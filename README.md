@@ -131,14 +131,14 @@ pip install martin-binance
 * Run binance_srv.py in terminal window
 * Run cli_7_BTCUSDT.py in other terminal window
 
+Strategy is started.
+
 Setting trade pair. You must set pair name in three places the same (yes, it is crooked, but so far):
 * base setting at bottom of the cli_X_AAABBB.py in "__main__" section, SYMBOL = 'AAABBB'
 * the name of cli_X_AAABBB.py must match
 * the name of pane in <a href="#tmux">Tmux terminal window</a>
- 
-Strategy is started.
 
-* For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
+For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
 
 ### MARGIN mode
 * Install [margin](https://margin.de/download/)
