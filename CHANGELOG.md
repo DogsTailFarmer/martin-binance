@@ -1,6 +1,6 @@
 ## v1.0rc0 - 2021-12-07
 * Added direct access to Binance SPOT API
-* Migrate to Decimal() calculation for best precision
+* Migrate to Decimal() calculation for necessary precision
 * Added stop-loss checkpoint for possible bug
 * Split logic and initial trading setup
 * Added buy/sell asset with grid options
