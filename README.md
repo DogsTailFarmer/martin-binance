@@ -1,4 +1,4 @@
-<p align="center"><img src="doc/Modified martingale.svg" width="300"></p>
+<p align="center"><img src="https://git.io/JDIic" width="300"></p>
 
 ***
 
@@ -25,7 +25,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Review
-<p align="center"><img src="doc/architecture.png"></p>
+<p align="center"><img src="https://git.io/JDIig"></p>
 
 
 The system can be used in two modes:
@@ -148,7 +148,7 @@ Strategy is started.
 * Add currency pair BTC/USDT
 * Set the custom fee level = 0.0% in the margin terminal settings
 * Add Python strategy:
-<p align="center"><img src="doc/Create_strategy.png"></p>
+<p align="center"><img src="https://git.io/JDIiQ"></p>
 
 * Copy/paste the contents of the file cli_7_BTCUSDT.py to the Code Editor window
 * Save, Run Strategy, Start
@@ -217,7 +217,7 @@ tmux attach
 ~~~
 You must see the same window as before reboot:
 
-<p align="center"><img src="doc/tmux.png"></p>
+<p align="center"><img src="https://git.io/JDIix"></p>
 
 * Find /service/relaunch.service, edit your path and install it under systemctl.
 * Run in the pane 0:srv server script:
@@ -422,7 +422,7 @@ Control the return on the balance of three coins.
 Basic information about the state of the bot, for example, about the start and results of the cycle,
 can be sent to Telegram bot.
 
-<p align="center"><img src="doc/tlg_notify.png"></p>
+<p align="center"><img src="https://git.io/JDIPe"></p>
 
 ### Telegram control
 <p id="telegram-control"></p>
@@ -459,7 +459,7 @@ Also, you can try the grafana_config.json as example of consolidated report.
 If you have several trading pairs on different exchanges, then regular valuation of the asset is a very time-consuming
 task.
 
-<p align="center"><img src="doc/graf1.png"></p>
+<p align="center"><img src="https://git.io/JDIPt"></p>
 
 At the end of each trading cycle, deposit data recorded for each currency. Once a day, the current currency rate to USD
 is queried. In funds_rate_exporter.py of times per minute calculated data for unloading in
