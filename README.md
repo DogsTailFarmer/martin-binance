@@ -1,4 +1,4 @@
-<p align="center"><img src="https://git.io/JDIic" width="300"></p>
+<p align="center"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="300"></p>
 
 ***
 
