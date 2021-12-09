@@ -116,7 +116,7 @@ The optimal pair choice is a stablecoin or fiat plus a coin from the top ten.
 ### Install
 
 ```console
-pip install -i https://test.pypi.org/simple/ martin-binance
+pip install martin-binance
 ```
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
