@@ -1,6 +1,7 @@
 <p align="center"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="300"></p>
 
 ***
+<a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="18"></a>
 
 <h1 align="center">Modified Martingale</h1>
 
@@ -131,14 +132,14 @@ pip install martin-binance
 * Run binance_srv.py in terminal window
 * Run cli_7_BTCUSDT.py in other terminal window
 
+Strategy is started.
+
 Setting trade pair. You must set pair name in three places the same (yes, it is crooked, but so far):
 * base setting at bottom of the cli_X_AAABBB.py in "__main__" section, SYMBOL = 'AAABBB'
 * the name of cli_X_AAABBB.py must match
 * the name of pane in <a href="#tmux">Tmux terminal window</a>
- 
-Strategy is started.
 
-* For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
+For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
 
 ### MARGIN mode
 * Install [margin](https://margin.de/download/)
@@ -153,10 +154,10 @@ Strategy is started.
 * Copy/paste the contents of the file cli_7_BTCUSDT.py to the Code Editor window
 * Save, Run Strategy, Start
 
+Strategy is started.
+
 Setting trade pair. The selection of the pair is determined by the window of the terminal in which the strategy is
 launched. The "__ main __" section settings are ignored.
-
-Strategy is started.
 
 ## Terminal Tmux 
 <p id="tmux"></p>
