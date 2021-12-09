@@ -153,10 +153,10 @@ For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
 * Copy/paste the contents of the file cli_7_BTCUSDT.py to the Code Editor window
 * Save, Run Strategy, Start
 
+Strategy is started.
+
 Setting trade pair. The selection of the pair is determined by the window of the terminal in which the strategy is
 launched. The "__ main __" section settings are ignored.
-
-Strategy is started.
 
 ## Terminal Tmux 
 <p id="tmux"></p>
