@@ -1,0 +1,11 @@
+binance.py>=1.8.4
+margin-strategy-sdk==0.0.11
+aiohttp>=3.6.3
+grpcio>=1.40.0
+grpcio-tools>=1.40.0
+jsonpickle>=2.0.0
+psutil>=5.8.0
+requests>=2.26.0
+simplejson>=3.16.0
+toml>=0.10.2
+libtmux>=0.10.1

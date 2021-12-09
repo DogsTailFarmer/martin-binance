@@ -1,0 +1,20 @@
+[Unit]
+Description=tmux restart
+Documentation=man:tmux(1)
+After=syslog.target
+After=network.target
+
+[Service]
+Type=forking
+User=ubuntu
+Environment=DISPLAY=:0
+ExecStart=/usr/bin/tmux new-session -d
+
+ExecStop=/bin/bash home/ubuntu/.tmux/plugins/tmux-resurrect/scripts/save.sh
+ExecStop=/usr/bin/tmux kill-server
+KillMode=none
+
+RestartSec=2
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,41 @@
+# Parameters for martin-scale strategy
+# Copyright © 2021 Jerry Fedorenko aka VM
+
+telegram_url = 'https://api.telegram.org/bot'
+
+# List exchange, don't remove or edit row, add only!
+exchange = [
+   'Demo-OKEX',        # 0
+   'Binance',          # 1
+   'Bitfinex',         # 2
+   'OKEX',             # 3
+   'Kraken',           # 4
+   'Huobi',            # 5
+   'YObit',            # 6
+   'Demo - Binance',   # 7
+]
+
+[Exporter]
+database = './funds_rate.db'
+port = 8000
+sleep_time_s = 60
+vps_name = '**** Place VPS Name there ****'
+# CoinMarketCap
+url = 'https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest'
+api = '********** Place API key for CoinMarketCap there ***********'
+rate_limit = 30  # Requests per minute
+
+[Path]
+work_path = './'
+log_path = './log/'
+last_state_path = './last_state/'
+
+[[Telegram]]
+id_exchange = [1, 7] # 'Binance', 'Demo - Binance'
+token = "********** Place Token for Telegram bot there ***********"
+channel_id = '*** Place channel_id there ***'
+
+[[Telegram]]
+id_exchange = [0, 3] # 'Demo-OKEX', 'OKEX'
+token = '********** Place Token for Telegram bot there ***********'
+channel_id = '*** Place channel_id there ***'

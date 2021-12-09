@@ -1,0 +1,34 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "martin-binance"
+authors = [{name = "Jerry Fedorenko", email = "jerry.fedorenko@yahoo.com"}]
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers=["Programming Language :: Python :: 3",
+             "Development Status :: 4 - Beta",
+             "License :: OSI Approved :: MIT License",
+             "Operating System :: Unix"]
+dynamic = ["version", "description"]
+
+dependencies = [
+    "binance.py>=1.8.4",
+    "margin-strategy-sdk==0.0.11",
+    "aiohttp>=3.6.3",
+    "grpcio>=1.40.0",
+    "grpcio-tools>=1.40.0",
+    "jsonpickle>=2.0.0",
+    "psutil>=5.8.0",
+    "requests>=2.26.0",
+    "simplejson>=3.16.0",
+    "toml>=0.10.2",
+    "libtmux>=0.10.1"
+]
+
+[tool.flit.module]
+name = "martin_binance"
+
+[project.urls]
+Source = "https://github.com/DogsTailFarmer/martin-binance"

@@ -1,0 +1,16 @@
+[Unit]
+Description=Crypto Exporter
+After=syslog.target
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=sudo
+WorkingDirectory=/home/ubuntu/martin_binance/
+ExecStart=python3 funds_rate_exporter.py
+RestartSec=10
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

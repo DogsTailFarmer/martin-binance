@@ -1,0 +1,13 @@
+[Unit]
+Description=restart martin-binance
+After=syslog.target
+After=network.target
+
+[Service]
+User=ubuntu
+Group=sudo
+WorkingDirectory=/home/ubuntu/martin_binance/
+ExecStart=python3 relaunch.py
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,103 @@
+@startuml
+'https://plantuml.com/component-diagram
+
+node "binance.com" {
+    package "Sub account n" {
+        [BTCUSDT] <--> (API_n)
+        [ETHBUSD] <--> (API_n)
+  }
+    package "Main account" {
+        [BTCBUSD] <--> (API_1)
+        [ETHUSDT] <--> (API_1)
+  }
+}
+
+component b2 [binance.py
+===
+A python3 binance API wrapper
+powered by asyncio and python Decimals
+===
+https://github.com/Th0rgal/binance.py
+]
+
+package "martin-binance" #D3D3D3 {
+    [funds_rate_exporter.py] as exp
+    database funds_rate.db #F8F8FF {
+    [assets] -up-> exp
+    [trade raw] -up-> exp
+    }
+    component bs [
+        binance_srv.py
+        ===
+        Async grpc multiplexer
+    ]
+    component mw [
+        margin_wrapper.py
+        ===
+        Emulator for margin.de Python API
+    ]
+    frame python_strategy #E6E6FA {
+        component ex [
+            executor.py
+            ===
+            Python trade strategy
+        ]
+        component c1 [
+            API_1_BTCBUSD.py
+            ===
+            Executable module
+            with trade parameter
+            setup
+        ]
+        component cn [
+            API_n_ETHBUSD.py
+            ===
+            Executable module
+            with trade parameter
+            setup
+        ]
+   }
+[mw] <-up-> [bs]
+[ex] <-up-> [mw]
+[c1] <-up-> [ex]
+[cn] <-up-> [ex]
+}
+
+cloud Telegram {
+    [Bot "Sub account n"] <-down-> (API)
+    [Bot "Main account"] <-down-> (API)
+    note left of API : Control and status
+}
+
+cloud data_collect_and_view {
+[https://grafana.com] as gr
+[https://github.com/prometheus/client_python] as prom
+}
+
+node "margin.de" {
+    (API_OKEX) <-up-> [API_Python]
+    (API_KRAKEN) <-up-> [API_Python]
+    (API_Bitfinex) <-up-> [API_Python]
+    (API_Binance) <-up-> [API_Python]
+    (API_other) <-up-> [API_Python]
+    note left
+        https://margin.de
+        ===
+        Multi exchange
+        trade terminal
+    end note
+}
+
+
+[b2] <-up-> API_1
+[b2] <-up-> API_n
+[bs] <-up-> b2
+[c1] <-down-> [API_Python]
+[cn] <-down-> [API_Python]
+[ex] --> [trade raw]
+[mw] --> [assets]
+[exp] -up-> prom
+prom -up-> gr
+[ex] <--> API
+
+@enduml

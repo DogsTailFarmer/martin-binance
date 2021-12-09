@@ -1,0 +1,61 @@
+@startuml
+|order_update()|
+start
+floating note left
+  Sell Reverse cycle
+  ====
+  reverse == True
+  cycle_buy == False
+  ====
+  deposit_first = sum_amount_first
+  reverse_target_amount = calc_profit_order()
+  reverse_init_amount = sum_amount_second
+end note
+
+if (order) then (TP)
+  :tp_order_id = None;
+  |restart_after_filled_tp()|
+  if (tp_hold) then (Yes)
+    :tp_hold = False;
+    :Calculate and place \n additional grid;
+    kill
+  else (No)
+    :restart = True;
+    |cancel_grid()|
+    :atomic remove grid orders;
+    if (not grid orders) then (Yes)
+      start
+    else (No)
+      |grid_handler()|
+      if (no_grid and not orders_save) then (No)
+        if (orders_save) then (Yes)
+          :Restore deleted \n grid orders;
+        endif
+        (A)
+        kill
+      else (Yes)
+        |reverse_after_grid_ending()|
+        :;
+        kill
+      endif
+    endif
+  endif
+else (grid)
+  |place_profit_order()|
+  (A)
+  !pragma useVerticalIf on
+  if (tp_wait_id or self.cancel_order_id) then (Yes)
+    :tp_hold = True;
+    (W)
+    kill
+  elseif (tp_order_id) then (Yes)
+    :tp_hold = True;
+    :cancel_order();
+    (W)
+    kill
+  else
+    :self.tp_target = target;
+    :tp_wait_id = place_limit_order();
+  endif
+
+@enduml
