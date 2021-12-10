@@ -1,8 +1,12 @@
 <p align="center"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="300"></p>
 
 ***
-<a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="18"></a>
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FDogsTailFarmer%2Fmartin-binance.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FDogsTailFarmer%2Fmartin-binance?ref=badge_shield
+<a href="https://badge.fury.io/py/martin-binance">
+<img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="18"></a>
+<a href="https://app.fossa.com/reports/3dc6af58-8d34-499c-b8cc-03e2d2bb0d78">
+<img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FDogsTailFarmer%2Fmartin-binance.svg?type=shield" 
+height="18"></a>
+
 
 <h1 align="center">Modified Martingale</h1>
 
