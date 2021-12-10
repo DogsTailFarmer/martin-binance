@@ -7,7 +7,7 @@ margin.de <-> Python strategy <-> mPw <-> BinanceAPIServer <-> Python3 binance A
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc0"
+__version__ = "1.0rc-01"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __package__ = 'martin-binance'
@@ -31,7 +31,7 @@ from google.protobuf import json_format
 from margin_strategy_sdk import *
 
 # noinspection PyPackageRequirements
-import binance
+import binance  # lgtm [py/import-and-import-from]
 import binance_api_pb2
 import binance_api_pb2_grpc
 import executor as ms
@@ -1021,7 +1021,7 @@ async def main(_symbol):
             restore_state = False
             _cancel_orders = await stub.CancelAllOrders(binance_api_pb2.MarketRequest(client_id=client_id_msg.client_id,
                                                                                       symbol=_symbol))
-            cancel_orders = json_format.MessageToDict(_active_orders).get('items', [])
+            cancel_orders = json_format.MessageToDict(_cancel_orders).get('items', [])
             print('Before start cancel orders:')
             for i in cancel_orders:
                 print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")

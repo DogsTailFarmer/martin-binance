@@ -9,3 +9,4 @@ queries:
   - exclude: py/mismatched-multiple-assignment
   - exclude: py/call/wrong-arguments
   - exclude: py/missing-call-to-init
+  - exclude: py/polluting-import

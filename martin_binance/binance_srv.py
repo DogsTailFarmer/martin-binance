@@ -7,7 +7,7 @@ margin.de <-> Python strategy <-> mPw <-> BinanceAPIServer <-> Python3 binance A
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc0"
+__version__ = "1.0rc-01"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __package__ = 'martin_binance'
@@ -35,7 +35,7 @@ import toml
 from google.protobuf import json_format
 
 # noinspection PyPackageRequirements
-import binance
+import binance  # lgtm [py/import-and-import-from]
 import binance_api_pb2
 import binance_api_pb2_grpc
 # noinspection PyPackageRequirements
@@ -592,8 +592,7 @@ class Martin(binance_api_pb2_grpc.MartinServicer):
                 open_client.client.events.unregister(None, _i)
         # logger.info(f"StopStream.events_3: {open_client.client.events.registered_streams}")
         # logger.info(f"StopStream.events_4: {open_client.client.events.handlers}")
-        n = gc.collect(generation=2)
-        # logger.info(f"Number of unreachable objects collected by GC:, {n}")
+        gc.collect(generation=2)
         response.success = True
         return response
 
