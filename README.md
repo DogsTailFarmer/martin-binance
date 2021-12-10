@@ -567,7 +567,3 @@ To donate and directly support the project, you can transfer funds to these addr
 *BNB*, *BUSD*, *USDT* (BEP20) 0x5b52c6ba862b11318616ee6cef64388618318b92
 
 *USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
-
-
-## License
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FDogsTailFarmer%2Fmartin-binance.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FDogsTailFarmer%2Fmartin-binance?ref=badge_large)
