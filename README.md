@@ -3,7 +3,6 @@
 ***
 <a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="18"></a>
 
-
 <h1 align="center">Modified Martingale</h1>
 
 <h2 align="center">Cyclic grid strategy</h2>
