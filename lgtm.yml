@@ -1,0 +1,11 @@
+##########################################################################################
+# Customize file classifications.                                                        #
+# Results from files under any classifier will be excluded from LGTM                     #
+# statistics.                                                                            #
+##########################################################################################
+
+queries:
+  - exclude: py/clear-text-logging-sensitive-data
+  - exclude: py/mismatched-multiple-assignment
+  - exclude: py/call/wrong-arguments
+  - exclude: py/missing-call-to-init

@@ -1,6 +1,7 @@
 <p align="center"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="300"></p>
 
 ***
+<a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="18"></a>
 
 <h1 align="center">Modified Martingale</h1>
 
