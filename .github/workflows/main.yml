@@ -24,6 +24,7 @@ jobs:
       uses: codecov/codecov-action@v2
       with:
         env_vars: OS,PYTHON
+        token: ${{999b1cb8-f0c2-4154-b705-1547ae7cd539}}
         fail_ci_if_error: true
         name: codecov-umbrella
         verbose: true
