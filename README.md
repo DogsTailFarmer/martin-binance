@@ -1,13 +1,6 @@
 <p align="center"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="300"></p>
 
 ***
-<a href="https://badge.fury.io/py/martin-binance">
-<img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="18"></a>
-<a href="https://app.fossa.com/reports/3dc6af58-8d34-499c-b8cc-03e2d2bb0d78">
-<img src="https://app.fossa.com/api/projects/git%2Bgithub.com%2FDogsTailFarmer%2Fmartin-binance.svg?type=shield" 
-height="18"></a>
-
-
 <h1 align="center">Modified Martingale</h1>
 
 <h2 align="center">Cyclic grid strategy</h2>
@@ -15,6 +8,10 @@ height="18"></a>
 <h3 align="center">Free trading system for Binance API</h3>
 
 ***
+<a href="https://badge.fury.io/py/martin-binance">
+<img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="18"></a>
+<a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability">
+<img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability" height="18"/></a>
 
 Many other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a>
 
