@@ -27,8 +27,6 @@ import sys
 # from datetime import datetime
 
 # noinspection PyPackageRequirements
-import binance.events
-# noinspection PyPackageRequirements
 import grpc
 import toml
 # noinspection PyPackageRequirements
@@ -245,7 +243,12 @@ class Martin(binance_api_pb2_grpc.MartinServicer):
         client = OpenClient.get_client(request.client_id).client
         response = binance_api_pb2.FetchExchangeInfoSymbolResponse()
         exchange_info = await client.fetch_exchange_info()
-        exchange_info_symbol = next(item for item in exchange_info.get('symbols') if item["symbol"] == request.symbol)
+        exchange_info_symbol = {}
+        try:
+            exchange_info_symbol = next(item for item in exchange_info.get('symbols')
+                                        if item["symbol"] == request.symbol)
+        except StopIteration:
+            logger.info(f"FetchExchangeInfoSymbol.exchange_info_symbol: None")
         # logger.info(f"exchange_info_symbol: {exchange_info_symbol}")
         filters_res = exchange_info_symbol.pop('filters', [])
         json_format.ParseDict(exchange_info_symbol, response)
