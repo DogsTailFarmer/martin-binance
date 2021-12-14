@@ -7,7 +7,7 @@ margin.de <-> Python strategy <-> mPw <-> BinanceAPIServer <-> Python3 binance A
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc-01"
+__version__ = "1.0rc0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 __package__ = 'martin-binance'
@@ -375,7 +375,7 @@ class TradingCapabilityManager:
             rounded_amount = round(unrounded_amount, self.base_asset_precision)
         else:
             rounded_amount = unrounded_amount
-            assert True, 'Unknown RoundingType'
+            ms.Strategy.strategy.message_log("round_amount: Unknown RoundingType", log_level=LogLevel.ERROR)
         return rounded_amount
 
     def round_price(self, unrounded_price: float, rounding_type: RoundingType) -> float:
@@ -390,7 +390,7 @@ class TradingCapabilityManager:
             rounded_price = round(unrounded_price, k)
         else:
             rounded_price = unrounded_price
-            assert True, 'Unknown RoundingType'
+            ms.Strategy.strategy.message_log("round_price: Unknown RoundingType", log_level=LogLevel.ERROR)
         return rounded_price
 
     def get_min_sell_amount(self, price: float) -> float:
@@ -1021,7 +1021,7 @@ async def main(_symbol):
             restore_state = False
             _cancel_orders = await stub.CancelAllOrders(binance_api_pb2.MarketRequest(client_id=client_id_msg.client_id,
                                                                                       symbol=_symbol))
-            cancel_orders = json_format.MessageToDict(_cancel_orders).get('items', [])
+            cancel_orders = json_format.MessageToDict(_active_orders).get('items', [])
             print('Before start cancel orders:')
             for i in cancel_orders:
                 print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
