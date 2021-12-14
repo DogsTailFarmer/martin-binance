@@ -10,7 +10,6 @@ __license__ = "MIT"
 __version__ = "1.0rc-01"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
-__package__ = 'martin_binance'
 
 import time
 import weakref
@@ -139,12 +138,11 @@ class Martin(binance_api_pb2_grpc.MartinServicer):
                                    context: grpc.aio.ServicerContext) -> binance_api_pb2.OpenClientConnectionId:
         # logger.info(f"OpenClientConnection: {request.account_name}")
         client_id = OpenClient.get_id(request.account_name)
-        if not client_id:
-            if get_account(request.account_name):
-                open_client = OpenClient(request.account_name)
-                if open_client:
-                    await open_client.client.load()
-                    client_id = id(open_client)
+        if not client_id and get_account(request.account_name):
+            open_client = OpenClient(request.account_name)
+            if open_client:
+                await open_client.client.load()
+                client_id = id(open_client)
         # Set rate_limiter
         Martin.rate_limiter = max(Martin.rate_limiter if Martin.rate_limiter else 0, request.rate_limiter)
         return binance_api_pb2.OpenClientConnectionId(client_id=client_id, srv_version=__version__)

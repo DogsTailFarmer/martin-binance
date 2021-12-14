@@ -10,7 +10,6 @@ __license__ = "MIT"
 __version__ = "1.0rc0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
-__package__ = "martin-binance"
 """
 ##################################################################
 Disclaimer
