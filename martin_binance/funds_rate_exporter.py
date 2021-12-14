@@ -10,13 +10,12 @@ __license__ = "MIT"
 __version__ = "1.8r"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
-__package__ = 'martin_binance'
 
 import time
 import sqlite3
 import psutil
 from requests import Session
-from requests.exceptions import ConnectionError, Timeout, TooManyRedirects
+from requests.exceptions import ConnectionError as req_ConnectionError, Timeout, TooManyRedirects
 import json
 import toml
 
@@ -102,7 +101,7 @@ def get_rate(currency_rate):
         try:
             response = session.get(URL, params=parameters)
             data = json.loads(response.text)
-        except (ConnectionError, Timeout, TooManyRedirects) as e:
+        except (req_ConnectionError, Timeout, TooManyRedirects) as e:
             print(e)
         if data.get('data'):
             price = data.get('data').get('quote').get(currency).get('price')

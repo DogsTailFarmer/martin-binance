@@ -7,10 +7,9 @@ margin.de <-> Python strategy <-> mPw <-> BinanceAPIServer <-> Python3 binance A
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc0"
+__version__ = "1.0rc-01"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
-__package__ = 'martin-binance'
 
 import asyncio
 import functools
@@ -113,7 +112,6 @@ class StrategyBase:
     ticker = {}
     funds = {}
     order_book = {}
-    klines = {}
     order_id = 0
     wait_order_id = []  # List of placed orders for time-out detect
     canceled_order_id = []  # List canceled orders  for time-out detect
@@ -126,20 +124,17 @@ class StrategyBase:
     get_buffered_funds_last_time = time.time()
     rate_limiter = RATE_LIMITER
 
-    def __init__(self):
-        pass
-
     def __call__(self):
         return self
 
     class Klines:
-        klines = {}
+        klines_series = {}
         klines_lim = int()
 
         def __init__(self, _interval):
             self.interval = _interval
             self.kline = []
-            self.klines[_interval] = self.kline
+            self.klines_series[_interval] = self.kline
 
         def refresh(self, _candle):
             candle = Candle(_candle)
@@ -151,11 +146,11 @@ class StrategyBase:
                 self.kline.append(candle)
                 if len(self.kline) > self.klines_lim:
                     del self.kline[0]
-            self.klines[self.interval] = self.kline
+            self.klines_series[self.interval] = self.kline
 
         @classmethod
         def get_kline(cls, _interval) -> []:
-            return cls.klines.get(_interval, [])
+            return cls.klines_series.get(_interval, [])
 
     @classmethod
     def order_exist(cls, _id) -> bool:
@@ -213,8 +208,7 @@ class StrategyBase:
         if len(kline) > number_of_candles+1:
             return kline[-number_of_candles-(0 if include_current_building_candle else 1):
                          None if include_current_building_candle else -1]
-        else:
-            return kline[:None if include_current_building_candle else -1]
+        return kline[:None if include_current_building_candle else -1]
 
     @classmethod
     def place_limit_order(cls, buy: bool, amount: float, price: float) -> int:
@@ -234,15 +228,13 @@ class StrategyBase:
     def get_buffered_completed_trades(cls, get_all_trades: bool = False) -> List[PrivateTrade]:
         if get_all_trades:
             return ms.Strategy.all_trades
-        else:
-            return ms.Strategy.trades
+        return ms.Strategy.trades
 
     @classmethod
     def get_buffered_open_orders(cls, get_all_orders: bool = False) -> List[Order]:
         if get_all_orders:
             return cls.all_orders
-        else:
-            return cls.orders
+        return cls.orders
 
 
 def trade_not_exist(_order_id: int, _trade_id: int, _trades: [PrivateTrade] = None) -> bool:
@@ -308,7 +300,7 @@ class Order:
         # Overall amount of the order.
         self.amount = float(order['origQty'])
         # True if the order is a buy order.
-        self.buy = True if order['side'] == 'BUY' else False
+        self.buy = bool(order['side'] == 'BUY')
         # id of the order.
         self.id = int(order['orderId'])
         # Type of the order.
@@ -401,8 +393,7 @@ class TradingCapabilityManager:
         # print(f"get_min_buy_amount: price:{price}, min_notional:{self.min_notional}")
         return self.round_amount(self.min_notional / price, RoundingType.CEIL)
 
-    # noinspection PyUnusedLocal
-    def get_minimal_price_change(self, price: float) -> float:
+    def get_minimal_price_change(self, _unused_price: float) -> float:
         return self.tick_size
 
 
@@ -539,13 +530,12 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
                                                      'id_exchange': ms.ID_EXCHANGE, 'currency': row[1]})
                     else:
                         # Remove not needed asset
-                        if time.time() - row[4] < delay:
-                            if assets.get(row[1]):
-                                assets.pop(row[1])
+                        if time.time() - row[4] < delay and assets.get(row[1]):
+                            assets.pop(row[1])
             if assets:
-                for asset in assets:
+                for key, value in assets.items():
                     cursor_analytic.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
-                                            (ms.ID_EXCHANGE, asset, assets[asset], 0, time.time()))
+                                            (ms.ID_EXCHANGE, key, value, 0, int(time.time())))
             connection_analytic.commit()
         await asyncio.sleep(delay)
 
@@ -739,7 +729,6 @@ async def buffered_orders(_stub, _client_id, _symbol):
                     # print(f"buffered_orders.ms.Strategy.orders: {ms.Strategy.orders}")
                     if not restore:
                         ms.Strategy.strategy.restore_strategy_state(last_state)
-                    del last_state
                 except Exception as exc:
                     ms.Strategy.last_state = None
                     ms.Strategy.strategy.message_log(f"Exception restore_strategy_state: {exc}",
@@ -790,7 +779,7 @@ async def on_order_update(_stub, _client_id, _symbol):
                     remove_from_orders_lists([event.order_id])
                 if trade_not_exist(event.order_id, event.trade_id, ms.Strategy.trades):
                     trade = {"qty": event.last_executed_quantity,
-                             "isBuyer": True if event.side == 'BUY' else False,
+                             "isBuyer": bool(event.side == 'BUY'),
                              "id": event.trade_id,
                              "orderId": event.order_id,
                              "price": event.last_executed_price,
