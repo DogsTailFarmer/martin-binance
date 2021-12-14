@@ -164,7 +164,7 @@ class Martin(binance_api_pb2_grpc.MartinServicer):
             if time.time() - Martin.rate_limit_reached_time > 60:
                 OpenClient.get_client(request.client_id).client.http.rate_limit_reached = False
                 Martin.rate_limit_reached_time = None
-                logger.info(f"ResetRateLimit error clear, trying one else time")
+                logger.info("ResetRateLimit error clear, trying one else time")
                 _success = True
         else:
             if OpenClient.get_client(request.client_id).client.http.rate_limit_reached:

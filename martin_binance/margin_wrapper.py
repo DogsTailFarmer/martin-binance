@@ -485,7 +485,7 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
         try:
             res = await _stub.FetchAccountInformation(binance_api_pb2.OpenClientConnectionId(client_id=_client_id))
         except asyncio.CancelledError:
-            print(f"save_asset.Cancelled")
+            print("save_asset.Cancelled")
         except Exception as _ex:
             ms.Strategy.strategy.message_log(f"Exception save_asset: {_ex}", log_level=LogLevel.WARNING)
         else:
@@ -608,7 +608,7 @@ async def buffered_funds(_stub, _client_id, _symbol, _base_asset, _quote_asset, 
         res = await _stub.FetchAccountInformation(binance_api_pb2.OpenClientConnectionId(
             client_id=_client_id))
     except asyncio.CancelledError:
-        print(f"buffered_funds.Cancelled")
+        print("buffered_funds.Cancelled")
     except Exception as _ex:
         ms.Strategy.strategy.message_log(f"Exception buffered_funds: {_ex}", log_level=LogLevel.WARNING)
     else:
@@ -678,17 +678,17 @@ async def buffered_orders(_stub, _client_id, _symbol):
                     for _id in diff_excess_id:
                         check_status = await fetch_order(_id, _filled_update_call=False)
                         if check_status.get('status') not in ('FILLED', 'CANCELED'):
-                            print(f"buffered_orders.create_task: cancel_order")
+                            print("buffered_orders.create_task: cancel_order")
                             loop.create_task(cancel_order_timeout(_id))
                             loop.create_task(cancel_order_call(_id))
                 ms.Strategy.all_orders = all_orders.copy()
                 all_orders.clear()
             if restore or ms.Strategy.last_state:
                 if restore:
-                    ms.Strategy.strategy.message_log(f"Trying restore saved state after lost connection to host",
+                    ms.Strategy.strategy.message_log("Trying restore saved state after lost connection to host",
                                                      color=ms.Style.GREEN)
                 else:
-                    ms.Strategy.strategy.message_log(f"Trying restore saved state after restart", color=ms.Style.GREEN)
+                    ms.Strategy.strategy.message_log("Trying restore saved state after restart", color=ms.Style.GREEN)
                 try:
                     last_state = {}
                     if ms.Strategy.last_state:
@@ -746,7 +746,7 @@ async def buffered_orders(_stub, _client_id, _symbol):
                                                      log_level=LogLevel.WARNING)
                 restore = False
         except asyncio.CancelledError:
-            print(f"buffered_orders.Cancelled")
+            print("buffered_orders.Cancelled")
             run = False
         except Exception as _ex:
             ms.Strategy.strategy.message_log(f"Exception buffered_orders: {_ex}", log_level=LogLevel.WARNING)
