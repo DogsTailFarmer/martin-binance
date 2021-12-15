@@ -431,17 +431,18 @@ class OrderBook:
     order_book.asks[0].amount
     """
     def __init__(self, _order_book) -> None:
-        class _Order:
+        class _OrderBookRow:
             def __init__(self, _order) -> None:
                 self.price = float(_order[0])
                 self.amount = float(_order[1])
         self.asks = []
-        self.bids = []
         # List of asks ordered by price in ascending order.
+        self.bids = []
         # List of bids ordered by price in descending order.
-        for i in range(len(_order_book['bids'])):
-            self.asks.append(_Order(_order_book['asks'][i]))
-            self.bids.append(_Order(_order_book['bids'][i]))
+        for _, v in enumerate(_order_book['asks']):
+            self.asks.append(_OrderBookRow(v))
+        for _, v in enumerate(_order_book['bids']):
+            self.bids.append(_OrderBookRow(v))
 
     def __call__(self):
         return self
