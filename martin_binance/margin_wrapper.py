@@ -265,6 +265,7 @@ class PrivateTrade:
 
 class OrderUpdate(OrderUpdate):
     def __init__(self, event: events.OrderUpdateWrapper) -> None:
+        super().__init__()
 
         class OriginalOrder:
             def __init__(self, _event: events.OrderUpdateWrapper):
