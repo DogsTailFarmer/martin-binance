@@ -429,7 +429,8 @@ class Strategy(StrategyBase):
         self.grid_order_canceled = None  # -
 
     # noinspection PyProtectedMember
-    def init(self, check_funds: bool = True) -> None:
+    def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
+
         self.message_log('Start Init section')
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
@@ -753,7 +754,7 @@ class Strategy(StrategyBase):
             for i, o in enumerate(open_orders):
                 if o.id == self.tp_order_id:
                     tp_order = open_orders[i]
-                    del open_orders[i]
+                    del open_orders[i]  # skipcq: PYL-E1138
                     break
         # Possible strategy states in compare with saved one
         grid_orders_len = len(self.orders_grid)
@@ -1644,7 +1645,7 @@ class Strategy(StrategyBase):
         After filling take profit order calculate profit, deposit and restart or place additional TP
         """
         # noinspection PyTupleAssignmentBalance
-        amount_first, amount_second, by_market = self.tp_was_filled
+        amount_first, amount_second, by_market = self.tp_was_filled  # skipcq: PYL-W0632
         self.message_log(f"after_filled_tp: amount_first: {amount_first}, amount_second: {amount_second},"
                          f" by_market: {by_market}, tp_amount: {self.tp_amount}, tp_target: {self.tp_target}"
                          f" one_else_grid: {one_else_grid}", log_level=LogLevel.DEBUG)
@@ -1710,7 +1711,7 @@ class Strategy(StrategyBase):
                 self.tp_hold_additional = True
                 self.place_grid(self.cycle_buy, amount, float(reverse_target_amount), allow_grid_shift=False)
                 return
-            if float(amount) > min_trade_amount:
+            if float(amount) > min_trade_amount:  # skipcq: PYL-R1705
                 self.message_log("Too small amount for place additional grid, correct grid and replace TP", tlg=True)
                 if self.orders_hold:
                     order = self.orders_hold.orders_list.pop()
