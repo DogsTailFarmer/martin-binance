@@ -6,16 +6,16 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc1"
+__version__ = "1.0rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
 
 import gc
+import psutil
 import sqlite3
 import statistics
 from datetime import datetime
-# noinspection PyUnresolvedReferences
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
 from multiprocessing import Process, Queue
 
@@ -156,7 +156,7 @@ def telegram_control() -> None:
             res = requests.post(method, data={'chat_id': channel_id, 'offset': offset})
         except Exception as _ex:
             print(f"telegram_get: {_ex}")
-        if res.status_code == 200:
+        if res and res.status_code == 200:
             result = res.json().get('result')
             # print(f"telegram_get.result: {result}")
             message_id = None
@@ -252,15 +252,6 @@ def save_to_db(queue_to_db, connection_analytic) -> None:
 
 def float2decimal(_f: float) -> Decimal:
     return Decimal(str(_f))
-
-
-def memory_usage() -> int:
-    mem = str(os.popen('free -t -m').readlines())
-    t_ind = mem.index('T')
-    mem_g = ' '.join(mem[t_ind + 14:-4].split())
-    mem_total, mem_used, _unused_mem_free = map(int, mem_g.split())
-    mem_used_percent = int(100 * mem_used / mem_total)
-    return mem_used_percent
 
 
 class Orders:
@@ -627,21 +618,21 @@ class Strategy(StrategyBase):
             #
             funds = self.get_buffered_funds()
             ff = funds.get(self.f_currency, 0)
-            ff = float2decimal(ff.available) if ff else Decimal('0.0')
+            ff = self.round_truncate(float2decimal(ff.available) if ff else Decimal('0.0'), base=True)
             fs = funds.get(self.s_currency, 0)
-            fs = float2decimal(fs.available) if fs else Decimal('0.0')
+            fs = self.round_truncate(float2decimal(fs.available) if fs else Decimal('0.0'), base=False)
             #
             if buy_side:
                 diff_s = self.deposit_second - fs
                 diff_f = diff_s / self.avg_rate
-                go_trade = bool(diff_f >= ff)
+                go_trade = bool(ff >= diff_f)
             else:
                 diff_f = self.deposit_first - ff
                 diff_s = diff_f * self.avg_rate
-                go_trade = bool(diff_s >= fs)
+                go_trade = bool(fs >= diff_s)
             #
-            self.message_log(f"go_trade:{go_trade}, ff:{ff}, fs:{fs}, avg_rate:{self.avg_rate}, diff_f:{diff_f},"
-                             f" diff_s:{diff_s}", log_level=LogLevel.DEBUG)
+            self.message_log(f"go_trade: {go_trade}, ff: {ff:f}, fs: {fs:f}, avg_rate: {self.avg_rate},"
+                             f" diff_f: {diff_f:f}, diff_s: {diff_s:f}", log_level=LogLevel.DEBUG)
             if go_trade:
                 self.message_log(f"Release grid hold: necessary {depo}, exist {fs if buy_side else ff}\n"
                                  f"Difference first: {diff_f}, second: {diff_s}")
@@ -650,7 +641,7 @@ class Strategy(StrategyBase):
                 self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
                                  f" Sum_amount_second: {self.sum_amount_second}",
                                  log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-                depo -= diff_s if buy_side else diff_f
+                depo = fs if buy_side else ff
                 self.message_log(f"New depo is {depo}")
                 # Check min amount for placing TP
                 if self.check_min_amount_for_tp():
@@ -1031,7 +1022,7 @@ class Strategy(StrategyBase):
                              f"First: {self.sum_profit_first}\n"
                              f"Second: {self.sum_profit_second}\n"
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}")
-        mem = memory_usage()
+        mem = psutil.virtual_memory().percent
         if mem > 80:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
             self.command = 'end'
