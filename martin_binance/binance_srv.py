@@ -68,7 +68,7 @@ class OpenClient:
     open_clients = []
 
     def __init__(self, _account_name: str):
-        api_key, api_secret, api, ws = get_account(_account_name)
+        api_key, api_secret, api, ws = get_account(_account_name)  # lgtm [py/mismatched-multiple-assignment]
         self.name = _account_name
         self.client = binance.Client(api_key, api_secret, endpoint=api)
         self.endpoint_ws = ws

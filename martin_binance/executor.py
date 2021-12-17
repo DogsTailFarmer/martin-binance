@@ -22,10 +22,10 @@ from multiprocessing import Process, Queue
 import requests
 
 try:
-    from margin_wrapper import *
+    from margin_wrapper import *  # lgtm [py/polluting-import]
     from margin_wrapper import __version__ as msb_ver
 except ImportError:
-    from margin_strategy_sdk import *
+    from margin_strategy_sdk import *  # lgtm [py/polluting-import]
     from typing import Dict, List
     import time
     import math
@@ -747,7 +747,7 @@ class Strategy(StrategyBase):
         # Variants are processed when the actual order is equal to or less than it should be
         # Exotic when drop during placed grid or unconfirmed TP left for later
         self.start_process()
-        open_orders = self.get_buffered_open_orders(True)
+        open_orders = self.get_buffered_open_orders(True)  # lgtm [py/call/wrong-arguments]
         tp_order = None
         # Separate TP order
         if self.tp_order_id:
@@ -2476,7 +2476,7 @@ class Strategy(StrategyBase):
 
     def on_place_order_error_string(self, place_order_id: int, error: str) -> None:
         # Check all orders on exchange if exists required
-        open_orders = self.get_buffered_open_orders(True)
+        open_orders = self.get_buffered_open_orders(True)  # lgtm [py/call/wrong-arguments]
         order = None
         if self.orders_init.exist(place_order_id):
             order = self.orders_init.find_order(open_orders, place_order_id)
@@ -2548,7 +2548,7 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         # Check all orders on exchange if not exists required
-        open_orders = self.get_buffered_open_orders(True)
+        open_orders = self.get_buffered_open_orders(True)  # lgtm [py/call/wrong-arguments]
         if any(i.id == order_id for i in open_orders):
             self.message_log(f"On cancel order {order_id} {error}, try one else", LogLevel.ERROR)
             self.cancel_order(order_id)

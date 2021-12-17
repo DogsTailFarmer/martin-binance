@@ -27,7 +27,7 @@ import grpc
 import jsonpickle
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
-from margin_strategy_sdk import *
+from margin_strategy_sdk import *  # lgtm [py/polluting-import]
 
 # noinspection PyPackageRequirements
 import binance  # lgtm [py/import-and-import-from]
@@ -850,12 +850,13 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
             color=ms.Style.GREEN)
         if order.remaining_amount == 0.0:
             # noinspection PyArgumentList
+            tcm = ms.Strategy.get_trading_capability_manager()  # lgtm [py/call/wrong-arguments]
             trade = {"qty": order.amount,
                      "isBuyer": order.buy,
                      "id": 1,
                      "orderId": order.id,
-                     "price": ms.Strategy.get_trading_capability_manager().round_price(
-                                  float(result.get('cummulativeQuoteQty')) / order.amount, RoundingType.ROUND),
+                     "price": tcm.round_price(float(result.get('cummulativeQuoteQty')) / order.amount,
+                                              RoundingType.ROUND),
                      "time": order.timestamp}
             # ms.Strategy.strategy.message_log(f"place_limit_order_callback.trade: {trade}", color=ms.Style.YELLOW)
             if len(ms.Strategy.trades) > TRADES_LIST_LIMIT:
@@ -978,7 +979,7 @@ async def main(_symbol):
     StrategyBase.symbol = _symbol
     # ms.Strategy.loop = loop
     account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
-    print(f"main.account_name: {account_name}")
+    print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
     channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
     stub = binance_api_pb2_grpc.MartinStub(channel)
     client_id_msg = await stub.OpenClientConnection(binance_api_pb2.OpenClientConnectionRequest(

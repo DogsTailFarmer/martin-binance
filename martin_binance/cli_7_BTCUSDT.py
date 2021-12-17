@@ -30,7 +30,7 @@ Verify init message in Strategy output window for no error
 import toml
 import sys
 import executor as ex
-from executor import *
+from executor import *  # lgtm [py/polluting-import]
 ################################################################
 # Exchange setup and parameter settings
 ################################################################
