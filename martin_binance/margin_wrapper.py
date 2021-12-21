@@ -547,7 +547,7 @@ async def ask_exit():
     _client_id = ms.Strategy.client_id
     _symbol = ms.Strategy.symbol
     if ms.Strategy.strategy:
-        ms.Strategy.strategy.message_log(f"Got signal for exit", color=ms.Style.MAGENTA)
+        ms.Strategy.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
         await _stub.StopStream(binance_api_pb2.MarketRequest(client_id=_client_id, symbol=_symbol))
         tasks = asyncio.all_tasks(loop)
         for task in tasks:

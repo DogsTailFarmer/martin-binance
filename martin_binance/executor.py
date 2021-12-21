@@ -404,7 +404,7 @@ class Strategy(StrategyBase):
         self.start_after_shift = False  # - Flag set before shift, clear into Start()
         self.queue_to_db = queue.Queue()  # - Queue for save data to .db
         self.pr_db = None  # - Process for save data to .db
-        self.queue_to_tlg = Queue()  # - Queue for sending message to Telegram
+        self.queue_to_tlg = queue.Queue()  # - Queue for sending message to Telegram
         self.pr_tlg = None  # - Process for sending message to Telegram
         self.pr_tlg_control = None  # - Process for get command from Telegram
         self.restart = None  # - Set after execute take profit order and restart cycle

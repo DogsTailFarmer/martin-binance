@@ -10,17 +10,22 @@
 ***
 <a href="https://badge.fury.io/py/martin-binance">
 <img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version"></a>
+
 <a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability">
 <img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
+
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank">
 <img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=
 resolved+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
+
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank">
 <img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=
 active+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
+
 <a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/alerts/">
 <img alt="Total alerts" src="https://img.shields.io/lgtm/alerts/g/DogsTailFarmer/martin-binance.svg?logo=
 lgtm&logoWidth=18"/></a>
+
 <a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/context:python">
 <img alt="Language grade: Python" src="https://img.shields.io/lgtm/grade/python/g/DogsTailFarmer/
 martin-binance.svg?logo=lgtm&logoWidth=18"/></a>
