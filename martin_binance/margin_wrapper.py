@@ -7,19 +7,18 @@ margin.de <-> Python strategy <-> mPw <-> BinanceAPIServer <-> Python3 binance A
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc1"
+__version__ = "1.0rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import asyncio
-import functools
+from colorama import init as color_init
 import simplejson as json
 import logging
 import math
 import os
 import sys
 import time
-from signal import SIGINT
 from decimal import Decimal
 
 # noinspection PyPackageRequirements
@@ -52,6 +51,7 @@ HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
 logger = logging.getLogger('logger')
+color_init()
 
 
 def write_log(level: LogLevel, message: str) -> None:
@@ -542,14 +542,19 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
         await asyncio.sleep(delay)
 
 
-async def ask_exit(sig_name, _stub, _client_id, _symbol):
-    # print(f"ask_exit._strategy: {_strategy}, _loop: {_loop}")
+async def ask_exit():
+    _stub = ms.Strategy.stub
+    _client_id = ms.Strategy.client_id
+    _symbol = ms.Strategy.symbol
     if ms.Strategy.strategy:
-        ms.Strategy.strategy.message_log(f"Got signal {sig_name}: exit", color=ms.Style.MAGENTA)
+        ms.Strategy.strategy.message_log(f"Got signal for exit", color=ms.Style.MAGENTA)
         await _stub.StopStream(binance_api_pb2.MarketRequest(client_id=_client_id, symbol=_symbol))
         tasks = asyncio.all_tasks(loop)
         for task in tasks:
-            task.cancel()
+            try:
+                task.cancel()
+            except asyncio.CancelledError:
+                pass
         try:
             ms.Strategy.strategy.stop()
         except Exception as _err:
@@ -564,7 +569,6 @@ async def ask_exit(sig_name, _stub, _client_id, _symbol):
                 print('Current state cleared')
             else:
                 print('OK')
-        loop.remove_signal_handler(SIGINT)
 
 
 async def buffered_candle(_stub, _client_id, _symbol):
@@ -1011,10 +1015,9 @@ async def main(_symbol):
         answer = input('Are you want cancel all active order for this pair? Y:')
         if answer.lower() == 'y':
             restore_state = False
-            _cancel_orders = await stub.CancelAllOrders(binance_api_pb2.MarketRequest(client_id=client_id_msg.client_id,
-                                                                                      symbol=_symbol))
+            await stub.CancelAllOrders(binance_api_pb2.MarketRequest(client_id=client_id_msg.client_id, symbol=_symbol))
             cancel_orders = json_format.MessageToDict(_active_orders).get('items', [])
-            print('Before start cancel orders:')
+            print('Before start was canceled orders:')
             for i in cancel_orders:
                 print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
             print('================================================================')
@@ -1090,8 +1093,6 @@ async def main(_symbol):
     loop.create_task(on_funds_update(stub, client_id_msg.client_id, _symbol, base_asset, quote_asset))
     loop.create_task(on_order_update(stub, client_id_msg.client_id, _symbol))
     # Start section
-    loop.add_signal_handler(SIGINT, functools.partial(asyncio.run_coroutine_threadsafe,
-                                                      ask_exit(SIGINT, stub, client_id_msg.client_id, _symbol), loop))
     loop.create_task(save_asset(stub, client_id_msg.client_id, base_asset, quote_asset))
     answer = str()
     if restore_state:

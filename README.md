@@ -13,9 +13,17 @@
 <a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability">
 <img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank">
-<img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=resolved+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
+<img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=
+resolved+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank">
-<img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=active+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
+<img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=
+active+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
+<a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/alerts/">
+<img alt="Total alerts" src="https://img.shields.io/lgtm/alerts/g/DogsTailFarmer/martin-binance.svg?logo=
+lgtm&logoWidth=18"/></a>
+<a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/context:python">
+<img alt="Language grade: Python" src="https://img.shields.io/lgtm/grade/python/g/DogsTailFarmer/
+martin-binance.svg?logo=lgtm&logoWidth=18"/></a>
 
 Many other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a>
 
@@ -149,8 +157,25 @@ For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
 
 ### MARGIN mode
 * Install [margin](https://margin.de/download/)
-* Copy ms_cfg.toml and funds_rate.db to the ~/margin-linux
-* Copy executor.py to the ~/margin-linux/resources/python/lib/python3.7/site-packages
+* Extract one of the files from:
+```
+.
+|-- martin_binance
+    |-- margin
+        |-- Linux_site-packages.tar.gz
+        |-- win_site-packages.zip
+```
+#### For Linux
+to the ``` ~/margin-linux/resources/python/lib/python3.7/site-packages ```
+* Copy ms_cfg.toml and funds_rate.db to the ``` ~/margin-linux ```
+* Copy executor.py to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
+
+#### For Windows
+to the ``` C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages ```
+* Copy ms_cfg.toml and funds_rate.db to the ``` C:\Users\user\AppData\Local\Programs\margin ```
+* Copy executor.py to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+
+***
 * Start margin in Demo mode
 * Add currency pair BTC/USDT
 * Set the custom fee level = 0.0% in the margin terminal settings
@@ -165,7 +190,7 @@ Strategy is started.
 Setting trade pair. The selection of the pair is determined by the window of the terminal in which the strategy is
 launched. The "__ main __" section settings are ignored.
 
-## Terminal Tmux 
+## Terminal Tmux (Linux)
 <p id="tmux"></p>
 For STANDALONE mode you need separate terminal window for each task, separate for server and for each trading pair.
 If you plan to run a strategy on VPS then you need terminal program which:
@@ -439,6 +464,7 @@ can be sent to Telegram bot.
 * end - stop after end of cycle, direct and reverse, no difference
 
 All commands are sent as a reply to message from desired strategy. Use simple text message.
+If all is normal, you will receive a confirmation that the system has received the command within 10 seconds.
 
 ### Save data for external analytics
 <p id="save-data-for-external-analytics"></p>
@@ -510,10 +536,10 @@ Use Telegram control function, described above.
 
 * In development
 
-## Not Tested
+## Not tested
 <p id="not-tested"></p>
 
-- Not tested under Windows and macOS
+- Not tested under macOS
 
 ## Known issue
 <p id="known-issue"></p>
@@ -525,12 +551,7 @@ _STANDALONE_ mode:
 _With margin.de:_
 * Not work more than one Python bot at the same time, you can use new instance for new pair
 * Sometimes skips the partial fill signal from the margin layer
-* Sometimes fill signal from the margin come with a delay
-* Some function can not be use under Windows. I faced a problem use sqlite3 module
-  in margin environment under Windows. You can try and resolve it. Therefore, not function:
-
-   * Telegram control
-   * Collection cycle data for external analytics
+* Sometimes fill signal from the margin come with a delay, for temp fix use EXTRA_CHECK_ORDER_STATE = True
 
 ## Target
 <p id="target"></p>

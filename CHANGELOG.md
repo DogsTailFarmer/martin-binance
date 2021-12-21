@@ -1,3 +1,8 @@
+## v1.0rc2 - 2021-12-21
+### Fixed
+* margin Windows full functional
+* refactoring service process threading
+
 ## v1.0rc0 - 2021-12-07
 * Added direct access to Binance SPOT API
 * Migrate to Decimal() calculation for necessary precision
@@ -58,7 +63,7 @@
 
 ## v0.4b - 2021-05-29
 ### Added for new features.
-* Check if take profit order execute by market and process it
+* Check if the take profit order execute by market and process it
 * Optimize send Telegram message and save to .db function
 
 ## v0.3b - 2021-05-28

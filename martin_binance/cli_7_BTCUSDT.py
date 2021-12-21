@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc0"
+__version__ = "1.0rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -126,8 +126,18 @@ if __name__ == "__main__":
         handler = logging.handlers.RotatingFileHandler(FILE_LOG, maxBytes=1000000, backupCount=10)
         handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
         logger.addHandler(handler)
-        # logger.propagate = False
-        loop.create_task(main(SYMBOL))
-        loop.run_forever()
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        loop.close()
+        logger.propagate = False
+        try:
+            loop.create_task(main(SYMBOL))
+            loop.run_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            try:
+                loop.run_until_complete(ask_exit())
+            except asyncio.CancelledError:
+                pass
+            except Exception as _err:
+                print(f"Error: {_err}")
+            loop.stop()
+            loop.close()

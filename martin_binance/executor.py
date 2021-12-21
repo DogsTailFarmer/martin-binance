@@ -11,16 +11,6 @@ __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
 
-import gc
-import psutil
-import sqlite3
-import statistics
-from datetime import datetime
-from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
-from multiprocessing import Process, Queue
-
-import requests
-
 try:
     from margin_wrapper import *  # lgtm [py/polluting-import]
     from margin_wrapper import __version__ as msb_ver
@@ -31,10 +21,21 @@ except ImportError:
     import math
     import os
     import simplejson as json
+    import charset_normalizer
     msb_ver = ''
     STANDALONE = False
 else:
     STANDALONE = True
+#
+import gc
+import psutil
+import sqlite3
+import statistics
+from datetime import datetime
+from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
+from threading import Thread
+import queue
+import requests
 
 # region SetParameters
 SYMBOL = str()
@@ -125,37 +126,21 @@ class Style:
         return Style() + b
 
 
-def telegram_send(queue_to_tlg) -> None:
+def telegram(queue_to_tlg) -> None:
     url = TELEGRAM_URL
     token = TOKEN
     channel_id = CHANNEL_ID
     url += token
     method = url + '/sendMessage'
-    while True:
-        try:
-            text = queue_to_tlg.get()
-        except KeyboardInterrupt:
-            pass
-        else:
-            try:
-                requests.post(method, data={'chat_id': channel_id, 'text': text})
-            except Exception as _ex:
-                print(f"telegram_send: {_ex}")
 
-
-def telegram_control() -> None:
     def telegram_get(offset=None) -> []:
         command_list = []
-        url = TELEGRAM_URL
-        token = TOKEN
-        channel_id = CHANNEL_ID
-        url += token
-        method = url + '/getUpdates'
+        _method = url + '/getUpdates'
         res = None
         try:
-            res = requests.post(method, data={'chat_id': channel_id, 'offset': offset})
-        except Exception as _ex:
-            print(f"telegram_get: {_ex}")
+            res = requests.post(_method, data={'chat_id': channel_id, 'offset': offset})
+        except Exception as _exp:
+            print(f"telegram_get: {_exp}")
         if res and res.status_code == 200:
             result = res.json().get('result')
             # print(f"telegram_get.result: {result}")
@@ -182,25 +167,41 @@ def telegram_control() -> None:
     cursor_control = connection_control.cursor()
     offset_id = None
     while True:
-        x = telegram_get(offset_id)
-        if x:
-            offset_id = x[-1].get('update_id')
-            offset_id += 1
-            for n in x:
-                a = n.get('reply_to_message')
-                if a:
-                    bot_id = a.split('.')[0]
-                    cursor_control.execute('insert into t_control values(?,?,?,?)',
-                                           (n['message_id'], n['text_in'], bot_id, None))
-            connection_control.commit()
         try:
-            time.sleep(10)
+            text = queue_to_tlg.get(block=True, timeout=10)
         except KeyboardInterrupt:
-            print("Keyboard Interrupt")
             break
+        except queue.Empty:
+            # Get external command from Telegram bot
+            x = telegram_get(offset_id)
+            if x:
+                offset_id = x[-1].get('update_id')
+                offset_id += 1
+                for n in x:
+                    a = n.get('reply_to_message')
+                    if a:
+                        bot_id = a.split('.')[0]
+                        cursor_control.execute('insert into t_control values(?,?,?,?)',
+                                               (n['message_id'], n['text_in'], bot_id, None))
+                        # Send receipt
+                        text = f"{n['text_in']}, OK"
+                        try:
+                            requests.post(method, data={'chat_id': channel_id, 'text': text})
+                        except Exception as _ex:
+                            print(f"telegram: {_ex}")
+                connection_control.commit()
+        else:
+            if text and 'stop_signal_QWE#@!' in text:
+                break
+            try:
+                requests.post(method, data={'chat_id': channel_id, 'text': text})
+            except Exception as _ex:
+                print(f"telegram: {_ex}")
+    print("tlg_stop")
 
 
-def save_to_db(queue_to_db, connection_analytic) -> None:
+def save_to_db(queue_to_db) -> None:
+    connection_analytic = sqlite3.connect(WORK_PATH + 'funds_rate.db', check_same_thread=False)
     cursor_analytic = connection_analytic.cursor()
     # Compliance check t_exchange and EXCHANGE() = exchange() from ms_cfg.toml
     cursor_analytic.execute("SELECT id_exchange, name FROM t_exchange")
@@ -219,7 +220,6 @@ def save_to_db(queue_to_db, connection_analytic) -> None:
         except KeyboardInterrupt:
             pass
         if data is None or data.get('stop_signal'):
-            connection_analytic.commit()
             break
         print("save_to_db: Record row into .db")
         cursor_analytic.execute("insert into t_funds values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -248,6 +248,7 @@ def save_to_db(queue_to_db, connection_analytic) -> None:
                                  data.get('cycle_time')))
         connection_analytic.commit()
     connection_analytic.commit()
+    print("db_stop")
 
 
 def float2decimal(_f: float) -> Decimal:
@@ -401,7 +402,7 @@ class Strategy(StrategyBase):
         self.part_amount_second = Decimal('0')  # + Amount of partially filled order
         self.command = None  # + External input command from Telegram
         self.start_after_shift = False  # - Flag set before shift, clear into Start()
-        self.queue_to_db = Queue()  # - Queue for save data to .db
+        self.queue_to_db = queue.Queue()  # - Queue for save data to .db
         self.pr_db = None  # - Process for save data to .db
         self.queue_to_tlg = Queue()  # - Queue for sending message to Telegram
         self.pr_tlg = None  # - Process for sending message to Telegram
@@ -430,7 +431,6 @@ class Strategy(StrategyBase):
 
     # noinspection PyProtectedMember
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
-
         self.message_log('Start Init section')
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
@@ -1075,29 +1075,19 @@ class Strategy(StrategyBase):
 
     def stop(self) -> None:
         self.message_log('Stop')
-        data_to_db = {'stop_signal': True}
-        self.queue_to_db.put(data_to_db)
+        self.queue_to_db.put({'stop_signal': True})
+        self.queue_to_tlg.put('stop_signal_QWE#@!')
         self.connection_analytic.commit()
         self.connection_analytic.close()
-        self.queue_to_db.close()
-        self.queue_to_tlg.close()
         self.connection_analytic = None
-        self.pr_tlg = None
-        self.pr_db = None
-        self.pr_tlg_control = None
 
     def suspend(self) -> None:
         print('Suspend')
-        data_to_db = {'stop_signal': True}
-        self.queue_to_db.put(data_to_db)
+        self.queue_to_db.put({'stop_signal': True})
+        self.queue_to_tlg.put('stop_signal_QWE#@!')
         self.connection_analytic.commit()
         self.connection_analytic.close()
-        self.queue_to_db.close()
-        self.queue_to_tlg.close()
         self.connection_analytic = None
-        self.pr_tlg = None
-        self.pr_db = None
-        self.pr_tlg_control = None
 
     def unsuspend(self) -> None:
         print('Unsuspend')
@@ -1539,24 +1529,16 @@ class Strategy(StrategyBase):
         self.connection_analytic = self.connection_analytic or sqlite3.connect(WORK_PATH + 'funds_rate.db',
                                                                                check_same_thread=False)
         # Create processes for save to .db and send Telegram message
-        self.pr_db = self.pr_db or Process(target=save_to_db, args=(self.queue_to_db, self.connection_analytic,),
-                                           daemon=True)
-        self.pr_tlg = self.pr_tlg or Process(target=telegram_send, args=(self.queue_to_tlg,), daemon=True)
-        self.pr_tlg_control = self.pr_tlg_control or Process(target=telegram_control, daemon=True)
+        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,))
+        self.pr_tlg = Thread(target=telegram, args=(self.queue_to_tlg,))
         if not self.pr_db.is_alive():
             print('Start process for .db save')
             try:
                 self.pr_db.start()
             except AssertionError as error:
                 self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
-        if not self.pr_tlg_control.is_alive():
-            print('Start process for Telegram control')
-            try:
-                self.pr_tlg_control.start()
-            except AssertionError as error:
-                self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
         if not self.pr_tlg.is_alive():
-            print('Start process for Telegram send')
+            print('Start process for Telegram')
             try:
                 self.pr_tlg.start()
             except AssertionError as error:

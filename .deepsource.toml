@@ -1,6 +1,8 @@
 version = 1
 
-exclude_patterns = ["martin_binance/binance_api*"]
+exclude_patterns = ["martin_binance/binance_api*",
+                    "martin_binance/margin/**",
+]
 
 [[analyzers]]
 name = "python"
