@@ -3,7 +3,7 @@
 ***
 <h1 align="center">Modified Martingale</h1>
 
-<h2 align="center">Cyclic grid strategy</h2>
+<h2 align="center">Cyclic grid strategy for SPOT market</h2>
 
 <h3 align="center">Free trading system for Binance API</h3>
 
