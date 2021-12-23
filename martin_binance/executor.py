@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc2"
+__version__ = "1.0rc4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -21,7 +21,7 @@ except ImportError:
     import math
     import os
     import simplejson as json
-    import charset_normalizer
+    import charset_normalizer  # lgtm [py/unused-import]
     msb_ver = ''
     STANDALONE = False
 else:
@@ -184,7 +184,7 @@ def telegram(queue_to_tlg) -> None:
                         cursor_control.execute('insert into t_control values(?,?,?,?)',
                                                (n['message_id'], n['text_in'], bot_id, None))
                         # Send receipt
-                        text = f"{n['text_in']}, OK"
+                        text = f"Received {n['text_in']} command, OK"
                         try:
                             requests.post(method, data={'chat_id': channel_id, 'text': text})
                         except Exception as _ex:
@@ -197,7 +197,6 @@ def telegram(queue_to_tlg) -> None:
                 requests.post(method, data={'chat_id': channel_id, 'text': text})
             except Exception as _ex:
                 print(f"telegram: {_ex}")
-    print("tlg_stop")
 
 
 def save_to_db(queue_to_db) -> None:
@@ -248,7 +247,6 @@ def save_to_db(queue_to_db) -> None:
                                  data.get('cycle_time')))
         connection_analytic.commit()
     connection_analytic.commit()
-    print("db_stop")
 
 
 def float2decimal(_f: float) -> Decimal:
@@ -526,7 +524,7 @@ class Strategy(StrategyBase):
                                         {'message_id': row[0]})
                 self.connection_analytic.commit()
             # self.message_log(f"save_strategy_state.command: {self.command}", log_level=LogLevel.DEBUG)
-        if command or ((time.time() - self.status_time) / 60 > STATUS_DELAY and self.command != 'end'):
+        if command or (time.time() - self.status_time) / 60 > STATUS_DELAY:
             # Report current status
             last_price = self.get_buffered_ticker().last_price
             if self.cycle_time:
@@ -534,7 +532,9 @@ class Strategy(StrategyBase):
             else:
                 self.message_log("save_strategy_state: cycle_time is None!", log_level=LogLevel.DEBUG)
                 ct = str(datetime.utcnow()).rsplit('.')[0]
-            if self.grid_hold:
+            if self.command == 'stopped':
+                self.message_log("Strategy stopped. Need manual action", tlg=True)
+            elif self.grid_hold:
                 funds = self.get_buffered_funds()
                 if self.cycle_buy:
                     fund = funds.get(self.s_currency, 0)
@@ -561,6 +561,7 @@ class Strategy(StrategyBase):
                 order_hold = len(self.orders_hold)
                 sum_profit = self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second,
                                                  base=False)
+                command = True if self.command in ('end', 'stop') else False
                 self.message_log(f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
                                  f"For all cycles profit:\n"
                                  f"First: {self.sum_profit_first}\n"
@@ -577,7 +578,7 @@ class Strategy(StrategyBase):
                                  f"ver: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
                                  f"From start {ct}\n"
                                  f"{'-   ***   ***   ***   -' if self.command == 'stop' else ''}\n"
-                                 f"{'Waiting for end of cycle for manual action' if self.command == 'stop' else ''}",
+                                 f"{'Waiting for end of cycle for manual action' if command else ''}",
                                  tlg=True)
         # endregion
         # region ProcessingEvent
@@ -611,7 +612,8 @@ class Strategy(StrategyBase):
                 self.tp_part_amount_second = Decimal('0')
                 self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
                 self.start()
-        if time.time() - self.grid_hold.get('timestamp', time.time()) > SHIFT_GRID_DELAY:
+        grid_hold_timestamp = self.grid_hold.get('timestamp') if self.grid_hold.get('timestamp') else time.time()
+        if time.time() - grid_hold_timestamp > SHIFT_GRID_DELAY:
             self.grid_hold['timestamp'] = None
             self.message_log("Try release hold grid", tlg=True)
             buy_side = self.grid_hold['buy_side']
@@ -771,7 +773,9 @@ class Strategy(StrategyBase):
         #
         self.avg_rate = float2decimal(self.get_buffered_ticker().last_price)
         #
-        if grid_no_change and tp_no_change:
+        if self.command == 'stopped':
+            self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
+        elif grid_no_change and tp_no_change:
             if grid_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                 self.place_grid_part()
@@ -1032,6 +1036,7 @@ class Strategy(StrategyBase):
             self.command = 'stop'
         if self.command == 'end' or (self.command == 'stop' and
                                      (not self.reverse or (self.reverse and REVERSE_STOP))):
+            self.command = 'stopped'
             self.message_log('Stop, waiting manual action', tlg=True)
         else:
             n = gc.collect(generation=2)
@@ -1364,7 +1369,8 @@ class Strategy(StrategyBase):
         self.message_log(f"calc_profit_order: buy_side: {buy_side}, by_market: {by_market}", LogLevel.DEBUG)
         tcm = self.get_trading_capability_manager()
         # Calculate take profit order
-        if PROFIT_MAX:
+        n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
+        if PROFIT_MAX and n > 1:
             profit = self.set_profit()
         else:
             profit = PROFIT
