@@ -1,3 +1,15 @@
+## v1.0rc4 - 2021-12-23
+### Update
+* Readme.md
+
+### Added for new features
+* Cycle end alert and manual action waiting
+* Set min profit for TP when executing the penultimate order of the grid
+
+### Fixed
+* TypeError: unsupported operand type(s) for -: 'float' and 'NoneType' At: /executor.py(615):
+
+
 ## v1.0rc2 - 2021-12-21
 ### Fixed
 * margin Windows full functional
