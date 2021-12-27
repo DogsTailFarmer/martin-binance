@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc2"
+__version__ = "1.0rc5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -88,12 +88,21 @@ ex.REVERSE_INIT_AMOUNT = Decimal('0.0')
 ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 ##################################################################
 ex.HEAD_VERSION = __version__
-FILE_CONFIG = './ms_cfg.toml'
-config = toml.load(FILE_CONFIG)
-path = config.get('Path')
-ex.LOG_PATH = path.get('log_path')
-ex.WORK_PATH = path.get('work_path')
-ex.LAST_STATE_PATH = path.get('last_state_path')
+if not ex.STANDALONE and sys.platform == 'darwin':
+    user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
+    FILE_CONFIG = f"/Users/{user}/.margin/ms_cfg.toml"
+    config = toml.load(FILE_CONFIG)
+    path = f"/Users/{user}/.margin/"
+    ex.LOG_PATH = path
+    ex.WORK_PATH = path
+    ex.LAST_STATE_PATH = path
+else:
+    FILE_CONFIG = './ms_cfg.toml'
+    config = toml.load(FILE_CONFIG)
+    path = config.get('Path')
+    ex.LOG_PATH = path.get('log_path')
+    ex.WORK_PATH = path.get('work_path')
+    ex.LAST_STATE_PATH = path.get('last_state_path')
 ex.EXCHANGE = config.get('exchange')
 ex.VPS_NAME = config.get('Exporter').get('vps_name')
 # Telegram parameters

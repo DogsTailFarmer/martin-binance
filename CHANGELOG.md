@@ -1,3 +1,10 @@
+## v1.0rc5 - 2021-12-27
+### Fixed
+* Set min profit for TP when executing the penultimate order of the grid only
+
+### Added for new features
+* Modified and tested for macOS
+
 ## v1.0rc4 - 2021-12-23
 ### Update
 * Readme.md
@@ -96,10 +103,10 @@
 
 ## v0.6a - 2021-05-23
 
-### Added for new features.
-### Changed for changes in existing functionality.
-### Deprecated for soon-to-be removed features.
-### Removed for now removed features.
-### Fixed for any bug fixes.
+### Added for new features
+### Changed for changes in existing functionality
+### Deprecated for soon-to-be removed features
+### Removed for now removed features
+### Fixed for any bug fixes
 ### Security 
 

@@ -56,8 +56,6 @@ You can modify them for your needs.
 
 <a href="#planned">Planned</a>
 
-<a href="#not-tested">Not Tested</a>
-
 <a href="#known-issue">Known issue</a>
 
 <a href="#target">Target</a>
@@ -154,17 +152,22 @@ For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
     |-- margin
         |-- Linux_site-packages.tar.gz
         |-- win_site-packages.zip
+        |-- MacOS_site-packages.zip
 ```
 #### For Linux
-to the ``` ~/margin-linux/resources/python/lib/python3.7/site-packages ```
+to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
 * Copy ms_cfg.toml and funds_rate.db to the ``` ~/margin-linux ```
 * Copy executor.py to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
 
 #### For Windows
-to the ``` C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages ```
-* Copy ms_cfg.toml and funds_rate.db to the ``` C:\Users\user\AppData\Local\Programs\margin ```
+to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+* Copy ms_cfg.toml and funds_rate.db to the ```C:\Users\user\AppData\Local\Programs\margin```
 * Copy executor.py to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
 
+#### For macOS
+to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
+* Copy ms_cfg.toml and funds_rate.db to the ```/Users/current_user/.margin/```
+* Copy executor.py to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
 ***
 * Start margin in Demo mode
 * Add currency pair BTC/USDT
@@ -498,7 +501,7 @@ Specify the key at the top of the ms_cfg.toml and start funds_rate_exporter.py a
 
 #### STANDALONE mode
 * Auto for Network failure, exchange timeout etc. 
-* Auto recovery after restart with full implemented Tmux install
+* Auto recovery after restart with full implemented Tmux install (Linux only)
 * For manual restart with save order and load last state run ./cli_X_AAABBB.py 1
 
 #### margin mode
@@ -526,11 +529,6 @@ Use Telegram control function, described above.
 
 * In development
 
-## Not tested
-<p id="not-tested"></p>
-
-- Not tested under macOS
-
 ## Known issue
 <p id="known-issue"></p>
 
@@ -539,7 +537,8 @@ _STANDALONE_ mode:
 * None
 
 _With margin.de:_
-* Not work more than one Python bot at the same time, you can use new instance for new pair
+* Not work more than one Python bot at the same time with "pure virtual function" error after some time.
+You can use new instance for new pair
 * Sometimes skips the partial fill signal from the margin layer
 * Sometimes fill signal from the margin come with a delay, for temp fix use EXTRA_CHECK_ORDER_STATE = True
 

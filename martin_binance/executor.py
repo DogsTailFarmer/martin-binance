@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc4"
+__version__ = "1.0rc5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -799,7 +799,12 @@ class Strategy(StrategyBase):
                 if o.order_id == self.tp_order_id:
                     amount_first += float2decimal(o.amount)
                     amount_second += float2decimal(o.amount) * float2decimal(o.price)
-            self.tp_was_filled = (amount_first, amount_second, True,)
+            if amount_first == 0:
+                # If execution event was missed
+                _buy, _amount, _price = self.tp_order
+                amount_first = self.round_truncate(float2decimal(_amount), base=True)
+                amount_second = self.round_truncate(float2decimal(_amount * _price), base=False)
+            self.tp_was_filled = (amount_first, amount_second, True)
             self.tp_order_id = None
             self.tp_order = ()
             self.message_log(f"restore_strategy_state.was_filled_tp: {self.tp_was_filled}", log_level=LogLevel.DEBUG)
@@ -841,7 +846,12 @@ class Strategy(StrategyBase):
                     amount_first += float2decimal(o.amount)
                     amount_second += float2decimal(o.amount) * float2decimal(o.price)
                     print(f"order_id={o.order_id}, first: {o.amount}, price: {o.price}")
-            self.tp_was_filled = (amount_first, amount_second, True,)
+            if amount_first == 0:
+                # If execution event was missed
+                _buy, _amount, _price = self.tp_order
+                amount_first = self.round_truncate(float2decimal(_amount), base=True)
+                amount_second = self.round_truncate(float2decimal(_amount * _price), base=False)
+            self.tp_was_filled = (amount_first, amount_second, True)
             self.tp_order_id = None
             self.tp_order = ()
             self.message_log(f"restore_strategy_state.was_filled_tp: {self.tp_was_filled}", log_level=LogLevel.DEBUG)
@@ -914,7 +924,12 @@ class Strategy(StrategyBase):
                     amount_first += float2decimal(o.amount)
                     amount_second += float2decimal(o.amount) * float2decimal(o.price)
                     print(f"order_id={o.order_id}, first: {o.amount}, price: {o.price}")
-            self.tp_was_filled = (amount_first, amount_second, True,)
+            if amount_first == 0:
+                # If execution event was missed
+                _buy, _amount, _price = self.tp_order
+                amount_first = self.round_truncate(float2decimal(_amount), base=True)
+                amount_second = self.round_truncate(float2decimal(_amount * _price), base=False)
+            self.tp_was_filled = (amount_first, amount_second, True)
             self.tp_order_id = None
             self.tp_order = ()
             self.grid_remove = True
@@ -1370,7 +1385,7 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         # Calculate take profit order
         n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
-        if PROFIT_MAX and n > 1:
+        if PROFIT_MAX and n != 1:
             profit = self.set_profit()
         else:
             profit = PROFIT
@@ -2122,7 +2137,7 @@ class Strategy(StrategyBase):
                 diff_id.remove(self.tp_order_id)
                 amount_first = float2decimal(self.tp_order[1])
                 amount_second = float2decimal(self.tp_order[1]) * float2decimal(self.tp_order[2])
-                self.tp_was_filled = (amount_first, amount_second, True,)
+                self.tp_was_filled = (amount_first, amount_second, True)
                 self.tp_order_id = None
                 self.tp_order = ()
                 self.message_log(f"Was filled TP: {self.tp_was_filled}", log_level=LogLevel.DEBUG)
@@ -2291,7 +2306,7 @@ class Strategy(StrategyBase):
                         self.message_log("Cancel hold reverse cycle", color=Style.B_WHITE, tlg=True)
                     self.tp_part_amount_first = Decimal('0')
                     self.tp_part_amount_second = Decimal('0')
-                    self.tp_was_filled = (amount_first, amount_second, False,)
+                    self.tp_was_filled = (amount_first, amount_second, False)
                     # print(f"on_order_update.was_filled_tp: {self.tp_was_filled}")
                     if self.tp_hold:
                         # After place but before execute TP was filled some grid
@@ -2406,7 +2421,7 @@ class Strategy(StrategyBase):
                     self.initial_reverse_second = Decimal('0')
                     self.message_log("Cancel hold reverse cycle", color=Style.B_WHITE, tlg=True)
                 self.message_log(f"Take profit order {order.id} execute by market")
-                self.tp_was_filled = (amount_first, amount_second, True,)
+                self.tp_was_filled = (amount_first, amount_second, True)
                 if self.tp_hold or self.tp_cancel_from_grid_handler:
                     self.tp_cancel_from_grid_handler = False
                     self.tp_hold = False
@@ -2558,7 +2573,7 @@ class Strategy(StrategyBase):
                 self.message_log("It's was take profit", LogLevel.ERROR)
                 amount_first = float2decimal(self.tp_order[1])
                 amount_second = float2decimal(self.tp_order[1]) * float2decimal(self.tp_order[2])
-                self.tp_was_filled = (amount_first, amount_second, True,)
+                self.tp_was_filled = (amount_first, amount_second, True)
                 self.tp_order_id = None
                 self.tp_order = ()
                 self.message_log(f"Was filled TP: {self.tp_was_filled}", log_level=LogLevel.DEBUG)
