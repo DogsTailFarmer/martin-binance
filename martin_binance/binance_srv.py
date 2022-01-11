@@ -7,7 +7,7 @@ margin.de <-> Python strategy <-> mPw <-> BinanceAPIServer <-> Python3 binance A
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc1"
+__version__ = "1.0rc6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -55,12 +55,14 @@ def get_account(_account_name: str) -> ():
     for account in accounts:
         if account.get('name') == _account_name:
             if account.get('test_net'):
+                real_market = False
                 api = CONFIG.get('endpoint_test').get('api')
                 ws = CONFIG.get('endpoint_test').get('ws')
             else:
+                real_market = True
                 api = CONFIG.get('endpoint').get('api')
                 ws = CONFIG.get('endpoint').get('ws')
-            return account.get('api_key'), account.get('api_secret'), api, ws
+            return account.get('api_key'), account.get('api_secret'), api, ws, real_market
     return ()
 
 
@@ -68,8 +70,9 @@ class OpenClient:
     open_clients = []
 
     def __init__(self, _account_name: str):
-        api_key, api_secret, api, ws = get_account(_account_name)  # lgtm [py/mismatched-multiple-assignment]
+        api_key, api_secret, api, ws, real_mrkt = get_account(_account_name)  # lgtm [py/mismatched-multiple-assignment]
         self.name = _account_name
+        self.real_market = real_mrkt
         self.client = binance.Client(api_key, api_secret, endpoint=api)
         self.endpoint_ws = ws
         self.stop_streams_for_symbol = None
@@ -294,15 +297,43 @@ class Martin(binance_api_pb2_grpc.MartinServicer):
     async def FetchAccountInformation(self, request: binance_api_pb2.OpenClientConnectionId,
                                       context: grpc.aio.ServicerContext
                                       ) -> binance_api_pb2.FetchAccountBalanceResponse:
-        client = OpenClient.get_client(request.client_id).client
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
         response = binance_api_pb2.FetchAccountBalanceResponse()
         response_balance = binance_api_pb2.FetchAccountBalanceResponse.Balances()
         account_information = await client.fetch_account_information(receive_window=None)
         # logger.info(f"account_information: {account_information}")
         # Send only balances
-        balances_res = account_information.get('balances', [])
-        # logger.info(f"account_information.balances_res: {balances_res}")
-        for balance in balances_res:
+        res = account_information.get('balances', [])
+        # Create consolidated list of asset balances from SPOT and Funding wallets
+        balances = []
+        for i in res:
+            _free = float(i.get('free'))
+            _locked = float(i.get('locked'))
+            if _free or _locked:
+                balances.append({'asset': i.get('asset'), 'free': i.get('free'), 'locked': i.get('locked')})
+        # logger.info(f"account_information.balances: {balances}")
+        for balance in balances:
+            new_balance = json_format.ParseDict(balance, response_balance)
+            response.balances.extend([new_balance])
+        return response
+
+    async def FetchFundingWallet(self, request: binance_api_pb2.FetchFundingWalletRequest,
+                                 context: grpc.aio.ServicerContext) -> binance_api_pb2.FetchFundingWalletResponse:
+        open_client = OpenClient.get_client(request.client_id)
+        client = open_client.client
+        response = binance_api_pb2.FetchFundingWalletResponse()
+        response_balance = binance_api_pb2.FetchFundingWalletResponse.Balances()
+        res = []
+        if open_client.real_market:
+            try:
+                res = await client.fetch_funding_wallet(asset=request.asset,
+                                                        need_btc_valuation=request.need_btc_valuation,
+                                                        receive_window=request.receive_window)
+            except AttributeError:
+                logger.error("Can't get Funding Wallet balances, try update binance.py to the last version")
+        # logger.info(f"funding_wallet: {res}")
+        for balance in res:
             new_balance = json_format.ParseDict(balance, response_balance)
             response.balances.extend([new_balance])
         return response

@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.8r"
+__version__ = "1.8r2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -77,10 +77,15 @@ BALANCE_USD = Gauge("margin_balance_usd", "currency balance amount in USD", ['ex
 VPS_CPU = Gauge("margin_vps_cpu", "average cpu load", ['vps_name'])
 VPS_MEMORY = Gauge("margin_vps_memory", "average memory use in %", ['vps_name'])
 
+# Cycle parameters
+CYCLE_BUY = Gauge("margin_cycle_buy", "cycle buy", ['exchange', 'pair', 'vps_name'])
+OVER_PRICE = Gauge("margin_over_price", "over price", ['exchange', 'pair', 'vps_name'])
+F_DEPO = Gauge("margin_f_depo", "first depo", ['exchange', 'pair', 'vps_name'])
+S_DEPO = Gauge("margin_s_depo", "second depo", ['exchange', 'pair', 'vps_name'])
+
 ''' Cycle parameters for future use
 PRICE_SHIFT = Gauge("margin_price_shift", "price shift", ['exchange', 'pair'])
 PROFIT = Gauge("margin_profit", "profit", ['exchange', 'pair'])
-OVER_PRICE = Gauge("margin_over_price", "over price", ['exchange', 'pair'])
 ORDER_Q = Gauge("margin_order_q", "order_q", ['exchange', 'pair'])
 MARTIN = Gauge("margin_martin", "martin", ['exchange', 'pair'])
 LINEAR_GRID_K = Gauge("margin_linear_grid_k", "linear_grid_k", ['exchange', 'pair'])
@@ -121,12 +126,12 @@ def read_sqlite_table(sql_conn, currency_rate, currency_rate_last_time):
                     GROUP BY tex.name, tf.id_exchange, tf.f_currency, tf.s_currency')
     records = cursor.fetchall()
     # Get non-tradable assets
-    cursor.execute('SELECT tex.name, ta.currency, ta.value\
+    cursor.execute('SELECT tex.id_exchange, tex.name, ta.currency, ta.value\
                     FROM t_asset as ta LEFT JOIN t_exchange tex USING(id_exchange)\
                     WHERE ta.value > 0')
     assets = cursor.fetchall()
     for asset in assets:
-        currency_rate.setdefault(asset[1])
+        currency_rate.setdefault(asset[2])
 
     for row in records:
         exchange = str(row[0])
@@ -146,7 +151,7 @@ def read_sqlite_table(sql_conn, currency_rate, currency_rate_last_time):
         currency_rate.setdefault(s_currency)
         if None in currency_rate.values() or time.time() - currency_rate_last_time > 86400:
             get_rate(currency_rate)
-            currency_rate_last_time = time.time()
+            currency_rate_last_time = int(time.time())
         # Last rate
         cursor.execute('SELECT rate\
                         FROM t_funds\
@@ -210,7 +215,7 @@ def read_sqlite_table(sql_conn, currency_rate, currency_rate_last_time):
         SELL_INTEREST.labels(exchange, pair, VPS_NAME).set(cycle_sell_interest)
 
         # Balance amount
-        cursor.execute('SELECT f_balance, s_balance\
+        cursor.execute('SELECT f_balance, s_balance, cycle_buy, f_depo, s_depo, over_price\
                         FROM t_funds\
                         WHERE id_exchange=:id_exchange\
                         AND f_currency=:f_currency\
@@ -222,7 +227,7 @@ def read_sqlite_table(sql_conn, currency_rate, currency_rate_last_time):
         balance_row = cursor.fetchall()
 
         if not balance_row:
-            cursor.execute('SELECT f_balance, s_balance\
+            cursor.execute('SELECT f_balance, s_balance, cycle_buy, f_depo, s_depo, over_price\
                             FROM t_funds\
                             WHERE id_exchange=:id_exchange\
                             AND f_currency=:f_currency\
@@ -235,36 +240,54 @@ def read_sqlite_table(sql_conn, currency_rate, currency_rate_last_time):
 
         for bri in balance_row:
             f_balance = bri[0]
+            s_balance = bri[1]
+            balance = f_balance * last_rate + s_balance
+            F_BALANCE.labels(exchange, pair, VPS_NAME).set(f_balance)
+            S_BALANCE.labels(exchange, pair, VPS_NAME).set(s_balance)
+            TOTAL_BALANCE.labels(exchange, pair, VPS_NAME).set(balance)
+            # Balance in USD cumulative for SPOT and Funding wallets
+            f_balance_fw = 0.0
+            for i, v in enumerate(assets):
+                if v[0] == id_exchange and v[2] == f_currency:
+                    f_balance_fw = v[3]
+                    del assets[i]  # skipcq: PYL-E1138
+                    break
+            f_balance += f_balance_fw
             f_balance_usd = -1
             if CURRENCY_RATE.get(f_currency):
                 try:
                     f_balance_usd = f_balance / CURRENCY_RATE[f_currency]
                 except ZeroDivisionError:
                     f_balance_usd = -1
-            # print(f_currency, f_balance_usd, ' USD')
-            s_balance = bri[1]
+            s_balance_fw = 0.0
+            for i, v in enumerate(assets):
+                if v[0] == id_exchange and v[2] == s_currency:
+                    s_balance_fw = v[3]
+                    del assets[i]  # skipcq: PYL-E1138
+                    break
+            s_balance += s_balance_fw
             s_balance_usd = -1
             if CURRENCY_RATE.get(s_currency):
                 try:
                     s_balance_usd = s_balance / CURRENCY_RATE[s_currency]
                 except ZeroDivisionError:
                     s_balance_usd = -1
-            # print(s_currency, s_balance_usd, ' USD')
-            balance = f_balance * last_rate + s_balance
-            F_BALANCE.labels(exchange, pair, VPS_NAME).set(f_balance)
-            S_BALANCE.labels(exchange, pair, VPS_NAME).set(s_balance)
-            TOTAL_BALANCE.labels(exchange, pair, VPS_NAME).set(balance)
             BALANCE_USD.labels(exchange, f_currency, VPS_NAME).set(f_balance_usd)
             BALANCE_USD.labels(exchange, s_currency, VPS_NAME).set(s_balance_usd)
+            # Cycle parameters
+            CYCLE_BUY.labels(exchange, pair, VPS_NAME).set(bri[2])
+            F_DEPO.labels(exchange, pair, VPS_NAME).set(bri[3])
+            S_DEPO.labels(exchange, pair, VPS_NAME).set(bri[4])
+            OVER_PRICE.labels(exchange, pair, VPS_NAME).set(bri[5])
 
     for asset in assets:
-        if CURRENCY_RATE.get(asset[1]):
+        if CURRENCY_RATE.get(asset[2]):
             try:
-                usd_amount = asset[2] / CURRENCY_RATE[asset[1]]
+                usd_amount = asset[3] / CURRENCY_RATE[asset[2]]
             except ZeroDivisionError:
                 usd_amount = -1
             if usd_amount >= 1.0:
-                BALANCE_USD.labels(asset[0], asset[1], VPS_NAME).set(usd_amount)
+                BALANCE_USD.labels(asset[1], asset[2], VPS_NAME).set(usd_amount)
 
     cursor.close()
     return currency_rate_last_time

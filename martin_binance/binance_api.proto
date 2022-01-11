@@ -5,7 +5,7 @@ margin Python <-> mPw <-> BinanceAPIServer <-> Python3 binance API wrapper <-> B
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "0.10b7"
+__version__ = "1.0rc1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 */
@@ -38,6 +38,26 @@ service Martin {
   rpc FetchOrder (FetchOrderRequest) returns (FetchOrderResponse) {}
   rpc ResetRateLimit (OpenClientConnectionId) returns (SimpleResponse) {}
   rpc OnKlinesUpdate(FetchKlinesRequest) returns (stream OnKlinesUpdateResponse) {}
+  rpc FetchFundingWallet(FetchFundingWalletRequest) returns (FetchFundingWalletResponse) {}
+}
+
+message FetchFundingWalletRequest{
+  int64 client_id = 1;
+  string asset = 2;
+  bool need_btc_valuation = 3;
+  int64 receive_window = 4;
+}
+
+message FetchFundingWalletResponse {
+  message Balances {
+    string asset = 1;
+    string free = 2;
+    string locked = 3;
+    string freeze = 4;
+    string withdrawing = 5;
+    string btc_valuation = 6;
+  }
+  repeated Balances balances = 1;
 }
 
 message CancelOrderResponse{

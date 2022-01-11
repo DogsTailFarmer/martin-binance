@@ -1,6 +1,21 @@
+## v1.0rc6 - 2022-01-11
+### Fixed
+* handler for cancel order - part filled - correct cancel non-filled part 
+* release hold grid after check, not place grid
+* remove extra messages about receiving the command through the Telegram
+* incorrect balance in USD for assets in trading pair (for analytics)
+
+### Update
+* set min profit for TP also when calculate it before reverse
+* Grafana dashboard template, some improvement
+
+### Added for new features
+* some cycle parameters for export into analytic
+* STANDALONE mode (Binance) get asset balances from Funding wallet for analytics
+
 ## v1.0rc5 - 2021-12-27
 ### Fixed
-* Set min profit for TP when executing the penultimate order of the grid only
+* Set min profit for TP when executing only the penultimate order of the grid
 
 ### Added for new features
 * Modified and tested for macOS

@@ -7,7 +7,7 @@ margin.de <-> Python strategy <-> mPw <-> BinanceAPIServer <-> Python3 binance A
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc2"
+__version__ = "1.0rc6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -484,27 +484,50 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
         else:
             balances = json_format.MessageToDict(res).get('balances', [])
             # Refresh actual balance
-            balance_f = next(item for item in balances if item["asset"] == _base_asset)
-            balance_s = next(item for item in balances if item["asset"] == _quote_asset)
+            try:
+                balance_f = next(item for item in balances if item["asset"] == _base_asset)
+            except StopIteration:
+                balance_f = {'asset': _base_asset, 'free': '0.0', 'locked': '0.0'}
+            try:
+                balance_s = next(item for item in balances if item["asset"] == _quote_asset)
+            except StopIteration:
+                balance_s = {'asset': _base_asset, 'free': '0.0', 'locked': '0.0'}
             funds = {_base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
                      _quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
             ms.Strategy.funds = funds
             # print(f"save_asset: {funds}")
-            # Get list of asset without current pair
+            # print(f"save_asset.balances: {balances}")
+            # Get asset balances from Funding Wallet
+            funding_wallet = []
+            try:
+                res = await _stub.FetchFundingWallet(binance_api_pb2.FetchFundingWalletRequest(client_id=_client_id))
+            except asyncio.CancelledError:
+                print("save_asset.Cancelled")
+            except Exception as _ex:
+                ms.Strategy.strategy.message_log(f"Exception FetchFundingWallet: {_ex}", log_level=LogLevel.WARNING)
+            else:
+                funding_wallet = json_format.MessageToDict(res).get('balances', [])
+            assets_fw = {}
+            for fw in funding_wallet:
+                assets_fw[fw['asset']] = Decimal(fw['free']) + Decimal(fw['locked']) + Decimal(fw['freeze'])
+            # print(f"save_asset.assets_fw: {assets_fw}")
+            # Create list of cumulative asset without current pair from SPOT wallet and all assets from Funding wallet
             assets = {}
             for balance in balances:
+                total = assets_fw.pop(balance['asset'], Decimal('0.0'))
                 if balance['asset'] not in (_base_asset, _quote_asset):
-                    total = float(balance['free']) + float(balance['locked'])
-                    if total:
-                        assets[balance['asset']] = total
+                    total += Decimal(balance['free']) + Decimal(balance['locked'])
+                if total:
+                    assets[balance['asset']] = float(total)
+            for k, v in assets_fw.items():
+                assets[k] = float(v)
+            # print(f"save_asset.assets: {assets}")
             # Delete all not used and old updated currency from table
             cursor_analytic.execute('DELETE\
                                      FROM t_asset\
                                      WHERE id_exchange=:id_exchange\
-                                     and use=:use\
-                                     and timestamp<:timestamp',
-                                    {'id_exchange': ms.ID_EXCHANGE, 'use': 0, 'timestamp': time.time() - delay})
-
+                                     and use=:use',
+                                    {'id_exchange': ms.ID_EXCHANGE, 'use': 0})
             cursor_analytic.execute('SELECT id_exchange, currency, value, use, timestamp\
                                      FROM t_asset\
                                      WHERE id_exchange=:id_exchange',
@@ -513,31 +536,27 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
             # print(f"save_asset.rows: {rows}")
             for row in rows:
                 if row[1] in (_base_asset, _quote_asset):
-                    cursor_analytic.execute('UPDATE t_asset SET use=:use, timestamp=:timestamp\
+                    total = assets.pop(row[1], 0.0)
+                    cursor_analytic.execute('UPDATE t_asset SET value=:value, timestamp=:timestamp\
                                              WHERE id_exchange=:id_exchange\
                                              and currency=:currency',
-                                            {'use': 1, 'timestamp': time.time(),
+                                            {'value': total, 'timestamp': int(time.time()),
                                              'id_exchange': ms.ID_EXCHANGE, 'currency': row[1]})
                 else:
-                    # Check used currency for last update time
-                    if row[3]:
-                        # Do not add used currency from other pair
-                        if assets.get(row[1]):
-                            assets.pop(row[1])
-                        if time.time() - row[4] > max_use_update:
-                            cursor_analytic.execute('UPDATE t_asset SET use=:use, timestamp=:timestamp\
-                                                     WHERE id_exchange=:id_exchange\
-                                                     and currency=:currency',
-                                                    {'use': 0, 'timestamp': time.time(),
-                                                     'id_exchange': ms.ID_EXCHANGE, 'currency': row[1]})
+                    # Check used currency from other pair for last update time
+                    if time.time() - row[4] > max_use_update:
+                        cursor_analytic.execute('DELETE FROM t_asset\
+                                                 WHERE id_exchange=:id_exchange\
+                                                 and currency=:currency',
+                                                {'id_exchange': ms.ID_EXCHANGE, 'currency': row[1]})
                     else:
-                        # Remove not needed asset
-                        if time.time() - row[4] < delay and assets.get(row[1]):
-                            assets.pop(row[1])
+                        # Do not add used currency from other pair
+                        assets.pop(row[1], None)
             if assets:
                 for key, value in assets.items():
+                    use = 1 if key in (_base_asset, _quote_asset) else 0
                     cursor_analytic.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
-                                            (ms.ID_EXCHANGE, key, value, 0, int(time.time())))
+                                            (ms.ID_EXCHANGE, key, value, use, int(time.time())))
             connection_analytic.commit()
         await asyncio.sleep(delay)
 
@@ -601,8 +620,7 @@ async def on_klines_update(_stub, _client_id, _symbol, _interval, _kline_i):
 
 async def buffered_funds(_stub, _client_id, _symbol, _base_asset, _quote_asset, print_info: bool = True):
     try:
-        res = await _stub.FetchAccountInformation(binance_api_pb2.OpenClientConnectionId(
-            client_id=_client_id))
+        res = await _stub.FetchAccountInformation(binance_api_pb2.OpenClientConnectionId(client_id=_client_id))
     except asyncio.CancelledError:
         print("buffered_funds.Cancelled")
     except Exception as _ex:
@@ -610,8 +628,14 @@ async def buffered_funds(_stub, _client_id, _symbol, _base_asset, _quote_asset, 
     else:
         balances = json_format.MessageToDict(res).get('balances', [])
         # print(f"buffered_funds.balances: {balances}")
-        balance_f = next(item for item in balances if item["asset"] == _base_asset)
-        balance_s = next(item for item in balances if item["asset"] == _quote_asset)
+        try:
+            balance_f = next(item for item in balances if item["asset"] == _base_asset)
+        except StopIteration:
+            balance_f = {'asset': _base_asset, 'free': '0.0', 'locked': '0.0'}
+        try:
+            balance_s = next(item for item in balances if item["asset"] == _quote_asset)
+        except StopIteration:
+            balance_s = {'asset': _base_asset, 'free': '0.0', 'locked': '0.0'}
         funds = {_base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
                  _quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
         cls = ms.Strategy

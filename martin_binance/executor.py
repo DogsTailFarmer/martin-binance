@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc5"
+__version__ = "1.0rc6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -126,7 +126,7 @@ class Style:
         return Style() + b
 
 
-def telegram(queue_to_tlg) -> None:
+def telegram(queue_to_tlg, _bot_id) -> None:
     url = TELEGRAM_URL
     token = TOKEN
     channel_id = CHANNEL_ID
@@ -181,14 +181,15 @@ def telegram(queue_to_tlg) -> None:
                     a = n.get('reply_to_message')
                     if a:
                         bot_id = a.split('.')[0]
-                        cursor_control.execute('insert into t_control values(?,?,?,?)',
-                                               (n['message_id'], n['text_in'], bot_id, None))
-                        # Send receipt
-                        text = f"Received {n['text_in']} command, OK"
-                        try:
-                            requests.post(method, data={'chat_id': channel_id, 'text': text})
-                        except Exception as _ex:
-                            print(f"telegram: {_ex}")
+                        if bot_id == _bot_id:
+                            cursor_control.execute('insert into t_control values(?,?,?,?)',
+                                                   (n['message_id'], n['text_in'], bot_id, None))
+                            # Send receipt
+                            text = f"Received {n['text_in']} command, OK"
+                            try:
+                                requests.post(method, data={'chat_id': channel_id, 'text': text})
+                            except Exception as _ex:
+                                print(f"telegram: {_ex}")
                 connection_control.commit()
         else:
             if text and 'stop_signal_QWE#@!' in text:
@@ -637,7 +638,7 @@ class Strategy(StrategyBase):
             self.message_log(f"go_trade: {go_trade}, ff: {ff:f}, fs: {fs:f}, avg_rate: {self.avg_rate},"
                              f" diff_f: {diff_f:f}, diff_s: {diff_s:f}", log_level=LogLevel.DEBUG)
             if go_trade:
-                self.message_log(f"Release grid hold: necessary {depo}, exist {fs if buy_side else ff}\n"
+                self.message_log(f"Release hold grid: necessary {depo}, exist {fs if buy_side else ff}\n"
                                  f"Difference first: {diff_f}, second: {diff_s}")
                 self.sum_amount_first += diff_f
                 self.sum_amount_second += diff_s
@@ -649,7 +650,7 @@ class Strategy(StrategyBase):
                 # Check min amount for placing TP
                 if self.check_min_amount_for_tp():
                     self.tp_hold_additional = True
-                    self.place_grid(buy_side, depo, self.reverse_target_amount)
+                self.place_grid(buy_side, depo, self.reverse_target_amount)
         # endregion
         return {'command': json.dumps(self.command),
                 'cycle_buy': json.dumps(self.cycle_buy),
@@ -1041,7 +1042,7 @@ class Strategy(StrategyBase):
                              f"For all cycles profit:\n"
                              f"First: {self.sum_profit_first}\n"
                              f"Second: {self.sum_profit_second}\n"
-                             f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}")
+                             f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
         mem = psutil.virtual_memory().percent
         if mem > 80:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
@@ -1385,7 +1386,7 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         # Calculate take profit order
         n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
-        if PROFIT_MAX and n != 1:
+        if PROFIT_MAX and (n > 1 or self.reverse):
             profit = self.set_profit()
         else:
             profit = PROFIT
@@ -1551,7 +1552,7 @@ class Strategy(StrategyBase):
                                                                                check_same_thread=False)
         # Create processes for save to .db and send Telegram message
         self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,))
-        self.pr_tlg = Thread(target=telegram, args=(self.queue_to_tlg,))
+        self.pr_tlg = Thread(target=telegram, args=(self.queue_to_tlg, self.tlg_header.split('.')[0],))
         if not self.pr_db.is_alive():
             print('Start process for .db save')
             try:
@@ -2321,8 +2322,7 @@ class Strategy(StrategyBase):
                 else:
                     self.message_log('Wild order, do not know it', tlg=True)
             elif update.status == OrderUpdate.PARTIALLY_FILLED:
-                order_trade = update.original_order
-                if self.tp_order_id == order_trade.id:
+                if self.tp_order_id == update.original_order.id:
                     self.message_log("Take profit partially filled", color=Style.B_WHITE)
                     amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second)
                     # Calculate profit for filled part TP
@@ -2506,11 +2506,18 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_success(self, order_id: int, canceled_order: Order) -> None:
         if self.orders_grid.exist(order_id):
+            self.part_amount_first = Decimal('0')
+            self.part_amount_second = Decimal('0')
             self.grid_order_canceled = None
             self.orders_grid.remove(order_id)
-            self.orders_save.append(canceled_order.id, canceled_order.buy, float2decimal(canceled_order.amount),
-                                    float2decimal(canceled_order.price))
-            # for i in self.orders_save: self.message_log(f"on_cancel_order_success.orders_save (after): {i}")
+            save = True
+            for o in self.get_buffered_completed_trades():
+                if o.order_id == order_id:
+                    save = False
+                    break
+            if save:
+                self.orders_save.append(canceled_order.id, canceled_order.buy, float2decimal(canceled_order.amount),
+                                        float2decimal(canceled_order.price))
             self.cancel_grid()
         elif order_id == self.cancel_order_id:
             self.cancel_order_id = None

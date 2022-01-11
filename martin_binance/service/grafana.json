@@ -22,7 +22,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": 16,
-  "iteration": 1636572396615,
+  "iteration": 1641912466875,
   "links": [],
   "panels": [
     {
@@ -57,7 +57,34 @@
           "mappings": [],
           "unit": "currencyUSD"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "BTC Binance",
+                  "BNB Binance",
+                  "BUSD Binance"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 18,
@@ -102,63 +129,121 @@
       "type": "piechart"
     },
     {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
       "datasource": "Node",
       "description": "",
       "fieldConfig": {
         "defaults": {
-          "unit": "currencyUSD"
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "decimals": 3,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "currencyBTC"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "USD"
+            },
+            "properties": [
+              {
+                "id": "custom.lineWidth",
+                "value": 3
+              },
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              }
+            ]
+          },
+          {
+            "__systemRef": "hideSeriesFrom",
+            "matcher": {
+              "id": "byNames",
+              "options": {
+                "mode": "exclude",
+                "names": [
+                  "USD"
+                ],
+                "prefix": "All except:",
+                "readOnly": true
+              }
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom",
+                "value": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": true
+                }
+              }
+            ]
+          }
+        ]
       },
-      "fill": 0,
-      "fillGradient": 0,
       "gridPos": {
         "h": 18,
         "w": 19,
         "x": 5,
         "y": 1
       },
-      "hiddenSeries": false,
       "id": 23,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": true,
-        "hideEmpty": true,
-        "hideZero": true,
-        "max": false,
-        "min": false,
-        "rightSide": true,
-        "show": true,
-        "total": false,
-        "values": true
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
       "options": {
-        "alertThreshold": false
-      },
-      "percentage": false,
-      "pluginVersion": "8.1.3",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [
-        {
-          "$$hashKey": "object:321",
-          "alias": "USD",
-          "linewidth": 3,
-          "yaxis": 2
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "single"
         }
-      ],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
+      },
+      "pluginVersion": "8.1.3",
       "targets": [
         {
           "exemplar": true,
@@ -176,50 +261,10 @@
           "refId": "B"
         }
       ],
-      "thresholds": [],
       "timeFrom": null,
-      "timeRegions": [],
       "timeShift": null,
       "title": "Assets",
-      "tooltip": {
-        "shared": true,
-        "sort": 1,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "$$hashKey": "object:206",
-          "decimals": 3,
-          "format": "currencyUSD",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "$$hashKey": "object:207",
-          "decimals": 3,
-          "format": "currencyUSD",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
+      "type": "timeseries"
     },
     {
       "datasource": "Node",
@@ -264,10 +309,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -276,7 +317,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 13,
         "w": 24,
         "x": 0,
         "y": 19
@@ -284,9 +325,7 @@
       "id": 27,
       "options": {
         "legend": {
-          "calcs": [
-            "delta"
-          ],
+          "calcs": [],
           "displayMode": "table",
           "placement": "right"
         },
@@ -335,10 +374,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
+        "h": 12,
         "w": 3,
         "x": 0,
-        "y": 28
+        "y": 32
       },
       "id": 29,
       "options": {
@@ -380,15 +419,19 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "continuous-greens"
+            "mode": "thresholds"
           },
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
+                "color": "dark-red",
                 "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0
               }
             ]
           },
@@ -397,10 +440,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
+        "h": 12,
         "w": 21,
         "x": 3,
-        "y": 28
+        "y": 32
       },
       "id": 28,
       "options": {
@@ -408,7 +451,7 @@
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
-            "last"
+            "diff"
           ],
           "fields": "",
           "values": false
@@ -420,12 +463,22 @@
       "targets": [
         {
           "exemplar": true,
+          "expr": "sum(margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Total for period",
+          "refId": "A"
+        },
+        {
+          "exemplar": true,
           "expr": "margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",
           "legendFormat": " {{exchange}} {{pair}}",
-          "refId": "A"
+          "refId": "B"
         }
       ],
       "timeFrom": null,
@@ -441,7 +494,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 38
+        "y": 44
       },
       "id": 19,
       "panels": [
@@ -455,8 +508,8 @@
           "fill": 1,
           "fillGradient": 0,
           "gridPos": {
-            "h": 10,
-            "w": 23,
+            "h": 11,
+            "w": 12,
             "x": 0,
             "y": 2
           },
@@ -487,11 +540,6 @@
               "$$hashKey": "object:1351",
               "alias": "/.*cpu/",
               "yaxis": 1
-            },
-            {
-              "$$hashKey": "object:1358",
-              "alias": "/.*mem/",
-              "yaxis": 2
             }
           ],
           "spaceLength": 10,
@@ -504,14 +552,6 @@
               "interval": "",
               "legendFormat": "{{vps_name}} cpu",
               "refId": "A"
-            },
-            {
-              "exemplar": false,
-              "expr": "margin_vps_memory{vps_name=~\"$v_vps_name\"}",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "{{vps_name}} mem",
-              "refId": "B"
             }
           ],
           "thresholds": [
@@ -537,7 +577,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "$v_vps_name",
+          "title": "CPU",
           "tooltip": {
             "shared": true,
             "sort": 0,
@@ -568,13 +608,123 @@
               "logBase": 1,
               "max": null,
               "min": null,
-              "show": true
+              "show": false
             }
           ],
           "yaxis": {
             "align": false,
             "alignLevel": 0
           }
+        },
+        {
+          "datasource": "Node",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "cpu",
+                "axisPlacement": "hidden",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "line+area"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "transparent",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percentunit"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/.*mem/"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "auto"
+                  },
+                  {
+                    "id": "custom.axisLabel",
+                    "value": "memory"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 11,
+            "w": 12,
+            "x": 12,
+            "y": 2
+          },
+          "id": 30,
+          "options": {
+            "legend": {
+              "calcs": [
+                "last"
+              ],
+              "displayMode": "table",
+              "placement": "right"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "pluginVersion": "8.1.3",
+          "targets": [
+            {
+              "exemplar": false,
+              "expr": "margin_vps_memory{vps_name=~\"$v_vps_name\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{vps_name}} mem",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Memory use",
+          "type": "timeseries"
         }
       ],
       "title": "VPS",
@@ -587,7 +737,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 45
       },
       "id": 17,
       "panels": [
@@ -716,148 +866,76 @@
           "type": "stat"
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "Node",
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 8,
-            "w": 6,
-            "x": 2,
-            "y": 3
-          },
-          "hiddenSeries": false,
-          "id": 6,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": false,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "connected",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "8.1.3",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "margin_last_rate{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
-              "interval": "",
-              "legendFormat": "value",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "RATE",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:271",
-              "format": "none",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:272",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
           "datasource": "Node",
           "description": "",
           "fieldConfig": {
             "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "stepAfter",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "decimals": 6,
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
               "unit": "currencyBTC"
             },
             "overrides": []
           },
-          "fill": 1,
-          "fillGradient": 0,
           "gridPos": {
             "h": 8,
-            "w": 6,
-            "x": 8,
+            "w": 9,
+            "x": 2,
             "y": 3
           },
-          "hiddenSeries": false,
           "id": 2,
-          "legend": {
-            "alignAsTable": false,
-            "avg": false,
-            "current": false,
-            "hideEmpty": false,
-            "hideZero": false,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "connected",
           "options": {
-            "alertThreshold": false
+            "legend": {
+              "calcs": [
+                "last"
+              ],
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
           },
-          "percentage": false,
           "pluginVersion": "8.1.3",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": true,
           "targets": [
             {
               "exemplar": true,
@@ -875,106 +953,106 @@
               "refId": "B"
             }
           ],
-          "thresholds": [],
           "timeFrom": null,
-          "timeRegions": [],
           "timeShift": null,
           "title": "--> $v_pair",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:1038",
-              "decimals": 6,
-              "format": "currencyBTC",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:1039",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          "type": "timeseries"
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
           "datasource": "Node",
           "description": "",
-          "fill": 1,
-          "fillGradient": 0,
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "stepAfter",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Profit"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Sum profit by last rate"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  }
+                ]
+              }
+            ]
+          },
           "gridPos": {
             "h": 8,
-            "w": 6,
-            "x": 14,
+            "w": 9,
+            "x": 11,
             "y": 3
           },
-          "hiddenSeries": false,
           "id": 14,
-          "legend": {
-            "alignAsTable": false,
-            "avg": false,
-            "current": false,
-            "hideEmpty": false,
-            "hideZero": false,
-            "max": false,
-            "min": false,
-            "rightSide": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "connected",
           "options": {
-            "alertThreshold": false
-          },
-          "percentage": false,
-          "pluginVersion": "8.1.3",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "$$hashKey": "object:311",
-              "alias": "Profit",
-              "yaxis": 2
+            "legend": {
+              "calcs": [
+                "last"
+              ],
+              "displayMode": "list",
+              "placement": "bottom"
             },
-            {
-              "$$hashKey": "object:318",
-              "alias": "Sum profit by last rate",
-              "yaxis": 2
+            "tooltip": {
+              "mode": "single"
             }
-          ],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": true,
+          },
+          "pluginVersion": "8.1.3",
           "targets": [
             {
               "exemplar": true,
@@ -1000,49 +1078,10 @@
               "refId": "C"
             }
           ],
-          "thresholds": [],
           "timeFrom": null,
-          "timeRegions": [],
           "timeShift": null,
           "title": "$v_pair<--",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:1038",
-              "decimals": null,
-              "format": "none",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "$$hashKey": "object:1039",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          "type": "timeseries"
         },
         {
           "datasource": "Node",
@@ -1195,7 +1234,7 @@
             ]
           },
           "gridPos": {
-            "h": 16,
+            "h": 13,
             "w": 4,
             "x": 20,
             "y": 3
@@ -1314,52 +1353,73 @@
           "type": "stat"
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
           "datasource": "Node",
           "description": "Total amount for both currency by last rate",
           "fieldConfig": {
             "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
               "unit": "none"
             },
             "overrides": []
           },
-          "fill": 1,
-          "fillGradient": 0,
           "gridPos": {
-            "h": 8,
+            "h": 5,
             "w": 20,
             "x": 0,
             "y": 11
           },
-          "hiddenSeries": false,
           "id": 13,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": false,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "nullPointMode": "connected",
           "options": {
-            "alertThreshold": true
+            "legend": {
+              "calcs": [],
+              "displayMode": "hidden",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
           },
-          "percentage": false,
           "pluginVersion": "8.1.3",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
           "targets": [
             {
               "exemplar": false,
@@ -1372,53 +1432,238 @@
               "refId": "B"
             }
           ],
-          "thresholds": [],
           "timeFrom": null,
-          "timeRegions": [],
           "timeShift": null,
           "title": "Summary amount ($v_pair<--)",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
           "transformations": [],
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Node",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "A"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "currencyBTC"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 3
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-blue",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "B"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "currencyUSD"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 3
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "C"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bool"
+                  },
+                  {
+                    "id": "custom.showPoints",
+                    "value": "always"
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 5
+                  },
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-green",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "D"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  },
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 5
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "E"
+                },
+                "properties": [
+                  {
+                    "id": "custom.fillOpacity",
+                    "value": 0
+                  }
+                ]
+              }
+            ]
           },
-          "yaxes": [
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 16
+          },
+          "id": 33,
+          "options": {
+            "legend": {
+              "calcs": [
+                "last"
+              ],
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
+          "pluginVersion": "8.1.3",
+          "targets": [
             {
-              "$$hashKey": "object:762",
-              "format": "none",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "exemplar": true,
+              "expr": "margin_f_depo{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "First depo",
+              "refId": "A"
             },
             {
-              "$$hashKey": "object:763",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
+              "exemplar": true,
+              "expr": "margin_s_depo{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "Second depo",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "margin_cycle_buy{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "Buy/Sell",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "margin_over_price{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "Over price",
+              "refId": "D"
+            },
+            {
+              "exemplar": true,
+              "expr": "margin_last_rate{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "Rate",
+              "refId": "E"
             }
           ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Cycle parameters ($v_pair)",
+          "transformations": [],
+          "type": "timeseries"
         }
       ],
-      "repeat": null,
-      "title": "Margin",
+      "title": "Trade cycle detail (want be selected one pair only)",
       "type": "row"
     }
   ],
@@ -1431,14 +1676,12 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
+          "selected": true,
           "text": [
-            "htznr_BNNCE",
-            "htznr_MRGN"
+            "All"
           ],
           "value": [
-            "htznr_BNNCE",
-            "htznr_MRGN"
+            "$__all"
           ]
         },
         "datasource": "Node",
@@ -1467,12 +1710,12 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
+          "selected": true,
           "text": [
-            "BinanceSub4"
+            "All"
           ],
           "value": [
-            "BinanceSub4"
+            "$__all"
           ]
         },
         "datasource": "Node",
@@ -1501,7 +1744,7 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
+          "selected": true,
           "text": [
             "All"
           ],
@@ -1536,12 +1779,8 @@
         "allValue": null,
         "current": {
           "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": "Node",
         "definition": "label_values({exchange=~\"$v_exchange\"}, currency)",
@@ -1569,12 +1808,12 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-30d",
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "",
-  "title": "crypto exporter",
-  "uid": "",
-  "version": 127
+  "timezone": "utc",
+  "title": "Crypto exporter",
+  "uid": "9ICv5brMk",
+  "version": 178
 }

@@ -145,26 +145,24 @@ For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
 
 ### MARGIN mode
 * Install [margin](https://margin.de/download/)
-* Extract one of the files from:
-```
-.
-|-- martin_binance
-    |-- margin
-        |-- Linux_site-packages.tar.gz
-        |-- win_site-packages.zip
-        |-- MacOS_site-packages.zip
-```
+
 #### For Linux
+Extract [Linux_site-packages.tar.gz](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/Linux_site-packages.tar.gz)
+
 to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
 * Copy ms_cfg.toml and funds_rate.db to the ``` ~/margin-linux ```
 * Copy executor.py to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
 
 #### For Windows
+Extract [win_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/win_site-packages.zip)
+
 to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
 * Copy ms_cfg.toml and funds_rate.db to the ```C:\Users\user\AppData\Local\Programs\margin```
 * Copy executor.py to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
 
 #### For macOS
+Extract [MacOS_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/MacOS_site-packages.zip)
+
 to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
 * Copy ms_cfg.toml and funds_rate.db to the ```/Users/current_user/.margin/```
 * Copy executor.py to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```

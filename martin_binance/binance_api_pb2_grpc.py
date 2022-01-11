@@ -119,6 +119,11 @@ class MartinStub(object):
                 request_serializer=binance__api__pb2.FetchKlinesRequest.SerializeToString,
                 response_deserializer=binance__api__pb2.OnKlinesUpdateResponse.FromString,
                 )
+        self.FetchFundingWallet = channel.unary_unary(
+                '/martin.Martin/FetchFundingWallet',
+                request_serializer=binance__api__pb2.FetchFundingWalletRequest.SerializeToString,
+                response_deserializer=binance__api__pb2.FetchFundingWalletResponse.FromString,
+                )
 
 
 class MartinServicer(object):
@@ -250,6 +255,12 @@ class MartinServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def FetchFundingWallet(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MartinServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -357,6 +368,11 @@ def add_MartinServicer_to_server(servicer, server):
                     servicer.OnKlinesUpdate,
                     request_deserializer=binance__api__pb2.FetchKlinesRequest.FromString,
                     response_serializer=binance__api__pb2.OnKlinesUpdateResponse.SerializeToString,
+            ),
+            'FetchFundingWallet': grpc.unary_unary_rpc_method_handler(
+                    servicer.FetchFundingWallet,
+                    request_deserializer=binance__api__pb2.FetchFundingWalletRequest.FromString,
+                    response_serializer=binance__api__pb2.FetchFundingWalletResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -722,5 +738,22 @@ class Martin(object):
         return grpc.experimental.unary_stream(request, target, '/martin.Martin/OnKlinesUpdate',
             binance__api__pb2.FetchKlinesRequest.SerializeToString,
             binance__api__pb2.OnKlinesUpdateResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def FetchFundingWallet(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/martin.Martin/FetchFundingWallet',
+            binance__api__pb2.FetchFundingWalletRequest.SerializeToString,
+            binance__api__pb2.FetchFundingWalletResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
