@@ -26,7 +26,7 @@ import grpc
 import jsonpickle
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
-from margin_strategy_sdk import *  # lgtm [py/polluting-import]
+from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
 
 # noinspection PyPackageRequirements
 import binance  # lgtm [py/import-and-import-from]
@@ -154,17 +154,11 @@ class StrategyBase:
 
     @classmethod
     def order_exist(cls, _id) -> bool:
-        for i in cls.orders:
-            if i.id == _id:
-                return True
-        return False
+        return any(i.id == _id for i in cls.orders)
 
     @classmethod
     def all_order_exist(cls, _id) -> bool:
-        for i in cls.all_orders:
-            if i.id == _id:
-                return True
-        return False
+        return any(i.id == _id for i in cls.all_orders)
 
     @classmethod
     def get_trading_capability_manager(cls) -> TradingCapabilityManager:
@@ -238,10 +232,7 @@ class StrategyBase:
 
 
 def trade_not_exist(_order_id: int, _trade_id: int, _trades: [PrivateTrade] = None) -> bool:
-    for trade in _trades:
-        if trade.order_id == _order_id and trade.id == _trade_id:
-            return False
-    return True
+    return all(not(trade.order_id == _order_id and trade.id == _trade_id) for trade in _trades)
 
 
 class PrivateTrade:

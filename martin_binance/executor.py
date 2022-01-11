@@ -15,13 +15,13 @@ try:
     from margin_wrapper import *  # lgtm [py/polluting-import]
     from margin_wrapper import __version__ as msb_ver
 except ImportError:
-    from margin_strategy_sdk import *  # lgtm [py/polluting-import]
+    from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
     from typing import Dict, List
     import time
     import math
     import os
     import simplejson as json
-    import charset_normalizer  # lgtm [py/unused-import]
+    import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
     msb_ver = ''
     STANDALONE = False
 else:
@@ -294,10 +294,7 @@ class Orders:
         return ()
 
     def exist(self, _id: int) -> bool:
-        for i in self.orders_list:
-            if i['id'] == _id:
-                return True
-        return False
+        return any(i['id'] == _id for i in self.orders_list)
 
     def get(self) -> []:
         """
