@@ -1,3 +1,8 @@
+## v1.0rc6.1 - 2022-01-19
+### Update
+* refactoring funds_rate_exporter.py
+* readme.md, add 'For developer' chapter
+
 ## v1.0rc6 - 2022-01-11
 ### Fixed
 * handler for cancel order - part filled - correct cancel non-filled part 

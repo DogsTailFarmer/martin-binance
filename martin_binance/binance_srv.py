@@ -45,7 +45,7 @@ if os.path.exists(FILE_CONFIG):
     CONFIG = toml.load(FILE_CONFIG)
 else:
     print("Can't find config file!")
-    # noinspection PyProtectedMember
+    # noinspection PyProtectedMember, PyUnresolvedReferences
     os._exit(1)
 HEARTBEAT = 1  # Sec
 

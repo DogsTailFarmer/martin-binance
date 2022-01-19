@@ -40,7 +40,7 @@ The system can be used in two modes:
 
 Strategy logic at executor.py file and trading parameters set in the API_1_BTCBUSD.py (cli_7_BTCUSDT.py)
 
-You can modify them for your needs.
+You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
 
 ## Reference
 
@@ -54,7 +54,7 @@ You can modify them for your needs.
 
 <a href="#how-its-work">How it's work</a>
 
-<a href="#planned">Planned</a>
+<a href="#for-developers">For developers</a>
 
 <a href="#known-issue">Known issue</a>
 
@@ -522,10 +522,83 @@ and I am not sure that it is necessary.
 If you need setup new version margin or Python strategy, first you need stop strategy.
 Use Telegram control function, described above.
 
-## Planned
-<p id="planned"></p>
+## For developers
+<p id="for-developers"></p>
 
-* In development
+The modular open architecture of the project allows you to use it both as a ready-made solution and in parts when
+developing your own strategies. See Review chart for reference.
+
+Warning.
+Coverage of overridden [margin strategy-sdk](https://github.com/MarginOpenSource/strategy-sdk) and
+[binance.py](https://github.com/Th0rgal/binance.py) packages is significant but not complete.
+Only methods and functions required for normal operation of the presented strategy are implemented.
+Missing functionality can be implemented on yours own or on request.
+
+### Easy way
+If you want to develop 'margin style' strategy, use
+[template](https://github.com/MarginOpenSource/strategy-template) from margin repository.  In this way you can use it
+both independently (STANDALONE mode) and together with margin.
+
+### Independent way
+A fully independent strategy that can only be used on the Binance SPOT Exchange.
+
+In this case, the following modules are used:
+[binance.py](https://github.com/Th0rgal/binance.py) package as a layer for async communication with the Binance API.
+
+The module ```binance_srv.py``` as a multiplexer layer, providing simultaneous async interaction for many accounts
+and many trading pairs through one connection from one IP address. It's powered by [gRPC](https://grpc.io/about/)
+Remote Procedure Call framework.
+For [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/overview) serializing structured data
+see ```binance_api.proto```
+Below code example for client, where we up connection, get client id and get info for trading pair.
+
+```Python
+import asyncio
+import toml
+
+import grpc
+
+from google.protobuf import json_format
+import binance_api_pb2
+import binance_api_pb2_grpc
+
+# For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
+CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
+                   ('grpc.enable_retries', 0),
+                   ('grpc.keepalive_timeout_ms', 10000)]
+RATE_LIMITER = 10  # sec
+ID_EXCHANGE = 7
+FILE_CONFIG = './ms_cfg.toml'
+config = toml.load(FILE_CONFIG)
+EXCHANGE = config.get('exchange')
+SYMBOL = 'BTCUSDT'
+
+
+async def main(_symbol):
+    account_name = EXCHANGE[ID_EXCHANGE]
+    print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
+    channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
+    stub = binance_api_pb2_grpc.MartinStub(channel)
+    client_id_msg = await stub.OpenClientConnection(binance_api_pb2.OpenClientConnectionRequest(
+        account_name=account_name,
+        rate_limiter=RATE_LIMITER))
+    print(f"main.client_id: {client_id_msg.client_id}")
+    print(f"main.srv_version: {client_id_msg.srv_version}")
+    # Get symbol info based on https://th0rgal.gitbook.io/binance-py/queries/general#code-2
+    _exchange_info_symbol = await stub.FetchExchangeInfoSymbol(binance_api_pb2.MarketRequest(
+        client_id=client_id_msg.client_id,
+        symbol=_symbol))
+    exchange_info_symbol = json_format.MessageToDict(_exchange_info_symbol)
+    print("\n".join(f"{k}\t{v}" for k, v in exchange_info_symbol.items()))
+
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main(SYMBOL))
+    loop.stop()
+    loop.close()
+```
+Start binance_srv.py in one terminal window and this code in second.
 
 ## Known issue
 <p id="known-issue"></p>
@@ -539,6 +612,8 @@ _With margin.de:_
 You can use new instance for new pair
 * Sometimes skips the partial fill signal from the margin layer
 * Sometimes fill signal from the margin come with a delay, for temp fix use EXTRA_CHECK_ORDER_STATE = True
+* When you STOP strategy from margin terminal, close and then restart it, the strategy is started without approval and
+restore (can be duplicated) orders. If you want planed restart martin-binance - delete state.db in./margin folder before restart.
 
 ## Target
 <p id="target"></p>
