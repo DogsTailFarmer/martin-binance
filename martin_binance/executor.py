@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc6"
+__version__ = "1.0rc7.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -200,6 +200,22 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                 print(f"telegram: {_ex}")
 
 
+def db_management() -> None:
+    conn = sqlite3.connect(WORK_PATH + 'funds_rate.db', check_same_thread=False)
+    conn.execute("CREATE TABLE IF NOT EXISTS t_orders (\
+                  id_exchange   INTEGER REFERENCES t_exchange (id_exchange)\
+                                    ON DELETE RESTRICT ON UPDATE CASCADE NOT NULL,\
+                  f_currency    TEXT                NOT NULL,\
+                  s_currency    TEXT                NOT NULL,\
+                  cycle_buy     BOOLEAN             NOT NULL,\
+                  order_buy     INTEGER             NOT NULL,\
+                  order_sell    INTEGER             NOT NULL,\
+                  order_hold    INTEGER             NOT NULL,\
+                  PRIMARY KEY(id_exchange, f_currency, s_currency))")
+    conn.commit()
+    conn.close()
+
+
 def save_to_db(queue_to_db) -> None:
     connection_analytic = sqlite3.connect(WORK_PATH + 'funds_rate.db', check_same_thread=False)
     cursor_analytic = connection_analytic.cursor()
@@ -221,32 +237,55 @@ def save_to_db(queue_to_db) -> None:
             pass
         if data is None or data.get('stop_signal'):
             break
-        print("save_to_db: Record row into .db")
-        cursor_analytic.execute("insert into t_funds values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                (ID_EXCHANGE,
-                                 None,
-                                 data.get('f_currency'),
-                                 data.get('s_currency'),
-                                 float(data.get('f_funds')),
-                                 float(data.get('s_funds')),
-                                 float(data.get('avg_rate')),
-                                 data.get('cycle_buy'),
-                                 float(data.get('f_depo')),
-                                 float(data.get('s_depo')),
-                                 float(data.get('f_profit')),
-                                 float(data.get('s_profit')),
-                                 datetime.utcnow(),
-                                 PRICE_SHIFT,
-                                 float(PROFIT),
-                                 float(data.get('over_price')),
-                                 data.get('order_q'),
-                                 float(MARTIN),
-                                 LINEAR_GRID_K,
-                                 ADAPTIVE_TRADE_CONDITION,
-                                 KBB,
-                                 PROFIT_K,
-                                 data.get('cycle_time')))
-        connection_analytic.commit()
+        elif data.get('destination') == 't_funds':
+            # print("save_to_db: Record row into t_funds")
+            cursor_analytic.execute("INSERT INTO t_funds values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                    (ID_EXCHANGE,
+                                     None,
+                                     data.get('f_currency'),
+                                     data.get('s_currency'),
+                                     float(data.get('f_funds')),
+                                     float(data.get('s_funds')),
+                                     float(data.get('avg_rate')),
+                                     data.get('cycle_buy'),
+                                     float(data.get('f_depo')),
+                                     float(data.get('s_depo')),
+                                     float(data.get('f_profit')),
+                                     float(data.get('s_profit')),
+                                     datetime.utcnow(),
+                                     PRICE_SHIFT,
+                                     float(PROFIT),
+                                     float(data.get('over_price')),
+                                     data.get('order_q'),
+                                     float(MARTIN),
+                                     LINEAR_GRID_K,
+                                     ADAPTIVE_TRADE_CONDITION,
+                                     KBB,
+                                     PROFIT_K,
+                                     data.get('cycle_time')))
+            connection_analytic.commit()
+        elif data.get('destination') == 't_orders':
+            # print("save_to_db: Record row into t_orders")
+            cursor_analytic.execute("INSERT INTO t_orders VALUES(:id_exchange,\
+                                                                 :f_currency,\
+                                                                 :s_currency,\
+                                                                 :cycle_buy,\
+                                                                 :order_buy,\
+                                                                 :order_sell,\
+                                                                 :order_hold)\
+                                        ON CONFLICT(id_exchange, f_currency, s_currency)\
+                                     DO UPDATE SET cycle_buy=:cycle_buy,\
+                                                   order_buy=:order_buy,\
+                                                   order_sell=:order_sell,\
+                                                   order_hold=:order_hold",
+                                    {'id_exchange': ID_EXCHANGE,
+                                     'f_currency': data.get('f_currency'),
+                                     's_currency': data.get('s_currency'),
+                                     'cycle_buy': data.get('cycle_buy'),
+                                     'order_buy': data.get('order_buy'),
+                                     'order_sell': data.get('order_sell'),
+                                     'order_hold': data.get('order_hold')})
+            connection_analytic.commit()
     connection_analytic.commit()
 
 
@@ -424,10 +463,12 @@ class Strategy(StrategyBase):
         self.grid_remove = None  # - Flag when starting cancel grid orders
         self.heartbeat_counter = 0  # -
         self.grid_order_canceled = None  # -
+        self.cycle_status = ()  # - Operational status for current cycle, orders count
 
-    # noinspection PyProtectedMember
+    # noinspection PyProtectedMember, PyUnresolvedReferences
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
-        self.message_log('Start Init section')
+        # self.message_log('Start Init section')
+        db_management()
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
         self.s_currency = self.get_second_currency()
@@ -502,6 +543,31 @@ class Strategy(StrategyBase):
         return s
 
     def save_strategy_state(self) -> Dict[str, str]:
+        # region SaveOperationalStatus
+        # Skip when transition processes or GRID_ONLY mode
+        stable_state = (self.shift_grid_threshold is None
+                        and self.grid_remove is None
+                        and not self.reverse_hold
+                        and not GRID_ONLY)
+        if stable_state:
+            orders = self.get_buffered_open_orders()
+            order_buy = len([i for i in orders if i.buy is True])
+            order_sell = len([i for i in orders if i.buy is False])
+            order_hold = len(self.orders_hold)
+            cycle_status = (self.cycle_buy, order_buy, order_sell, order_hold)
+            if self.cycle_status != cycle_status:
+                self.cycle_status = cycle_status
+                data_to_db = {'f_currency': self.f_currency,
+                              's_currency': self.s_currency,
+                              'cycle_buy': self.cycle_buy,
+                              'order_buy': order_buy,
+                              'order_sell': order_sell,
+                              'order_hold': order_hold,
+                              'destination': 't_orders'}
+                if self.queue_to_db:
+                    # print('Send data to t_orders')
+                    self.queue_to_db.put(data_to_db)
+        # endregion
         # region ReportStatus
         # Get command from Telegram
         command = None
@@ -553,10 +619,15 @@ class Strategy(StrategyBase):
                                  f"From start {ct}\n"
                                  f"Time difference: {time_diff} sec", tlg=True)
             else:
-                orders = self.get_buffered_open_orders()
-                order_buy = len([i for i in orders if i.buy is True])
-                order_sell = len([i for i in orders if i.buy is False])
-                order_hold = len(self.orders_hold)
+                if self.cycle_status:
+                    order_buy = self.cycle_status[1]
+                    order_sell = self.cycle_status[2]
+                    order_hold = self.cycle_status[3]
+                else:
+                    orders = self.get_buffered_open_orders()
+                    order_buy = len([i for i in orders if i.buy is True])
+                    order_sell = len([i for i in orders if i.buy is False])
+                    order_hold = len(self.orders_hold)
                 sum_profit = self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second,
                                                  base=False)
                 command = bool(self.command in ('end', 'stop'))
@@ -996,8 +1067,6 @@ class Strategy(StrategyBase):
                 if self.reverse:
                     self.initial_reverse_first = self.round_truncate(ff, base=True, _rounding=ROUND_FLOOR)
                     self.initial_reverse_second = self.round_truncate(fs, base=False, _rounding=ROUND_FLOOR)
-                    ff = self.initial_first
-                    fs = self.initial_second
                     pf = PROFIT_REVERSE * self.profit_first / (1 - PROFIT_REVERSE)
                     ps = PROFIT_REVERSE * self.profit_second / (1 - PROFIT_REVERSE)
                 else:
@@ -1025,9 +1094,10 @@ class Strategy(StrategyBase):
                               's_profit': ps,
                               'order_q': self.order_q,
                               'over_price': self.over_price,
-                              'cycle_time': ct}
+                              'cycle_time': ct,
+                              'destination': 't_funds'}
                 if self.queue_to_db:
-                    print('Save data to .db')
+                    print('Send data to .db t_funds')
                     self.queue_to_db.put(data_to_db)
             else:
                 self.wait_refunding_for_start = True
@@ -1095,6 +1165,13 @@ class Strategy(StrategyBase):
         self.message_log('Stop')
         self.queue_to_db.put({'stop_signal': True})
         self.queue_to_tlg.put('stop_signal_QWE#@!')
+        self.connection_analytic.execute("DELETE FROM t_orders\
+                                          WHERE id_exchange=:id_exchange\
+                                          AND f_currency=:f_currency\
+                                          AND s_currency=:s_currency",
+                                         {'id_exchange': ID_EXCHANGE,
+                                          'f_currency': self.f_currency,
+                                          's_currency': self.s_currency})
         self.connection_analytic.commit()
         self.connection_analytic.close()
         self.connection_analytic = None
@@ -1161,6 +1238,8 @@ class Strategy(StrategyBase):
             fund = float2decimal(fund.available) if fund else Decimal('0.0')
             currency = self.f_currency
         if depo <= fund:
+            total_grid_amount_f = float2decimal(0)
+            total_grid_amount_s = float2decimal(0)
             for i in range(self.order_q):
                 if LINEAR_GRID_K >= 0:
                     price_k = float2decimal(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
@@ -1179,16 +1258,24 @@ class Strategy(StrategyBase):
                         price = price_prev + min_delta_dec
                 price_prev = price
                 # print(f"place_grid.round_price: {price}")
-                amount = depo * self.martin**i * (1 - self.martin) / (1 - self.martin**self.order_q)
+                if i < self.order_q - 1:
+                    amount = depo * self.martin**i * (1 - self.martin) / (1 - self.martin**self.order_q)
+                else:
+                    amount = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
                 if buy_side:
                     amount /= price
                 amount = self.round_truncate(amount, base=True)
+                total_grid_amount_f += amount
+                total_grid_amount_s += amount * price
+                # print(f"{i+1}, {amount}, {price}, {amount * price}")
                 # create order for grid
                 if i < GRID_MAX_COUNT:
                     waiting_order_id = self.place_limit_order(buy_side, float(amount), float(price))
                     self.orders_init.append(waiting_order_id, buy_side, amount, price)
                 else:
                     self.orders_hold.append(i, buy_side, amount, price)
+            self.message_log(f"Total grid amount: first: {total_grid_amount_f}, second: {total_grid_amount_s}",
+                             log_level=LogLevel.DEBUG, color=Style.CYAN)
             if not GRID_ONLY and allow_grid_shift:
                 if buy_side:
                     self.shift_grid_threshold = base_price + 2 * PRICE_SHIFT * base_price / 100
@@ -1526,22 +1613,32 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         delta_price = (over_price * base_price) / (100 * (self.order_q - 1))
         avg_amount = 0.0
+        total_grid_amount_f = 0
+        total_grid_amount_s = 0
         for i in range(self.order_q):
-            price_k = 1 - math.log(self.order_q - i, self.order_q)
+            if LINEAR_GRID_K >= 0:
+                price_k = 1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K)
+            else:
+                price_k = 1
             if buy_side:
                 price = base_price - i * delta_price * price_k
             else:
                 price = base_price + i * delta_price * price_k
             price = tcm.round_price(price, RoundingType.ROUND)
-            amount = depo * pow(martin_float, i) * (1 - martin_float) / (1 - pow(martin_float, self.order_q))
+            if i < self.order_q - 1:
+                amount = depo * pow(martin_float, i) * (1 - martin_float) / (1 - pow(martin_float, self.order_q))
+            else:
+                amount = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
             amount = tcm.round_amount(amount, RoundingType.FLOOR)
-            # print(f"calc_grid_avg.amount: {amount}")
             if buy_side:
                 amount /= price
                 avg_amount += amount
             else:
                 avg_amount += amount * price
-        return avg_amount
+            total_grid_amount_f += amount
+            total_grid_amount_s += amount * price
+        # print(f"calc_grid_avg: {tcm.round_amount(avg_amount, RoundingType.FLOOR)}")
+        return tcm.round_amount(avg_amount, RoundingType.FLOOR)
 
     def start_process(self):
         # Init analytic
@@ -1712,27 +1809,22 @@ class Strategy(StrategyBase):
                 self.tp_hold_additional = True
                 self.place_grid(self.cycle_buy, amount, float(reverse_target_amount), allow_grid_shift=False)
                 return
-            if float(amount) > min_trade_amount:  # skipcq: PYL-R1705
+            amount /= self.avg_rate if self.cycle_buy else 1
+            if float(amount) > min_trade_amount and (self.orders_hold or self.orders_grid):  # skipcq: PYL-R1705
                 self.message_log("Too small amount for place additional grid, correct grid and replace TP", tlg=True)
                 if self.orders_hold:
                     order = self.orders_hold.orders_list.pop()
-                    order['amount'] += self.tp_init[1] if self.cycle_buy else self.tp_init[0]
+                    order['amount'] += amount
                     self.message_log(f"Corrected amount of last hold grid order: {order['amount']}")
                     self.orders_hold.orders_list.append(order)
                 elif self.orders_grid:
                     order = self.orders_grid.orders_list[-1]
-                    order['amount'] = self.tp_init[1] if self.cycle_buy else self.tp_init[0]
+                    order['amount'] = amount
                     self.message_log(f"Additional grid order for buy: {order['buy']},"
                                      f" {order['amount']} by {order['price']}")
                     waiting_order_id = self.place_limit_order(order['buy'], float(order['amount']),
                                                               float(order['price']))
                     self.orders_init.append(waiting_order_id, order['buy'], order['amount'], order['price'])
-                else:
-                    self.message_log(f"Additional grid order for buy: {self.cycle_buy},"
-                                     f" {amount} by {reverse_target_amount / amount}")
-                    waiting_order_id = self.place_limit_order(self.cycle_buy, float(amount),
-                                                              float(reverse_target_amount / amount))
-                    self.orders_init.append(waiting_order_id, self.cycle_buy, amount, reverse_target_amount / amount)
                 self.place_profit_order(by_market=by_market)
                 return
             else:
@@ -1772,6 +1864,7 @@ class Strategy(StrategyBase):
         if (not self.cycle_buy and self.profit_first < 0) or (self.cycle_buy and self.profit_second < 0):
             self.message_log("Strategy have a negative cycle result, STOP", log_level=LogLevel.CRITICAL)
             self.command = 'end'
+            self.tp_was_filled = ()
             self.cancel_grid()
         else:
             self.message_log("Restart after filling take profit order", tlg=False)

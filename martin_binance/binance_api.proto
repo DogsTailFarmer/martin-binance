@@ -334,10 +334,11 @@ message FetchExchangeInfoSymbolResponse {
   bool icebergAllowed = 11;
   bool ocoAllowed = 12;
   bool quoteOrderQtyMarketAllowed = 13;
-  bool isSpotTradingAllowed = 14;
-  bool isMarginTradingAllowed = 15;
-  Filters filters = 16;
-  repeated string permissions = 17;
+  bool allowTrailingStop = 14;
+  bool isSpotTradingAllowed = 15;
+  bool isMarginTradingAllowed = 16;
+  Filters filters = 17;
+  repeated string permissions = 18;
 }
 
 message CancelAllOrdersResponse {

@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.9r0"
+__version__ = "1.9r2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -15,7 +15,6 @@ import time
 import sqlite3
 import psutil
 from requests import Session
-from requests.exceptions import ConnectionError as req_ConnectionError, Timeout, TooManyRedirects
 import json
 import toml
 
@@ -47,6 +46,8 @@ REQUEST_DELAY = 60 / config.get('rate_limit')
 CURRENCY_RATE_LAST_TIME = time.time()
 
 # region Metric declare
+STATUS_ALARM = Gauge("margin_alarm", "1 when not order", ['exchange', 'pair', 'vps_name'])
+
 SUM_F_PROFIT = Gauge("margin_f_profit", "first profit", ['exchange', 'pair', 'vps_name'])
 SUM_S_PROFIT = Gauge("margin_s_profit", "second profit", ['exchange', 'pair', 'vps_name'])
 LAST_RATE = Gauge("margin_last_rate", "pair last rate", ['exchange', 'pair', 'vps_name'])
@@ -151,6 +152,20 @@ def read_sqlite_table(sql_conn, _currency_rate, currency_rate_last_time):
         SUM_F_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_f_profit)
         sum_s_profit = float(row[6])
         SUM_S_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_s_profit)
+        # Alarm
+        cursor.execute('SELECT order_buy, order_sell\
+                        FROM t_orders\
+                        WHERE id_exchange=:id_exchange\
+                        AND f_currency=:f_currency\
+                        AND s_currency=:s_currency',
+                       {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
+        status_alarm = cursor.fetchone()
+        alarm = 0
+        if status_alarm:
+            order_buy = int(status_alarm[0])
+            order_sell = int(status_alarm[1])
+            alarm = 0 if order_buy and order_sell else 1
+        STATUS_ALARM.labels(exchange, pair, VPS_NAME).set(alarm)
         # Last rate
         cursor.execute('SELECT rate\
                         FROM t_funds\
