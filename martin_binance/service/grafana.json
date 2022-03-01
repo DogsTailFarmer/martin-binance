@@ -19,15 +19,15 @@
     ]
   },
   "editable": true,
-  "gnetId": null,
+  "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": 16,
-  "iteration": 1641912466875,
+  "iteration": 1646147154256,
   "links": [],
+  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
-      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -40,7 +40,10 @@
       "type": "row"
     },
     {
-      "datasource": "Node",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "E28iFVEGk"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -57,37 +60,10 @@
           "mappings": [],
           "unit": "currencyUSD"
         },
-        "overrides": [
-          {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "BTC Binance",
-                  "BNB Binance",
-                  "BUSD Binance"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
-        "h": 18,
+        "h": 15,
         "w": 5,
         "x": 0,
         "y": 1
@@ -95,13 +71,13 @@
       "id": 26,
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "values": [
             "percent"
           ]
         },
-        "pieType": "pie",
+        "pieType": "donut",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -116,20 +92,25 @@
       "pluginVersion": "8.0.3",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "exemplar": true,
-          "expr": "margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\"}",
+          "expr": "margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
           "interval": "",
           "legendFormat": "{{currency}} {{exchange}}",
           "refId": "A"
         }
       ],
-      "timeFrom": null,
-      "timeShift": null,
       "title": "Assets",
       "type": "piechart"
     },
     {
-      "datasource": "Node",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "E28iFVEGk"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -155,7 +136,7 @@
               "type": "linear"
             },
             "showPoints": "never",
-            "spanNulls": true,
+            "spanNulls": 3600000,
             "stacking": {
               "group": "A",
               "mode": "none"
@@ -172,10 +153,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
@@ -225,7 +202,7 @@
         ]
       },
       "gridPos": {
-        "h": 18,
+        "h": 15,
         "w": 19,
         "x": 5,
         "y": 1
@@ -246,28 +223,263 @@
       "pluginVersion": "8.1.3",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "exemplar": true,
-          "expr": "margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\"}",
+          "expr": "margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
           "interval": "",
           "legendFormat": "{{currency}} {{exchange}}",
           "refId": "A"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "exemplar": true,
-          "expr": "sum(margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\"})",
+          "expr": "sum(margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}) + $OKEX_funds + $Huobi_funds + $FTX_funds",
           "hide": false,
           "interval": "",
           "legendFormat": "USD",
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "$OKEX_funds + $Huobi_funds + $FTX_funds",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Extra funds",
+          "refId": "C"
         }
       ],
-      "timeFrom": null,
-      "timeShift": null,
       "title": "Assets",
+      "transformations": [],
       "type": "timeseries"
     },
     {
-      "datasource": "Node",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "E28iFVEGk"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "dark-yellow",
+            "mode": "fixed"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 3,
+        "x": 0,
+        "y": 16
+      },
+      "id": 29,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "8.3.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "sum(margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": " {{exchange}} {{pair}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Total profit in USD",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "E28iFVEGk"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "dark-red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 5,
+        "x": 3,
+        "y": 16
+      },
+      "id": 38,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "diff"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": false,
+        "text": {}
+      },
+      "pluginVersion": "8.3.4",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum(margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Total for period",
+          "refId": "A"
+        },
+        {
+          "exemplar": true,
+          "expr": "margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": " {{exchange}} {{pair}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Profit in USD by trade pair",
+      "transparent": true,
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "E28iFVEGk"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "dark-red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 7,
+        "x": 8,
+        "y": 16
+      },
+      "id": 39,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": false,
+        "text": {}
+      },
+      "pluginVersion": "8.3.4",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "(31536000 * margin_sell_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_sell_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} + 31536000 * margin_buy_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_buy_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}) / 2",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "legendFormat": " {{exchange}} {{pair}}",
+          "refId": "A"
+        }
+      ],
+      "title": "APY profit rating",
+      "transparent": true,
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "E28iFVEGk"
+      },
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -317,10 +529,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 13,
-        "w": 24,
-        "x": 0,
-        "y": 19
+        "h": 12,
+        "w": 9,
+        "x": 15,
+        "y": 16
       },
       "id": 27,
       "options": {
@@ -345,173 +557,72 @@
           "refId": "A"
         }
       ],
-      "timeFrom": null,
-      "timeShift": null,
       "title": "Profit timeline",
       "type": "timeseries"
     },
     {
-      "datasource": "Node",
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "fixedColor": "dark-yellow",
-            "mode": "fixed"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 12,
-        "w": 3,
-        "x": 0,
-        "y": 32
-      },
-      "id": 29,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "last"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "text": {},
-        "textMode": "auto"
-      },
-      "pluginVersion": "8.1.3",
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum(margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
-          "format": "time_series",
-          "instant": false,
-          "interval": "",
-          "legendFormat": " {{exchange}} {{pair}}",
-          "refId": "A"
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Total profit in USD",
-      "transparent": true,
-      "type": "stat"
-    },
-    {
-      "datasource": "Node",
-      "description": "",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "dark-red",
-                "value": null
-              },
-              {
-                "color": "#EAB839",
-                "value": 0
-              }
-            ]
-          },
-          "unit": "currencyUSD"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 12,
-        "w": 21,
-        "x": 3,
-        "y": 32
-      },
-      "id": 28,
-      "options": {
-        "displayMode": "gradient",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "diff"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": false,
-        "text": {}
-      },
-      "pluginVersion": "8.1.3",
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum(margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "legendFormat": "Total for period",
-          "refId": "A"
-        },
-        {
-          "exemplar": true,
-          "expr": "margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
-          "format": "time_series",
-          "instant": false,
-          "interval": "",
-          "legendFormat": " {{exchange}} {{pair}}",
-          "refId": "B"
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Profit in USD by trade pair",
-      "transparent": true,
-      "type": "bargauge"
-    },
-    {
       "collapsed": true,
-      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 28
       },
       "id": 19,
       "panels": [
+        {
+          "gridPos": {
+            "h": 8,
+            "w": 4,
+            "x": 0,
+            "y": 29
+          },
+          "id": 37,
+          "options": {
+            "alertName": "",
+            "dashboardAlerts": false,
+            "dashboardTitle": "",
+            "folder": {
+              "id": 18,
+              "title": "status_alert"
+            },
+            "maxItems": 30,
+            "showInstances": true,
+            "showOptions": "current",
+            "sortOrder": 1,
+            "stateFilter": {
+              "alerting": false,
+              "execution_error": false,
+              "firing": true,
+              "inactive": true,
+              "no_data": false,
+              "ok": false,
+              "paused": false,
+              "pending": true
+            },
+            "tags": []
+          },
+          "pluginVersion": "8.1.3",
+          "title": "Status alert",
+          "type": "alertlist"
+        },
         {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
           "dashes": false,
-          "datasource": "Node",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "description": "",
           "fill": 1,
           "fillGradient": 0,
           "gridPos": {
-            "h": 11,
-            "w": 12,
-            "x": 0,
-            "y": 2
+            "h": 8,
+            "w": 8,
+            "x": 4,
+            "y": 29
           },
           "hiddenSeries": false,
           "id": 21,
@@ -531,7 +642,7 @@
             "alertThreshold": false
           },
           "percentage": false,
-          "pluginVersion": "8.1.3",
+          "pluginVersion": "8.3.4",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -574,9 +685,7 @@
               "yaxis": "right"
             }
           ],
-          "timeFrom": null,
           "timeRegions": [],
-          "timeShift": null,
           "title": "CPU",
           "tooltip": {
             "shared": true,
@@ -585,9 +694,7 @@
           },
           "type": "graph",
           "xaxis": {
-            "buckets": null,
             "mode": "time",
-            "name": null,
             "show": true,
             "values": []
           },
@@ -597,8 +704,6 @@
               "format": "percentunit",
               "label": "cpu",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": true
             },
             {
@@ -606,8 +711,6 @@
               "format": "percent",
               "label": "memory",
               "logBase": 1,
-              "max": null,
-              "min": null,
               "show": false
             }
           ],
@@ -617,7 +720,10 @@
           }
         },
         {
-          "datasource": "Node",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -657,8 +763,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "transparent",
-                    "value": null
+                    "color": "transparent"
                   },
                   {
                     "color": "red",
@@ -692,10 +797,10 @@
             ]
           },
           "gridPos": {
-            "h": 11,
+            "h": 8,
             "w": 12,
             "x": 12,
-            "y": 2
+            "y": 29
           },
           "id": 30,
           "options": {
@@ -721,8 +826,6 @@
               "refId": "B"
             }
           ],
-          "timeFrom": null,
-          "timeShift": null,
           "title": "Memory use",
           "type": "timeseries"
         }
@@ -732,17 +835,19 @@
     },
     {
       "collapsed": true,
-      "datasource": null,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 45
+        "y": 29
       },
       "id": 17,
       "panels": [
         {
-          "datasource": "Node",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -755,8 +860,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   }
                 ]
               }
@@ -813,7 +917,7 @@
             "h": 8,
             "w": 2,
             "x": 0,
-            "y": 3
+            "y": 30
           },
           "id": 12,
           "options": {
@@ -831,7 +935,7 @@
             "text": {},
             "textMode": "auto"
           },
-          "pluginVersion": "8.1.3",
+          "pluginVersion": "8.3.4",
           "targets": [
             {
               "exemplar": false,
@@ -860,13 +964,14 @@
               "refId": "C"
             }
           ],
-          "timeFrom": null,
-          "timeShift": null,
           "title": "Cycle count",
           "type": "stat"
         },
         {
-          "datasource": "Node",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -907,8 +1012,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   }
                 ]
               },
@@ -920,7 +1024,7 @@
             "h": 8,
             "w": 9,
             "x": 2,
-            "y": 3
+            "y": 30
           },
           "id": 2,
           "options": {
@@ -953,13 +1057,14 @@
               "refId": "B"
             }
           ],
-          "timeFrom": null,
-          "timeShift": null,
           "title": "--> $v_pair",
           "type": "timeseries"
         },
         {
-          "datasource": "Node",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -999,8 +1104,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   }
                 ]
               },
@@ -1037,7 +1141,7 @@
             "h": 8,
             "w": 9,
             "x": 11,
-            "y": 3
+            "y": 30
           },
           "id": 14,
           "options": {
@@ -1078,13 +1182,14 @@
               "refId": "C"
             }
           ],
-          "timeFrom": null,
-          "timeShift": null,
           "title": "$v_pair<--",
           "type": "timeseries"
         },
         {
-          "datasource": "Node",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -1095,8 +1200,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   }
                 ]
               },
@@ -1237,7 +1341,7 @@
             "h": 13,
             "w": 4,
             "x": 20,
-            "y": 3
+            "y": 30
           },
           "id": 8,
           "options": {
@@ -1255,7 +1359,7 @@
             "text": {},
             "textMode": "auto"
           },
-          "pluginVersion": "8.1.3",
+          "pluginVersion": "8.3.4",
           "targets": [
             {
               "exemplar": false,
@@ -1346,14 +1450,15 @@
               "refId": "H"
             }
           ],
-          "timeFrom": null,
-          "timeShift": null,
           "title": "Interest for all time",
           "transformations": [],
           "type": "stat"
         },
         {
-          "datasource": "Node",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "description": "Total amount for both currency by last rate",
           "fieldConfig": {
             "defaults": {
@@ -1393,8 +1498,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   }
                 ]
               },
@@ -1406,14 +1510,16 @@
             "h": 5,
             "w": 20,
             "x": 0,
-            "y": 11
+            "y": 38
           },
           "id": 13,
           "options": {
             "legend": {
-              "calcs": [],
-              "displayMode": "hidden",
-              "placement": "bottom"
+              "calcs": [
+                "last"
+              ],
+              "displayMode": "list",
+              "placement": "right"
             },
             "tooltip": {
               "mode": "single"
@@ -1432,14 +1538,15 @@
               "refId": "B"
             }
           ],
-          "timeFrom": null,
-          "timeShift": null,
           "title": "Summary amount ($v_pair<--)",
           "transformations": [],
           "type": "timeseries"
         },
         {
-          "datasource": "Node",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
           "description": "",
           "fieldConfig": {
             "defaults": {
@@ -1479,8 +1586,7 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   }
                 ]
               },
@@ -1588,6 +1694,32 @@
                     "value": 0
                   }
                 ]
+              },
+              {
+                "__systemRef": "hideSeriesFrom",
+                "matcher": {
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "Second depo",
+                      "Buy/Sell",
+                      "First depo"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": true
+                    }
+                  }
+                ]
               }
             ]
           },
@@ -1595,7 +1727,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 16
+            "y": 43
           },
           "id": 33,
           "options": {
@@ -1656,8 +1788,6 @@
               "refId": "E"
             }
           ],
-          "timeFrom": null,
-          "timeShift": null,
           "title": "Cycle parameters ($v_pair)",
           "transformations": [],
           "type": "timeseries"
@@ -1668,15 +1798,14 @@
     }
   ],
   "refresh": "5m",
-  "schemaVersion": 30,
+  "schemaVersion": 34,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": [
       {
-        "allValue": null,
         "current": {
-          "selected": true,
+          "selected": false,
           "text": [
             "All"
           ],
@@ -1684,10 +1813,11 @@
             "$__all"
           ]
         },
-        "datasource": "Node",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "E28iFVEGk"
+        },
         "definition": "label_values(vps_name)",
-        "description": null,
-        "error": null,
         "hide": 0,
         "includeAll": true,
         "label": "vps_name",
@@ -1708,9 +1838,8 @@
         "useTags": false
       },
       {
-        "allValue": null,
         "current": {
-          "selected": true,
+          "selected": false,
           "text": [
             "All"
           ],
@@ -1718,10 +1847,11 @@
             "$__all"
           ]
         },
-        "datasource": "Node",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "E28iFVEGk"
+        },
         "definition": "label_values({vps_name=~\"$v_vps_name\"},exchange)",
-        "description": null,
-        "error": null,
         "hide": 0,
         "includeAll": true,
         "label": "Exchange",
@@ -1742,9 +1872,8 @@
         "useTags": false
       },
       {
-        "allValue": null,
         "current": {
-          "selected": true,
+          "selected": false,
           "text": [
             "All"
           ],
@@ -1752,10 +1881,11 @@
             "$__all"
           ]
         },
-        "datasource": "Node",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "E28iFVEGk"
+        },
         "definition": "label_values({exchange=~\"$v_exchange\"},pair)",
-        "description": null,
-        "error": null,
         "hide": 0,
         "includeAll": true,
         "label": "Pair:",
@@ -1776,16 +1906,20 @@
         "useTags": false
       },
       {
-        "allValue": null,
         "current": {
           "selected": false,
-          "text": "All",
-          "value": "$__all"
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
         },
-        "datasource": "Node",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "E28iFVEGk"
+        },
         "definition": "label_values({exchange=~\"$v_exchange\"}, currency)",
-        "description": null,
-        "error": null,
         "hide": 0,
         "includeAll": true,
         "label": "currency",
@@ -1804,16 +1938,71 @@
         "tagsQuery": "",
         "type": "query",
         "useTags": false
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "0",
+          "value": "0"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "OKEX_funds",
+        "options": [],
+        "query": "grafana",
+        "queryValue": "0",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "0",
+          "value": "0"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "Huobi_funds",
+        "options": [],
+        "query": "grafana",
+        "queryValue": "0",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "0",
+          "value": "0"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "FTX_funds",
+        "options": [],
+        "query": "grafana",
+        "queryValue": "0",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "type": "datasource"
       }
     ]
   },
   "time": {
-    "from": "now-30d",
+    "from": "now-4d",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "utc",
   "title": "Crypto exporter",
   "uid": "9ICv5brMk",
-  "version": 178
+  "version": 217,
+  "weekStart": ""
 }

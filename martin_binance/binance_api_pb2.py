@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x11\x62inance_api.proto\x12\x06martin\"q\n\x19\x46\x65tchFundingWalletRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\r\n\x05\x61sset\x18\x02 \x01(\t\x12\x1a\n\x12need_btc_valuation\x18\x03 \x01(\x08\x12\x16\n\x0ereceive_window\x18\x04 \x01(\x03\"\xd0\x01\n\x1a\x46\x65tchFundingWalletResponse\x12=\n\x08\x62\x61lances\x18\x01 \x03(\x0b\x32+.martin.FetchFundingWalletResponse.Balances\x1as\n\x08\x42\x61lances\x12\r\n\x05\x61sset\x18\x01 \x01(\t\x12\x0c\n\x04\x66ree\x18\x02 \x01(\t\x12\x0e\n\x06locked\x18\x03 \x01(\t\x12\x0e\n\x06\x66reeze\x18\x04 \x01(\t\x12\x13\n\x0bwithdrawing\x18\x05 \x01(\t\x12\x15\n\rbtc_valuation\x18\x06 \x01(\t\"\x90\x02\n\x13\x43\x61ncelOrderResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x19\n\x11origClientOrderId\x18\x02 \x01(\t\x12\x0f\n\x07orderId\x18\x03 \x01(\x04\x12\x13\n\x0borderListId\x18\x04 \x01(\x05\x12\x15\n\rclientOrderId\x18\x05 \x01(\t\x12\r\n\x05price\x18\x06 \x01(\t\x12\x0f\n\x07origQty\x18\x07 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x08 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\t \x01(\t\x12\x0e\n\x06status\x18\n \x01(\t\x12\x13\n\x0btimeInForce\x18\x0b \x01(\t\x12\x0c\n\x04type\x18\x0c \x01(\t\x12\x0c\n\x04side\x18\r \x01(\t\"I\n\x12\x43\x61ncelOrderRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x10\n\x08order_id\x18\x03 \x01(\x03\"\x90\x02\n\x18\x43reateLimitOrderResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0f\n\x07orderId\x18\x02 \x01(\x04\x12\x13\n\x0borderListId\x18\x03 \x01(\x11\x12\x15\n\rclientOrderId\x18\x04 \x01(\t\x12\x14\n\x0ctransactTime\x18\x05 \x01(\x04\x12\r\n\x05price\x18\x06 \x01(\t\x12\x0f\n\x07origQty\x18\x07 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x08 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\t \x01(\t\x12\x0e\n\x06status\x18\n \x01(\t\x12\x13\n\x0btimeInForce\x18\x0b \x01(\t\x12\x0c\n\x04type\x18\x0c \x01(\t\x12\x0c\n\x04side\x18\r \x01(\t\"\x8c\x01\n\x17\x43reateLimitOrderRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x10\n\x08\x62uy_side\x18\x03 \x01(\x08\x12\x10\n\x08quantity\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\t\x12\x1b\n\x13new_client_order_id\x18\x06 \x01(\x03\"\xf8\x05\n\x15OnOrderUpdateResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x17\n\x0f\x63lient_order_id\x18\x02 \x01(\t\x12\x0c\n\x04side\x18\x03 \x01(\t\x12\x12\n\norder_type\x18\x04 \x01(\t\x12\x15\n\rtime_in_force\x18\x05 \x01(\t\x12\x16\n\x0eorder_quantity\x18\x06 \x01(\t\x12\x13\n\x0border_price\x18\x07 \x01(\t\x12\x12\n\nstop_price\x18\x08 \x01(\t\x12\x18\n\x10iceberg_quantity\x18\t \x01(\t\x12\x15\n\rorder_list_id\x18\n \x01(\x11\x12\x1a\n\x12original_client_id\x18\x0b \x01(\t\x12\x16\n\x0e\x65xecution_type\x18\x0c \x01(\t\x12\x14\n\x0corder_status\x18\r \x01(\t\x12\x1b\n\x13order_reject_reason\x18\x0e \x01(\t\x12\x10\n\x08order_id\x18\x0f \x01(\x04\x12\x1e\n\x16last_executed_quantity\x18\x10 \x01(\t\x12\"\n\x1a\x63umulative_filled_quantity\x18\x11 \x01(\t\x12\x1b\n\x13last_executed_price\x18\x12 \x01(\t\x12\x19\n\x11\x63ommission_amount\x18\x13 \x01(\t\x12\x18\n\x10\x63ommission_asset\x18\x14 \x01(\t\x12\x18\n\x10transaction_time\x18\x15 \x01(\x04\x12\x10\n\x08trade_id\x18\x16 \x01(\x12\x12\x10\n\x08ignore_a\x18\x17 \x01(\x04\x12\x15\n\rin_order_book\x18\x18 \x01(\x08\x12\x15\n\ris_maker_side\x18\x19 \x01(\x08\x12\x10\n\x08ignore_b\x18\x1a \x01(\x08\x12\x1b\n\x13order_creation_time\x18\x1b \x01(\x04\x12\x1e\n\x16quote_asset_transacted\x18\x1c \x01(\t\x12#\n\x1blast_quote_asset_transacted\x18\x1d \x01(\t\x12\x1c\n\x14quote_order_quantity\x18\x1e \x01(\t\"&\n\x15OnFundsUpdateResponse\x12\r\n\x05\x66unds\x18\x01 \x01(\t\"b\n\x14OnFundsUpdateRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x12\n\nbase_asset\x18\x03 \x01(\t\x12\x13\n\x0bquote_asset\x18\x04 \x01(\t\"!\n\x0eSimpleResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"e\n\x16OnTickerUpdateResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x12\n\nopen_price\x18\x02 \x01(\t\x12\x13\n\x0b\x63lose_price\x18\x03 \x01(\t\x12\x12\n\nevent_time\x18\x04 \x01(\x04\"\xbd\x02\n\x18\x41\x63\x63ountTradeListResponse\x12\x35\n\x05items\x18\x01 \x03(\x0b\x32&.martin.AccountTradeListResponse.Trade\x1a\xe9\x01\n\x05Trade\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\n\n\x02id\x18\x02 \x01(\x04\x12\x0f\n\x07orderId\x18\x03 \x01(\x04\x12\x13\n\x0borderListId\x18\x04 \x01(\x11\x12\r\n\x05price\x18\x05 \x01(\t\x12\x0b\n\x03qty\x18\x06 \x01(\t\x12\x10\n\x08quoteQty\x18\x07 \x01(\t\x12\x12\n\ncommission\x18\x08 \x01(\t\x12\x17\n\x0f\x63ommissionAsset\x18\t \x01(\t\x12\x0c\n\x04time\x18\n \x01(\x04\x12\x0f\n\x07isBuyer\x18\x0b \x01(\x08\x12\x0f\n\x07isMaker\x18\x0c \x01(\x08\x12\x13\n\x0bisBestMatch\x18\r \x01(\x08\"K\n\x17\x41\x63\x63ountTradeListRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\r\"%\n\x13\x46\x65tchKlinesResponse\x12\x0e\n\x06klines\x18\x01 \x03(\t\"J\n\x16OnKlinesUpdateResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x10\n\x08interval\x18\x02 \x01(\t\x12\x0e\n\x06\x63\x61ndle\x18\x03 \x01(\t\"X\n\x12\x46\x65tchKlinesRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x10\n\x08interval\x18\x03 \x01(\t\x12\r\n\x05limit\x18\x04 \x01(\r\"\xb7\x03\n(FetchTickerPriceChangeStatisticsResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x13\n\x0bpriceChange\x18\x02 \x01(\t\x12\x1a\n\x12priceChangePercent\x18\x03 \x01(\t\x12\x18\n\x10weightedAvgPrice\x18\x04 \x01(\t\x12\x16\n\x0eprevClosePrice\x18\x05 \x01(\t\x12\x11\n\tlastPrice\x18\x06 \x01(\t\x12\x0f\n\x07lastQty\x18\x07 \x01(\t\x12\x10\n\x08\x62idPrice\x18\x08 \x01(\t\x12\x0e\n\x06\x62idQty\x18\t \x01(\t\x12\x10\n\x08\x61skPrice\x18\n \x01(\t\x12\x0e\n\x06\x61skQty\x18\x0b \x01(\t\x12\x11\n\topenPrice\x18\x0c \x01(\t\x12\x11\n\thighPrice\x18\r \x01(\t\x12\x10\n\x08lowPrice\x18\x0e \x01(\t\x12\x0e\n\x06volume\x18\x0f \x01(\t\x12\x13\n\x0bquoteVolume\x18\x10 \x01(\t\x12\x10\n\x08openTime\x18\x11 \x01(\x04\x12\x11\n\tcloseTime\x18\x12 \x01(\x04\x12\x0f\n\x07\x66irstId\x18\x13 \x01(\x04\x12\x0e\n\x06lastId\x18\x14 \x01(\x04\x12\r\n\x05\x63ount\x18\x15 \x01(\x04\"?\n\x1e\x46\x65tchSymbolPriceTickerResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\r\n\x05price\x18\x02 \x01(\t\"J\n\x16\x46\x65tchOrderBookResponse\x12\x14\n\x0clastUpdateId\x18\x01 \x01(\x04\x12\x0c\n\x04\x62ids\x18\x02 \x03(\t\x12\x0c\n\x04\x61sks\x18\x03 \x03(\t\"\x96\x01\n\x1b\x46\x65tchAccountBalanceResponse\x12>\n\x08\x62\x61lances\x18\x01 \x03(\x0b\x32,.martin.FetchAccountBalanceResponse.Balances\x1a\x37\n\x08\x42\x61lances\x12\r\n\x05\x61sset\x18\x01 \x01(\t\x12\x0c\n\x04\x66ree\x18\x02 \x01(\t\x12\x0e\n\x06locked\x18\x03 \x01(\t\"\xce\x12\n\x1f\x46\x65tchExchangeInfoSymbolResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x11\n\tbaseAsset\x18\x03 \x01(\t\x12\x1a\n\x12\x62\x61seAssetPrecision\x18\x04 \x01(\r\x12\x12\n\nquoteAsset\x18\x05 \x01(\t\x12\x16\n\x0equotePrecision\x18\x06 \x01(\r\x12\x1b\n\x13quoteAssetPrecision\x18\x07 \x01(\r\x12\x1f\n\x17\x62\x61seCommissionPrecision\x18\x08 \x01(\r\x12 \n\x18quoteCommissionPrecision\x18\t \x01(\r\x12\x12\n\norderTypes\x18\n \x03(\t\x12\x16\n\x0eicebergAllowed\x18\x0b \x01(\x08\x12\x12\n\nocoAllowed\x18\x0c \x01(\x08\x12\"\n\x1aquoteOrderQtyMarketAllowed\x18\r \x01(\x08\x12\x1c\n\x14isSpotTradingAllowed\x18\x0e \x01(\x08\x12\x1e\n\x16isMarginTradingAllowed\x18\x0f \x01(\x08\x12@\n\x07\x66ilters\x18\x10 \x01(\x0b\x32/.martin.FetchExchangeInfoSymbolResponse.Filters\x12\x13\n\x0bpermissions\x18\x11 \x03(\t\x1a\xd6\x0e\n\x07\x46ilters\x12V\n\x0cprice_filter\x18\x01 \x01(\x0b\x32;.martin.FetchExchangeInfoSymbolResponse.Filters.PriceFilterH\x00\x88\x01\x01\x12X\n\rpercent_price\x18\x02 \x01(\x0b\x32<.martin.FetchExchangeInfoSymbolResponse.Filters.PercentPriceH\x01\x88\x01\x01\x12N\n\x08lot_size\x18\x03 \x01(\x0b\x32\x37.martin.FetchExchangeInfoSymbolResponse.Filters.LotSizeH\x02\x88\x01\x01\x12V\n\x0cmin_notional\x18\x04 \x01(\x0b\x32;.martin.FetchExchangeInfoSymbolResponse.Filters.MinNotionalH\x03\x88\x01\x01\x12X\n\riceberg_parts\x18\x05 \x01(\x0b\x32<.martin.FetchExchangeInfoSymbolResponse.Filters.IcebergPartsH\x04\x88\x01\x01\x12[\n\x0fmarket_lot_size\x18\x06 \x01(\x0b\x32=.martin.FetchExchangeInfoSymbolResponse.Filters.MarketLotSizeH\x05\x88\x01\x01\x12Y\n\x0emax_num_orders\x18\x07 \x01(\x0b\x32<.martin.FetchExchangeInfoSymbolResponse.Filters.MaxNumOrdersH\x06\x88\x01\x01\x12\x62\n\x13max_num_algo_orders\x18\x08 \x01(\x0b\x32@.martin.FetchExchangeInfoSymbolResponse.Filters.MaxNumAlgoOrdersH\x07\x88\x01\x01\x12h\n\x16max_num_iceberg_orders\x18\t \x01(\x0b\x32\x43.martin.FetchExchangeInfoSymbolResponse.Filters.MaxNumIcebergOrdersH\x08\x88\x01\x01\x12V\n\x0cmax_position\x18\n \x01(\x0b\x32;.martin.FetchExchangeInfoSymbolResponse.Filters.MaxPositionH\t\x88\x01\x01\x1aW\n\x0bPriceFilter\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x10\n\x08minPrice\x18\x02 \x01(\t\x12\x10\n\x08maxPrice\x18\x03 \x01(\t\x12\x10\n\x08tickSize\x18\x04 \x01(\t\x1a\x66\n\x0cPercentPrice\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x14\n\x0cmultiplierUp\x18\x02 \x01(\t\x12\x16\n\x0emultiplierDown\x18\x03 \x01(\t\x12\x14\n\x0c\x61vgPriceMins\x18\x04 \x01(\r\x1aO\n\x07LotSize\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x0e\n\x06minQty\x18\x02 \x01(\t\x12\x0e\n\x06maxQty\x18\x03 \x01(\t\x12\x10\n\x08stepSize\x18\x04 \x01(\t\x1a\x63\n\x0bMinNotional\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x13\n\x0bminNotional\x18\x02 \x01(\t\x12\x15\n\rapplyToMarket\x18\x03 \x01(\x08\x12\x14\n\x0c\x61vgPriceMins\x18\x04 \x01(\r\x1a\x31\n\x0cIcebergParts\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\r\x1aU\n\rMarketLotSize\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x0e\n\x06minQty\x18\x02 \x01(\t\x12\x0e\n\x06maxQty\x18\x03 \x01(\t\x12\x10\n\x08stepSize\x18\x04 \x01(\t\x1a\x38\n\x0cMaxNumOrders\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x14\n\x0cmaxNumOrders\x18\x02 \x01(\r\x1a@\n\x10MaxNumAlgoOrders\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x18\n\x10maxNumAlgoOrders\x18\x02 \x01(\r\x1a\x46\n\x13MaxNumIcebergOrders\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x1b\n\x13maxNumIcebergOrders\x18\x02 \x01(\r\x1a\x36\n\x0bMaxPosition\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x13\n\x0bmaxPosition\x18\x02 \x01(\tB\x0f\n\r_price_filterB\x10\n\x0e_percent_priceB\x0b\n\t_lot_sizeB\x0f\n\r_min_notionalB\x10\n\x0e_iceberg_partsB\x12\n\x10_market_lot_sizeB\x11\n\x0f_max_num_ordersB\x16\n\x14_max_num_algo_ordersB\x19\n\x17_max_num_iceberg_ordersB\x0f\n\r_max_position\"\xe0\x02\n\x17\x43\x61ncelAllOrdersResponse\x12:\n\x05items\x18\x01 \x03(\x0b\x32+.martin.CancelAllOrdersResponse.CancelOrder\x1a\x88\x02\n\x0b\x43\x61ncelOrder\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x19\n\x11origClientOrderId\x18\x02 \x01(\t\x12\x0f\n\x07orderId\x18\x03 \x01(\x04\x12\x13\n\x0borderListId\x18\x04 \x01(\x05\x12\x15\n\rclientOrderId\x18\x05 \x01(\t\x12\r\n\x05price\x18\x06 \x01(\t\x12\x0f\n\x07origQty\x18\x07 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x08 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\t \x01(\t\x12\x0e\n\x06status\x18\n \x01(\t\x12\x13\n\x0btimeInForce\x18\x0b \x01(\t\x12\x0c\n\x04type\x18\x0c \x01(\t\x12\x0c\n\x04side\x18\r \x01(\t\"d\n\x11\x46\x65tchOrderRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x10\n\x08order_id\x18\x03 \x01(\x03\x12\x1a\n\x12\x66illed_update_call\x18\x04 \x01(\x08\"\xeb\x02\n\x12\x46\x65tchOrderResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0f\n\x07orderId\x18\x02 \x01(\x04\x12\x13\n\x0borderListId\x18\x03 \x01(\x11\x12\x15\n\rclientOrderId\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\t\x12\x0f\n\x07origQty\x18\x06 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x07 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\x08 \x01(\t\x12\x0e\n\x06status\x18\t \x01(\t\x12\x13\n\x0btimeInForce\x18\n \x01(\t\x12\x0c\n\x04type\x18\x0b \x01(\t\x12\x0c\n\x04side\x18\x0c \x01(\t\x12\x11\n\tstopPrice\x18\r \x01(\t\x12\x12\n\nicebergQty\x18\x0e \x01(\t\x12\x0c\n\x04time\x18\x0f \x01(\x04\x12\x12\n\nupdateTime\x18\x10 \x01(\x04\x12\x11\n\tisWorking\x18\x11 \x01(\x08\x12\x19\n\x11origQuoteOrderQty\x18\x12 \x01(\t\"\xc6\x03\n\x17\x46\x65tchOpenOrdersResponse\x12\x14\n\x0crate_limiter\x18\x01 \x01(\x05\x12\x34\n\x05items\x18\x02 \x03(\x0b\x32%.martin.FetchOpenOrdersResponse.Order\x1a\xde\x02\n\x05Order\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0f\n\x07orderId\x18\x02 \x01(\x04\x12\x13\n\x0borderListId\x18\x03 \x01(\x11\x12\x15\n\rclientOrderId\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\t\x12\x0f\n\x07origQty\x18\x06 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x07 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\x08 \x01(\t\x12\x0e\n\x06status\x18\t \x01(\t\x12\x13\n\x0btimeInForce\x18\n \x01(\t\x12\x0c\n\x04type\x18\x0b \x01(\t\x12\x0c\n\x04side\x18\x0c \x01(\t\x12\x11\n\tstopPrice\x18\r \x01(\t\x12\x12\n\nicebergQty\x18\x0e \x01(\t\x12\x0c\n\x04time\x18\x0f \x01(\x04\x12\x12\n\nupdateTime\x18\x10 \x01(\x04\x12\x11\n\tisWorking\x18\x11 \x01(\x08\x12\x19\n\x11origQuoteOrderQty\x18\x12 \x01(\t\"2\n\rMarketRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\"I\n\x1bOpenClientConnectionRequest\x12\x14\n\x0c\x61\x63\x63ount_name\x18\x01 \x01(\t\x12\x14\n\x0crate_limiter\x18\x02 \x01(\x05\"V\n\x16OpenClientConnectionId\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x13\n\x0bsrv_version\x18\x02 \x01(\t\x12\x14\n\x0crate_limiter\x18\x03 \x01(\x05\"+\n\x16\x46\x65tchServerTimeRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\".\n\x17\x46\x65tchServerTimeResponse\x12\x13\n\x0bserver_time\x18\x01 \x01(\x04\x32\xb3\x0e\n\x06Martin\x12]\n\x14OpenClientConnection\x12#.martin.OpenClientConnectionRequest\x1a\x1e.martin.OpenClientConnectionId\"\x00\x12T\n\x0f\x46\x65tchServerTime\x12\x1e.martin.OpenClientConnectionId\x1a\x1f.martin.FetchServerTimeResponse\"\x00\x12K\n\x0f\x46\x65tchOpenOrders\x12\x15.martin.MarketRequest\x1a\x1f.martin.FetchOpenOrdersResponse\"\x00\x12K\n\x0f\x43\x61ncelAllOrders\x12\x15.martin.MarketRequest\x1a\x1f.martin.FetchOpenOrdersResponse\"\x00\x12[\n\x17\x46\x65tchExchangeInfoSymbol\x12\x15.martin.MarketRequest\x1a\'.martin.FetchExchangeInfoSymbolResponse\"\x00\x12`\n\x17\x46\x65tchAccountInformation\x12\x1e.martin.OpenClientConnectionId\x1a#.martin.FetchAccountBalanceResponse\"\x00\x12I\n\x0e\x46\x65tchOrderBook\x12\x15.martin.MarketRequest\x1a\x1e.martin.FetchOrderBookResponse\"\x00\x12Y\n\x16\x46\x65tchSymbolPriceTicker\x12\x15.martin.MarketRequest\x1a&.martin.FetchSymbolPriceTickerResponse\"\x00\x12m\n FetchTickerPriceChangeStatistics\x12\x15.martin.MarketRequest\x1a\x30.martin.FetchTickerPriceChangeStatisticsResponse\"\x00\x12H\n\x0b\x46\x65tchKlines\x12\x1a.martin.FetchKlinesRequest\x1a\x1b.martin.FetchKlinesResponse\"\x00\x12\\\n\x15\x46\x65tchAccountTradeList\x12\x1f.martin.AccountTradeListRequest\x1a .martin.AccountTradeListResponse\"\x00\x12K\n\x0eOnTickerUpdate\x12\x15.martin.MarketRequest\x1a\x1e.martin.OnTickerUpdateResponse\"\x00\x30\x01\x12N\n\x11OnOrderBookUpdate\x12\x15.martin.MarketRequest\x1a\x1e.martin.FetchOrderBookResponse\"\x00\x30\x01\x12=\n\nStopStream\x12\x15.martin.MarketRequest\x1a\x16.martin.SimpleResponse\"\x00\x12P\n\rOnFundsUpdate\x12\x1c.martin.OnFundsUpdateRequest\x1a\x1d.martin.OnFundsUpdateResponse\"\x00\x30\x01\x12I\n\rOnOrderUpdate\x12\x15.martin.MarketRequest\x1a\x1d.martin.OnOrderUpdateResponse\"\x00\x30\x01\x12W\n\x10\x43reateLimitOrder\x12\x1f.martin.CreateLimitOrderRequest\x1a .martin.CreateLimitOrderResponse\"\x00\x12H\n\x0b\x43\x61ncelOrder\x12\x1a.martin.CancelOrderRequest\x1a\x1b.martin.CancelOrderResponse\"\x00\x12\x45\n\nFetchOrder\x12\x19.martin.FetchOrderRequest\x1a\x1a.martin.FetchOrderResponse\"\x00\x12J\n\x0eResetRateLimit\x12\x1e.martin.OpenClientConnectionId\x1a\x16.martin.SimpleResponse\"\x00\x12P\n\x0eOnKlinesUpdate\x12\x1a.martin.FetchKlinesRequest\x1a\x1e.martin.OnKlinesUpdateResponse\"\x00\x30\x01\x12]\n\x12\x46\x65tchFundingWallet\x12!.martin.FetchFundingWalletRequest\x1a\".martin.FetchFundingWalletResponse\"\x00\x62\x06proto3'
+  serialized_pb=b'\n\x11\x62inance_api.proto\x12\x06martin\"q\n\x19\x46\x65tchFundingWalletRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\r\n\x05\x61sset\x18\x02 \x01(\t\x12\x1a\n\x12need_btc_valuation\x18\x03 \x01(\x08\x12\x16\n\x0ereceive_window\x18\x04 \x01(\x03\"\xd0\x01\n\x1a\x46\x65tchFundingWalletResponse\x12=\n\x08\x62\x61lances\x18\x01 \x03(\x0b\x32+.martin.FetchFundingWalletResponse.Balances\x1as\n\x08\x42\x61lances\x12\r\n\x05\x61sset\x18\x01 \x01(\t\x12\x0c\n\x04\x66ree\x18\x02 \x01(\t\x12\x0e\n\x06locked\x18\x03 \x01(\t\x12\x0e\n\x06\x66reeze\x18\x04 \x01(\t\x12\x13\n\x0bwithdrawing\x18\x05 \x01(\t\x12\x15\n\rbtc_valuation\x18\x06 \x01(\t\"\x90\x02\n\x13\x43\x61ncelOrderResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x19\n\x11origClientOrderId\x18\x02 \x01(\t\x12\x0f\n\x07orderId\x18\x03 \x01(\x04\x12\x13\n\x0borderListId\x18\x04 \x01(\x05\x12\x15\n\rclientOrderId\x18\x05 \x01(\t\x12\r\n\x05price\x18\x06 \x01(\t\x12\x0f\n\x07origQty\x18\x07 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x08 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\t \x01(\t\x12\x0e\n\x06status\x18\n \x01(\t\x12\x13\n\x0btimeInForce\x18\x0b \x01(\t\x12\x0c\n\x04type\x18\x0c \x01(\t\x12\x0c\n\x04side\x18\r \x01(\t\"I\n\x12\x43\x61ncelOrderRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x10\n\x08order_id\x18\x03 \x01(\x03\"\x90\x02\n\x18\x43reateLimitOrderResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0f\n\x07orderId\x18\x02 \x01(\x04\x12\x13\n\x0borderListId\x18\x03 \x01(\x11\x12\x15\n\rclientOrderId\x18\x04 \x01(\t\x12\x14\n\x0ctransactTime\x18\x05 \x01(\x04\x12\r\n\x05price\x18\x06 \x01(\t\x12\x0f\n\x07origQty\x18\x07 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x08 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\t \x01(\t\x12\x0e\n\x06status\x18\n \x01(\t\x12\x13\n\x0btimeInForce\x18\x0b \x01(\t\x12\x0c\n\x04type\x18\x0c \x01(\t\x12\x0c\n\x04side\x18\r \x01(\t\"\x8c\x01\n\x17\x43reateLimitOrderRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x10\n\x08\x62uy_side\x18\x03 \x01(\x08\x12\x10\n\x08quantity\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\t\x12\x1b\n\x13new_client_order_id\x18\x06 \x01(\x03\"\xf8\x05\n\x15OnOrderUpdateResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x17\n\x0f\x63lient_order_id\x18\x02 \x01(\t\x12\x0c\n\x04side\x18\x03 \x01(\t\x12\x12\n\norder_type\x18\x04 \x01(\t\x12\x15\n\rtime_in_force\x18\x05 \x01(\t\x12\x16\n\x0eorder_quantity\x18\x06 \x01(\t\x12\x13\n\x0border_price\x18\x07 \x01(\t\x12\x12\n\nstop_price\x18\x08 \x01(\t\x12\x18\n\x10iceberg_quantity\x18\t \x01(\t\x12\x15\n\rorder_list_id\x18\n \x01(\x11\x12\x1a\n\x12original_client_id\x18\x0b \x01(\t\x12\x16\n\x0e\x65xecution_type\x18\x0c \x01(\t\x12\x14\n\x0corder_status\x18\r \x01(\t\x12\x1b\n\x13order_reject_reason\x18\x0e \x01(\t\x12\x10\n\x08order_id\x18\x0f \x01(\x04\x12\x1e\n\x16last_executed_quantity\x18\x10 \x01(\t\x12\"\n\x1a\x63umulative_filled_quantity\x18\x11 \x01(\t\x12\x1b\n\x13last_executed_price\x18\x12 \x01(\t\x12\x19\n\x11\x63ommission_amount\x18\x13 \x01(\t\x12\x18\n\x10\x63ommission_asset\x18\x14 \x01(\t\x12\x18\n\x10transaction_time\x18\x15 \x01(\x04\x12\x10\n\x08trade_id\x18\x16 \x01(\x12\x12\x10\n\x08ignore_a\x18\x17 \x01(\x04\x12\x15\n\rin_order_book\x18\x18 \x01(\x08\x12\x15\n\ris_maker_side\x18\x19 \x01(\x08\x12\x10\n\x08ignore_b\x18\x1a \x01(\x08\x12\x1b\n\x13order_creation_time\x18\x1b \x01(\x04\x12\x1e\n\x16quote_asset_transacted\x18\x1c \x01(\t\x12#\n\x1blast_quote_asset_transacted\x18\x1d \x01(\t\x12\x1c\n\x14quote_order_quantity\x18\x1e \x01(\t\"&\n\x15OnFundsUpdateResponse\x12\r\n\x05\x66unds\x18\x01 \x01(\t\"b\n\x14OnFundsUpdateRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x12\n\nbase_asset\x18\x03 \x01(\t\x12\x13\n\x0bquote_asset\x18\x04 \x01(\t\"!\n\x0eSimpleResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\"e\n\x16OnTickerUpdateResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x12\n\nopen_price\x18\x02 \x01(\t\x12\x13\n\x0b\x63lose_price\x18\x03 \x01(\t\x12\x12\n\nevent_time\x18\x04 \x01(\x04\"\xbd\x02\n\x18\x41\x63\x63ountTradeListResponse\x12\x35\n\x05items\x18\x01 \x03(\x0b\x32&.martin.AccountTradeListResponse.Trade\x1a\xe9\x01\n\x05Trade\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\n\n\x02id\x18\x02 \x01(\x04\x12\x0f\n\x07orderId\x18\x03 \x01(\x04\x12\x13\n\x0borderListId\x18\x04 \x01(\x11\x12\r\n\x05price\x18\x05 \x01(\t\x12\x0b\n\x03qty\x18\x06 \x01(\t\x12\x10\n\x08quoteQty\x18\x07 \x01(\t\x12\x12\n\ncommission\x18\x08 \x01(\t\x12\x17\n\x0f\x63ommissionAsset\x18\t \x01(\t\x12\x0c\n\x04time\x18\n \x01(\x04\x12\x0f\n\x07isBuyer\x18\x0b \x01(\x08\x12\x0f\n\x07isMaker\x18\x0c \x01(\x08\x12\x13\n\x0bisBestMatch\x18\r \x01(\x08\"K\n\x17\x41\x63\x63ountTradeListRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\r\"%\n\x13\x46\x65tchKlinesResponse\x12\x0e\n\x06klines\x18\x01 \x03(\t\"J\n\x16OnKlinesUpdateResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x10\n\x08interval\x18\x02 \x01(\t\x12\x0e\n\x06\x63\x61ndle\x18\x03 \x01(\t\"X\n\x12\x46\x65tchKlinesRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x10\n\x08interval\x18\x03 \x01(\t\x12\r\n\x05limit\x18\x04 \x01(\r\"\xb7\x03\n(FetchTickerPriceChangeStatisticsResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x13\n\x0bpriceChange\x18\x02 \x01(\t\x12\x1a\n\x12priceChangePercent\x18\x03 \x01(\t\x12\x18\n\x10weightedAvgPrice\x18\x04 \x01(\t\x12\x16\n\x0eprevClosePrice\x18\x05 \x01(\t\x12\x11\n\tlastPrice\x18\x06 \x01(\t\x12\x0f\n\x07lastQty\x18\x07 \x01(\t\x12\x10\n\x08\x62idPrice\x18\x08 \x01(\t\x12\x0e\n\x06\x62idQty\x18\t \x01(\t\x12\x10\n\x08\x61skPrice\x18\n \x01(\t\x12\x0e\n\x06\x61skQty\x18\x0b \x01(\t\x12\x11\n\topenPrice\x18\x0c \x01(\t\x12\x11\n\thighPrice\x18\r \x01(\t\x12\x10\n\x08lowPrice\x18\x0e \x01(\t\x12\x0e\n\x06volume\x18\x0f \x01(\t\x12\x13\n\x0bquoteVolume\x18\x10 \x01(\t\x12\x10\n\x08openTime\x18\x11 \x01(\x04\x12\x11\n\tcloseTime\x18\x12 \x01(\x04\x12\x0f\n\x07\x66irstId\x18\x13 \x01(\x04\x12\x0e\n\x06lastId\x18\x14 \x01(\x04\x12\r\n\x05\x63ount\x18\x15 \x01(\x04\"?\n\x1e\x46\x65tchSymbolPriceTickerResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\r\n\x05price\x18\x02 \x01(\t\"J\n\x16\x46\x65tchOrderBookResponse\x12\x14\n\x0clastUpdateId\x18\x01 \x01(\x04\x12\x0c\n\x04\x62ids\x18\x02 \x03(\t\x12\x0c\n\x04\x61sks\x18\x03 \x03(\t\"\x96\x01\n\x1b\x46\x65tchAccountBalanceResponse\x12>\n\x08\x62\x61lances\x18\x01 \x03(\x0b\x32,.martin.FetchAccountBalanceResponse.Balances\x1a\x37\n\x08\x42\x61lances\x12\r\n\x05\x61sset\x18\x01 \x01(\t\x12\x0c\n\x04\x66ree\x18\x02 \x01(\t\x12\x0e\n\x06locked\x18\x03 \x01(\t\"\xe9\x12\n\x1f\x46\x65tchExchangeInfoSymbolResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x11\n\tbaseAsset\x18\x03 \x01(\t\x12\x1a\n\x12\x62\x61seAssetPrecision\x18\x04 \x01(\r\x12\x12\n\nquoteAsset\x18\x05 \x01(\t\x12\x16\n\x0equotePrecision\x18\x06 \x01(\r\x12\x1b\n\x13quoteAssetPrecision\x18\x07 \x01(\r\x12\x1f\n\x17\x62\x61seCommissionPrecision\x18\x08 \x01(\r\x12 \n\x18quoteCommissionPrecision\x18\t \x01(\r\x12\x12\n\norderTypes\x18\n \x03(\t\x12\x16\n\x0eicebergAllowed\x18\x0b \x01(\x08\x12\x12\n\nocoAllowed\x18\x0c \x01(\x08\x12\"\n\x1aquoteOrderQtyMarketAllowed\x18\r \x01(\x08\x12\x19\n\x11\x61llowTrailingStop\x18\x0e \x01(\x08\x12\x1c\n\x14isSpotTradingAllowed\x18\x0f \x01(\x08\x12\x1e\n\x16isMarginTradingAllowed\x18\x10 \x01(\x08\x12@\n\x07\x66ilters\x18\x11 \x01(\x0b\x32/.martin.FetchExchangeInfoSymbolResponse.Filters\x12\x13\n\x0bpermissions\x18\x12 \x03(\t\x1a\xd6\x0e\n\x07\x46ilters\x12V\n\x0cprice_filter\x18\x01 \x01(\x0b\x32;.martin.FetchExchangeInfoSymbolResponse.Filters.PriceFilterH\x00\x88\x01\x01\x12X\n\rpercent_price\x18\x02 \x01(\x0b\x32<.martin.FetchExchangeInfoSymbolResponse.Filters.PercentPriceH\x01\x88\x01\x01\x12N\n\x08lot_size\x18\x03 \x01(\x0b\x32\x37.martin.FetchExchangeInfoSymbolResponse.Filters.LotSizeH\x02\x88\x01\x01\x12V\n\x0cmin_notional\x18\x04 \x01(\x0b\x32;.martin.FetchExchangeInfoSymbolResponse.Filters.MinNotionalH\x03\x88\x01\x01\x12X\n\riceberg_parts\x18\x05 \x01(\x0b\x32<.martin.FetchExchangeInfoSymbolResponse.Filters.IcebergPartsH\x04\x88\x01\x01\x12[\n\x0fmarket_lot_size\x18\x06 \x01(\x0b\x32=.martin.FetchExchangeInfoSymbolResponse.Filters.MarketLotSizeH\x05\x88\x01\x01\x12Y\n\x0emax_num_orders\x18\x07 \x01(\x0b\x32<.martin.FetchExchangeInfoSymbolResponse.Filters.MaxNumOrdersH\x06\x88\x01\x01\x12\x62\n\x13max_num_algo_orders\x18\x08 \x01(\x0b\x32@.martin.FetchExchangeInfoSymbolResponse.Filters.MaxNumAlgoOrdersH\x07\x88\x01\x01\x12h\n\x16max_num_iceberg_orders\x18\t \x01(\x0b\x32\x43.martin.FetchExchangeInfoSymbolResponse.Filters.MaxNumIcebergOrdersH\x08\x88\x01\x01\x12V\n\x0cmax_position\x18\n \x01(\x0b\x32;.martin.FetchExchangeInfoSymbolResponse.Filters.MaxPositionH\t\x88\x01\x01\x1aW\n\x0bPriceFilter\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x10\n\x08minPrice\x18\x02 \x01(\t\x12\x10\n\x08maxPrice\x18\x03 \x01(\t\x12\x10\n\x08tickSize\x18\x04 \x01(\t\x1a\x66\n\x0cPercentPrice\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x14\n\x0cmultiplierUp\x18\x02 \x01(\t\x12\x16\n\x0emultiplierDown\x18\x03 \x01(\t\x12\x14\n\x0c\x61vgPriceMins\x18\x04 \x01(\r\x1aO\n\x07LotSize\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x0e\n\x06minQty\x18\x02 \x01(\t\x12\x0e\n\x06maxQty\x18\x03 \x01(\t\x12\x10\n\x08stepSize\x18\x04 \x01(\t\x1a\x63\n\x0bMinNotional\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x13\n\x0bminNotional\x18\x02 \x01(\t\x12\x15\n\rapplyToMarket\x18\x03 \x01(\x08\x12\x14\n\x0c\x61vgPriceMins\x18\x04 \x01(\r\x1a\x31\n\x0cIcebergParts\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\r\x1aU\n\rMarketLotSize\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x0e\n\x06minQty\x18\x02 \x01(\t\x12\x0e\n\x06maxQty\x18\x03 \x01(\t\x12\x10\n\x08stepSize\x18\x04 \x01(\t\x1a\x38\n\x0cMaxNumOrders\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x14\n\x0cmaxNumOrders\x18\x02 \x01(\r\x1a@\n\x10MaxNumAlgoOrders\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x18\n\x10maxNumAlgoOrders\x18\x02 \x01(\r\x1a\x46\n\x13MaxNumIcebergOrders\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x1b\n\x13maxNumIcebergOrders\x18\x02 \x01(\r\x1a\x36\n\x0bMaxPosition\x12\x12\n\nfilterType\x18\x01 \x01(\t\x12\x13\n\x0bmaxPosition\x18\x02 \x01(\tB\x0f\n\r_price_filterB\x10\n\x0e_percent_priceB\x0b\n\t_lot_sizeB\x0f\n\r_min_notionalB\x10\n\x0e_iceberg_partsB\x12\n\x10_market_lot_sizeB\x11\n\x0f_max_num_ordersB\x16\n\x14_max_num_algo_ordersB\x19\n\x17_max_num_iceberg_ordersB\x0f\n\r_max_position\"\xe0\x02\n\x17\x43\x61ncelAllOrdersResponse\x12:\n\x05items\x18\x01 \x03(\x0b\x32+.martin.CancelAllOrdersResponse.CancelOrder\x1a\x88\x02\n\x0b\x43\x61ncelOrder\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x19\n\x11origClientOrderId\x18\x02 \x01(\t\x12\x0f\n\x07orderId\x18\x03 \x01(\x04\x12\x13\n\x0borderListId\x18\x04 \x01(\x05\x12\x15\n\rclientOrderId\x18\x05 \x01(\t\x12\r\n\x05price\x18\x06 \x01(\t\x12\x0f\n\x07origQty\x18\x07 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x08 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\t \x01(\t\x12\x0e\n\x06status\x18\n \x01(\t\x12\x13\n\x0btimeInForce\x18\x0b \x01(\t\x12\x0c\n\x04type\x18\x0c \x01(\t\x12\x0c\n\x04side\x18\r \x01(\t\"d\n\x11\x46\x65tchOrderRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\x12\x10\n\x08order_id\x18\x03 \x01(\x03\x12\x1a\n\x12\x66illed_update_call\x18\x04 \x01(\x08\"\xeb\x02\n\x12\x46\x65tchOrderResponse\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0f\n\x07orderId\x18\x02 \x01(\x04\x12\x13\n\x0borderListId\x18\x03 \x01(\x11\x12\x15\n\rclientOrderId\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\t\x12\x0f\n\x07origQty\x18\x06 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x07 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\x08 \x01(\t\x12\x0e\n\x06status\x18\t \x01(\t\x12\x13\n\x0btimeInForce\x18\n \x01(\t\x12\x0c\n\x04type\x18\x0b \x01(\t\x12\x0c\n\x04side\x18\x0c \x01(\t\x12\x11\n\tstopPrice\x18\r \x01(\t\x12\x12\n\nicebergQty\x18\x0e \x01(\t\x12\x0c\n\x04time\x18\x0f \x01(\x04\x12\x12\n\nupdateTime\x18\x10 \x01(\x04\x12\x11\n\tisWorking\x18\x11 \x01(\x08\x12\x19\n\x11origQuoteOrderQty\x18\x12 \x01(\t\"\xc6\x03\n\x17\x46\x65tchOpenOrdersResponse\x12\x14\n\x0crate_limiter\x18\x01 \x01(\x05\x12\x34\n\x05items\x18\x02 \x03(\x0b\x32%.martin.FetchOpenOrdersResponse.Order\x1a\xde\x02\n\x05Order\x12\x0e\n\x06symbol\x18\x01 \x01(\t\x12\x0f\n\x07orderId\x18\x02 \x01(\x04\x12\x13\n\x0borderListId\x18\x03 \x01(\x11\x12\x15\n\rclientOrderId\x18\x04 \x01(\t\x12\r\n\x05price\x18\x05 \x01(\t\x12\x0f\n\x07origQty\x18\x06 \x01(\t\x12\x13\n\x0b\x65xecutedQty\x18\x07 \x01(\t\x12\x1b\n\x13\x63ummulativeQuoteQty\x18\x08 \x01(\t\x12\x0e\n\x06status\x18\t \x01(\t\x12\x13\n\x0btimeInForce\x18\n \x01(\t\x12\x0c\n\x04type\x18\x0b \x01(\t\x12\x0c\n\x04side\x18\x0c \x01(\t\x12\x11\n\tstopPrice\x18\r \x01(\t\x12\x12\n\nicebergQty\x18\x0e \x01(\t\x12\x0c\n\x04time\x18\x0f \x01(\x04\x12\x12\n\nupdateTime\x18\x10 \x01(\x04\x12\x11\n\tisWorking\x18\x11 \x01(\x08\x12\x19\n\x11origQuoteOrderQty\x18\x12 \x01(\t\"2\n\rMarketRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x0e\n\x06symbol\x18\x02 \x01(\t\"I\n\x1bOpenClientConnectionRequest\x12\x14\n\x0c\x61\x63\x63ount_name\x18\x01 \x01(\t\x12\x14\n\x0crate_limiter\x18\x02 \x01(\x05\"V\n\x16OpenClientConnectionId\x12\x11\n\tclient_id\x18\x01 \x01(\x03\x12\x13\n\x0bsrv_version\x18\x02 \x01(\t\x12\x14\n\x0crate_limiter\x18\x03 \x01(\x05\"+\n\x16\x46\x65tchServerTimeRequest\x12\x11\n\tclient_id\x18\x01 \x01(\x03\".\n\x17\x46\x65tchServerTimeResponse\x12\x13\n\x0bserver_time\x18\x01 \x01(\x04\x32\xb3\x0e\n\x06Martin\x12]\n\x14OpenClientConnection\x12#.martin.OpenClientConnectionRequest\x1a\x1e.martin.OpenClientConnectionId\"\x00\x12T\n\x0f\x46\x65tchServerTime\x12\x1e.martin.OpenClientConnectionId\x1a\x1f.martin.FetchServerTimeResponse\"\x00\x12K\n\x0f\x46\x65tchOpenOrders\x12\x15.martin.MarketRequest\x1a\x1f.martin.FetchOpenOrdersResponse\"\x00\x12K\n\x0f\x43\x61ncelAllOrders\x12\x15.martin.MarketRequest\x1a\x1f.martin.FetchOpenOrdersResponse\"\x00\x12[\n\x17\x46\x65tchExchangeInfoSymbol\x12\x15.martin.MarketRequest\x1a\'.martin.FetchExchangeInfoSymbolResponse\"\x00\x12`\n\x17\x46\x65tchAccountInformation\x12\x1e.martin.OpenClientConnectionId\x1a#.martin.FetchAccountBalanceResponse\"\x00\x12I\n\x0e\x46\x65tchOrderBook\x12\x15.martin.MarketRequest\x1a\x1e.martin.FetchOrderBookResponse\"\x00\x12Y\n\x16\x46\x65tchSymbolPriceTicker\x12\x15.martin.MarketRequest\x1a&.martin.FetchSymbolPriceTickerResponse\"\x00\x12m\n FetchTickerPriceChangeStatistics\x12\x15.martin.MarketRequest\x1a\x30.martin.FetchTickerPriceChangeStatisticsResponse\"\x00\x12H\n\x0b\x46\x65tchKlines\x12\x1a.martin.FetchKlinesRequest\x1a\x1b.martin.FetchKlinesResponse\"\x00\x12\\\n\x15\x46\x65tchAccountTradeList\x12\x1f.martin.AccountTradeListRequest\x1a .martin.AccountTradeListResponse\"\x00\x12K\n\x0eOnTickerUpdate\x12\x15.martin.MarketRequest\x1a\x1e.martin.OnTickerUpdateResponse\"\x00\x30\x01\x12N\n\x11OnOrderBookUpdate\x12\x15.martin.MarketRequest\x1a\x1e.martin.FetchOrderBookResponse\"\x00\x30\x01\x12=\n\nStopStream\x12\x15.martin.MarketRequest\x1a\x16.martin.SimpleResponse\"\x00\x12P\n\rOnFundsUpdate\x12\x1c.martin.OnFundsUpdateRequest\x1a\x1d.martin.OnFundsUpdateResponse\"\x00\x30\x01\x12I\n\rOnOrderUpdate\x12\x15.martin.MarketRequest\x1a\x1d.martin.OnOrderUpdateResponse\"\x00\x30\x01\x12W\n\x10\x43reateLimitOrder\x12\x1f.martin.CreateLimitOrderRequest\x1a .martin.CreateLimitOrderResponse\"\x00\x12H\n\x0b\x43\x61ncelOrder\x12\x1a.martin.CancelOrderRequest\x1a\x1b.martin.CancelOrderResponse\"\x00\x12\x45\n\nFetchOrder\x12\x19.martin.FetchOrderRequest\x1a\x1a.martin.FetchOrderResponse\"\x00\x12J\n\x0eResetRateLimit\x12\x1e.martin.OpenClientConnectionId\x1a\x16.martin.SimpleResponse\"\x00\x12P\n\x0eOnKlinesUpdate\x12\x1a.martin.FetchKlinesRequest\x1a\x1e.martin.OnKlinesUpdateResponse\"\x00\x30\x01\x12]\n\x12\x46\x65tchFundingWallet\x12!.martin.FetchFundingWalletRequest\x1a\".martin.FetchFundingWalletResponse\"\x00\x62\x06proto3'
 )
 
 
@@ -1632,8 +1632,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_PRICEFILTER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=4932,
-  serialized_end=5019,
+  serialized_start=4959,
+  serialized_end=5046,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_PERCENTPRICE = _descriptor.Descriptor(
@@ -1684,8 +1684,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_PERCENTPRICE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5021,
-  serialized_end=5123,
+  serialized_start=5048,
+  serialized_end=5150,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_LOTSIZE = _descriptor.Descriptor(
@@ -1736,8 +1736,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_LOTSIZE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5125,
-  serialized_end=5204,
+  serialized_start=5152,
+  serialized_end=5231,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MINNOTIONAL = _descriptor.Descriptor(
@@ -1788,8 +1788,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MINNOTIONAL = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5206,
-  serialized_end=5305,
+  serialized_start=5233,
+  serialized_end=5332,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_ICEBERGPARTS = _descriptor.Descriptor(
@@ -1826,8 +1826,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_ICEBERGPARTS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5307,
-  serialized_end=5356,
+  serialized_start=5334,
+  serialized_end=5383,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MARKETLOTSIZE = _descriptor.Descriptor(
@@ -1878,8 +1878,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MARKETLOTSIZE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5358,
-  serialized_end=5443,
+  serialized_start=5385,
+  serialized_end=5470,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MAXNUMORDERS = _descriptor.Descriptor(
@@ -1916,8 +1916,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MAXNUMORDERS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5445,
-  serialized_end=5501,
+  serialized_start=5472,
+  serialized_end=5528,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MAXNUMALGOORDERS = _descriptor.Descriptor(
@@ -1954,8 +1954,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MAXNUMALGOORDERS = _descriptor.Descript
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5503,
-  serialized_end=5567,
+  serialized_start=5530,
+  serialized_end=5594,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MAXNUMICEBERGORDERS = _descriptor.Descriptor(
@@ -1992,8 +1992,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MAXNUMICEBERGORDERS = _descriptor.Descr
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5569,
-  serialized_end=5639,
+  serialized_start=5596,
+  serialized_end=5666,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MAXPOSITION = _descriptor.Descriptor(
@@ -2030,8 +2030,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS_MAXPOSITION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5641,
-  serialized_end=5695,
+  serialized_start=5668,
+  serialized_end=5722,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS = _descriptor.Descriptor(
@@ -2174,8 +2174,8 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE_FILTERS = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=4007,
-  serialized_end=5885,
+  serialized_start=4034,
+  serialized_end=5912,
 )
 
 _FETCHEXCHANGEINFOSYMBOLRESPONSE = _descriptor.Descriptor(
@@ -2278,29 +2278,36 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='isSpotTradingAllowed', full_name='martin.FetchExchangeInfoSymbolResponse.isSpotTradingAllowed', index=13,
+      name='allowTrailingStop', full_name='martin.FetchExchangeInfoSymbolResponse.allowTrailingStop', index=13,
       number=14, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='isMarginTradingAllowed', full_name='martin.FetchExchangeInfoSymbolResponse.isMarginTradingAllowed', index=14,
+      name='isSpotTradingAllowed', full_name='martin.FetchExchangeInfoSymbolResponse.isSpotTradingAllowed', index=14,
       number=15, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='filters', full_name='martin.FetchExchangeInfoSymbolResponse.filters', index=15,
-      number=16, type=11, cpp_type=10, label=1,
+      name='isMarginTradingAllowed', full_name='martin.FetchExchangeInfoSymbolResponse.isMarginTradingAllowed', index=15,
+      number=16, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='filters', full_name='martin.FetchExchangeInfoSymbolResponse.filters', index=16,
+      number=17, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='permissions', full_name='martin.FetchExchangeInfoSymbolResponse.permissions', index=16,
-      number=17, type=9, cpp_type=9, label=3,
+      name='permissions', full_name='martin.FetchExchangeInfoSymbolResponse.permissions', index=17,
+      number=18, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -2318,7 +2325,7 @@ _FETCHEXCHANGEINFOSYMBOLRESPONSE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=3503,
-  serialized_end=5885,
+  serialized_end=5912,
 )
 
 
@@ -2433,8 +2440,8 @@ _CANCELALLORDERSRESPONSE_CANCELORDER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5976,
-  serialized_end=6240,
+  serialized_start=6003,
+  serialized_end=6267,
 )
 
 _CANCELALLORDERSRESPONSE = _descriptor.Descriptor(
@@ -2464,8 +2471,8 @@ _CANCELALLORDERSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=5888,
-  serialized_end=6240,
+  serialized_start=5915,
+  serialized_end=6267,
 )
 
 
@@ -2517,8 +2524,8 @@ _FETCHORDERREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=6242,
-  serialized_end=6342,
+  serialized_start=6269,
+  serialized_end=6369,
 )
 
 
@@ -2668,8 +2675,8 @@ _FETCHORDERRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=6345,
-  serialized_end=6708,
+  serialized_start=6372,
+  serialized_end=6735,
 )
 
 
@@ -2819,8 +2826,8 @@ _FETCHOPENORDERSRESPONSE_ORDER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=6815,
-  serialized_end=7165,
+  serialized_start=6842,
+  serialized_end=7192,
 )
 
 _FETCHOPENORDERSRESPONSE = _descriptor.Descriptor(
@@ -2857,8 +2864,8 @@ _FETCHOPENORDERSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=6711,
-  serialized_end=7165,
+  serialized_start=6738,
+  serialized_end=7192,
 )
 
 
@@ -2896,8 +2903,8 @@ _MARKETREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=7167,
-  serialized_end=7217,
+  serialized_start=7194,
+  serialized_end=7244,
 )
 
 
@@ -2935,8 +2942,8 @@ _OPENCLIENTCONNECTIONREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=7219,
-  serialized_end=7292,
+  serialized_start=7246,
+  serialized_end=7319,
 )
 
 
@@ -2981,8 +2988,8 @@ _OPENCLIENTCONNECTIONID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=7294,
-  serialized_end=7380,
+  serialized_start=7321,
+  serialized_end=7407,
 )
 
 
@@ -3013,8 +3020,8 @@ _FETCHSERVERTIMEREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=7382,
-  serialized_end=7425,
+  serialized_start=7409,
+  serialized_end=7452,
 )
 
 
@@ -3045,8 +3052,8 @@ _FETCHSERVERTIMERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=7427,
-  serialized_end=7473,
+  serialized_start=7454,
+  serialized_end=7500,
 )
 
 _FETCHFUNDINGWALLETRESPONSE_BALANCES.containing_type = _FETCHFUNDINGWALLETRESPONSE
@@ -3490,8 +3497,8 @@ _MARTIN = _descriptor.ServiceDescriptor(
   index=0,
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_start=7476,
-  serialized_end=9319,
+  serialized_start=7503,
+  serialized_end=9346,
   methods=[
   _descriptor.MethodDescriptor(
     name='OpenClientConnection',

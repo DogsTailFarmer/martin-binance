@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc5"
+__version__ = "1.0rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -28,6 +28,7 @@ Verify init message in Strategy output window for no error
 """
 ################################################################
 import toml
+# noinspection PyUnresolvedReferences
 import sys
 import executor as ex
 from executor import *  # lgtm [py/polluting-import]
@@ -58,7 +59,7 @@ ex.PROFIT_MAX = Decimal('0.85')  # If set it is maximum adapted cycle profit
 ex.PROFIT_REVERSE = Decimal('0.5')  # 0.0 - 0.75, In Reverse cycle revenue portion of profit
 ex.OVER_PRICE = Decimal('1.2')  # Overlap price in one direction
 ex.ORDER_Q = 12  # Target grid orders quantity in moment
-ex.MARTIN = Decimal('5')  # 5-20, % increments volume of orders in the grid
+ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
 ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
 # Other
 ex.STATUS_DELAY = 60  # Minute between sending Tlg message about current status
@@ -86,7 +87,10 @@ ex.REVERSE = False
 ex.REVERSE_TARGET_AMOUNT = 0.0
 ex.REVERSE_INIT_AMOUNT = Decimal('0.0')
 ex.REVERSE_STOP = False  # Stop after ending reverse cycle
-##################################################################
+################################################################
+# DO NOT EDIT UNDER THIS LINE EXCEPT SYMBOL SET LINE         ###
+################################################################
+
 ex.HEAD_VERSION = __version__
 if not ex.STANDALONE and sys.platform == 'darwin':
     user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
