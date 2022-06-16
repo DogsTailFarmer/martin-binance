@@ -22,7 +22,7 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": 16,
-  "iteration": 1646147154256,
+  "iteration": 1655387903063,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -86,7 +86,8 @@
           "values": false
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "single",
+          "sort": "none"
         }
       },
       "pluginVersion": "8.0.3",
@@ -97,13 +98,154 @@
             "uid": "E28iFVEGk"
           },
           "exemplar": true,
-          "expr": "margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
+          "expr": "sum by (vps_name) (margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
           "interval": "",
-          "legendFormat": "{{currency}} {{exchange}}",
+          "legendFormat": " {{vps_name}}",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "$OKEX_funds",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "OKEX funds",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "$Huobi_funds",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Huobi funds",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "$Trust_wallet",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Trust wallet",
+          "refId": "E"
         }
       ],
-      "title": "Assets",
+      "title": "Assets by place",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "E28iFVEGk"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "unit": "currencyUSD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 15,
+        "w": 5,
+        "x": 5,
+        "y": 1
+      },
+      "id": 40,
+      "options": {
+        "displayLabels": [],
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "values": [
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "8.0.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "sum by (currency) (margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
+          "interval": "",
+          "legendFormat": " {{currency}}",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "$OKEX_funds",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "OKEX funds",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "$Huobi_funds",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Huobi funds",
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "E28iFVEGk"
+          },
+          "exemplar": true,
+          "expr": "$Trust_wallet",
+          "hide": false,
+          "interval": "",
+          "legendFormat": "Trust wallet",
+          "refId": "E"
+        }
+      ],
+      "title": "Assets by coin",
       "type": "piechart"
     },
     {
@@ -203,21 +345,22 @@
       },
       "gridPos": {
         "h": 15,
-        "w": 19,
-        "x": 5,
+        "w": 14,
+        "x": 10,
         "y": 1
       },
       "id": 23,
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ],
           "displayMode": "list",
           "placement": "right"
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "single",
+          "sort": "none"
         }
       },
       "pluginVersion": "8.1.3",
@@ -239,19 +382,7 @@
             "uid": "E28iFVEGk"
           },
           "exemplar": true,
-          "expr": "sum(margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}) + $OKEX_funds + $Huobi_funds + $FTX_funds",
-          "hide": false,
-          "interval": "",
-          "legendFormat": "USD",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "E28iFVEGk"
-          },
-          "exemplar": true,
-          "expr": "$OKEX_funds + $Huobi_funds + $FTX_funds",
+          "expr": "$OKEX_funds + $Huobi_funds + $Trust_wallet",
           "hide": false,
           "interval": "",
           "legendFormat": "Extra funds",
@@ -259,7 +390,18 @@
         }
       ],
       "title": "Assets",
-      "transformations": [],
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "alias": "USD",
+            "mode": "reduceRow",
+            "reduce": {
+              "reducer": "sum"
+            }
+          }
+        }
+      ],
       "type": "timeseries"
     },
     {
@@ -310,7 +452,7 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.3.4",
+      "pluginVersion": "8.4.4",
       "targets": [
         {
           "datasource": {
@@ -379,7 +521,7 @@
         "showUnfilled": false,
         "text": {}
       },
-      "pluginVersion": "8.3.4",
+      "pluginVersion": "8.4.4",
       "targets": [
         {
           "exemplar": true,
@@ -454,7 +596,7 @@
         "showUnfilled": false,
         "text": {}
       },
-      "pluginVersion": "8.3.4",
+      "pluginVersion": "8.4.4",
       "targets": [
         {
           "datasource": {
@@ -542,7 +684,8 @@
           "placement": "right"
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "single",
+          "sort": "none"
         }
       },
       "pluginVersion": "8.1.3",
@@ -579,6 +722,7 @@
           },
           "id": 37,
           "options": {
+            "alertInstanceLabelFilter": "",
             "alertName": "",
             "dashboardAlerts": false,
             "dashboardTitle": "",
@@ -586,16 +730,21 @@
               "id": 18,
               "title": "status_alert"
             },
+            "groupBy": [],
+            "groupMode": "default",
             "maxItems": 30,
             "showInstances": true,
             "showOptions": "current",
             "sortOrder": 1,
             "stateFilter": {
               "alerting": false,
+              "error": true,
               "execution_error": false,
               "firing": true,
               "inactive": true,
+              "noData": false,
               "no_data": false,
+              "normal": false,
               "ok": false,
               "paused": false,
               "pending": true
@@ -642,7 +791,7 @@
             "alertThreshold": false
           },
           "percentage": false,
-          "pluginVersion": "8.3.4",
+          "pluginVersion": "8.4.4",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -793,6 +942,42 @@
                     "value": "memory"
                   }
                 ]
+              },
+              {
+                "matcher": {
+                  "id": "byType",
+                  "options": "time"
+                },
+                "properties": [
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "auto"
+                  }
+                ]
+              },
+              {
+                "__systemRef": "hideSeriesFrom",
+                "matcher": {
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "HUOBI_03 mem"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": true
+                    }
+                  }
+                ]
               }
             ]
           },
@@ -812,7 +997,8 @@
               "placement": "right"
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "single",
+              "sort": "none"
             }
           },
           "pluginVersion": "8.1.3",
@@ -935,7 +1121,7 @@
             "text": {},
             "textMode": "auto"
           },
-          "pluginVersion": "8.3.4",
+          "pluginVersion": "8.4.4",
           "targets": [
             {
               "exemplar": false,
@@ -1036,7 +1222,8 @@
               "placement": "bottom"
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "single",
+              "sort": "none"
             }
           },
           "pluginVersion": "8.1.3",
@@ -1153,7 +1340,8 @@
               "placement": "bottom"
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "single",
+              "sort": "none"
             }
           },
           "pluginVersion": "8.1.3",
@@ -1359,7 +1547,7 @@
             "text": {},
             "textMode": "auto"
           },
-          "pluginVersion": "8.3.4",
+          "pluginVersion": "8.4.4",
           "targets": [
             {
               "exemplar": false,
@@ -1522,7 +1710,8 @@
               "placement": "right"
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "single",
+              "sort": "none"
             }
           },
           "pluginVersion": "8.1.3",
@@ -1702,8 +1891,6 @@
                   "options": {
                     "mode": "exclude",
                     "names": [
-                      "Second depo",
-                      "Buy/Sell",
                       "First depo"
                     ],
                     "prefix": "All except:",
@@ -1739,7 +1926,8 @@
               "placement": "bottom"
             },
             "tooltip": {
-              "mode": "single"
+              "mode": "single",
+              "sort": "none"
             }
           },
           "pluginVersion": "8.1.3",
@@ -1798,7 +1986,7 @@
     }
   ],
   "refresh": "5m",
-  "schemaVersion": 34,
+  "schemaVersion": 35,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -1841,10 +2029,28 @@
         "current": {
           "selected": false,
           "text": [
-            "All"
+            "Binance",
+            "BinanceSub1",
+            "BinanceSub2",
+            "BinanceSub3",
+            "BinanceSub4",
+            "BitFinex",
+            "FTX",
+            "FTX_sub_01",
+            "Huobi",
+            "OKEX"
           ],
           "value": [
-            "$__all"
+            "Binance",
+            "BinanceSub1",
+            "BinanceSub2",
+            "BinanceSub3",
+            "BinanceSub4",
+            "BitFinex",
+            "FTX",
+            "FTX_sub_01",
+            "Huobi",
+            "OKEX"
           ]
         },
         "datasource": {
@@ -1984,7 +2190,7 @@
         "hide": 0,
         "includeAll": false,
         "multi": false,
-        "name": "FTX_funds",
+        "name": "Trust_wallet",
         "options": [],
         "query": "grafana",
         "queryValue": "0",
@@ -1996,13 +2202,13 @@
     ]
   },
   "time": {
-    "from": "now-4d",
+    "from": "now-7d",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "utc",
   "title": "Crypto exporter",
   "uid": "9ICv5brMk",
-  "version": 217,
+  "version": 261,
   "weekStart": ""
 }

@@ -3,22 +3,37 @@
 
 node "binance.com" {
     package "Sub account n" {
-        [BTCUSDT] <--> (API_n)
-        [ETHBUSD] <--> (API_n)
+        [BTCUSDT] <--> (API n)
+        [ETHBUSD] <--> (API n)
   }
     package "Main account" {
-        [BTCBUSD] <--> (API_1)
-        [ETHUSDT] <--> (API_1)
+        [BTCBUSD] <--> (API 1)
+        [ETHUSDT] <--> (API 1)
   }
 }
 
-component b2 [binance.py
-===
-A python3 binance API wrapper
-powered by asyncio and python Decimals
-===
-https://github.com/Th0rgal/binance.py
-]
+node "ftx.com" {
+    package "Sub account ftx" {
+        [FTTUSDT] <--> (API i)
+  }
+     package "Main account ftx" {
+        [PAXGUSDT] <--> (API main)
+  }
+}
+
+node "DeFi (coming soon)" {
+     package "Account" {
+        [DOGEUSDT] <--> (API k)
+  }
+}
+
+package "exchanges-wrapper" #D3D3D3 {
+    component ew [API/WSS async wrapper with grpc powered server
+    ===
+    https://github.com/DogsTailFarmer/exchanges-wrapper]
+    (aiohttp)
+    (exch_srv.py) as srv
+}
 
 package "martin-binance" #D3D3D3 {
     [funds_rate_exporter.py] as exp
@@ -26,11 +41,6 @@ package "martin-binance" #D3D3D3 {
     [assets] -up-> exp
     [trade raw] -up-> exp
     }
-    component bs [
-        binance_srv.py
-        ===
-        Async grpc multiplexer
-    ]
     component mw [
         margin_wrapper.py
         ===
@@ -57,7 +67,7 @@ package "martin-binance" #D3D3D3 {
             setup
         ]
    }
-[mw] <-up-> [bs]
+[mw] <-up-> [srv]
 [ex] <-up-> [mw]
 [c1] <-up-> [ex]
 [cn] <-up-> [ex]
@@ -89,14 +99,16 @@ node "margin.de" {
 }
 
 
-[b2] <-up-> API_1
-[b2] <-up-> API_n
-[bs] <-up-> b2
+[aiohttp] <-up-> (API 1)
+[aiohttp] <-up-> (API n)
+[aiohttp] <-up-> (API main)
+[aiohttp] <-up-> (API i)
+[aiohttp] <-up-> (API k)
 [c1] <-down-> [API_Python]
 [cn] <-down-> [API_Python]
 [ex] --> [trade raw]
 [mw] --> [assets]
-[exp] -up-> prom
+[exp] -left-> prom
 prom -up-> gr
 [ex] <--> API
 

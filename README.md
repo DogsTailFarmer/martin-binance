@@ -5,7 +5,7 @@
 
 <h2 align="center">Cyclic grid strategy for SPOT market</h2>
 
-<h3 align="center">Free trading system for Binance API</h3>
+<h3 align="center">Free trading system for crypto exchanges (Binance, FTX, )</h3>
 
 ***
 <a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version"></a>
@@ -14,8 +14,9 @@
 <a href="https://deepsource.io/gh/DogsTailFarmer/martin-binance/?ref=repository-badge}" target="_blank"><img alt="DeepSource" title="DeepSource" src="https://deepsource.io/gh/DogsTailFarmer/martin-binance.svg/?label=active+issues&token=ONJLSJHeeBvXyuaAjG1OWUhG"/></a>
 <a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/alerts/"><img alt="Total alerts" src="https://img.shields.io/lgtm/alerts/g/DogsTailFarmer/martin-binance.svg?logo=lgtm&logoWidth=18"/></a>
 <a href="https://lgtm.com/projects/g/DogsTailFarmer/martin-binance/context:python"><img alt="Language grade: Python" src="https://img.shields.io/lgtm/grade/python/g/DogsTailFarmer/martin-binance.svg?logo=lgtm&logoWidth=18"/></a>
+<a href="https://sonarcloud.io/summary/new_code?id=DogsTailFarmer_martin-binance" target="_blank"><img alt="sonarcloud" title="sonarcloud" src="https://sonarcloud.io/api/project_badges/measure?project=DogsTailFarmer_martin-binance&metric=alert_status"/></a>
 
-Many other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a>
+Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a>
 
 ## The motto of the project
 
@@ -30,15 +31,18 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Review
-<p align="center"><img src="https://git.io/JDIig"></p>
+<p align="center"><img src="https://gist.githubusercontent.com/DogsTailFarmer/b650b9b199666700d2839fb46d3aa1d7/raw/657ea8e7ad79df66d9d373776aeeb8614241f03f/architecture.svg"></p>
 
+Starting with version 1.1.0 the project was transformed into two parts:
+* Crypto exchanges API/WSS async wrapper with grpc powered server [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper)
+* This package, a ready-to-use trading strategy that also can be used as a template for implementing your own ideas.
 
-The system can be used in two modes:
-* STANDALONE, for free unlimited trading on Binance SPOT market.
+The system has two modes:
+* STANDALONE, for free unlimited trading on crypto exchanges SPOT market.
 * python_strategy modules can be used as plug-in trading strategy for multi-exchange terminal
-<a href="#margin">margin.de</a> Free demo, you can try it.
+<a href="#margin">margin.de</a>, free demo, you can try it.
 
-Strategy logic at executor.py file and trading parameters set in the API_1_BTCBUSD.py (cli_7_BTCUSDT.py)
+Strategy logic realized at executor.py and trading parameters settings in the API_1_BTCBUSD.py (cli_7_BTCUSDT.py)
 
 You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
 
@@ -53,6 +57,8 @@ You can modify them for your needs. See <a href="#for-developers">For developers
 <a href="#tmux">Terminal Tmux for STANDALONE mode</a>
 
 <a href="#how-its-work">How it's work</a>
+
+<a href="#specific-ftx-requirements">Specific FTX requirements</a>
 
 <a href="#for-developers">For developers</a>
 
@@ -90,7 +96,7 @@ In the cycle to buy, the profit accumulates in the second coin.
 
 Fee payments are taken into account when calculating TP.
 
-The optimal pair choice is a stablecoin or fiat plus a coin from the top ten.
+The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 
 ## Features
 <p id="features"></p>
@@ -104,6 +110,7 @@ The optimal pair choice is a stablecoin or fiat plus a coin from the top ten.
 * Shift grid orders (customizable) if the price is go way (before take profit placed) 
 * Fractional creation of grid for increase productivity (customizable)
 * Adaptive overlap price for grid on current market conditions (customizable) based on Bollinger Band
+* *NEW*: Update grid orders if market conditions change
 * Adaptive profit setting on current market conditions (customizable) based on Bollinger Band
 * Adaptive grid orders quantity for initial and Reverse cycle
 * Stable operation in pump/dump conditions
@@ -130,8 +137,11 @@ pip install martin-binance
 ### STANDALONE mode
 * Log in at [Binance Spot Test Network](https://testnet.binance.vision/)
 * Create API Key
-* Specify api_key and api_secret in binance_srv_cfg.toml for 'Demo - Binance'
-* Run binance_srv.py in terminal window
+
+#### Start server
+* Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
+* Run ```exchanges_wrapper/exch_srv.py``` in terminal window
+#### Start client
 * Run cli_7_BTCUSDT.py in other terminal window
 
 Strategy is started.
@@ -141,7 +151,7 @@ Setting trade pair. You must set pair name in three places the same (yes, it is 
 * the name of cli_X_AAABBB.py must match
 * the name of pane in <a href="#tmux">Tmux terminal window</a>
 
-For stop strategy use Ctrl-C Ctrl-Z and/or Telegram control function
+For stop strategy use Ctrl-C and/or Telegram control function
 
 ### MARGIN mode
 * Install [margin](https://margin.de/download/)
@@ -190,6 +200,8 @@ If you plan to run a strategy on VPS then you need terminal program which:
 * continue running after end of ssh session
 * auto save running state
 * restore state after system restart
+
+The [Tmux](https://github.com/tmux/tmux) meets all these requirements.
  
 ### Tmux install
 Install and setup all in list:
@@ -229,10 +241,10 @@ which start in this pane. For example cli_1_BTCUSDT.py must be started in pane w
 tmux new-session -s Trade
 ~~~
 * Rename pane 0: Ctrl+B + , srv Enter
-* Change dir to the ~/martin_binance
+* Change dir to the ```~/.local/lib/python3.8/site-packages/exchanges_wrapper```
 * Create new pane: Ctrl+B c
 * Rename pane 1: Ctrl+B + , 7-BTC/USDT Enter
-* Change dir to the ~/martin_binance
+* Change dir to the ```~/martin_binance```
 * Reboot system
 * Attach to the restored session:
 ~~~
@@ -242,10 +254,12 @@ You must see the same window as before reboot:
 
 <p align="center"><img src="https://git.io/JDIix"></p>
 
+For each pane appropriate dir must be selected.
+
 * Find /service/relaunch.service, edit your path and install it under systemctl.
 * Run in the pane 0:srv server script:
 ~~~
-./binance_srv.py
+./exch_srv.py
 ~~~
 * Run in the pane 1:7-BTC/USDT trade strategy script:
 ~~~
@@ -339,7 +353,8 @@ are limited by the exchange limit for minimal price change per one step combined
 
 For fine-tuning there is KBB parameter. By default, value 2.0 is used to calculate Bollinger curves.
 
-The over price value updated before the start of the new cycle.
+The over price value update before the start of the new cycle and periodically refreshed.
+If the market condition change exceeds the set limits, the grid is updated (does not apply in reverse cycle).
 
 #### Quantity of grid orders
 <p id="quantity-of-grid-orders"></p>
@@ -434,6 +449,7 @@ For fee processing for second currency only, like as KRAKEN, use FEE_SECOND = Tr
 Priority of parameters from larger to smaller is:
 * FEE_IN_PAIR 
 * FEE_BNB_IN_PAIR
+* FEE_FTX
 * FEE_SECOND
 
 Attention: the commission, which is charged in the third coin, is not taken into account in the calculation of income.
@@ -462,7 +478,7 @@ If all is normal, you will receive a confirmation that the system has received t
 
 Analytic subsystem is not mandatory and has no impact on trading strategy.
 
-All data collected into funds_rate.db
+All data collected into ```funds_rate.db```
 
 Cycle time, yield, funds, initial cycle parameters, all this for all pairs and exchanges where this bot launched.
 
@@ -475,7 +491,7 @@ Now I'm use [prometheus](https://github.com/prometheus/client_python) -> [Grafan
 for calculate and visualisation analytic data. It's useful. You can use funds_rate_exporter.py for start.
 Find it into repository. 
 
-Also, you can try the grafana_config.json as example of consolidated report.
+Also, you can try the ```martin_binance/service/grafana.json``` as example of consolidated report.
 
 ### Consolidated asset valuation
 <p id="consolidated-asset-valuation"></p>
@@ -486,13 +502,13 @@ task.
 <p align="center"><img src="https://git.io/JDIPt"></p>
 
 At the end of each trading cycle, deposit data recorded for each currency. Once a day, the current currency rate to USD
-is queried. In funds_rate_exporter.py of times per minute calculated data for unloading in
+is queried. In ```funds_rate_exporter.py``` of times per minute calculated data for unloading in
 [prometheus](https://github.com/prometheus/client_python). An example of a summary report implemented on Grafana
 located above.
 
 To receive quotes, you need to get the free API key on [CoinMarketCap](https://coinmarketcap.com/api/pricing/).
-Specify the key at the top of the ms_cfg.toml and start funds_rate_exporter.py as service. For Ubuntu, you can use
-/service/funds_export.service 
+Specify the key at the top of the ms_cfg.toml and start ```funds_rate_exporter.py``` as service. For Ubuntu,
+you can use ```/service/funds_export.service``` 
 
 ### Recovery after any reason crash, restart etc.
 <p id="recovery-after-any-reason-crash"></p>
@@ -500,7 +516,7 @@ Specify the key at the top of the ms_cfg.toml and start funds_rate_exporter.py a
 #### STANDALONE mode
 * Auto for Network failure, exchange timeout etc. 
 * Auto recovery after restart with full implemented Tmux install (Linux only)
-* For manual restart with save order and load last state run ./cli_X_AAABBB.py 1
+* For manual restart with save order and load last state run ```./cli_X_AAABBB.py 1```
 
 #### margin mode
 * Network failure, timeout etc.
@@ -522,6 +538,17 @@ and I am not sure that it is necessary.
 If you need setup new version margin or Python strategy, first you need stop strategy.
 Use Telegram control function, described above.
 
+## Specific FTX requirements
+<p id="specific-ftx-requirements"></p>
+
+These comments relate to this strategy, perhaps for another algorithm these restrictions will not be significant.
+This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
+profit order price, a giant gap is obtained between the first grid order and the take profit order.
+This is due to the large price change step and the large minimum order size.
+
+To get a Maker fee = 0% you need a stake 25 FTT. [Details here](https://help.ftx.com/hc/en-us/articles/360052410392). 
+
+
 ## For developers
 <p id="for-developers"></p>
 
@@ -537,68 +564,12 @@ Missing functionality can be implemented on yours own or on request.
 ### Easy way
 If you want to develop 'margin style' strategy, use
 [template](https://github.com/MarginOpenSource/strategy-template) from margin repository.  In this way you can use it
-both independently (STANDALONE mode) and together with margin.
+both independently (STANDALONE mode) and together with [margin.de](https://margin.de)
 
 ### Independent way
-A fully independent strategy that can only be used on the Binance SPOT Exchange.
-
-In this case, the following modules are used:
-[binance.py](https://github.com/Th0rgal/binance.py) package as a layer for async communication with the Binance API.
-
-The module ```binance_srv.py``` as a multiplexer layer, providing simultaneous async interaction for many accounts
-and many trading pairs through one connection from one IP address. It's powered by [gRPC](https://grpc.io/about/)
-Remote Procedure Call framework.
-For [Protocol Buffers](https://developers.google.com/protocol-buffers/docs/overview) serializing structured data
-see ```binance_api.proto```
-Below code example for client, where we up connection, get client id and get info for trading pair.
-
-```Python
-import asyncio
-import toml
-
-import grpc
-
-from google.protobuf import json_format
-import binance_api_pb2
-import binance_api_pb2_grpc
-
-# For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
-CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
-                   ('grpc.enable_retries', 0),
-                   ('grpc.keepalive_timeout_ms', 10000)]
-RATE_LIMITER = 10  # sec
-ID_EXCHANGE = 7
-FILE_CONFIG = './ms_cfg.toml'
-config = toml.load(FILE_CONFIG)
-EXCHANGE = config.get('exchange')
-SYMBOL = 'BTCUSDT'
-
-
-async def main(_symbol):
-    account_name = EXCHANGE[ID_EXCHANGE]
-    print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
-    channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
-    stub = binance_api_pb2_grpc.MartinStub(channel)
-    client_id_msg = await stub.OpenClientConnection(binance_api_pb2.OpenClientConnectionRequest(
-        account_name=account_name,
-        rate_limiter=RATE_LIMITER))
-    print(f"main.client_id: {client_id_msg.client_id}")
-    print(f"main.srv_version: {client_id_msg.srv_version}")
-    # Get symbol info based on https://th0rgal.gitbook.io/binance-py/queries/general#code-2
-    _exchange_info_symbol = await stub.FetchExchangeInfoSymbol(binance_api_pb2.MarketRequest(
-        client_id=client_id_msg.client_id,
-        symbol=_symbol))
-    exchange_info_symbol = json_format.MessageToDict(_exchange_info_symbol)
-    print("\n".join(f"{k}\t{v}" for k, v in exchange_info_symbol.items()))
-
-
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main(SYMBOL))
-    loop.stop()
-    loop.close()
-```
-Start binance_srv.py in one terminal window and this code in second.
+A fully independent strategy that can be used on exchanges that are supported by the
+[exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper). Now it Binance and FTX.
+Their list will expand. Description and examples of use referenced above.
 
 ## Known issue
 <p id="known-issue"></p>

@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc7"
+__version__ = "1.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -42,27 +42,27 @@ ex.FEE_MAKER = Decimal('0.075')  # standard exchange Fee for maker
 ex.FEE_TAKER = Decimal('0.075')  # standard exchange Fee for taker
 ex.FEE_SECOND = False  # On KRAKEN fee always in second coin
 ex.FEE_BNB_IN_PAIR = False  # Binance fee in BNB and BNB is base asset
+ex.FEE_FTX = False  # https://help.ftx.com/hc/en-us/articles/360024479432-Fees
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
 ex.AMOUNT_FIRST = Decimal('0.0')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
-ex.AMOUNT_SECOND = Decimal('1000.0')  # Deposit for Buy cycle in second currency
+ex.AMOUNT_SECOND = Decimal('500.0')  # Deposit for Buy cycle in second currency
 ex.PRICE_SHIFT = 0.05  # 'No market' shift price in % from current bid/ask price
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()
-# x * PRICE_SHIFT also set max price drift from first grid order before shift grid orders
-ex.PROFIT = Decimal('0.25')  # 0.15 - 0.85
-ex.PROFIT_MAX = Decimal('0.85')  # If set it is maximum adapted cycle profit
+ex.PROFIT = Decimal('0.15')  # 0.15 - 0.85
+ex.PROFIT_MAX = Decimal('0.35')  # If set it is maximum adapted cycle profit
 ex.PROFIT_REVERSE = Decimal('0.5')  # 0.0 - 0.75, In Reverse cycle revenue portion of profit
-ex.OVER_PRICE = Decimal('1.2')  # Overlap price in one direction
+ex.OVER_PRICE = Decimal('0.6')  # Overlap price in one direction
 ex.ORDER_Q = 12  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
 ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
 # Other
-ex.STATUS_DELAY = 60  # Minute between sending Tlg message about current status
+ex.STATUS_DELAY = 5  # Minute between sending Tlg message about current status
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
 ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list member
 # Parameter for calculate grid over price and grid orders quantity in set_trade_condition()
@@ -70,7 +70,7 @@ ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list memb
 ex.ADAPTIVE_TRADE_CONDITION = True
 ex.BB_CANDLE_SIZE_IN_MINUTES = 60
 ex.BB_NUMBER_OF_CANDLES = 20
-ex.KBB = 2  # k for Bollinger Band
+ex.KBB = 0.3  # k for Bollinger Band
 ex.PROFIT_K = 2 * 0.75 / ex.KBB  # k for place profit in relation to BB value
 # Parameter for calculate price of grid orders by logarithmic scale
 # If -1 function is disabled, can take a value from 0 to infinity (in practice no more 1000)
@@ -147,10 +147,11 @@ if __name__ == "__main__":
             pass
         finally:
             try:
-                loop.run_until_complete(ask_exit())
+                loop.run_until_complete(ask_exit(loop))
             except asyncio.CancelledError:
                 pass
             except Exception as _err:
                 print(f"Error: {_err}")
             loop.stop()
+            loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()

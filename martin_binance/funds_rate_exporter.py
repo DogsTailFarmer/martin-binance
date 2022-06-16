@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.9r2"
+__version__ = "1.9r9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -43,7 +43,7 @@ REQUEST_DELAY = 60 / config.get('rate_limit')
 
 #  endregion
 
-CURRENCY_RATE_LAST_TIME = time.time()
+CURRENCY_RATE_LAST_TIME = int(time.time())
 
 # region Metric declare
 STATUS_ALARM = Gauge("margin_alarm", "1 when not order", ['exchange', 'pair', 'vps_name'])
@@ -99,21 +99,21 @@ def get_rate(_currency_rate) -> {}:
     session.headers.update(headers)
     for currency in list(_currency_rate.keys()):
         data = {}
-        price = 0.0
+        price = -1
         parameters = {'amount': 1, 'symbol': 'USD', 'convert': currency}
         try:
             response = session.get(URL, params=parameters)
             data = json.loads(response.text)
         except Exception as er:
             print(er)
-        if data.get('data'):
-            price = data.get('data').get('quote').get(currency).get('price')
+        if data and data.get('data'):
+            price = data.get('data').get('quote').get(currency).get('price', -1)
         _currency_rate[currency] = price
         time.sleep(REQUEST_DELAY)
     return _currency_rate
 
 
-def read_sqlite_table(sql_conn, _currency_rate, currency_rate_last_time):
+def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
     cursor = sql_conn.cursor()
     # Aggregate score for pair on exchange
     cursor.execute('SELECT tex.name, tf.id_exchange,\
@@ -124,7 +124,7 @@ def read_sqlite_table(sql_conn, _currency_rate, currency_rate_last_time):
                     FROM t_funds as tf LEFT JOIN t_exchange tex USING(id_exchange)\
                     GROUP BY tex.name, tf.id_exchange, tf.f_currency, tf.s_currency')
     records = cursor.fetchall()
-    # Get non-tradable assets
+    # Get non-traded assets
     cursor.execute('SELECT tex.id_exchange, tex.name, ta.currency, ta.value\
                     FROM t_asset as ta LEFT JOIN t_exchange tex USING(id_exchange)\
                     WHERE ta.value > 0')
@@ -136,11 +136,22 @@ def read_sqlite_table(sql_conn, _currency_rate, currency_rate_last_time):
         _currency_rate.setdefault(str(row[2]))
         _currency_rate.setdefault(str(row[3]))
     # Get currency rate for all currency from CoinMarketCap in relation to USD
-    if None in _currency_rate.values() or time.time() - currency_rate_last_time > 86400:
+    time_for_refresh = time.time() - currency_rate_last_time > 86400
+    if None in _currency_rate.values() or time_for_refresh:
         get_rate(_currency_rate)
+        if time_for_refresh:
+            F_BALANCE.clear()
+            S_BALANCE.clear()
+            TOTAL_BALANCE.clear()
+            BALANCE_USD.clear()
+            CYCLE_BUY.clear()
+            F_DEPO.clear()
+            S_DEPO.clear()
+            OVER_PRICE.clear()
         currency_rate_last_time = int(time.time())
-
+    #
     for row in records:
+        # print(f"row: {row}")
         exchange = str(row[0])
         id_exchange = int(row[1])
         f_currency = str(row[2])
@@ -233,49 +244,53 @@ def read_sqlite_table(sql_conn, _currency_rate, currency_rate_last_time):
                         WHERE id_exchange=:id_exchange\
                         AND f_currency=:f_currency\
                         AND s_currency=:s_currency\
+                        AND active=1\
                         ORDER BY id DESC LIMIT 1',
                        {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
         balance_row = cursor.fetchone()
-        f_balance = balance_row[0]
-        s_balance = balance_row[1]
-        balance = f_balance * last_rate + s_balance
-        F_BALANCE.labels(exchange, pair, VPS_NAME).set(f_balance)
-        S_BALANCE.labels(exchange, pair, VPS_NAME).set(s_balance)
-        TOTAL_BALANCE.labels(exchange, pair, VPS_NAME).set(balance)
-        # Balance in USD cumulative for SPOT and Funding wallets
-        f_balance_fw = 0.0
-        for i, v in enumerate(assets):
-            if v[0] == id_exchange and v[2] == f_currency:
-                f_balance_fw = v[3]
-                del assets[i]  # skipcq: PYL-E1138
-                break
-        f_balance += f_balance_fw
-        f_balance_usd = -1
-        if _currency_rate.get(f_currency):
-            try:
-                f_balance_usd = f_balance / _currency_rate[f_currency]
-            except ZeroDivisionError:
-                f_balance_usd = -1
-        s_balance_fw = 0.0
-        for i, v in enumerate(assets):
-            if v[0] == id_exchange and v[2] == s_currency:
-                s_balance_fw = v[3]
-                del assets[i]  # skipcq: PYL-E1138
-                break
-        s_balance += s_balance_fw
-        s_balance_usd = -1
-        if _currency_rate.get(s_currency):
-            try:
-                s_balance_usd = s_balance / _currency_rate[s_currency]
-            except ZeroDivisionError:
-                s_balance_usd = -1
-        BALANCE_USD.labels(exchange, f_currency, VPS_NAME).set(f_balance_usd)
-        BALANCE_USD.labels(exchange, s_currency, VPS_NAME).set(s_balance_usd)
-        # Cycle parameters
-        CYCLE_BUY.labels(exchange, pair, VPS_NAME).set(balance_row[2])
-        F_DEPO.labels(exchange, pair, VPS_NAME).set(balance_row[3])
-        S_DEPO.labels(exchange, pair, VPS_NAME).set(balance_row[4])
-        OVER_PRICE.labels(exchange, pair, VPS_NAME).set(balance_row[5])
+        # print(f"balance_row: {balance_row}")
+        if balance_row:
+            f_balance = balance_row[0]
+            s_balance = balance_row[1]
+            balance = f_balance * last_rate + s_balance
+            F_BALANCE.labels(exchange, pair, VPS_NAME).set(f_balance)
+            S_BALANCE.labels(exchange, pair, VPS_NAME).set(s_balance)
+            TOTAL_BALANCE.labels(exchange, pair, VPS_NAME).set(balance)
+            # Balance in USD cumulative for SPOT and Funding wallets
+            f_balance_fw = 0.0
+            for i, v in enumerate(assets):
+                if v[0] == id_exchange and v[2] == f_currency:
+                    f_balance_fw = v[3]
+                    del assets[i]  # skipcq: PYL-E1138
+                    break
+            f_balance += f_balance_fw
+            f_balance_usd = -1
+            if _currency_rate.get(f_currency):
+                try:
+                    f_balance_usd = f_balance / _currency_rate[f_currency]
+                except ZeroDivisionError:
+                    f_balance_usd = -1
+            s_balance_fw = 0.0
+            for i, v in enumerate(assets):
+                if v[0] == id_exchange and v[2] == s_currency:
+                    s_balance_fw = v[3]
+                    del assets[i]  # skipcq: PYL-E1138
+                    break
+            s_balance += s_balance_fw
+            s_balance_usd = -1
+            if _currency_rate.get(s_currency):
+                try:
+                    s_balance_usd = s_balance / _currency_rate[s_currency]
+                except ZeroDivisionError:
+                    s_balance_usd = -1
+            # print(f"f_balance_usd: {f_balance_usd}, s_balance_usd: {s_balance_usd}")
+            BALANCE_USD.labels(exchange, f_currency, VPS_NAME).set(f_balance_usd)
+            BALANCE_USD.labels(exchange, s_currency, VPS_NAME).set(s_balance_usd)
+            # Cycle parameters
+            CYCLE_BUY.labels(exchange, pair, VPS_NAME).set(balance_row[2])
+            F_DEPO.labels(exchange, pair, VPS_NAME).set(balance_row[3])
+            S_DEPO.labels(exchange, pair, VPS_NAME).set(balance_row[4])
+            OVER_PRICE.labels(exchange, pair, VPS_NAME).set(balance_row[5])
 
     for asset in assets:
         if _currency_rate.get(asset[2]):
@@ -296,11 +311,14 @@ if __name__ == '__main__':
     start_http_server(PORT)
     sqlite_connection = None
     try:
-        sqlite_connection = sqlite3.connect(DATABASE)
+        sqlite_connection = sqlite3.connect(DATABASE, check_same_thread=False, timeout=10)
     except sqlite3.Error as error:
         print("SQLite error:", error)
     while True:
-        CURRENCY_RATE_LAST_TIME = read_sqlite_table(sqlite_connection, currency_rate, CURRENCY_RATE_LAST_TIME)
+        try:
+            CURRENCY_RATE_LAST_TIME = db_handler(sqlite_connection, currency_rate, CURRENCY_RATE_LAST_TIME)
+        except sqlite3.Error as error:
+            print("DB operational error:", error)
         VPS_CPU.labels(VPS_NAME).set(psutil.getloadavg()[1])
         VPS_MEMORY.labels(VPS_NAME).set(psutil.virtual_memory()[2])
         time.sleep(SLEEP_TIME_S)

@@ -1,3 +1,12 @@
+## v1.1.0 - 2022-06-16
+### Added for new features
+* FTX exchange for STANDALONE mode added
+* updating grid if market conditions change
+
+### Update
+* Grafana template
+* code refactoring
+
 ## v1.0rc7 - 2022-03-01
 ### Added for new features
 * control and structure update for funds_rate.db for future updates

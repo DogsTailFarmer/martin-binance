@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.0rc-01"
+__version__ = "1.1r1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -16,7 +16,7 @@ import libtmux
 import time
 import logging
 
-logging.basicConfig(filename='../log/relaunch.log', filemode='w', level=logging.INFO)
+logging.basicConfig(filename='./log/relaunch.log', filemode='w', level=logging.INFO)
 
 
 time.sleep(10)
@@ -34,7 +34,7 @@ if session:
         window_name = window.get('window_name')
         pane = window.attached_pane
         if window_name == 'srv':
-            pane.send_keys('./binance_srv.py', enter=True)
+            pane.send_keys('./exch_srv.py', enter=True)
             logging.info('Starting srv')
         else:
             last_state = './last_state/' + window_name.replace('-', '_').replace('/', '') + '.json'
