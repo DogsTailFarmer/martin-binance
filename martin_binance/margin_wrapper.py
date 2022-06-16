@@ -473,7 +473,6 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
     max_use_update = 60 * 60 * 24  # 24h if the row has not been updated that the asset is not traded
     id_ftx_main = ms.EXCHANGE.index('FTX') if ms.FEE_FTX and ms.EXCHANGE.count('FTX') else None
     while True:
-        # print('+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++')
         try:
             res = await _stub.FetchAccountInformation(api_pb2.OpenClientConnectionId(client_id=_client_id))
         except asyncio.CancelledError:
@@ -494,8 +493,6 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
             funds = {_base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
                      _quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
             ms.Strategy.funds = funds
-            # print(f"save_asset.funds: {funds}")
-            # print(f"save_asset.balances: {balances}")
             # Get asset balances from Funding Wallet
             cursor = connection_analytic.cursor()
             try:
@@ -507,7 +504,6 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
                 cursor.close()
                 ftx_main_active = (2,)
                 print(f"SELECT from t_asset: {err}")
-            # print(f"save_asset.ftx_main_active: {ftx_main_active}")
             funding_wallet = []
             assets_fw = {}
             if id_ftx_main is None or (ftx_main_active is None and id_ftx_main != ms.ID_EXCHANGE):
@@ -523,7 +519,6 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
                     funding_wallet = json_format.MessageToDict(res).get('balances', [])
                 for fw in funding_wallet:
                     assets_fw[fw['asset']] = Decimal(fw['free']) + Decimal(fw['locked']) + Decimal(fw['freeze'])
-            # print(f"save_asset.assets_fw 1: {assets_fw}")
             # Create list of cumulative asset without current pair, from SPOT wallet
             # and all assets from Funding wallet on Binance or main account on FTX
             assets = {}
@@ -535,8 +530,6 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
                 if balance['asset'] not in (_base_asset, _quote_asset):
                     total += Decimal(balance['free']) + Decimal(balance['locked'])
                 assets[balance['asset']] = float(total)
-            # print(f"save_asset.assets 1: {assets}")
-            # print(f"save_asset.assets_fw 2: {assets_fw}")
             cursor_analytic = connection_analytic.cursor()
             try:
                 cursor_analytic.execute('SELECT id_exchange, currency, value, use, timestamp\
@@ -548,7 +541,6 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
             except sqlite3.Error as err:
                 rows = []
                 print(f"SELECT from t_asset: {err}")
-            # print(f"save_asset.rows: {rows}")
             cursor = connection_analytic.cursor()
             try:
                 cursor.execute('BEGIN')
@@ -575,13 +567,11 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
                                             and currency=:currency',
                                            {'id_exchange': ms.ID_EXCHANGE, 'currency': row[1]})
                         assets.pop(row[1], None)
-                # print(f"save_asset.assets 2: {assets}")
                 if assets:
                     for key, value in assets.items():
                         use = 1 if key in (_base_asset, _quote_asset) else 0
                         cursor.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
                                        (ms.ID_EXCHANGE, key, value, use, int(time.time())))
-                # print(f"save_asset.assets_fw 3: {assets_fw}")
                 if assets_fw:
                     for key, value in assets_fw.items():
                         cursor.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
@@ -620,7 +610,6 @@ async def ask_exit(_loop):
                 print('Current state cleared')
             else:
                 print('OK')
-        return
 
 
 async def buffered_candle(_stub, _client_id, _symbol):

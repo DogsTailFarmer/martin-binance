@@ -1565,7 +1565,13 @@ class Strategy(StrategyBase):
         self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {depo:f}, base_price: {base_price},"
                          f" reverse_target_amount: {reverse_target_amount}, amount_min: {amount_min},"
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
-        grid_min = 1 if additional_grid else GRID_MAX_COUNT if FEE_FTX or grid_update else ORDER_Q
+        if additional_grid:
+            grid_min = 1
+        else:
+            if FEE_FTX or grid_update:
+                grid_min = GRID_MAX_COUNT
+            else:
+                grid_min = ORDER_Q
         over_price_min = 100 * delta_min * (grid_min + 1) / base_price
         self.message_log(f"set_trade_conditions.grid_min: {grid_min}, over_price_min: {over_price_min:f}",
                          LogLevel.DEBUG)
@@ -1599,7 +1605,14 @@ class Strategy(StrategyBase):
             if delta > delta_min or q_max <= grid_min:
                 break
             q_max -= 1
-        self.order_q = q_max if order_q > q_max else order_q if order_q >= grid_min else grid_min
+        #
+        if order_q > q_max:
+            self.order_q = q_max
+        else:
+            if order_q >= grid_min:
+                self.order_q = order_q
+            else:
+                self.order_q = grid_min
         # Correction over_price after change quantity of orders
         if self.reverse and self.order_q > 1:
             over_price = self.calc_over_price(buy_side, depo, base_price, reverse_target_amount, exactly=True)
