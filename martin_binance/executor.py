@@ -266,7 +266,7 @@ def save_to_db(queue_to_db) -> None:
             pass
         if data is None or data.get('stop_signal'):
             break
-        elif data.get('destination') == 't_funds':
+        if data.get('destination') == 't_funds':
             # print("save_to_db: Record row into t_funds")
             try:
                 connection_analytic.execute("INSERT INTO t_funds values(\
@@ -1981,10 +1981,9 @@ class Strategy(StrategyBase):
                                 allow_grid_shift=False,
                                 additional_grid=True)
                 return
-            else:
-                self.message_log("Too small for trade, transfer filled TP amount to the next cycle", tlg=True)
-                transfer_sum_amount_first = self.sum_amount_first
-                transfer_sum_amount_second = self.sum_amount_second
+            self.message_log("Too small for trade, transfer filled TP amount to the next cycle", tlg=True)
+            transfer_sum_amount_first = self.sum_amount_first
+            transfer_sum_amount_second = self.sum_amount_second
         if self.cycle_buy:
             self.deposit_second += self.profit_second - transfer_sum_amount_second
             if self.reverse:
