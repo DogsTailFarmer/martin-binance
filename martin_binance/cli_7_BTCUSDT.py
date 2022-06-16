@@ -119,39 +119,38 @@ for tlg in telegram:
         break
 
 
-if __name__ == "__main__":
-    if STANDALONE:
-        # Set active pair
-        SYMBOL = 'BTCUSDT'
-        #
-        import logging.handlers
-        if len(sys.argv) > 1:
-            # For autoload last state
-            ex.LOAD_LAST_STATE = 1
-        else:
-            ex.LOAD_LAST_STATE = 0
-        #
-        FILE_LOG = f"{ex.LOG_PATH}mPw_{ex.ID_EXCHANGE}_{SYMBOL}.log"
-        ex.FILE_LAST_STATE = f"{ex.LAST_STATE_PATH}{ex.ID_EXCHANGE}_{SYMBOL}.json"
-        #
-        logger = logging.getLogger('logger')
-        logger.setLevel(logging.DEBUG)
-        handler = logging.handlers.RotatingFileHandler(FILE_LOG, maxBytes=1000000, backupCount=10)
-        handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-        logger.addHandler(handler)
-        logger.propagate = False
+if __name__ == "__main__" and STANDALONE:
+    # Set active pair
+    SYMBOL = 'BTCUSDT'
+    #
+    import logging.handlers
+    if len(sys.argv) > 1:
+        # For autoload last state
+        ex.LOAD_LAST_STATE = 1
+    else:
+        ex.LOAD_LAST_STATE = 0
+    #
+    FILE_LOG = f"{ex.LOG_PATH}mPw_{ex.ID_EXCHANGE}_{SYMBOL}.log"
+    ex.FILE_LAST_STATE = f"{ex.LAST_STATE_PATH}{ex.ID_EXCHANGE}_{SYMBOL}.json"
+    #
+    logger = logging.getLogger('logger')
+    logger.setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(FILE_LOG, maxBytes=1000000, backupCount=10)
+    handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
+    logger.addHandler(handler)
+    logger.propagate = False
+    try:
+        loop.create_task(main(SYMBOL))
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
         try:
-            loop.create_task(main(SYMBOL))
-            loop.run_forever()
-        except KeyboardInterrupt:
+            loop.run_until_complete(ask_exit(loop))
+        except asyncio.CancelledError:
             pass
-        finally:
-            try:
-                loop.run_until_complete(ask_exit(loop))
-            except asyncio.CancelledError:
-                pass
-            except Exception as _err:
-                print(f"Error: {_err}")
-            loop.stop()
-            loop.run_until_complete(loop.shutdown_asyncgens())
-            loop.close()
+        except Exception as _err:
+            print(f"Error: {_err}")
+        loop.stop()
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()

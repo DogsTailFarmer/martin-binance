@@ -94,6 +94,7 @@ REVERSE_STOP = bool()
 HEAD_VERSION = str()
 LOAD_LAST_STATE = int()
 # Path and files name
+DB_FILE = 'funds_rate.db'
 LOG_PATH = str()
 WORK_PATH = str()
 LAST_STATE_PATH = str()
@@ -103,6 +104,7 @@ VPS_NAME = str()
 TELEGRAM_URL = str()
 TOKEN = str()
 CHANNEL_ID = str()
+STOP_TLG = 'stop_signal_QWE#@!'
 # endregion
 
 
@@ -164,7 +166,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                                      'text_in': text_in, 'reply_to_message': reply_to_message})
         return command_list
 
-    connection_control = sqlite3.connect(WORK_PATH + 'funds_rate.db')
+    connection_control = sqlite3.connect(WORK_PATH + DB_FILE)
     offset_id = None
     while True:
         try:
@@ -196,7 +198,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                                 except Exception as _ex:
                                     print(f"telegram: {_ex}")
         else:
-            if text and 'stop_signal_QWE#@!' in text:
+            if text and STOP_TLG in text:
                 connection_control.close()
                 break
             try:
@@ -206,7 +208,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
 
 
 def db_management() -> None:
-    conn = sqlite3.connect(WORK_PATH + 'funds_rate.db', check_same_thread=False)
+    conn = sqlite3.connect(WORK_PATH + DB_FILE, check_same_thread=False)
     conn.execute("CREATE TABLE IF NOT EXISTS t_orders (\
                   id_exchange   INTEGER REFERENCES t_exchange (id_exchange)\
                                     ON DELETE RESTRICT ON UPDATE CASCADE NOT NULL,\
@@ -252,7 +254,7 @@ def db_management() -> None:
 
 
 def save_to_db(queue_to_db) -> None:
-    connection_analytic = sqlite3.connect(WORK_PATH + 'funds_rate.db', check_same_thread=False, timeout=10)
+    connection_analytic = sqlite3.connect(WORK_PATH + DB_FILE, check_same_thread=False, timeout=10)
     # Save data to .db
     data = None
     result = True
@@ -1250,7 +1252,7 @@ class Strategy(StrategyBase):
     def stop(self) -> None:
         self.message_log('Stop')
         self.queue_to_db.put({'stop_signal': True})
-        self.queue_to_tlg.put('stop_signal_QWE#@!')
+        self.queue_to_tlg.put(STOP_TLG)
         if self.connection_analytic:
             try:
                 self.connection_analytic.execute("DELETE FROM t_orders\
@@ -1269,7 +1271,7 @@ class Strategy(StrategyBase):
     def suspend(self) -> None:
         print('Suspend')
         self.queue_to_db.put({'stop_signal': True})
-        self.queue_to_tlg.put('stop_signal_QWE#@!')
+        self.queue_to_tlg.put(STOP_TLG)
         self.connection_analytic.commit()
         self.connection_analytic.close()
         self.connection_analytic = None
@@ -1715,7 +1717,6 @@ class Strategy(StrategyBase):
             # print('over_price coarse: {}'.format(over_price))
             # Fine calculate over_price for target return amount
             if exactly and over_price > 0.0:
-                i = 0
                 while True:
                     dy = reverse_target_amount - self.calc_grid_avg(buy_side, depo, base_price, over_price)
                     # print('dy: {}'.format(dy))
@@ -1723,7 +1724,6 @@ class Strategy(StrategyBase):
                         return over_price
                     dx = dy / k
                     over_price += dx
-                    i += 1
         return over_price
 
     def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
@@ -1826,7 +1826,7 @@ class Strategy(StrategyBase):
 
     def start_process(self):
         # Init analytic
-        self.connection_analytic = self.connection_analytic or sqlite3.connect(WORK_PATH + 'funds_rate.db',
+        self.connection_analytic = self.connection_analytic or sqlite3.connect(WORK_PATH + DB_FILE,
                                                                                check_same_thread=False,
                                                                                timeout=10)
         # Create processes for save to .db and send Telegram message
@@ -2249,7 +2249,6 @@ class Strategy(StrategyBase):
                                                               float(reverse_target_amount / amount))
                     self.orders_init.append(waiting_order_id, self.cycle_buy, amount,
                                             reverse_target_amount / amount)
-                    return
             elif self.tp_was_filled:
                 self.message_log("grid_handler: Was filled TP and all grid orders, converse TP to grid", tlg=True)
                 self.after_filled_tp(one_else_grid=True)
@@ -2322,7 +2321,10 @@ class Strategy(StrategyBase):
                     self.start()
 
     def round_truncate(self, _x: Decimal, base: bool, fee: bool = False, _rounding=ROUND_FLOOR) -> Decimal:
-        round_pattern = "1.01234567" if fee else self.round_base if base else self.round_quote
+        if fee:
+            round_pattern = "1.01234567"
+        else:
+            round_pattern = self.round_base if base else self.round_quote
         xr = _x.quantize(Decimal(round_pattern), rounding=_rounding)
         return xr
 
