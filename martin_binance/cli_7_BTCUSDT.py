@@ -55,9 +55,9 @@ ex.PRICE_SHIFT = 0.05  # 'No market' shift price in % from current bid/ask price
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()
 ex.PROFIT = Decimal('0.15')  # 0.15 - 0.85
-ex.PROFIT_MAX = Decimal('0.35')  # If set it is maximum adapted cycle profit
+ex.PROFIT_MAX = Decimal('0.85')  # If set it is maximum adapted cycle profit
 ex.PROFIT_REVERSE = Decimal('0.5')  # 0.0 - 0.75, In Reverse cycle revenue portion of profit
-ex.OVER_PRICE = Decimal('0.6')  # Overlap price in one direction
+ex.OVER_PRICE = Decimal('0.9')  # Overlap price in one direction
 ex.ORDER_Q = 12  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
 ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
@@ -70,7 +70,7 @@ ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list memb
 ex.ADAPTIVE_TRADE_CONDITION = True
 ex.BB_CANDLE_SIZE_IN_MINUTES = 60
 ex.BB_NUMBER_OF_CANDLES = 20
-ex.KBB = 0.3  # k for Bollinger Band
+ex.KBB = 2.5  # k for Bollinger Band
 ex.PROFIT_K = 2 * 0.75 / ex.KBB  # k for place profit in relation to BB value
 # Parameter for calculate price of grid orders by logarithmic scale
 # If -1 function is disabled, can take a value from 0 to infinity (in practice no more 1000)
