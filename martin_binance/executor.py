@@ -2423,22 +2423,21 @@ class Strategy(StrategyBase):
             and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
                  or
                  (not self.cycle_buy and ticker.last_price <= self.shift_grid_threshold))):
-            if self.shift_grid_threshold:
-                self.message_log('Shift grid', color=Style.B_WHITE)
-                self.shift_grid_threshold = None
-                self.start_after_shift = True
-                if self.part_amount_first != 0 or self.part_amount_second != 0:
-                    self.message_log("Grid order was small partially filled, correct depo")
-                    if self.cycle_buy:
-                        self.deposit_second += self.round_truncate(self.part_amount_second, base=False)
-                        self.message_log(f"New second depo: {self.deposit_second}")
-                    else:
-                        self.deposit_first += self.round_truncate(self.part_amount_first, base=True)
-                        self.message_log(f"New first depo: {self.deposit_first}")
-                    self.part_amount_first = Decimal('0')
-                    self.part_amount_second = Decimal('0')
-                self.grid_remove = None
-                self.cancel_grid()
+            self.message_log('Shift grid', color=Style.B_WHITE)
+            self.shift_grid_threshold = None
+            self.start_after_shift = True
+            if self.part_amount_first != 0 or self.part_amount_second != 0:
+                self.message_log("Grid order was small partially filled, correct depo")
+                if self.cycle_buy:
+                    self.deposit_second += self.round_truncate(self.part_amount_second, base=False)
+                    self.message_log(f"New second depo: {self.deposit_second}")
+                else:
+                    self.deposit_first += self.round_truncate(self.part_amount_first, base=True)
+                    self.message_log(f"New first depo: {self.deposit_first}")
+                self.part_amount_first = Decimal('0')
+                self.part_amount_second = Decimal('0')
+            self.grid_remove = None
+            self.cancel_grid()
 
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")

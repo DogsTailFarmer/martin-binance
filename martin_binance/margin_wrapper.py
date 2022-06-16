@@ -855,55 +855,56 @@ async def on_order_update(_stub, _client_id, _symbol):
               f"quote_asset_transacted: {event.quote_asset_transacted}\n"
               f"client_order_id: {event.client_order_id}")
         '''
-        if _symbol == event.symbol and ms.Strategy.order_exist(event.order_id):
-            if event.order_status in ('FILLED', 'PARTIALLY_FILLED'):
+        if (_symbol == event.symbol
+                and ms.Strategy.order_exist(event.order_id)
+                and event.order_status in ('FILLED', 'PARTIALLY_FILLED')):
+            if event.order_status == 'FILLED':
+                # Remove from all_orders and orders lists
+                remove_from_orders_lists([event.order_id])
+            if trade_not_exist(event.order_id, event.trade_id, ms.Strategy.trades):
+                trade = {"qty": event.last_executed_quantity,
+                         "isBuyer": bool(event.side == 'BUY'),
+                         "id": event.trade_id,
+                         "orderId": event.order_id,
+                         "price": event.last_executed_price,
+                         "time": event.transaction_time}
+                # ms.Strategy.strategy.message_log(f"on_order_update.trade: {trade}",
+                #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
+                #  Append to all_trades and trades list
+                if len(ms.Strategy.trades) > TRADES_LIST_LIMIT:
+                    del ms.Strategy.trades[0]
+                ms.Strategy.trades.append(PrivateTrade(trade))
+                if len(ms.Strategy.all_trades) > ALL_TRADES_LIST_LIMIT:
+                    del ms.Strategy.all_trades[0]
+                ms.Strategy.all_trades.append(PrivateTrade(trade))
                 if event.order_status == 'FILLED':
-                    # Remove from all_orders and orders lists
-                    remove_from_orders_lists([event.order_id])
-                if trade_not_exist(event.order_id, event.trade_id, ms.Strategy.trades):
-                    trade = {"qty": event.last_executed_quantity,
-                             "isBuyer": bool(event.side == 'BUY'),
-                             "id": event.trade_id,
-                             "orderId": event.order_id,
-                             "price": event.last_executed_price,
-                             "time": event.transaction_time}
-                    # ms.Strategy.strategy.message_log(f"on_order_update.trade: {trade}",
-                    #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
-                    #  Append to all_trades and trades list
-                    if len(ms.Strategy.trades) > TRADES_LIST_LIMIT:
-                        del ms.Strategy.trades[0]
-                    ms.Strategy.trades.append(PrivateTrade(trade))
-                    if len(ms.Strategy.all_trades) > ALL_TRADES_LIST_LIMIT:
-                        del ms.Strategy.all_trades[0]
-                    ms.Strategy.all_trades.append(PrivateTrade(trade))
-                    if event.order_status == 'FILLED':
-                        # Check if was missed Partially filling event for Binance or normal FTX processing
-                        _saved_filled_quantity = 0.0
-                        for _trade in ms.Strategy.trades:
-                            if _trade.order_id == event.order_id:
-                                # print(f"on_order_update: order: {_trade.order_id},"
-                                #       f" trade: {_trade.id}: {_trade.amount}")
-                                _saved_filled_quantity += _trade.amount
-                        saved_filled_quantity = ms.Strategy.tcm.round_amount(_saved_filled_quantity, RoundingType.ROUND)
-                        quantity = ms.Strategy.tcm.round_amount(float(event.cumulative_filled_quantity),
-                                                                RoundingType.ROUND)
-                        # print(f"on_order_update: saved_filled_quantity: {saved_filled_quantity}\n"
-                        #       f"event.cumulative_filled_quantity: {quantity}")
-                        if saved_filled_quantity < quantity:
-                            if not ms.FEE_FTX:
-                                ms.Strategy.strategy.message_log(f"Order: {event.order_id}"
-                                                                 f" was missed partially filling event",
-                                                                 log_level=LogLevel.INFO)
-                            # Remove trades associated with order from list
-                            remove_from_trades_lists(event.order_id)
-                            # Update current trade
-                            trade.update({"qty": event.cumulative_filled_quantity})
-                            # ms.Strategy.strategy.message_log(f"on_order_update.trade: {trade}",
-                            #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
-                            # Append to list
-                            ms.Strategy.trades.append(PrivateTrade(trade))
-                            ms.Strategy.all_trades.append(PrivateTrade(trade))
-                    ms.Strategy.strategy.on_order_update(OrderUpdate(event))
+                    # Check if was missed Partially filling event for Binance or normal FTX processing
+                    _saved_filled_quantity = 0.0
+                    for _trade in ms.Strategy.trades:
+                        if _trade.order_id == event.order_id:
+                            # print(f"on_order_update: order: {_trade.order_id},"
+                            #       f" trade: {_trade.id}: {_trade.amount}")
+                            _saved_filled_quantity += _trade.amount
+                    saved_filled_quantity = ms.Strategy.tcm.round_amount(_saved_filled_quantity, RoundingType.ROUND)
+                    quantity = ms.Strategy.tcm.round_amount(float(event.cumulative_filled_quantity),
+                                                            RoundingType.ROUND)
+                    # print(f"on_order_update: saved_filled_quantity: {saved_filled_quantity}\n"
+                    #       f"event.cumulative_filled_quantity: {quantity}")
+                    if saved_filled_quantity < quantity:
+                        if not ms.FEE_FTX:
+                            ms.Strategy.strategy.message_log(f"Order: {event.order_id}"
+                                                             f" was missed partially filling event",
+                                                             log_level=LogLevel.INFO)
+                        # Remove trades associated with order from list
+                        remove_from_trades_lists(event.order_id)
+                        # Update current trade
+                        trade.update({"qty": event.cumulative_filled_quantity})
+                        # ms.Strategy.strategy.message_log(f"on_order_update.trade: {trade}",
+                        #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
+                        # Append to list
+                        ms.Strategy.trades.append(PrivateTrade(trade))
+                        ms.Strategy.all_trades.append(PrivateTrade(trade))
+                ms.Strategy.strategy.on_order_update(OrderUpdate(event))
 
 
 async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> None:
