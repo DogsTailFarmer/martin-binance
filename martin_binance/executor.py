@@ -703,7 +703,7 @@ class Strategy(StrategyBase):
                 except sqlite3.Error as err:
                     print(f"UPDATE t_control: {err}")
             # self.message_log(f"save_strategy_state.command: {self.command}", log_level=LogLevel.DEBUG)
-        if command or (time.time() - self.status_time) / 60 > STATUS_DELAY:
+        if command or ((time.time() - self.status_time) / 60 > STATUS_DELAY and STATUS_DELAY != 0):
             # Report current status
             last_price = self.get_buffered_ticker().last_price
             if self.cycle_time:
