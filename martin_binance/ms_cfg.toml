@@ -24,7 +24,7 @@ port = 8000
 sleep_time_s = 60
 vps_name = "**** Place VPS Name there ****"
 # CoinMarketCap
-url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+url = "https://pro-api.coinmarketcap.com/v1/tools/price-conversion"
 api = "********** Place API key for CoinMarketCap there ***********"
 rate_limit = 30  # Requests per minute
 
