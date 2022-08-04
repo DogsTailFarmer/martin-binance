@@ -408,9 +408,8 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         solves.sort(key=lambda a: a[0], reverse=False)
         print('Solve return the best of the right value ;-)')
         return solves[0][1]
-    else:
-        print('Oops. No solution found')
-        return f2d(0)
+    print('Oops. No solution found')
+    return f2d(0)
 
 
 class Orders:

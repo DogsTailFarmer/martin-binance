@@ -729,7 +729,6 @@ async def buffered_orders(_stub, _client_id, _symbol):
             if diff_id or part_id:
                 ms.Strategy.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id + part_id},"
                                                  f" checking it", log_level=LogLevel.WARNING, tlg=False)
-                diff_id_canceled = []
                 for _id in list(set(diff_id + part_id)):
                     await fetch_order(_id, _filled_update_call=True)
                 part_id.clear()
