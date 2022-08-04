@@ -1234,7 +1234,6 @@ async def main(_symbol):
                 print(f"Strategy init error: {ex}")
                 restored = False
     else:
-        pass
         loop.create_task(buffered_orders(stub, client_id, _symbol))
     if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
         m_strategy.init()
