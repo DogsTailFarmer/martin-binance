@@ -1,4 +1,4 @@
-# Parameters for martin-scale strategy
+# Parameters for martin-binance strategy
 # Copyright © 2021 Jerry Fedorenko aka VM
 
 telegram_url = "https://api.telegram.org/bot"
@@ -16,6 +16,7 @@ exchange = [
    'Demo - Binance',   # 7
    "FTX",              # 8
    "FTX_sub_01",       # 9
+   "Bitfinex - demo",  # 10
 ]
 
 [Exporter]
@@ -24,7 +25,7 @@ port = 8000
 sleep_time_s = 60
 vps_name = "**** Place VPS Name there ****"
 # CoinMarketCap
-url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+url = "https://pro-api.coinmarketcap.com/v2/tools/price-conversion"
 api = "********** Place API key for CoinMarketCap there ***********"
 rate_limit = 30  # Requests per minute
 
@@ -45,5 +46,10 @@ channel_id = "*** Place channel_id there ***"
 
 [[Telegram]]
 id_exchange = [8, 9] # "FTX"
+token = "********** Place Token for Telegram bot there ***********"
+channel_id = "*** Place channel_id there ***"
+
+[[Telegram]]
+id_exchange = [2, 10] # "Bitfinex"
 token = "********** Place Token for Telegram bot there ***********"
 channel_id = "*** Place channel_id there ***"

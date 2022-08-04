@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -26,7 +26,7 @@ except ImportError:
     STANDALONE = False
 else:
     STANDALONE = True
-#
+
 import gc
 import psutil
 import sqlite3
@@ -36,6 +36,7 @@ from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
 from threading import Thread
 import queue
 import requests
+import traceback
 
 # region SetParameters
 SYMBOL = str()
@@ -87,7 +88,7 @@ ADX_THRESHOLD = int()
 ADX_PRICE_THRESHOLD = float()
 # Reverse cycle
 REVERSE = bool()
-REVERSE_TARGET_AMOUNT = float()
+REVERSE_TARGET_AMOUNT = Decimal()
 REVERSE_INIT_AMOUNT = Decimal()
 REVERSE_STOP = bool()
 # Config variables
@@ -364,8 +365,52 @@ def save_to_db(queue_to_db) -> None:
     connection_analytic.commit()
 
 
-def float2decimal(_f: float) -> Decimal:
+def f2d(_f: float) -> Decimal:
     return Decimal(str(_f))
+
+
+def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwargs) -> Decimal:
+    """
+    Numerical solution of the equation, value = fn(x)
+    :param fn: Function
+    :param value: Specified value
+    :param x: Predict of the search value
+    :param max_tries:
+    :param max_err:
+    :param kwargs: Function parameters as {}
+    :return: fine x
+    """
+    delta = f2d(0.000001)
+    solves = []
+
+    def dx(_fn, _x, _delta, **_kwargs):
+        return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
+
+    for tries in range(max_tries):
+        err = fn(x, **kwargs) - value
+        # print(f"err: {err}")
+        if abs(err) < max_err and err >= 0:
+            print(f"For {tries} of attempts the best solution was found!", )
+            return x
+        if err > 0:
+            solves.append((err, x))
+        slope = dx(fn, x, delta, **kwargs)
+        # print(f"slope: {slope}")
+        if slope != 0.0:
+            x -= err/slope
+            # print(f"x: {x}")
+        else:
+            delta *= 10
+            if delta > 1:
+                break
+            # print(f"solve.delta: {delta}")
+    if solves:
+        solves.sort(key=lambda a: a[0], reverse=False)
+        print('Solve return the best of the right value ;-)')
+        return solves[0][1]
+    else:
+        print('Oops. No solution found')
+        return f2d(0)
 
 
 class Orders:
@@ -432,18 +477,25 @@ class Orders:
 
     def get_first(self) -> ():
         """
-        Get [0] Dict for order
+        Get Dict[0]  for order
         :return: (buy, amount, price)
         """
         return self.orders_list[0]['buy'], self.orders_list[0]['amount'], self.orders_list[0]['price']
+
+    def get_last(self) -> ():
+        """
+        Get Dict[-1]  for order
+        :return: (buy, amount, price)
+        """
+        return self.orders_list[-1]['buy'], self.orders_list[-1]['amount'], self.orders_list[-1]['price']
 
     def restore(self, order_list: []):
         self.orders_list.clear()
         for i in order_list:
             i_dec = {'id': i.get('id'),
                      'buy': i.get('buy'),
-                     'amount': float2decimal(i.get('amount')),
-                     'price': float2decimal(i.get('price'))}
+                     'amount': f2d(i.get('amount')),
+                     'price': f2d(i.get('price'))}
             self.orders_list.append(i_dec)
 
     def sort(self, cycle_buy: bool):
@@ -536,7 +588,7 @@ class Strategy(StrategyBase):
         self.cycle_time = None  # + Cycle start time
         self.cycle_time_reverse = None  # + Reverse cycle start time
         self.reverse = REVERSE  # + Current cycle is Reverse
-        self.reverse_target_amount = REVERSE_TARGET_AMOUNT if REVERSE else None  # + Return amount for reverse cycle
+        self.reverse_target_amount = REVERSE_TARGET_AMOUNT if REVERSE else Decimal('0')  # + Amount for reverse cycle
         self.reverse_init_amount = REVERSE_INIT_AMOUNT if REVERSE else Decimal('0')  # + Actual amount of initial cycle
         self.reverse_hold = False  # + Exist unreleased reverse state
         self.reverse_price = None  # + Price when execute last grid order and hold reverse cycle
@@ -552,6 +604,7 @@ class Strategy(StrategyBase):
         self.grid_order_canceled = None  # -
         self.cycle_status = ()  # - Operational status for current cycle, orders count
         self.grid_update_started = None  # - Flag when grid update process started
+        self.start_reverse_time = None  # -
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         # self.message_log('Start Init section')
@@ -578,7 +631,7 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
         self.s_currency = self.get_second_currency()
-        self.tlg_header = '{}, {}/{}. '.format(EXCHANGE[ID_EXCHANGE], self.f_currency, self.s_currency)
+        self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}. "
         self.message_log(f"{self.tlg_header}", color=Style.B_WHITE)
         self.status_time = time.time()
         self.cycle_time = datetime.utcnow()
@@ -594,18 +647,18 @@ class Strategy(StrategyBase):
         self.round_base = ROUND_BASE or str(tcm.round_amount(1.0123456789, RoundingType.FLOOR))
         self.round_quote = ROUND_QUOTE or str(tcm.round_price(1.0123456789, RoundingType.FLOOR))
         print(f"Round pattern, for base: {self.round_base}, quote: {self.round_quote}")
-        last_price = float2decimal(self.get_buffered_ticker().last_price)
+        last_price = f2d(self.get_buffered_ticker().last_price)
         if last_price:
             print('Last ticker price: ', last_price)
             self.avg_rate = last_price
             df = self.get_buffered_funds().get(self.f_currency, 0)
-            df = float2decimal(df.available) if df else Decimal('0.0')
+            df = f2d(df.available) if df else Decimal('0.0')
             if USE_ALL_FIRST_FUND and df and self.cycle_buy:
                 self.message_log('Check USE_ALL_FIRST_FUND parameter. You may have loss on Reverse cycle',
                                  color=Style.B_WHITE)
             if self.cycle_buy:
                 ds = self.get_buffered_funds().get(self.s_currency, 0)
-                ds = float2decimal(ds.available) if ds else Decimal('0.0')
+                ds = f2d(ds.available) if ds else Decimal('0.0')
                 if check_funds and self.deposit_second > ds:
                     self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                     if STANDALONE:
@@ -623,10 +676,10 @@ class Strategy(StrategyBase):
                             # noinspection PyProtectedMember, PyUnresolvedReferences
                             os._exit(1)
                 first_order_vlm = self.deposit_first * 1 * (1 - self.martin) / (1 - pow(self.martin, ORDER_Q))
-            if self.cycle_buy and first_order_vlm < float2decimal(tcm.get_min_buy_amount(float(last_price))):
+            if self.cycle_buy and first_order_vlm < f2d(tcm.get_min_buy_amount(float(last_price))):
                 self.message_log(f"Total deposit {AMOUNT_SECOND}{self.s_currency}"
                                  f" not enough for min amount for {ORDER_Q} orders.", color=Style.B_RED)
-            elif not self.cycle_buy and first_order_vlm < float2decimal(tcm.get_min_sell_amount(float(last_price))):
+            elif not self.cycle_buy and first_order_vlm < f2d(tcm.get_min_sell_amount(float(last_price))):
                 self.message_log(f"Total deposit {self.deposit_first}{self.f_currency}"
                                  f" not enough for min amount for {ORDER_Q} orders.", color=Style.B_RED)
             buy_amount = tcm.get_min_buy_amount(float(last_price))
@@ -654,7 +707,10 @@ class Strategy(StrategyBase):
                         and not self.reverse_hold
                         and not GRID_ONLY
                         and not self.grid_update_started
-                        and not self.start_after_shift)
+                        and not self.start_after_shift
+                        and not self.tp_hold
+                        and not self.tp_was_filled
+                        and not self.orders_init)
         if stable_state:
             orders = self.get_buffered_open_orders()
             order_buy = len([i for i in orders if i.buy is True])
@@ -673,6 +729,8 @@ class Strategy(StrategyBase):
                 if self.queue_to_db:
                     # print('Send data to t_orders')
                     self.queue_to_db.put(data_to_db)
+        else:
+            self.cycle_status = ()
         # endregion
         # region ReportStatus
         # Get command from Telegram
@@ -703,7 +761,7 @@ class Strategy(StrategyBase):
                 except sqlite3.Error as err:
                     print(f"UPDATE t_control: {err}")
             # self.message_log(f"save_strategy_state.command: {self.command}", log_level=LogLevel.DEBUG)
-        if command or (time.time() - self.status_time) / 60 > STATUS_DELAY:
+        if command or (STATUS_DELAY and (time.time() - self.status_time) / 60 > STATUS_DELAY):
             # Report current status
             last_price = self.get_buffered_ticker().last_price
             if self.cycle_time:
@@ -751,7 +809,7 @@ class Strategy(StrategyBase):
                                  f"First: {self.sum_profit_first}\n"
                                  f"Second: {self.sum_profit_second}\n"
                                  f"Summary: {sum_profit}\n"
-                                 f"*   ***   ***   ***   *\n"
+                                 f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* ***  ***  *** *'}\n"
                                  f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
                                  f"{' Hold reverse' if self.reverse_hold else ''}"
                                  f" {'grid only' if GRID_ONLY else 'cycle'} with {order_buy} buy"
@@ -772,20 +830,13 @@ class Strategy(StrategyBase):
         if (stable_state
                 and ADAPTIVE_TRADE_CONDITION
                 and not self.reverse
-                and self.tp_order_id
-                and not self.tp_hold
-                and not self.tp_was_filled
-                and not self.orders_init
-                and not self.part_amount_first
-                and (len(self.orders_grid) + len(self.orders_hold)) > GRID_MAX_COUNT):
-            last_price = float(self.avg_rate)
-            if last_price:
-                if self.heartbeat_counter % 150 == 0:
-                    self.grid_update(last_price, frequency='low')
-                elif self.heartbeat_counter % 30 == 0:
-                    self.grid_update(last_price, frequency='mid')
-                elif self.heartbeat_counter % 5 == 0:
-                    self.grid_update(last_price, frequency='hi')
+                and not self.part_amount_first):
+            if self.heartbeat_counter % 150 == 0:
+                self.grid_update(frequency='low')
+            elif self.heartbeat_counter % 30 == 0:
+                self.grid_update(frequency='mid')
+            else:
+                self.grid_update(frequency='hi')
         if self.heartbeat_counter > 150:
             self.heartbeat_counter = 0
             # Update t_funds.active set True
@@ -800,25 +851,29 @@ class Strategy(StrategyBase):
             self.tp_error = False
             self.place_profit_order()
         if self.reverse_hold:
-            last_price = self.get_buffered_ticker().last_price
-            if self.cycle_buy:
-                price_diff = 100 * (self.reverse_price - last_price) / self.reverse_price
+            if self.start_reverse_time:
+                if time.time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
+                    last_price = self.get_buffered_ticker().last_price
+                    if self.cycle_buy:
+                        price_diff = 100 * (self.reverse_price - last_price) / self.reverse_price
+                    else:
+                        price_diff = 100 * (last_price - self.reverse_price) / self.reverse_price
+                    if price_diff > ADX_PRICE_THRESHOLD:
+                        # Reverse
+                        self.cycle_buy = not self.cycle_buy
+                        self.command = 'stop' if REVERSE_STOP else None
+                        self.reverse = True
+                        self.reverse_hold = False
+                        self.sum_amount_first = self.tp_part_amount_first
+                        self.sum_amount_second = self.tp_part_amount_second
+                        self.part_amount_first = Decimal('0')
+                        self.part_amount_second = Decimal('0')
+                        self.tp_part_amount_first = Decimal('0')
+                        self.tp_part_amount_second = Decimal('0')
+                        self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
+                        self.start()
             else:
-                price_diff = 100 * (last_price - self.reverse_price) / self.reverse_price
-            if price_diff > ADX_PRICE_THRESHOLD:
-                # Reverse
-                self.cycle_buy = not self.cycle_buy
-                self.command = 'stop' if REVERSE_STOP else None
-                self.reverse = True
-                self.reverse_hold = False
-                self.sum_amount_first = self.tp_part_amount_first
-                self.sum_amount_second = self.tp_part_amount_second
-                self.part_amount_first = Decimal('0')
-                self.part_amount_second = Decimal('0')
-                self.tp_part_amount_first = Decimal('0')
-                self.tp_part_amount_second = Decimal('0')
-                self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
-                self.start()
+                self.start_reverse_time = time.time()
         # endregion
         return {'command': json.dumps(self.command),
                 'cycle_buy': json.dumps(self.cycle_buy),
@@ -879,40 +934,40 @@ class Strategy(StrategyBase):
                 self.cycle_time_reverse = datetime.strptime(self.cycle_time_reverse, '%Y-%m-%d %H:%M:%S.%f')
             else:
                 self.cycle_time_reverse = None
-            self.deposit_first = float2decimal(json.loads(strategy_state.get('deposit_first')))
-            self.deposit_second = float2decimal(json.loads(strategy_state.get('deposit_second')))
+            self.deposit_first = f2d(json.loads(strategy_state.get('deposit_first')))
+            self.deposit_second = f2d(json.loads(strategy_state.get('deposit_second')))
             self.last_shift_time = json.loads(strategy_state.get('last_shift_time'))
-            self.martin = float2decimal(json.loads(strategy_state.get('martin')))
+            self.martin = f2d(json.loads(strategy_state.get('martin')))
             self.order_q = json.loads(strategy_state.get('order_q'))
             self.orders_grid.restore(json.loads(strategy_state.get('orders')))
             self.orders_hold.restore(json.loads(strategy_state.get('orders_hold')))
             self.orders_save.restore(json.loads(strategy_state.get('orders_save')))
             self.over_price = json.loads(strategy_state.get('over_price'))
-            self.part_amount_first = float2decimal(json.loads(strategy_state.get('part_amount_first')))
-            self.part_amount_second = float2decimal(json.loads(strategy_state.get('part_amount_second')))
-            self.initial_first = float2decimal(json.loads(strategy_state.get('initial_first')))
-            self.initial_second = float2decimal(json.loads(strategy_state.get('initial_second')))
-            self.initial_reverse_first = float2decimal(json.loads(strategy_state.get('initial_reverse_first')))
-            self.initial_reverse_second = float2decimal(json.loads(strategy_state.get('initial_reverse_second')))
-            self.profit_first = float2decimal(json.loads(strategy_state.get('profit_first')))
-            self.profit_second = float2decimal(json.loads(strategy_state.get('profit_second')))
+            self.part_amount_first = f2d(json.loads(strategy_state.get('part_amount_first')))
+            self.part_amount_second = f2d(json.loads(strategy_state.get('part_amount_second')))
+            self.initial_first = f2d(json.loads(strategy_state.get('initial_first')))
+            self.initial_second = f2d(json.loads(strategy_state.get('initial_second')))
+            self.initial_reverse_first = f2d(json.loads(strategy_state.get('initial_reverse_first')))
+            self.initial_reverse_second = f2d(json.loads(strategy_state.get('initial_reverse_second')))
+            self.profit_first = f2d(json.loads(strategy_state.get('profit_first')))
+            self.profit_second = f2d(json.loads(strategy_state.get('profit_second')))
             self.reverse = json.loads(strategy_state.get('reverse'))
             self.reverse_hold = json.loads(strategy_state.get('reverse_hold'))
-            self.reverse_init_amount = float2decimal(json.loads(strategy_state.get('reverse_init_amount')))
+            self.reverse_init_amount = f2d(json.loads(strategy_state.get('reverse_init_amount')))
             self.reverse_price = json.loads(strategy_state.get('reverse_price'))
-            self.reverse_target_amount = json.loads(strategy_state.get('reverse_target_amount'))
+            self.reverse_target_amount = f2d(json.loads(strategy_state.get('reverse_target_amount')))
             self.shift_grid_threshold = json.loads(strategy_state.get('shift_grid_threshold'))
             self.status_time = json.loads(strategy_state.get('status_time'))
-            self.sum_amount_first = float2decimal(json.loads(strategy_state.get('sum_amount_first')))
-            self.sum_amount_second = float2decimal(json.loads(strategy_state.get('sum_amount_second')))
-            self.sum_profit_first = float2decimal(json.loads(strategy_state.get('sum_profit_first')))
-            self.sum_profit_second = float2decimal(json.loads(strategy_state.get('sum_profit_second')))
-            self.tp_amount = float2decimal(json.loads(strategy_state.get('tp_amount')))
+            self.sum_amount_first = f2d(json.loads(strategy_state.get('sum_amount_first')))
+            self.sum_amount_second = f2d(json.loads(strategy_state.get('sum_amount_second')))
+            self.sum_profit_first = f2d(json.loads(strategy_state.get('sum_profit_first')))
+            self.sum_profit_second = f2d(json.loads(strategy_state.get('sum_profit_second')))
+            self.tp_amount = f2d(json.loads(strategy_state.get('tp_amount')))
             self.tp_init = eval(json.loads(strategy_state.get('tp_init')))
             self.tp_order_id = json.loads(strategy_state.get('tp_order_id'))
-            self.tp_part_amount_first = float2decimal(json.loads(strategy_state.get('tp_part_amount_first')))
-            self.tp_part_amount_second = float2decimal(json.loads(strategy_state.get('tp_part_amount_second')))
-            self.tp_target = float2decimal(json.loads(strategy_state.get('tp_target')))
+            self.tp_part_amount_first = f2d(json.loads(strategy_state.get('tp_part_amount_first')))
+            self.tp_part_amount_second = f2d(json.loads(strategy_state.get('tp_part_amount_second')))
+            self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
             self.tp_order = eval(json.loads(strategy_state.get('tp_order'))) if strategy_state.get('tp_order') else ()
             self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id')) if strategy_state.get('tp_wait_id') else None
         # Variants are processed when the actual order is equal to or less than it should be
@@ -940,7 +995,7 @@ class Strategy(StrategyBase):
         tp_filled = not tp_order and self.tp_order_id
         no_orders = grid_orders_len == 0 and not self.tp_order_id
         #
-        self.avg_rate = float2decimal(self.get_buffered_ticker().last_price)
+        self.avg_rate = f2d(self.get_buffered_ticker().last_price)
         #
         if self.command == 'stopped':
             self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
@@ -966,13 +1021,13 @@ class Strategy(StrategyBase):
             amount_second = Decimal('0')
             for o in market_order:
                 if o.order_id == self.tp_order_id:
-                    amount_first += float2decimal(o.amount)
-                    amount_second += float2decimal(o.amount) * float2decimal(o.price)
+                    amount_first += f2d(o.amount)
+                    amount_second += f2d(o.amount) * f2d(o.price)
             if amount_first == 0:
                 # If execution event was missed
                 _buy, _amount, _price = self.tp_order
-                amount_first = self.round_truncate(float2decimal(_amount), base=True)
-                amount_second = self.round_truncate(float2decimal(_amount * _price), base=False)
+                amount_first = self.round_truncate(f2d(_amount), base=True)
+                amount_second = self.round_truncate(f2d(_amount * _price), base=False)
             self.tp_was_filled = (amount_first, amount_second, True)
             self.tp_order_id = None
             self.tp_order = ()
@@ -1013,14 +1068,14 @@ class Strategy(StrategyBase):
             amount_second = Decimal('0')
             for o in market_order:
                 if o.order_id == self.tp_order_id:
-                    amount_first += float2decimal(o.amount)
-                    amount_second += float2decimal(o.amount) * float2decimal(o.price)
+                    amount_first += f2d(o.amount)
+                    amount_second += f2d(o.amount) * f2d(o.price)
                     print(f"order_id={o.order_id}, first: {o.amount}, price: {o.price}")
             if amount_first == 0:
                 # If execution event was missed
                 _buy, _amount, _price = self.tp_order
-                amount_first = self.round_truncate(float2decimal(_amount), base=True)
-                amount_second = self.round_truncate(float2decimal(_amount * _price), base=False)
+                amount_first = self.round_truncate(f2d(_amount), base=True)
+                amount_second = self.round_truncate(f2d(_amount * _price), base=False)
             self.tp_was_filled = (amount_first, amount_second, True)
             self.tp_order_id = None
             self.tp_order = ()
@@ -1092,14 +1147,14 @@ class Strategy(StrategyBase):
             amount_second = Decimal('0')
             for o in market_order:
                 if o.order_id == self.tp_order_id:
-                    amount_first += float2decimal(o.amount)
-                    amount_second += float2decimal(o.amount) * float2decimal(o.price)
+                    amount_first += f2d(o.amount)
+                    amount_second += f2d(o.amount) * f2d(o.price)
                     print(f"order_id={o.order_id}, first: {o.amount}, price: {o.price}")
             if amount_first == 0:
                 # If execution event was missed
                 _buy, _amount, _price = self.tp_order
-                amount_first = self.round_truncate(float2decimal(_amount), base=True)
-                amount_second = self.round_truncate(float2decimal(_amount * _price), base=False)
+                amount_first = self.round_truncate(f2d(_amount), base=True)
+                amount_second = self.round_truncate(f2d(_amount * _price), base=False)
             self.tp_was_filled = (amount_first, amount_second, True)
             self.tp_order_id = None
             self.tp_order = ()
@@ -1136,9 +1191,9 @@ class Strategy(StrategyBase):
             return
         funds = self.get_buffered_funds()
         ff = funds.get(self.f_currency, 0)
-        ff = float2decimal(ff.total_for_currency) if ff else Decimal('0.0')
+        ff = f2d(ff.total_for_currency) if ff else Decimal('0.0')
         fs = funds.get(self.s_currency, 0)
-        fs = float2decimal(fs.total_for_currency) if fs else Decimal('0.0')
+        fs = f2d(fs.total_for_currency) if fs else Decimal('0.0')
         # Save initial funds and cycle statistics to .db for external analytics
         if self.first_run:
             self.start_process()
@@ -1191,7 +1246,7 @@ class Strategy(StrategyBase):
                 self.wait_refunding_for_start = True
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
-        self.avg_rate = float2decimal(self.get_buffered_ticker().last_price)
+        self.avg_rate = f2d(self.get_buffered_ticker().last_price)
         if not self.first_run and not self.start_after_shift and not self.reverse and not GRID_ONLY:
             self.message_log(f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
                              f"For all cycles profit:\n"
@@ -1232,7 +1287,7 @@ class Strategy(StrategyBase):
             else:
                 if USE_ALL_FIRST_FUND and (self.reverse or GRID_ONLY):
                     ff = funds.get(self.f_currency, 0)
-                    fund = float2decimal(ff.available) if ff else Decimal('0.0')
+                    fund = f2d(ff.available) if ff else Decimal('0.0')
                     if fund > self.deposit_first:
                         self.deposit_first = fund
                         self.message_log('Use all available fund for first currency')
@@ -1287,7 +1342,7 @@ class Strategy(StrategyBase):
     def place_grid(self,
                    buy_side: bool,
                    depo: Decimal,
-                   reverse_target_amount: float,
+                   reverse_target_amount: Decimal,
                    allow_grid_shift: bool = True,
                    additional_grid: bool = False,
                    grid_update: bool = False) -> None:
@@ -1303,26 +1358,32 @@ class Strategy(StrategyBase):
         if buy_side:
             _price = last_executed_grid_price or self.get_buffered_order_book().bids[0].price
             base_price = _price - PRICE_SHIFT * _price / 100
+            amount_min = tcm.get_min_buy_amount(base_price)
         else:
             _price = last_executed_grid_price or self.get_buffered_order_book().asks[0].price
             base_price = _price + PRICE_SHIFT * _price / 100
-        print(f"place_grid.base_price: {base_price}")
-        min_delta = tcm.get_minimal_price_change(base_price)
+            amount_min = tcm.get_min_sell_amount(base_price)
+        min_delta = f2d(tcm.get_minimal_price_change(base_price))
+        base_price_dec = f2d(tcm.round_price(base_price, RoundingType.ROUND))
+        amount_min_dec = f2d(amount_min)
         if ADAPTIVE_TRADE_CONDITION or self.reverse or additional_grid:
             try:
-                self.set_trade_conditions(buy_side,
-                                          float(depo),
-                                          base_price,
-                                          reverse_target_amount,
-                                          min_delta,
-                                          additional_grid=additional_grid,
-                                          grid_update=grid_update)
+                amount_first_grid = self.set_trade_conditions(buy_side,
+                                                              depo,
+                                                              base_price_dec,
+                                                              reverse_target_amount,
+                                                              min_delta,
+                                                              amount_min_dec,
+                                                              additional_grid=additional_grid,
+                                                              grid_update=grid_update)
             except Exception as ex:
-                self.message_log(f"Can't set trade conditions: {ex}", log_level=LogLevel.ERROR)
+                self.message_log(f"Can't set trade conditions: {ex}\n"
+                                 f"{traceback.print_exc()}", log_level=LogLevel.ERROR)
                 return
         else:
             self.over_price = OVER_PRICE
             self.order_q = ORDER_Q
+            amount_first_grid = amount_min_dec
         if self.order_q > 1:
             self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
                              f" cycle set {self.order_q} orders for {self.over_price:.2f}% over price", tlg=False)
@@ -1330,9 +1391,6 @@ class Strategy(StrategyBase):
             self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
                              f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
                              tlg=False)
-        # Decimal zone
-        base_price_dec = float2decimal(base_price)
-        min_delta_dec = float2decimal(min_delta)
         if self.order_q > 1:
             delta_price = self.over_price * base_price_dec / (100 * (self.order_q - 1))
         else:
@@ -1341,55 +1399,79 @@ class Strategy(StrategyBase):
         price_prev = base_price_dec
         if buy_side:
             fund = funds.get(self.s_currency, 0)
-            fund = float2decimal(fund.available) if fund else Decimal('0.0')
+            fund = f2d(fund.available) if fund else Decimal('0.0')
             currency = self.s_currency
         else:
             fund = funds.get(self.f_currency, 0)
-            fund = float2decimal(fund.available) if fund else Decimal('0.0')
+            fund = f2d(fund.available) if fund else Decimal('0.0')
             currency = self.f_currency
         if depo <= fund:
-            total_grid_amount_f = float2decimal(0)
-            total_grid_amount_s = float2decimal(0)
+            total_grid_amount_f = f2d(0)
+            total_grid_amount_s = f2d(0)
+            amount_last_grid = f2d(0)
+            depo_i = f2d(0)
+            rounding = ROUND_CEILING
+            last_order_pass = False
+            price_k = 1
+            price_last_grid = 1
             for i in range(self.order_q):
                 if self.order_q > 1 or self.order_q == 1 and not self.reverse:
                     if LINEAR_GRID_K >= 0:
-                        price_k = float2decimal(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
-                    else:
-                        price_k = 1
+                        price_k = f2d(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
                     if buy_side:
                         price = base_price_dec - i * delta_price * price_k
                     else:
                         price = base_price_dec + i * delta_price * price_k
                 else:
-                    reverse_target_amount_dec = float2decimal(reverse_target_amount)
-                    price = depo / reverse_target_amount_dec if buy_side else reverse_target_amount_dec / depo
-                price = float2decimal(tcm.round_price(float(price), RoundingType.ROUND))
+                    price = (depo / reverse_target_amount) if buy_side else (reverse_target_amount / depo)
+                price = f2d(tcm.round_price(float(price), RoundingType.ROUND))
                 if buy_side:
-                    if i and price_prev - price < min_delta_dec:
-                        price = price_prev - min_delta_dec
+                    if i and price_prev - price < min_delta:
+                        price = price_prev - min_delta
                 else:
-                    if i and price - price_prev < min_delta_dec:
-                        price = price_prev + min_delta_dec
+                    if i and price - price_prev < min_delta:
+                        price = price_prev + min_delta
                 price_prev = price
                 # print(f"place_grid.round_price: {price}")
                 if self.order_q == 1:
                     amount = depo
+                    rounding = ROUND_FLOOR
+                elif i == 0:
+                    amount_0 = depo * self.martin**i * (self.martin - 1) / (self.martin**self.order_q - 1)
+                    amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
+                    depo_i = depo - amount
                 elif i < self.order_q - 1:
-                    amount = depo * self.martin**i * (1 - self.martin) / (1 - self.martin**self.order_q)
+                    amount = depo_i * self.martin**i * (self.martin - 1) / (self.martin**self.order_q - 1)
                 else:
-                    amount = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
+                    amount = amount_last_grid
+                    rounding = ROUND_FLOOR
                 if buy_side:
                     amount /= price
-                amount = self.round_truncate(amount, base=True)
+                amount = self.round_truncate(amount, base=True, _rounding=rounding)
                 total_grid_amount_f += amount
                 total_grid_amount_s += amount * price
-                # print(f"{i+1}, {amount}, {price}, {amount * price}")
+                # Check last order volume
+                if i == self.order_q - 2:
+                    amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
+                    if buy_side:
+                        if LINEAR_GRID_K >= 0:
+                            price_k = f2d(1 - math.log(self.order_q - (i + 1), self.order_q + LINEAR_GRID_K))
+                        price_last_grid = base_price_dec + (i + 1) * delta_price * price_k * (-1 if buy_side else 1)
+                        price_last_grid = f2d(tcm.round_price(float(price_last_grid), RoundingType.ROUND))
+                    if amount_last_grid < amount_min_dec * price_last_grid:
+                        # Skip last order
+                        amount += amount_last_grid / price_last_grid
+                        amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
+                        last_order_pass = True
+                # print(f"{i}, amount: {amount},price: {price}, {amount * price}")
                 # create order for grid
                 if i < GRID_MAX_COUNT:
                     waiting_order_id = self.place_limit_order(buy_side, float(amount), float(price))
                     self.orders_init.append(waiting_order_id, buy_side, amount, price)
                 else:
                     self.orders_hold.append(i, buy_side, amount, price)
+                if last_order_pass:
+                    break
             self.message_log(f"Total grid amount: first: {total_grid_amount_f}, second: {total_grid_amount_s}",
                              log_level=LogLevel.DEBUG, color=Style.CYAN)
             if not GRID_ONLY and allow_grid_shift:
@@ -1397,7 +1479,7 @@ class Strategy(StrategyBase):
                     self.shift_grid_threshold = base_price + 2 * PRICE_SHIFT * base_price / 100
                 else:
                     self.shift_grid_threshold = base_price - 2 * PRICE_SHIFT * base_price / 100
-                self.message_log(f"Shift grid threshold: {self.shift_grid_threshold:.2f}")
+                self.message_log(f"Shift grid threshold: {self.shift_grid_threshold:.4f}")
             self.start_after_shift = False
             if self.grid_update_started:
                 self.grid_place_flag = None
@@ -1416,33 +1498,124 @@ class Strategy(StrategyBase):
             self.tp_hold_additional = False
             self.place_profit_order()
 
-    def grid_update(self, base_price: float, frequency='mid'):
+    def calc_grid(self, over_price: Decimal, **kwargs) -> Decimal:
+        """
+        Calculate return average amount in second coin for grid orders with fixed initial parameters
+        :param over_price:
+        :param kwargs:
+        :return: Decimal(avg_amount)
+        """
+        buy_side = kwargs.get('buy_side')
+        depo = kwargs.get('depo')
+        base_price = kwargs.get('base_price')
+        amount_first_grid = kwargs.get('amount_first_grid')
+        min_delta = kwargs.get('min_delta')
+        amount_min = kwargs.get('amount_min')
+        #
+        tcm = self.get_trading_capability_manager()
+        # Decimal zone
+        delta_price = over_price * base_price / (100 * (self.order_q - 1))
+        price_prev = base_price
+        avg_amount = f2d(0)
+        total_grid_amount_f = f2d(0)
+        total_grid_amount_s = f2d(0)
+        depo_i = f2d(0)
+        rounding = ROUND_CEILING
+        last_order_pass = False
+        price_k = 1
+        price_last_grid = 1
+        for i in range(self.order_q):
+            if LINEAR_GRID_K >= 0:
+                price_k = f2d(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
+            if buy_side:
+                price = base_price - i * delta_price * price_k
+            else:
+                price = base_price + i * delta_price * price_k
+            price = f2d(tcm.round_price(float(price), RoundingType.ROUND))
+            if buy_side:
+                if i and price_prev - price < min_delta:
+                    price = price_prev - min_delta
+            else:
+                if i and price - price_prev < min_delta:
+                    price = price_prev + min_delta
+            price_prev = price
+            if i == 0:
+                amount_0 = depo * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
+                amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
+                depo_i = depo - amount
+                # print(f"calc_grid: {i}, amount: {amount}, price: {price}, depo: {depo}, depo_i: {depo_i}")
+            elif i < self.order_q - 1:
+                amount = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
+                # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
+            else:
+                amount = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
+                rounding = ROUND_FLOOR
+                # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
+            if buy_side:
+                amount /= price
+            amount = self.round_truncate(amount, base=True, _rounding=rounding)
+            total_grid_amount_f += amount
+            total_grid_amount_s += amount * price
+            # Check last order volume
+            if i == self.order_q - 2:
+                amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
+                if buy_side:
+                    if LINEAR_GRID_K >= 0:
+                        price_k = f2d(1 - math.log(self.order_q - (i + 1), self.order_q + LINEAR_GRID_K))
+                    price_last_grid = base_price + (i + 1) * delta_price * price_k * (-1 if buy_side else 1)
+                    price_last_grid = f2d(tcm.round_price(float(price_last_grid), RoundingType.ROUND))
+                if amount_last_grid < amount_min * price_last_grid:
+                    # Skip last order
+                    amount += amount_last_grid / price_last_grid
+                    amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
+                    last_order_pass = True
+            if buy_side:
+                avg_amount += amount
+            else:
+                avg_amount += amount * price
+            if last_order_pass:
+                break
+            # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
+        # print(f"calc_grid: total_grid_amount_f: {total_grid_amount_f}, total_grid_amount_s: {total_grid_amount_s}")
+        # print(f"calc_grid: order_q: {self.order_q}, over_price: {float(over_price):f}, avg_amount: {avg_amount}")
+        return avg_amount
+
+    def grid_update(self, frequency: str):
         try:
             bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
         except Exception as ex:
             self.message_log(f"Can't get BB in grid update: {ex}", log_level=LogLevel.INFO)
         else:
-            predict_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
-            if self.cycle_buy:
-                over_price_new = 100 * (base_price - predict_price) / base_price
-            else:
-                over_price_new = 100 * (predict_price - base_price) / base_price
-            over_price_new = max(over_price_new, float(OVER_PRICE))
-            over_price = float(self.over_price)
-            over_price_diff = 100 * (over_price_new - over_price) / over_price
             do_it = False
-            if frequency == 'hi' and over_price_diff > 0:
-                do_it = over_price_diff > 15
-            elif frequency == 'mid' and over_price_diff > 0:
-                do_it = over_price_diff > 10
-            elif frequency == 'low':
-                if over_price_diff > 0:
-                    do_it = over_price_diff > 5
+            delta = None
+            try:
+                if self.orders_hold:
+                    last_price = float(self.orders_hold.get_last()[2])
                 else:
-                    do_it = -1 * over_price_diff > 15
-            if do_it and not self.orders_init:
+                    last_price = float(self.orders_grid.get_last()[2])
+                predicted_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
+                if self.cycle_buy:
+                    delta = 100 * (last_price - predicted_price) / last_price
+                else:
+                    delta = 100 * (predicted_price - last_price) / last_price
+                depo_remaining = ((self.orders_grid.sum_amount(self.cycle_buy) +
+                                   self.orders_hold.sum_amount(self.cycle_buy)) /
+                                  (self.deposit_second if self.cycle_buy else self.deposit_first))
+                depo_check = depo_remaining >= f2d(0.8)
+                if frequency == 'hi' and delta > 0:
+                    do_it = depo_check and delta > 0.5
+                elif frequency == 'mid' and delta > 0:
+                    do_it = depo_check and delta > 0.25
+                elif frequency == 'low':
+                    if delta > 0:
+                        do_it = depo_check and delta > 0.12
+                    else:
+                        do_it = depo_remaining >= f2d(0.2) and -1 * delta > 3
+            except Exception as ex:
+                self.message_log(f"Can't get status for grid update: {ex}", log_level=LogLevel.WARNING)
+            if do_it:
                 self.message_log(f"Update grid orders, frequency: {frequency},"
-                                 f" over price difference: {over_price_diff:.2f}%", tlg=True)
+                                 f" BB limit difference: {delta:.2f}%", tlg=True)
                 self.grid_update_started = True
                 self.cancel_grid()
 
@@ -1472,10 +1645,10 @@ class Strategy(StrategyBase):
                 funds = self.get_buffered_funds()
                 if buy_side:
                     fund = funds.get(self.s_currency, 0)
-                    fund = float2decimal(fund.available) if fund else Decimal('0.0')
+                    fund = f2d(fund.available) if fund else Decimal('0.0')
                 else:
                     fund = funds.get(self.f_currency, 0)
-                    fund = float2decimal(fund.available) if fund else Decimal('0.0')
+                    fund = f2d(fund.available) if fund else Decimal('0.0')
                 if buy_side and amount * price > fund:
                     # Save take profit order and wait update balance
                     self.tp_order_hold = {'buy_side': buy_side,
@@ -1505,7 +1678,8 @@ class Strategy(StrategyBase):
                                 _price = tcm.round_price(_price, RoundingType.CEIL)
                             self.message_log(f"Rounded amount: {_amount}, price: {_price}")
                     self.tp_order = (buy_side, _amount, _price)
-                    self.tp_wait_id = self.place_limit_order(buy_side, _amount, _price)
+                    check = (len(self.orders_grid) + len(self.orders_hold)) > 2
+                    self.tp_wait_id = self.place_limit_order_check(buy_side, _amount, _price, check=check)
 
     def message_log(self, msg: str, log_level=LogLevel.INFO, tlg: bool = False, color=Style.WHITE) -> None:
         if tlg and color == Style.WHITE:
@@ -1549,62 +1723,71 @@ class Strategy(StrategyBase):
 
     def set_trade_conditions(self,
                              buy_side: bool,
-                             depo: float,
-                             base_price: float,
-                             reverse_target_amount: float,
-                             delta_min: float,
+                             depo: Decimal,
+                             base_price: Decimal,
+                             reverse_target_amount: Decimal,
+                             delta_min: Decimal,
+                             amount_min: Decimal,
                              additional_grid: bool = False,
-                             grid_update: bool = False) -> None:
+                             grid_update: bool = False) -> Decimal:
         tcm = self.get_trading_capability_manager()
-        if buy_side:
-            depo /= base_price
-            target_price = base_price + base_price * float(PROFIT_MAX) / 100
-            amount_min = tcm.get_min_buy_amount(base_price)
-        else:
-            target_price = base_price - base_price * float(PROFIT_MAX) / 100
-            amount_min = tcm.get_min_sell_amount(base_price)
-        step_size = tcm.get_minimal_amount_change(amount_min)
-        self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {depo:f}, base_price: {base_price},"
+        step_size = f2d(tcm.get_minimal_amount_change(float(amount_min)))
+        self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f}, base_price: {base_price},"
                          f" reverse_target_amount: {reverse_target_amount}, amount_min: {amount_min},"
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
         if additional_grid:
             grid_min = 1
         else:
-            if FEE_FTX or grid_update:
+            if (FEE_FTX and not self.reverse) or grid_update:
                 grid_min = GRID_MAX_COUNT
             else:
                 grid_min = ORDER_Q
         over_price_min = 100 * delta_min * (grid_min + 1) / base_price
-        self.message_log(f"set_trade_conditions.grid_min: {grid_min}, over_price_min: {over_price_min:f}",
+        self.message_log(f"set_trade_conditions.grid_min: {grid_min}, over_price_min: {float(over_price_min):f}",
                          LogLevel.DEBUG)
+        depo_c = (depo / base_price) if buy_side else depo
+        if not self.cycle_buy and not additional_grid and not grid_update and not GRID_ONLY and PROFIT_MAX < 100:
+            k = (1 + PROFIT_MAX / 100) / (1 - PROFIT_MAX / 100)
+            amount_first_grid = max(amount_min, (step_size / ((k / base_price) - 1 / base_price)) / base_price)
+            # For Bitfinex test accounts correction
+            if amount_first_grid >= f2d(tcm.get_max_sell_amount(0)) or amount_first_grid >= depo_c:
+                amount_first_grid /= ORDER_Q
+        else:
+            amount_first_grid = amount_min
         if self.reverse:
-            over_price = self.calc_over_price(buy_side, depo, base_price, reverse_target_amount)
+            over_price = self.calc_over_price(buy_side,
+                                              depo,
+                                              base_price,
+                                              reverse_target_amount,
+                                              delta_min,
+                                              amount_first_grid,
+                                              amount_min)
         else:
             bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
             if buy_side:
                 bbb = bb.get('bbb')
-                over_price = 100*(base_price - bbb) / base_price
+                over_price = 100 * (base_price - f2d(bbb)) / base_price
             else:
                 tbb = bb.get('tbb')
-                over_price = 100 * (tbb - base_price) / base_price
-        self.over_price = float2decimal(max(over_price, over_price_min))
+                over_price = 100 * (f2d(tbb) - base_price) / base_price
+        self.over_price = max(over_price, over_price_min, OVER_PRICE)
         # Adapt grid orders quantity for current over price
-        order_q = int(float(self.over_price) * ORDER_Q / float(OVER_PRICE))
-        if not additional_grid:
-            amount_min = max(amount_min, step_size * target_price / abs(base_price - target_price))
-        q_max = int(math.log(1 - depo * (1 - float(self.martin)) / amount_min, float(self.martin)))
-        self.message_log(f"set_trade_conditions.order_q: {order_q},"
-                         f" amount_min_adapted: {amount_min:f},"
-                         f" q_max: {q_max}", LogLevel.DEBUG)
+        order_q = int(self.over_price * ORDER_Q / OVER_PRICE)
+        depo_c = (depo / base_price) if buy_side else depo
+        amnt_2 = amount_min * self.martin
+        q_max = int(math.log(1 + (depo_c - amount_first_grid) * self.martin * (self.martin - 1) / amnt_2, self.martin))
+        self.message_log(f"set_trade_conditions: depo: {float(depo):f}, order_q: {order_q},"
+                         f" amount_first_grid: {amount_first_grid:f}, amount_2: {amnt_2:f},"
+                         f" q_max: {q_max}, coarse overprice: {float(self.over_price):f}", LogLevel.DEBUG)
         q_max = max(q_max, grid_min)
-        while q_max > 1:
-            delta_price = float(self.over_price) * base_price / (100 * (q_max - 1))
+        while q_max > grid_min:
+            delta_price = self.over_price * base_price / (100 * (q_max - 1))
             if LINEAR_GRID_K >= 0:
-                price_k = 1 - math.log(q_max - 1, q_max + LINEAR_GRID_K)
+                price_k = f2d(1 - math.log(q_max - 1, q_max + LINEAR_GRID_K))
             else:
                 price_k = 1
             delta = delta_price * price_k
-            if delta > delta_min or q_max <= grid_min:
+            if delta > delta_min:
                 break
             q_max -= 1
         #
@@ -1617,8 +1800,15 @@ class Strategy(StrategyBase):
                 self.order_q = grid_min
         # Correction over_price after change quantity of orders
         if self.reverse and self.order_q > 1:
-            over_price = self.calc_over_price(buy_side, depo, base_price, reverse_target_amount, exactly=True)
-            self.over_price = float2decimal(max(over_price, over_price_min))
+            over_price = self.calc_over_price(buy_side,
+                                              depo,
+                                              base_price,
+                                              reverse_target_amount,
+                                              delta_min,
+                                              amount_first_grid,
+                                              amount_min)
+            self.over_price = max(over_price, over_price_min)
+        return amount_first_grid
 
     def set_profit(self) -> Decimal:
         self.message_log("set_profit", LogLevel.DEBUG)
@@ -1664,18 +1854,21 @@ class Strategy(StrategyBase):
         else:
             fee = FEE_MAKER
         fee = fee if FEE_IN_PAIR else fee + FEE_MAKER
+        step_size = f2d(tcm.get_minimal_amount_change(0.0))
         if buy_side:
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
             target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
             target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_CEILING)
+            if target_amount_first - self.tp_amount < step_size:
+                target_amount_first = self.tp_amount + step_size
             target = target_amount_first
             self.message_log(f"calc_profit_order.target_amount_first: {target_amount_first}",
                              log_level=LogLevel.DEBUG)
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_FLOOR)
             price = amount_s / target_amount_first
-            price = float2decimal(tcm.round_price(float(price), RoundingType.FLOOR))
+            price = f2d(tcm.round_price(float(price), RoundingType.FLOOR))
             amount = amount_s / price
             amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
         else:
@@ -1686,45 +1879,48 @@ class Strategy(StrategyBase):
             target = target_amount_second
             self.message_log(f"calc_profit_order.target_amount_second: {target_amount_second}",
                              log_level=LogLevel.DEBUG)
-            # Calculate depo amount in second
+            # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
             price = target_amount_second / amount
-            price = float2decimal(tcm.round_price(float(price), RoundingType.CEIL))
+            price = f2d(tcm.round_price(float(price), RoundingType.CEIL))
         self.tp_init = (self.sum_amount_first, self.sum_amount_second)
         self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount}", log_level=LogLevel.DEBUG)
         return {'price': price, 'amount': amount, 'profit': profit, 'target': target}
 
     def calc_over_price(self,
                         buy_side: bool,
-                        depo: float,
-                        base_price: float,
-                        reverse_target_amount: float,
-                        exactly: bool = False) -> float:
-        self.message_log(f"calc_over_price: buy_side: {buy_side}, depo: {depo}, base_price: {base_price},"
-                         f" reverse_target_amount: {reverse_target_amount},"
-                         f" exactly: {exactly}", log_level=LogLevel.DEBUG)
-        over_price = 0.0
+                        depo: Decimal,
+                        base_price: Decimal,
+                        reverse_target_amount: Decimal,
+                        min_delta: Decimal,
+                        amount_first_grid: Decimal,
+                        amount_min: Decimal) -> Decimal:
+        self.message_log(f"calc_over_price: buy_side: {buy_side}, depo: {depo:.6f}, base_price: {base_price:f},"
+                         f" reverse_target_amount: {reverse_target_amount}, order_q: {self.order_q},"
+                         f" amount_first_grid: {amount_first_grid}",
+                         log_level=LogLevel.DEBUG)
+        over_price = f2d(0)
+        over_price_coarse = f2d(0)
         if self.order_q > 1:
             # Calculate over price for depo refund after Reverse cycle
-            # Coarse Search y = kx + b and calculate over_price for target return amount
-            b = self.calc_grid_avg(buy_side, depo, base_price, over_price)
-            # print('calc_grid_avg(0): {}'.format(b))
-            over_price = 50.0
-            grid_amount_50 = self.calc_grid_avg(buy_side, depo, base_price, over_price)
-            # print('calc_grid_avg(50): {}'.format(grid_amount_50))
-            k = (grid_amount_50 - b) / over_price
-            over_price = (reverse_target_amount - b) / k
-            # print('over_price coarse: {}'.format(over_price))
+            params = {'buy_side': buy_side,
+                      'depo': depo,
+                      'base_price': base_price,
+                      'amount_first_grid': amount_first_grid,
+                      'min_delta': min_delta,
+                      'amount_min': amount_min}
+            if buy_side:
+                over_price_coarse = 100 * (base_price - (depo / reverse_target_amount)) / base_price
+                max_err = self.round_truncate(f2d(0.00000001), base=True, _rounding=ROUND_CEILING)
+            else:
+                over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
+                max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
+            over_price_coarse *= f2d(2.0)
+            self.message_log(f"over_price coarse: {over_price_coarse:.6f}, max_err: {max_err}",
+                             log_level=LogLevel.DEBUG)
             # Fine calculate over_price for target return amount
-            if exactly and over_price > 0.0:
-                while True:
-                    dy = reverse_target_amount - self.calc_grid_avg(buy_side, depo, base_price, over_price)
-                    # print('dy: {}'.format(dy))
-                    if dy <= 0:
-                        return over_price
-                    dx = dy / k
-                    over_price += dx
-        return over_price
+            over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
+        return over_price or over_price_coarse
 
     def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
         """
@@ -1786,43 +1982,6 @@ class Strategy(StrategyBase):
             n += 1
         _adx = statistics.mean(dx[len(dx) - adx_period::])
         return {'adx': _adx, '+DI': di_pos[-1], '-DI': di_neg[-1]}
-
-    def calc_grid_avg(self, buy_side: bool, depo: float, base_price: float, over_price: float) -> float:
-        # self.message_log(f"calc_grid_avg: buy_side: {buy_side}, depo: {depo}, base_price: {base_price},"
-        #                  f" over_price: {over_price}", log_level=LogLevel.DEBUG)
-        # Calculate return average amount in second coin for grid orders with fixed initial parameters
-        martin_float = float(self.martin)
-        if buy_side:
-            depo = depo * base_price
-        tcm = self.get_trading_capability_manager()
-        delta_price = (over_price * base_price) / (100 * (self.order_q - 1))
-        avg_amount = 0.0
-        total_grid_amount_f = 0
-        total_grid_amount_s = 0
-        for i in range(self.order_q):
-            if LINEAR_GRID_K >= 0:
-                price_k = 1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K)
-            else:
-                price_k = 1
-            if buy_side:
-                price = base_price - i * delta_price * price_k
-            else:
-                price = base_price + i * delta_price * price_k
-            price = tcm.round_price(price, RoundingType.ROUND)
-            if i < self.order_q - 1:
-                amount = depo * pow(martin_float, i) * (1 - martin_float) / (1 - pow(martin_float, self.order_q))
-            else:
-                amount = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
-            amount = tcm.round_amount(amount, RoundingType.FLOOR)
-            if buy_side:
-                amount /= price
-                avg_amount += amount
-            else:
-                avg_amount += amount * price
-            total_grid_amount_f += amount
-            total_grid_amount_s += amount * price
-        # print(f"calc_grid_avg: {tcm.round_amount(avg_amount, RoundingType.FLOOR)}")
-        return tcm.round_amount(avg_amount, RoundingType.FLOOR)
 
     def start_process(self):
         # Init analytic
@@ -1956,16 +2115,14 @@ class Strategy(StrategyBase):
                 min_trade_amount = tcm.get_min_buy_amount(float(self.avg_rate))
                 amount = self.tp_init[1]
                 if self.reverse:
-                    reverse_target_amount = (float2decimal(self.reverse_target_amount) *
-                                             self.tp_init[0] / self.reverse_init_amount)
+                    reverse_target_amount = self.reverse_target_amount * self.tp_init[0] / self.reverse_init_amount
                 else:
                     reverse_target_amount = self.tp_init[0] + (FEE_MAKER * 2 + PROFIT) * self.tp_init[0] / 100
             else:
                 min_trade_amount = tcm.get_min_sell_amount(float(self.avg_rate))
                 amount = self.tp_init[0]
                 if self.reverse:
-                    reverse_target_amount = (float2decimal(self.reverse_target_amount) *
-                                             self.tp_init[1] / self.reverse_init_amount)
+                    reverse_target_amount = self.reverse_target_amount * self.tp_init[1] / self.reverse_init_amount
                 else:
                     reverse_target_amount = self.tp_init[1] + (FEE_MAKER * 2 + PROFIT) * self.tp_init[1] / 100
             self.message_log(f"Min trade amount is: {min_trade_amount}")
@@ -1977,7 +2134,7 @@ class Strategy(StrategyBase):
                 self.tp_hold_additional = True
                 self.place_grid(self.cycle_buy,
                                 amount,
-                                float(reverse_target_amount),
+                                reverse_target_amount,
                                 allow_grid_shift=False,
                                 additional_grid=True)
                 return
@@ -2041,7 +2198,7 @@ class Strategy(StrategyBase):
             self.reverse = False
             self.restart = True
             # Calculate profit and time for Reverse cycle
-            self.cycle_time = self.cycle_time_reverse
+            self.cycle_time = self.cycle_time_reverse or datetime.utcnow()
             if self.cycle_buy:
                 self.profit_first += self.round_truncate(self.sum_amount_first - self.reverse_init_amount +
                                                          self.tp_part_amount_first, base=True)
@@ -2059,7 +2216,7 @@ class Strategy(StrategyBase):
                 self.sum_profit_second += self.profit_second
                 self.cycle_buy_count += 1
             self.cycle_time_reverse = None
-            self.reverse_target_amount = None
+            self.reverse_target_amount = Decimal('0')
             self.reverse_init_amount = Decimal('0')
             self.initial_reverse_first = Decimal('0')
             self.initial_reverse_second = Decimal('0')
@@ -2078,11 +2235,12 @@ class Strategy(StrategyBase):
                 trend_down = adx.get('adx') > ADX_THRESHOLD and adx.get('-DI') > adx.get('+DI')
                 # print('adx: {}, +DI: {}, -DI: {}'.format(adx.get('adx'), adx.get('+DI'), adx.get('-DI')))
             self.cycle_time_reverse = self.cycle_time or datetime.utcnow()
+            self.start_reverse_time = time.time()
             # Calculate target return amount
             tp = self.calc_profit_order(not self.cycle_buy)
             if self.cycle_buy:
                 self.deposit_first = self.round_truncate(self.sum_amount_first, base=True) - self.tp_part_amount_first
-                self.reverse_target_amount = float(tp.get('amount') * tp.get('price') - self.tp_part_amount_second)
+                self.reverse_target_amount = tp.get('amount') * tp.get('price') - self.tp_part_amount_second
                 self.reverse_init_amount = self.sum_amount_second - self.tp_part_amount_second
                 self.initial_reverse_first = self.initial_first + self.sum_amount_first
                 self.initial_reverse_second = self.initial_second - self.sum_amount_second
@@ -2091,7 +2249,7 @@ class Strategy(StrategyBase):
             else:
                 self.deposit_second = (self.round_truncate(self.sum_amount_second, base=False)
                                        - self.tp_part_amount_second)
-                self.reverse_target_amount = float(tp.get('amount') - self.tp_part_amount_first)
+                self.reverse_target_amount = tp.get('amount') - self.tp_part_amount_first
                 self.reverse_init_amount = self.sum_amount_first - self.tp_part_amount_first
                 self.initial_reverse_first = self.initial_first - self.sum_amount_first
                 self.initial_reverse_second = self.initial_second + self.sum_amount_second
@@ -2127,12 +2285,18 @@ class Strategy(StrategyBase):
         self.grid_place_flag = True
         k = 0
         n = len(self.orders_grid) + len(self.orders_init)
+        check_i = len(self.orders_grid) + len(self.orders_hold)
         for i in self.orders_hold:
             if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
                 if k + n >= ORDER_Q:
                     self.order_q_placed = True
                 break
-            waiting_order_id = self.place_limit_order(i['buy'], float(i['amount']), float(i['price']))
+            check = check_i <= 1
+            check_i -= 1
+            waiting_order_id = self.place_limit_order_check(i['buy'],
+                                                            float(i['amount']),
+                                                            float(i['price']),
+                                                            check=check)
             self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
             k += 1
         del self.orders_hold.orders_list[:k]
@@ -2217,8 +2381,7 @@ class Strategy(StrategyBase):
                     min_trade_amount = tcm.get_min_buy_amount(float(self.avg_rate))
                     amount = _amount_s
                     if self.reverse:
-                        reverse_target_amount = (float2decimal(self.reverse_target_amount) *
-                                                 _amount_f / self.reverse_init_amount)
+                        reverse_target_amount = self.reverse_target_amount * _amount_f / self.reverse_init_amount
                     else:
                         reverse_target_amount = _amount_f + (FEE_MAKER * 2 + PROFIT) * _amount_f / 100
                     first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin**GRID_MAX_COUNT)
@@ -2227,8 +2390,7 @@ class Strategy(StrategyBase):
                     min_trade_amount = tcm.get_min_sell_amount(float(self.avg_rate))
                     amount = _amount_f
                     if self.reverse:
-                        reverse_target_amount = (float2decimal(self.reverse_target_amount) *
-                                                 _amount_s / self.reverse_init_amount)
+                        reverse_target_amount = self.reverse_target_amount * _amount_s / self.reverse_init_amount
                     else:
                         reverse_target_amount = _amount_s + (FEE_MAKER * 2 + PROFIT) * _amount_s / 100
                     first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin**GRID_MAX_COUNT)
@@ -2238,14 +2400,14 @@ class Strategy(StrategyBase):
                                  f" reverse_target_amount: {reverse_target_amount}", tlg=True)
                 if float(first_order_vlm) > min_trade_amount:
                     self.message_log("Place additional grid orders", tlg=True)
-                    self.place_grid(self.cycle_buy, amount, float(reverse_target_amount), allow_grid_shift=False)
+                    self.place_grid(self.cycle_buy, amount, reverse_target_amount, allow_grid_shift=False)
                     return
                 if float(amount) > min_trade_amount:
                     self.message_log(f"Too small amount for place additional grid,"
                                      f" add grid order for {'Buy' if self.cycle_buy else 'Sell'}"
                                      f" {amount} by {reverse_target_amount / amount:f}")
-                    waiting_order_id = self.place_limit_order(self.cycle_buy, float(amount),
-                                                              float(reverse_target_amount / amount))
+                    waiting_order_id = self.place_limit_order_check(self.cycle_buy, float(amount),
+                                                                    float(reverse_target_amount / amount))
                     self.orders_init.append(waiting_order_id, self.cycle_buy, amount,
                                             reverse_target_amount / amount)
             elif self.tp_was_filled:
@@ -2267,7 +2429,8 @@ class Strategy(StrategyBase):
             if after_full_fill and self.orders_hold and self.order_q_placed:
                 # PLace one hold grid order and remove it from hold list
                 _buy, _amount, _price = self.orders_hold.get_first()
-                waiting_order_id = self.place_limit_order(_buy, float(_amount), float(_price))
+                check = (len(self.orders_grid) + len(self.orders_hold)) <= 2
+                waiting_order_id = self.place_limit_order_check(_buy, float(_amount), float(_price), check=check)
                 self.orders_init.append(waiting_order_id, _buy, _amount, _price)
                 del self.orders_hold.orders_list[0]
             # Exist filled but non processing TP
@@ -2370,8 +2533,8 @@ class Strategy(StrategyBase):
             self.message_log(f"Orders not present on exchange: {diff_id}", tlg=True)
             if diff_id.count(self.tp_order_id):
                 diff_id.remove(self.tp_order_id)
-                amount_first = float2decimal(self.tp_order[1])
-                amount_second = float2decimal(self.tp_order[1]) * float2decimal(self.tp_order[2])
+                amount_first = f2d(self.tp_order[1])
+                amount_second = f2d(self.tp_order[1]) * f2d(self.tp_order[2])
                 self.tp_was_filled = (amount_first, amount_second, True)
                 self.tp_order_id = None
                 self.tp_order = ()
@@ -2384,8 +2547,8 @@ class Strategy(StrategyBase):
                 for _id in diff_id:
                     _buy, _amount, _price = self.orders_grid.get_by_id(_id)
                     self.orders_grid.remove(_id)
-                    amount_first += float2decimal(_amount)
-                    amount_second += float2decimal(_amount) * float2decimal(_price)
+                    amount_first += f2d(_amount)
+                    amount_second += f2d(_amount) * f2d(_price)
                 self.message_log(f"Grid amount: First: {amount_first}, Second: {amount_second},"
                                  f" price: {_price}")
                 self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
@@ -2397,22 +2560,33 @@ class Strategy(StrategyBase):
         if self.avg_rate:
             tcm = self.get_trading_capability_manager()
             if self.cycle_buy:
-                min_trade_amount = float2decimal(tcm.get_min_sell_amount(float(self.avg_rate)))
+                min_trade_amount = f2d(tcm.get_min_sell_amount(float(self.avg_rate)))
                 amount = self.sum_amount_first
                 amount = self.round_truncate(amount, base=True)
-                if amount:
-                    self.message_log(f"Sell amount: {amount}, min sell amount: {min_trade_amount}",
-                                     log_level=LogLevel.DEBUG)
             else:
-                min_trade_amount = float2decimal(tcm.get_min_buy_amount(float(self.avg_rate)))
+                min_trade_amount = f2d(tcm.get_min_buy_amount(float(self.avg_rate)))
                 amount = self.sum_amount_second / self.avg_rate
                 amount = self.round_truncate(amount, base=True)
-                if amount:
-                    self.message_log(f"Buy amount: {amount}, min buy amount: {min_trade_amount}",
-                                     log_level=LogLevel.DEBUG)
             if amount >= min_trade_amount:
                 res = True
         return res
+
+    def place_limit_order_check(self, buy: bool, amount: float, price: float, check=False) -> int:
+        """
+        Before place limit order check trade conditions and correct price
+        """
+        _price = price
+        if check:
+            order_book = self.get_buffered_order_book()
+            if buy and order_book.bids:
+                _price = min(price, order_book.bids[0].price)
+            elif not buy and order_book.asks:
+                _price = max(price, order_book.asks[0].price)
+        waiting_order_id = self.place_limit_order(buy, amount, _price)
+        if check and _price != price:
+            self.message_log(f"For order {waiting_order_id} price was updated, old: {price}, new: {_price}",
+                             log_level=LogLevel.DEBUG)
+        return waiting_order_id
 
     ##############################################################
     # public data update methods
@@ -2448,8 +2622,8 @@ class Strategy(StrategyBase):
         ff = funds.get(self.f_currency, 0)
         fs = funds.get(self.s_currency, 0)
         if self.wait_refunding_for_start:
-            ff = float2decimal(ff.total_for_currency) if ff else Decimal('0.0')
-            fs = float2decimal(fs.total_for_currency) if fs else Decimal('0.0')
+            ff = f2d(ff.total_for_currency) if ff else Decimal('0.0')
+            fs = f2d(fs.total_for_currency) if fs else Decimal('0.0')
             if self.cycle_buy:
                 go_trade = fs >= self.initial_reverse_second if self.reverse else self.initial_second
             else:
@@ -2459,17 +2633,17 @@ class Strategy(StrategyBase):
                 return
         if self.tp_order_hold:
             if self.tp_order_hold['buy_side']:
-                available_fund = float2decimal(fs.available) if fs else Decimal('0.0')
+                available_fund = f2d(fs.available) if fs else Decimal('0.0')
             else:
-                available_fund = float2decimal(ff.available) if ff else Decimal('0.0')
+                available_fund = f2d(ff.available) if ff else Decimal('0.0')
             if available_fund >= self.tp_order_hold['amount']:
                 self.place_profit_order(by_market=self.tp_order_hold['by_market'])
                 return
         if self.grid_hold:
             if self.grid_hold['buy_side']:
-                available_fund = float2decimal(fs.available) if fs else Decimal('0.0')
+                available_fund = f2d(fs.available) if fs else Decimal('0.0')
             else:
-                available_fund = float2decimal(ff.available) if ff else Decimal('0.0')
+                available_fund = f2d(ff.available) if ff else Decimal('0.0')
             if available_fund >= self.grid_hold['depo']:
                 self.place_grid(self.grid_hold['buy_side'],
                                 self.grid_hold['depo'],
@@ -2500,23 +2674,25 @@ class Strategy(StrategyBase):
                 # Get last trade row
                 if result_trades:
                     i = result_trades[-1]
-                    amount_first = float2decimal(i.amount)
-                    amount_second = float2decimal(i.amount) * float2decimal(i.price)
+                    amount_first = f2d(i.amount)
+                    amount_second = f2d(i.amount) * f2d(i.price)
                     self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
                 else:
                     self.message_log(f"No records for {update.original_order.id}", log_level=LogLevel.WARNING)
             else:
                 for i in result_trades:
                     # Calculate sum trade amount for both currency
-                    amount_first += float2decimal(i.amount)
-                    amount_second += float2decimal(i.amount) * float2decimal(i.price)
+                    amount_first += f2d(i.amount)
+                    amount_second += f2d(i.amount) * f2d(i.price)
                     self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
             # Retreat of courses
             if amount_first == 0:
                 self.message_log(f"No amount for {update.original_order.id}", log_level=LogLevel.WARNING)
                 return
             self.avg_rate = amount_second / amount_first
-            self.message_log(f"Executed amount: First: {amount_first}, Second: {amount_second}, price: {self.avg_rate}")
+            self.message_log(f"Executed amount: First: {amount_first},"
+                             f" Second: {amount_second},"
+                             f" price: {self.avg_rate:.6f}")
             if update.status in (OrderUpdate.FILLED, OrderUpdate.ADAPTED_AND_FILLED):
                 self.shift_grid_threshold = None
                 if self.orders_grid.exist(update.original_order.id):
@@ -2576,7 +2752,7 @@ class Strategy(StrategyBase):
                                              f" deposit_first: {self.deposit_first},"
                                              f" reverse_init_amount: {self.reverse_init_amount}",
                                              log_level=LogLevel.DEBUG)
-                            self.reverse_target_amount -= float(amount_second_fee)
+                            self.reverse_target_amount -= amount_second_fee
                             self.deposit_first -= amount_first_fee
                             self.reverse_init_amount -= amount_second_fee
                             self.message_log(f"New: reverse_target_amount: {self.reverse_target_amount},"
@@ -2588,7 +2764,7 @@ class Strategy(StrategyBase):
                                              f" deposit_second: {self.deposit_second},"
                                              f" reverse_init_amount: {self.reverse_init_amount}",
                                              log_level=LogLevel.DEBUG)
-                            self.reverse_target_amount -= float(amount_first_fee)
+                            self.reverse_target_amount -= amount_first_fee
                             self.deposit_second -= amount_second_fee
                             self.reverse_init_amount -= amount_first_fee
                             self.message_log(f"New: reverse_target_amount: {self.reverse_target_amount},"
@@ -2613,10 +2789,14 @@ class Strategy(StrategyBase):
                         self.shift_grid_threshold = None
                         self.grid_handler(after_full_fill=False)
                     else:
+                        self.last_shift_time = time.time() + 2 * SHIFT_GRID_DELAY
                         self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
 
     def on_place_order_success(self, place_order_id: int, order: Order) -> None:
         # print(f"on_place_order_success.place_order_id: {place_order_id}")
+        if order.amount > order.received_amount > 0:
+            self.message_log(f"Order {place_order_id} was partially filled", color=Style.B_WHITE)
+            self.shift_grid_threshold = None
         if order.remaining_amount == 0.0:
             self.shift_grid_threshold = None
             # Get actual parameter of last trade order
@@ -2626,11 +2806,11 @@ class Strategy(StrategyBase):
             self.message_log(f"Order {place_order_id} executed by market", color=Style.B_WHITE)
             for o in market_order:
                 if o.order_id == order.id:
-                    amount_first += float2decimal(o.amount)
-                    amount_second += float2decimal(o.amount) * float2decimal(o.price)
+                    amount_first += f2d(o.amount)
+                    amount_second += f2d(o.amount) * f2d(o.price)
             if not amount_first:
-                amount_first += float2decimal(order.amount)
-                amount_second += float2decimal(order.amount) * float2decimal(order.price)
+                amount_first += f2d(order.amount)
+                amount_second += f2d(order.amount) * f2d(order.price)
             self.avg_rate = amount_second / amount_first
             self.message_log(f"For {order.id} first: {amount_first}, second: {amount_second}, price: {self.avg_rate}")
             if self.orders_init.exist(place_order_id):
@@ -2660,11 +2840,11 @@ class Strategy(StrategyBase):
                     self.grid_remove = True
                     self.cancel_grid()
             else:
-                self.message_log('Did not have waiting order id for {}'.format(place_order_id),
-                                 LogLevel.ERROR, color=Style.B_RED)
+                self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR,
+                                 color=Style.B_RED)
         else:
             if self.orders_init.exist(place_order_id):
-                self.orders_grid.append(order.id, order.buy, float2decimal(order.amount), float2decimal(order.price))
+                self.orders_grid.append(order.id, order.buy, f2d(order.amount), f2d(order.price))
                 self.orders_grid.sort(self.cycle_buy)
                 '''
                 self.message_log(f"on_place_order_success.orders_grid", log_level=LogLevel.DEBUG)
@@ -2732,6 +2912,7 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_success(self, order_id: int, canceled_order: Order) -> None:
         if self.orders_grid.exist(order_id):
+            self.message_log(f"Processing canceled grid order {order_id}", log_level=LogLevel.INFO)
             self.part_amount_first = Decimal('0')
             self.part_amount_second = Decimal('0')
             self.grid_order_canceled = None
@@ -2742,10 +2923,11 @@ class Strategy(StrategyBase):
                     save = False
                     break
             if save:
-                self.orders_save.append(canceled_order.id, canceled_order.buy, float2decimal(canceled_order.amount),
-                                        float2decimal(canceled_order.price))
+                self.orders_save.append(canceled_order.id, canceled_order.buy, f2d(canceled_order.amount),
+                                        f2d(canceled_order.price))
             self.cancel_grid()
         elif order_id == self.cancel_order_id:
+            self.message_log(f"Processing canceled TP order {order_id}", log_level=LogLevel.INFO)
             self.cancel_order_id = None
             self.tp_order_id = None
             self.tp_order = ()
@@ -2788,14 +2970,14 @@ class Strategy(StrategyBase):
         if any(i.id == order_id for i in open_orders):
             self.message_log(f"On cancel order {order_id} {error}, try one else", LogLevel.ERROR)
             self.cancel_order(order_id)
-        else:
+        elif not STANDALONE:
             self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
             if self.orders_grid.exist(order_id):
                 self.message_log("It's was grid order, probably filled", LogLevel.WARNING)
                 self.grid_order_canceled = None
                 _buy, _amount, _price = self.orders_grid.get_by_id(order_id)
-                amount_first = float2decimal(_amount)
-                amount_second = float2decimal(_amount) * float2decimal(_price)
+                amount_first = f2d(_amount)
+                amount_second = f2d(_amount) * f2d(_price)
                 self.avg_rate = amount_second / amount_first
                 self.message_log(f"Executed amount: First: {amount_first}, Second: {amount_second},"
                                  f" price: {self.avg_rate}")
@@ -2804,8 +2986,8 @@ class Strategy(StrategyBase):
                 self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
             elif order_id == self.cancel_order_id:
                 self.message_log("It's was take profit", LogLevel.ERROR)
-                amount_first = float2decimal(self.tp_order[1])
-                amount_second = float2decimal(self.tp_order[1]) * float2decimal(self.tp_order[2])
+                amount_first = f2d(self.tp_order[1])
+                amount_second = f2d(self.tp_order[1]) * f2d(self.tp_order[2])
                 self.tp_was_filled = (amount_first, amount_second, True)
                 self.tp_order_id = None
                 self.tp_order = ()
@@ -2813,3 +2995,5 @@ class Strategy(StrategyBase):
                 self.cancel_grid()
             else:
                 self.message_log("It's unknown", LogLevel.ERROR)
+        else:
+            self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)

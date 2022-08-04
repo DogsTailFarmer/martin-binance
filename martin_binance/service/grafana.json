@@ -1,9 +1,73 @@
 {
+  "__inputs": [
+    {
+      "name": "DS_NODE",
+      "label": "Node",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__elements": [],
+  "__requires": [
+    {
+      "type": "panel",
+      "id": "alertlist",
+      "name": "Alert list",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "bargauge",
+      "name": "Bar gauge",
+      "version": ""
+    },
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "9.0.1"
+    },
+    {
+      "type": "panel",
+      "id": "graph",
+      "name": "Graph (old)",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "piechart",
+      "name": "Pie chart",
+      "version": ""
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
   "annotations": {
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -21,13 +85,17 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 16,
-  "iteration": 1655387903063,
+  "id": null,
+  "iteration": 1658917294560,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "000000001"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -36,13 +104,22 @@
       },
       "id": 25,
       "panels": [],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "000000001"
+          },
+          "refId": "A"
+        }
+      ],
       "title": "Consolidated asset valuation",
       "type": "row"
     },
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "E28iFVEGk"
+        "uid": "${DS_NODE}"
       },
       "description": "",
       "fieldConfig": {
@@ -95,7 +172,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "sum by (vps_name) (margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
@@ -106,7 +183,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "$OKEX_funds",
@@ -118,7 +195,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "$Huobi_funds",
@@ -130,7 +207,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "$Trust_wallet",
@@ -146,7 +223,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "E28iFVEGk"
+        "uid": "${DS_NODE}"
       },
       "description": "",
       "fieldConfig": {
@@ -200,7 +277,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "sum by (currency) (margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
@@ -211,7 +288,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "$OKEX_funds",
@@ -223,7 +300,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "$Huobi_funds",
@@ -235,7 +312,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "$Trust_wallet",
@@ -251,7 +328,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "E28iFVEGk"
+        "uid": "${DS_NODE}"
       },
       "description": "",
       "fieldConfig": {
@@ -368,7 +445,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
@@ -379,7 +456,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "$OKEX_funds + $Huobi_funds + $Trust_wallet",
@@ -407,7 +484,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "E28iFVEGk"
+        "uid": "${DS_NODE}"
       },
       "description": "",
       "fieldConfig": {
@@ -452,12 +529,12 @@
         "text": {},
         "textMode": "auto"
       },
-      "pluginVersion": "8.4.4",
+      "pluginVersion": "9.0.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "sum(margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
@@ -475,7 +552,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "E28iFVEGk"
+        "uid": "${DS_NODE}"
       },
       "description": "",
       "fieldConfig": {
@@ -510,6 +587,8 @@
       "id": 38,
       "options": {
         "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -521,9 +600,13 @@
         "showUnfilled": false,
         "text": {}
       },
-      "pluginVersion": "8.4.4",
+      "pluginVersion": "9.0.1",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_NODE}"
+          },
           "exemplar": true,
           "expr": "sum(margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
           "format": "time_series",
@@ -534,6 +617,10 @@
           "refId": "A"
         },
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_NODE}"
+          },
           "exemplar": true,
           "expr": "margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
           "format": "time_series",
@@ -550,7 +637,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "E28iFVEGk"
+        "uid": "${DS_NODE}"
       },
       "description": "",
       "fieldConfig": {
@@ -585,6 +672,8 @@
       "id": 39,
       "options": {
         "displayMode": "gradient",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
         "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
@@ -596,12 +685,12 @@
         "showUnfilled": false,
         "text": {}
       },
-      "pluginVersion": "8.4.4",
+      "pluginVersion": "9.0.1",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "exemplar": true,
           "expr": "(31536000 * margin_sell_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_sell_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} + 31536000 * margin_buy_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_buy_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}) / 2",
@@ -620,7 +709,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "E28iFVEGk"
+        "uid": "${DS_NODE}"
       },
       "description": "",
       "fieldConfig": {
@@ -691,6 +780,10 @@
       "pluginVersion": "8.1.3",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_NODE}"
+          },
           "exemplar": true,
           "expr": "idelta(margin_sum_profit{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}[24h:1h]) / margin_last_rate_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
           "format": "time_series",
@@ -705,6 +798,10 @@
     },
     {
       "collapsed": true,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "000000001"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -741,10 +838,9 @@
               "error": true,
               "execution_error": false,
               "firing": true,
-              "inactive": true,
               "noData": false,
               "no_data": false,
-              "normal": false,
+              "normal": true,
               "ok": false,
               "paused": false,
               "pending": true
@@ -762,7 +858,7 @@
           "dashes": false,
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "description": "",
           "fill": 1,
@@ -791,7 +887,7 @@
             "alertThreshold": false
           },
           "percentage": false,
-          "pluginVersion": "8.4.4",
+          "pluginVersion": "9.0.1",
           "pointradius": 2,
           "points": false,
           "renderer": "flot",
@@ -807,6 +903,10 @@
           "steppedLine": false,
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "margin_vps_cpu{vps_name=~\"$v_vps_name\"}",
               "interval": "",
@@ -871,7 +971,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "description": "",
           "fieldConfig": {
@@ -912,7 +1012,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "transparent"
+                    "color": "transparent",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -962,7 +1063,9 @@
                   "options": {
                     "mode": "exclude",
                     "names": [
-                      "HUOBI_03 mem"
+                      "BTFNX_01 mem",
+                      "FTX mem",
+                      "BNNCE mem"
                     ],
                     "prefix": "All except:",
                     "readOnly": true
@@ -1004,6 +1107,10 @@
           "pluginVersion": "8.1.3",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "margin_vps_memory{vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1016,11 +1123,24 @@
           "type": "timeseries"
         }
       ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "000000001"
+          },
+          "refId": "A"
+        }
+      ],
       "title": "VPS",
       "type": "row"
     },
     {
       "collapsed": true,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "000000001"
+      },
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -1032,7 +1152,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "description": "",
           "fieldConfig": {
@@ -1046,7 +1166,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   }
                 ]
               }
@@ -1121,9 +1242,13 @@
             "text": {},
             "textMode": "auto"
           },
-          "pluginVersion": "8.4.4",
+          "pluginVersion": "9.0.1",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "margin_cycle_count{pair=~\"$v_pair\",exchange=~\"$v_exchange\"}",
               "format": "time_series",
@@ -1134,6 +1259,10 @@
               "refId": "A"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_buy_count{pair=~\"$v_pair\",exchange=~\"$v_exchange\"}",
               "hide": false,
@@ -1142,6 +1271,10 @@
               "refId": "B"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_sell_count{pair=~\"$v_pair\",exchange=~\"$v_exchange\"}",
               "hide": false,
@@ -1156,7 +1289,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "description": "",
           "fieldConfig": {
@@ -1198,7 +1331,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   }
                 ]
               },
@@ -1229,6 +1363,10 @@
           "pluginVersion": "8.1.3",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_f_balance{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "interval": "",
@@ -1236,6 +1374,10 @@
               "refId": "A"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_f_profit{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1250,7 +1392,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "description": "",
           "fieldConfig": {
@@ -1291,7 +1433,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   }
                 ]
               },
@@ -1347,6 +1490,10 @@
           "pluginVersion": "8.1.3",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_s_balance{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "interval": "",
@@ -1354,6 +1501,10 @@
               "refId": "A"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_s_profit{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1362,6 +1513,10 @@
               "refId": "B"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_sum_profit{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1376,7 +1531,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "fieldConfig": {
             "defaults": {
@@ -1388,7 +1543,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   }
                 ]
               },
@@ -1547,9 +1703,13 @@
             "text": {},
             "textMode": "auto"
           },
-          "pluginVersion": "8.4.4",
+          "pluginVersion": "9.0.1",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "margin_buy_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1561,6 +1721,10 @@
               "refId": "A"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "margin_sell_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1572,6 +1736,10 @@
               "refId": "B"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "margin_buy_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1583,6 +1751,10 @@
               "refId": "C"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "margin_sell_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1594,6 +1766,10 @@
               "refId": "D"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "86400 * margin_buy_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_buy_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1605,6 +1781,10 @@
               "refId": "E"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "86400 * margin_sell_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_sell_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1616,6 +1796,10 @@
               "refId": "F"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "31536000 * margin_buy_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_buy_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1627,6 +1811,10 @@
               "refId": "G"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "31536000 * margin_sell_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_sell_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1645,7 +1833,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "description": "Total amount for both currency by last rate",
           "fieldConfig": {
@@ -1686,7 +1874,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   }
                 ]
               },
@@ -1717,6 +1906,10 @@
           "pluginVersion": "8.1.3",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": false,
               "expr": "margin_balance{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "format": "time_series",
@@ -1734,7 +1927,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "E28iFVEGk"
+            "uid": "${DS_NODE}"
           },
           "description": "",
           "fieldConfig": {
@@ -1775,7 +1968,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   }
                 ]
               },
@@ -1891,7 +2085,8 @@
                   "options": {
                     "mode": "exclude",
                     "names": [
-                      "First depo"
+                      "First depo",
+                      "Rate"
                     ],
                     "prefix": "All except:",
                     "readOnly": true
@@ -1933,6 +2128,10 @@
           "pluginVersion": "8.1.3",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_f_depo{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1941,6 +2140,10 @@
               "refId": "A"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_s_depo{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1950,6 +2153,10 @@
               "refId": "B"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_cycle_buy{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1959,6 +2166,10 @@
               "refId": "C"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_over_price{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1968,6 +2179,10 @@
               "refId": "D"
             },
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_NODE}"
+              },
               "exemplar": true,
               "expr": "margin_last_rate{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
               "hide": false,
@@ -1981,29 +2196,30 @@
           "type": "timeseries"
         }
       ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "000000001"
+          },
+          "refId": "A"
+        }
+      ],
       "title": "Trade cycle detail (want be selected one pair only)",
       "type": "row"
     }
   ],
   "refresh": "5m",
-  "schemaVersion": 35,
+  "schemaVersion": 36,
   "style": "dark",
   "tags": [],
   "templating": {
     "list": [
       {
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "E28iFVEGk"
+          "uid": "${DS_NODE}"
         },
         "definition": "label_values(vps_name)",
         "hide": 0,
@@ -2026,36 +2242,10 @@
         "useTags": false
       },
       {
-        "current": {
-          "selected": false,
-          "text": [
-            "Binance",
-            "BinanceSub1",
-            "BinanceSub2",
-            "BinanceSub3",
-            "BinanceSub4",
-            "BitFinex",
-            "FTX",
-            "FTX_sub_01",
-            "Huobi",
-            "OKEX"
-          ],
-          "value": [
-            "Binance",
-            "BinanceSub1",
-            "BinanceSub2",
-            "BinanceSub3",
-            "BinanceSub4",
-            "BitFinex",
-            "FTX",
-            "FTX_sub_01",
-            "Huobi",
-            "OKEX"
-          ]
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "E28iFVEGk"
+          "uid": "${DS_NODE}"
         },
         "definition": "label_values({vps_name=~\"$v_vps_name\"},exchange)",
         "hide": 0,
@@ -2078,18 +2268,10 @@
         "useTags": false
       },
       {
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "E28iFVEGk"
+          "uid": "${DS_NODE}"
         },
         "definition": "label_values({exchange=~\"$v_exchange\"},pair)",
         "hide": 0,
@@ -2112,18 +2294,10 @@
         "useTags": false
       },
       {
-        "current": {
-          "selected": false,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
-        },
+        "current": {},
         "datasource": {
           "type": "prometheus",
-          "uid": "E28iFVEGk"
+          "uid": "${DS_NODE}"
         },
         "definition": "label_values({exchange=~\"$v_exchange\"}, currency)",
         "hide": 0,
@@ -2148,8 +2322,8 @@
       {
         "current": {
           "selected": false,
-          "text": "0",
-          "value": "0"
+          "text": "345",
+          "value": "345"
         },
         "hide": 0,
         "includeAll": false,
@@ -2157,7 +2331,7 @@
         "name": "OKEX_funds",
         "options": [],
         "query": "grafana",
-        "queryValue": "0",
+        "queryValue": "345",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -2166,8 +2340,8 @@
       {
         "current": {
           "selected": false,
-          "text": "0",
-          "value": "0"
+          "text": "234",
+          "value": "234"
         },
         "hide": 0,
         "includeAll": false,
@@ -2175,7 +2349,7 @@
         "name": "Huobi_funds",
         "options": [],
         "query": "grafana",
-        "queryValue": "0",
+        "queryValue": "234",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -2184,8 +2358,8 @@
       {
         "current": {
           "selected": false,
-          "text": "0",
-          "value": "0"
+          "text": "1234",
+          "value": "1234"
         },
         "hide": 0,
         "includeAll": false,
@@ -2193,7 +2367,7 @@
         "name": "Trust_wallet",
         "options": [],
         "query": "grafana",
-        "queryValue": "0",
+        "queryValue": "1234",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -2209,6 +2383,6 @@
   "timezone": "utc",
   "title": "Crypto exporter",
   "uid": "9ICv5brMk",
-  "version": 261,
+  "version": 265,
   "weekStart": ""
 }

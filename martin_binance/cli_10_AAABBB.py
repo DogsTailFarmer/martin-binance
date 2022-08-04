@@ -36,10 +36,10 @@ from executor import *  # lgtm [py/polluting-import]
 # Exchange setup and parameter settings
 ################################################################
 # Exchange setup
-ex.ID_EXCHANGE = 7  # See ms_cfg.toml Use for collection of statistics *and get client connection*
+ex.ID_EXCHANGE = 10  # See ms_cfg.toml Use for collection of statistics *and get client connection*
 ex.FEE_IN_PAIR = True  # Fee pays in pair
-ex.FEE_MAKER = Decimal('0.075')  # standard exchange Fee for maker
-ex.FEE_TAKER = Decimal('0.075')  # standard exchange Fee for taker
+ex.FEE_MAKER = Decimal('0.1')  # standard exchange Fee for maker
+ex.FEE_TAKER = Decimal('0.17')  # standard exchange Fee for taker
 ex.FEE_SECOND = False  # On KRAKEN fee always in second coin
 ex.FEE_BNB_IN_PAIR = False  # Binance fee in BNB and BNB is base asset
 ex.FEE_FTX = False  # https://help.ftx.com/hc/en-us/articles/360024479432-Fees
@@ -47,18 +47,18 @@ ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
-ex.AMOUNT_FIRST = Decimal('0.3')  # Deposit for Sale cycle in first currency
+ex.AMOUNT_FIRST = Decimal('50.0')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
-ex.AMOUNT_SECOND = Decimal('10000.0')  # Deposit for Buy cycle in second currency
-ex.PRICE_SHIFT = 0.05  # 'No market' shift price in % from current bid/ask price
+ex.AMOUNT_SECOND = Decimal('1000000.0')  # Deposit for Buy cycle in second currency
+ex.PRICE_SHIFT = -1.5  # 'No market' shift price in % from current bid/ask price
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()
 ex.PROFIT = Decimal('0.15')  # 0.15 - 0.85
 ex.PROFIT_MAX = Decimal('0.85')  # If set it is maximum adapted cycle profit
 ex.PROFIT_REVERSE = Decimal('0.5')  # 0.0 - 0.75, In Reverse cycle revenue portion of profit
-ex.OVER_PRICE = Decimal('0.6')  # Overlap price in one direction
-ex.ORDER_Q = 12  # Target grid orders quantity in moment
+ex.OVER_PRICE = Decimal('0.9')  # Overlap price in one direction
+ex.ORDER_Q = 8  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
 ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
 # Other
@@ -121,7 +121,7 @@ for tlg in telegram:
 
 if __name__ == "__main__" and STANDALONE:
     # Set active pair
-    SYMBOL = 'BTCUSDT'
+    SYMBOL = 'AAABBB'
     #
     import logging.handlers
     # For autoload last state

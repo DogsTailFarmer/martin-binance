@@ -5,7 +5,7 @@
 
 <h2 align="center">Cyclic grid strategy for SPOT market</h2>
 
-<h3 align="center">Free trading system for crypto exchanges (Binance, FTX, )</h3>
+<h3 align="center">Free trading system for crypto exchanges (Binance, FTX, Bitfinex,)</h3>
 
 ***
 <a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version"></a>
@@ -107,10 +107,11 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 * Calculation of the price overlap for the Reverse cycle for the profitable completion of the previous cycle
 * Use Average Directional Index indicator for best time starting Reverse cycle
 * Calculation of separate MAKER and TAKER fee
-* Shift grid orders (customizable) if the price is go way (before take profit placed) 
+* Shift grid orders (customizable) if the price is go way (before take profit placed)
+* Adapted size of the first order depending on the exchange's limitations
 * Fractional creation of grid for increase productivity (customizable)
 * Adaptive overlap price for grid on current market conditions (customizable) based on Bollinger Band
-* *NEW*: Update grid orders if market conditions change
+* Update grid orders if market conditions change
 * Adaptive profit setting on current market conditions (customizable) based on Bollinger Band
 * Adaptive grid orders quantity for initial and Reverse cycle
 * Stable operation in pump/dump conditions
@@ -556,8 +557,7 @@ The modular open architecture of the project allows you to use it both as a read
 developing your own strategies. See Review chart for reference.
 
 Warning.
-Coverage of overridden [margin strategy-sdk](https://github.com/MarginOpenSource/strategy-sdk) and
-[binance.py](https://github.com/Th0rgal/binance.py) packages is significant but not complete.
+Coverage of overridden [margin strategy-sdk](https://github.com/MarginOpenSource/strategy-sdk) is significant but not complete.
 Only methods and functions required for normal operation of the presented strategy are implemented.
 Missing functionality can be implemented on yours own or on request.
 
@@ -603,6 +603,8 @@ fee
 
 Create account on [HUOBI](https://www.huobi.com/en-us/topic/double-reward/?invite_code=9uaw3223) and get 10% cashback
 on all trading fee
+
+Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
 
 Create account on [FTX](https://ftx.com/profile#a=62025440)
 

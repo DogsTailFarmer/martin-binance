@@ -1,3 +1,31 @@
+## v1.2.0 - 2022-08-04
+### Added for new features
+* Bitfinex exchange for STANDALONE mode added
+* Control for first and last grid orders volume added
+* For `ex.STATUS_DELAY = 5  # Minute between sending Tlg message about current status, 0 - disable` parameter add
+ability to turn off
+
+### Fixed
+* Correct rounding for base and quote assets on different exchanges
+
+### Update
+* Refactoring method for calculate over price in Reverse cycle
+* Up https://pro.coinmarketcap.com API call to v2
+
+If you update from lower versions please change reference in
+`martin_binance/ms_cfg.toml` on next:
+
+    `# CoinMarketCap`
+
+    `url = "https://pro-api.coinmarketcap.com/v2/tools/price-conversion"`
+
+* ATTENTION: in the required package `exchanges-wrapper` was changed format config file
+`exchanges_wrapper/exch_srv_cfg.toml` from 1.2.0 version. Before update, save old file and transfer configuration
+data into new.
+* Finished implemented Decimal calculation for orders processing
+* Change data type for `REVERSE_TARGET_AMOUNT` parameter in `cli_XX_AAABBB.py`, update it before restart
+* Renewed Grafana template
+
 ## v1.1.0 - 2022-06-16
 ### Added for new features
 * FTX exchange for STANDALONE mode added

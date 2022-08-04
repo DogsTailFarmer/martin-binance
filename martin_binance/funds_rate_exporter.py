@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.9r9"
+__version__ = "1.9r10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -94,21 +94,24 @@ KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
 
 
 def get_rate(_currency_rate) -> {}:
+    # Replace info
+    replace = {'UST': 'USDT'}
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
     session = Session()
     session.headers.update(headers)
     for currency in list(_currency_rate.keys()):
-        data = {}
+        _currency = replace.get(currency, currency)
         price = -1
-        parameters = {'amount': 1, 'symbol': 'USD', 'convert': currency}
+        parameters = {'amount': 1, 'symbol': 'USD', 'convert': _currency}
         try:
             response = session.get(URL, params=parameters)
-            data = json.loads(response.text)
         except Exception as er:
             print(er)
-        if data and data.get('data'):
-            price = data.get('data').get('quote').get(currency).get('price', -1)
-        _currency_rate[currency] = price
+        else:
+            if response.status_code == 200:
+                data = json.loads(response.text)
+                price = data['data'][0]['quote'][_currency]['price'] or -1
+            _currency_rate[currency] = price
         time.sleep(REQUEST_DELAY)
     return _currency_rate
 
