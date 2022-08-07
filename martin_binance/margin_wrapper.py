@@ -839,7 +839,8 @@ async def buffered_orders(_stub, _client_id, _symbol):
                 restore = True
         except Exception as _ex:
             ms.Strategy.strategy.message_log(f"Exception buffered_orders: {_ex}\n"
-                                             f"{ms.traceback.print_exc()}", log_level=LogLevel.ERROR)
+                                             f"{ms.traceback.print_exc()}",  # lgtm [py/procedure-return-value-used]
+                                             log_level=LogLevel.ERROR)
             restore = True
         await asyncio.sleep(StrategyBase.rate_limiter)
 
