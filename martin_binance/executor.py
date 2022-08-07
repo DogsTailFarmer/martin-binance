@@ -138,14 +138,14 @@ def telegram(queue_to_tlg, _bot_id) -> None:
     channel_id = CHANNEL_ID
     url += token
     method = url + '/sendMessage'
+    s = requests.Session()
+    retries = Retry(total=5, backoff_factor=1, status_forcelist=[101, 111, 502, 503, 504])
+    s.mount('https://', HTTPAdapter(max_retries=retries))
 
-    def requests_post(_method, _data):
-        s = requests.Session()
-        retries = Retry(total=5, backoff_factor=1, status_forcelist=[101, 111, 502, 503, 504])
-        s.mount('http://', HTTPAdapter(max_retries=retries))
+    def requests_post(_method, _data, session):
         res = None
         try:
-            res = s.post(_method, data=_data)
+            res = session.post(_method, data=_data)
         except requests.exceptions.RetryError as _exc:
             print(f"Telegram: {_exc}")
         except Exception as _exc:
@@ -155,7 +155,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
     def telegram_get(offset=None) -> []:
         command_list = []
         _method = url + '/getUpdates'
-        res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset})
+        res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
         if res and res.status_code == 200:
             result = res.json().get('result')
             # print(f"telegram_get.result: {result}")
@@ -205,12 +205,12 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                             else:
                                 # Send receipt
                                 text = f"Received {n['text_in']} command, OK"
-                                requests_post(method, _data={'chat_id': channel_id, 'text': text})
+                                requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
         else:
             if text and STOP_TLG in text:
                 connection_control.close()
                 break
-            requests_post(method, _data={'chat_id': channel_id, 'text': text})
+            requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
 
 
 def db_management() -> None:
