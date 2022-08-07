@@ -1,3 +1,11 @@
+## v1.2.1 - 2022-08-07
+### Fixed
+* Restore strategy from saved state after restart - get and handling missed event before the state was loaded
+* Max retries exceeded with url: * for Telegram requests.post()
+
+### Update
+* After restart save previous last state file into .bak
+
 ## v1.2.0 - 2022-08-04
 ### Added for new features
 * Bitfinex exchange for STANDALONE mode added
