@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -712,7 +712,7 @@ async def buffered_orders(_stub, _client_id, _symbol):
                 _id = int(order['orderId'])
                 all_orders.append(Order(order))
                 exch_orders_id.append(_id)
-                if order['status'] == 'PARTIALLY_FILLED' and order_trades_sum(_id) < Decimal(order['executedQty']):
+                if order.get('status', None) == 'PARTIALLY_FILLED' and order_trades_sum(_id) < Decimal(order['executedQty']):
                     part_id.append(_id)
             for i in ms.Strategy.all_orders:
                 save_orders_id.append(i.id)
@@ -726,13 +726,13 @@ async def buffered_orders(_stub, _client_id, _symbol):
             # print(f"buffered_orders.diff_excess_id: {diff_excess_id}")
             exch_orders_id.clear()
             save_orders_id.clear()
-            if diff_id or part_id:
+            if not ms.Strategy.last_state and (diff_id or part_id):
                 ms.Strategy.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id + part_id},"
                                                  f" checking it", log_level=LogLevel.WARNING, tlg=False)
                 for _id in list(set(diff_id + part_id)):
                     await fetch_order(_id, _filled_update_call=True)
                 part_id.clear()
-            if diff_excess_id:
+            if not ms.Strategy.last_state and diff_excess_id:
                 ms.Strategy.strategy.message_log(f"Find excess order(s): {diff_excess_id}, checking it",
                                                  log_level=LogLevel.WARNING, tlg=False)
                 for _id in diff_excess_id:
@@ -1133,7 +1133,9 @@ async def main(_symbol):
         except json.JSONDecodeError as er:
             print(f"Exception on load last state: {er}")
         else:
-            os.remove(ms.FILE_LAST_STATE)
+            if os.path.exists(ms.FILE_LAST_STATE + '.bak'):
+                os.remove(ms.FILE_LAST_STATE + '.bak')
+            os.rename(ms.FILE_LAST_STATE, ms.FILE_LAST_STATE + '.bak')
             restore_state = True
             print(f"main.restore_state: {restore_state}")
     if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
@@ -1229,12 +1231,10 @@ async def main(_symbol):
             ms.Strategy.last_state = last_state
             try:
                 m_strategy.init(check_funds=False)
-                loop.create_task(buffered_orders(stub, client_id, _symbol))
             except Exception as ex:
                 print(f"Strategy init error: {ex}")
                 restored = False
-    else:
-        loop.create_task(buffered_orders(stub, client_id, _symbol))
+    loop.create_task(buffered_orders(stub, client_id, _symbol))
     if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
         m_strategy.init()
         input('Press Enter for Start or Ctrl-Z for Cancel\n')

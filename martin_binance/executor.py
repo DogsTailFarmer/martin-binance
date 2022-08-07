@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -36,6 +36,7 @@ from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
 from threading import Thread
 import queue
 import requests
+from requests.adapters import HTTPAdapter, Retry
 import traceback
 
 # region SetParameters
@@ -131,20 +132,30 @@ class Style:
 
 
 def telegram(queue_to_tlg, _bot_id) -> None:
+
     url = TELEGRAM_URL
     token = TOKEN
     channel_id = CHANNEL_ID
     url += token
     method = url + '/sendMessage'
 
+    def requests_post(_method, _data):
+        s = requests.Session()
+        retries = Retry(total=5, backoff_factor=1, status_forcelist=[101, 111, 502, 503, 504])
+        s.mount('http://', HTTPAdapter(max_retries=retries))
+        res = None
+        try:
+            res = s.post(_method, data=_data)
+        except requests.exceptions.RetryError as _exc:
+            print(f"Telegram: {_exc}")
+        except Exception as _exc:
+            print(f"Telegram: {_exc}")
+        return res
+
     def telegram_get(offset=None) -> []:
         command_list = []
         _method = url + '/getUpdates'
-        res = None
-        try:
-            res = requests.post(_method, data={'chat_id': channel_id, 'offset': offset})
-        except Exception as _exp:
-            print(f"telegram_get: {_exp}")
+        res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset})
         if res and res.status_code == 200:
             result = res.json().get('result')
             # print(f"telegram_get.result: {result}")
@@ -194,18 +205,12 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                             else:
                                 # Send receipt
                                 text = f"Received {n['text_in']} command, OK"
-                                try:
-                                    requests.post(method, data={'chat_id': channel_id, 'text': text})
-                                except Exception as _ex:
-                                    print(f"telegram: {_ex}")
+                                requests_post(method, _data={'chat_id': channel_id, 'text': text})
         else:
             if text and STOP_TLG in text:
                 connection_control.close()
                 break
-            try:
-                requests.post(method, data={'chat_id': channel_id, 'text': text})
-            except Exception as _ex:
-                print(f"Telegram: {_ex}")
+            requests_post(method, _data={'chat_id': channel_id, 'text': text})
 
 
 def db_management() -> None:
@@ -1745,7 +1750,7 @@ class Strategy(StrategyBase):
         self.message_log(f"set_trade_conditions.grid_min: {grid_min}, over_price_min: {float(over_price_min):f}",
                          LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
-        if not self.cycle_buy and not additional_grid and not grid_update and not GRID_ONLY and PROFIT_MAX < 100:
+        if not additional_grid and not grid_update and not GRID_ONLY and PROFIT_MAX < 100:
             k = (1 + PROFIT_MAX / 100) / (1 - PROFIT_MAX / 100)
             amount_first_grid = max(amount_min, (step_size / ((k / base_price) - 1 / base_price)) / base_price)
             # For Bitfinex test accounts correction
