@@ -1,6 +1,7 @@
 ## v1.2.2 - 2022-08-08
 ### Update
 * Add \n on each input request (#13)
+* Handling HTTP 429 error for coinmarketcap
 
 ## v1.2.1 - 2022-08-07
 ### Fixed

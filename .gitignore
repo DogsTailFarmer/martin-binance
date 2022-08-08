@@ -11,4 +11,5 @@ venv/
 !/martin_binance/cli_19_AAABBB.py
 /dist/**
 /lgtm.template.yml
-!/martin_binance/funds_rate.db
+/martin_binance/funds_rate.db
+/martin_binance/ms_cfg.toml
