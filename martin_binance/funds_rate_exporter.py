@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.9r10"
+__version__ = "1.9r11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -39,7 +39,7 @@ VPS_NAME = config.get('vps_name')
 # CoinMarketCap
 URL = config.get('url')
 API = config.get('api')
-REQUEST_DELAY = 60 / config.get('rate_limit')
+request_delay = 60 / config.get('rate_limit')
 
 #  endregion
 
@@ -47,6 +47,7 @@ CURRENCY_RATE_LAST_TIME = int(time.time())
 
 # region Metric declare
 STATUS_ALARM = Gauge("margin_alarm", "1 when not order", ['exchange', 'pair', 'vps_name'])
+REQUEST_DELAY_G = Gauge("request_delay_g", "request delay in sec", ['vps_name'])
 
 SUM_F_PROFIT = Gauge("margin_f_profit", "first profit", ['exchange', 'pair', 'vps_name'])
 SUM_S_PROFIT = Gauge("margin_s_profit", "second profit", ['exchange', 'pair', 'vps_name'])
@@ -94,6 +95,7 @@ KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
 
 
 def get_rate(_currency_rate) -> {}:
+    global request_delay
     # Replace info
     replace = {'UST': 'USDT'}
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
@@ -108,15 +110,23 @@ def get_rate(_currency_rate) -> {}:
         except Exception as er:
             print(er)
         else:
+            if response.status_code == 429:
+                time.sleep(61)
+                request_delay *= 1.5
+                try:
+                    response = session.get(URL, params=parameters)
+                except Exception as er:
+                    print(er)
             if response.status_code == 200:
                 data = json.loads(response.text)
                 price = data['data'][0]['quote'][_currency]['price'] or -1
             _currency_rate[currency] = price
-        time.sleep(REQUEST_DELAY)
+        time.sleep(request_delay)
     return _currency_rate
 
 
 def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
+    global request_delay
     cursor = sql_conn.cursor()
     # Aggregate score for pair on exchange
     cursor.execute('SELECT tex.name, tf.id_exchange,\
@@ -152,6 +162,9 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
             S_DEPO.clear()
             OVER_PRICE.clear()
         currency_rate_last_time = int(time.time())
+        REQUEST_DELAY_G.labels(VPS_NAME).set(request_delay)
+        if request_delay > 60:
+            request_delay = 60 / config.get('rate_limit')
     #
     for row in records:
         # print(f"row: {row}")

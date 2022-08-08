@@ -1,3 +1,7 @@
+## v1.2.2 - 2022-08-08
+### Update
+* Add \n on each input request (#13)
+
 ## v1.2.1 - 2022-08-07
 ### Fixed
 * Restore strategy from saved state after restart - get and handling missed event before the state was loaded
