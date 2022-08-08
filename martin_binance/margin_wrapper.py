@@ -622,7 +622,7 @@ async def ask_exit(_loop):
             print(f"ask_exit.strategy.stop: {_err}")
         ms.Strategy.strategy = None
         if os.path.exists(ms.FILE_LAST_STATE):
-            answer = input('Save current state? y/n:')
+            answer = input('Save current state? y/n:\n')
             if answer.lower() != 'y':
                 if os.path.exists(ms.FILE_LAST_STATE + '.bak'):
                     os.remove(ms.FILE_LAST_STATE + '.bak')
@@ -1140,7 +1140,7 @@ async def main(_symbol):
             restore_state = True
             print(f"main.restore_state: {restore_state}")
     if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
-        answer = input('Are you want cancel all active order for this pair? Y:')
+        answer = input('Are you want cancel all active order for this pair? Y:\n')
         if answer.lower() == 'y':
             restore_state = False
             await stub.CancelAllOrders(
@@ -1227,7 +1227,7 @@ async def main(_symbol):
     restored = True
     if restore_state:
         if not ms.LOAD_LAST_STATE:
-            answer = input('Restore saved state after restart? Y:')
+            answer = input('Restore saved state after restart? Y:\n')
         if ms.LOAD_LAST_STATE or answer.lower() == 'y':
             ms.Strategy.last_state = last_state
             try:
