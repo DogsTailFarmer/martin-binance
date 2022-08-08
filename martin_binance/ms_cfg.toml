@@ -1,4 +1,4 @@
-# Parameters for martin-scale strategy
+# Parameters for martin-binance strategy
 # Copyright © 2021 Jerry Fedorenko aka VM
 
 telegram_url = "https://api.telegram.org/bot"
@@ -6,38 +6,27 @@ telegram_url = "https://api.telegram.org/bot"
 # List exchanges names, don"t remove or edit row, add only!
 # Accounts name wold be identically accounts.name from exchanges-wrapper
 exchange = [
-   "Demo-OKEX",        # 0
-   "BinanceNM",        # 1
-   "Bitfinex",         # 2
-   "OKEX",             # 3
-   "Kraken",           # 4
-   "Huobi",            # 5
-   "YObit",            # 6
-   "Demo - Binance",   # 7
-   "BinanceSub1",      # 8
-   "Binance",          # 9
-   "BinanceSub2",      # 10
-   "BinanceSub3",      # 11
-   "BinanceSub4",      # 12
-   "FTX",              # 13
-   "BinanceSub5",      # 14
-   "FTX_sub_01",       # 15
-   "FTX_sub_02",       # 16
-   "FTX_sub_03",       # 17
-   "FTX_sub_04",       # 18
-   "Bitfinex - demo",  # 19
-   "BitfinexSub1",     # 20
-   "BitfinexSub2",     # 21
+   'Demo-OKEX',        # 0
+   'Binance',          # 1
+   'Bitfinex',         # 2
+   'OKEX',             # 3
+   'Kraken',           # 4
+   'Huobi',            # 5
+   'YObit',            # 6
+   'Demo - Binance',   # 7
+   "FTX",              # 8
+   "FTX_sub_01",       # 9
+   "Bitfinex - demo",  # 10
 ]
 
 [Exporter]
 database = "./funds_rate.db"
 port = 8000
 sleep_time_s = 60
-vps_name = "localhost"
+vps_name = "**** Place VPS Name there ****"
 # CoinMarketCap
 url = "https://pro-api.coinmarketcap.com/v2/tools/price-conversion"
-api = "aa1824e5-c4e9-4126-8167-a01165a39c36"
+api = "********** Place API key for CoinMarketCap there ***********"
 rate_limit = 30  # Requests per minute
 
 [Path]
@@ -46,56 +35,21 @@ log_path = "./log/"
 last_state_path = "./last_state/"
 
 [[Telegram]]
-id_exchange = [0, 3] # "Demo-OKEX", "OKEX"
-token = "2120073694:AAHrNHfCCWan1oiXFtKW1ZYj1bDeVjuibwQ"
-channel_id = "966247982"
+id_exchange = [1, 7] # 'Binance', 'Demo - Binance'
+token = "********** Place Token for Telegram bot there ***********"
+channel_id = "*** Place channel_id there ***"
 
 [[Telegram]]
-id_exchange = [1] # "BinanceNM"
-token = "2013913899:AAEquDUda-GmDlPwa42O6s3qTkwWngIuHc8"
-channel_id = "966247982"
+id_exchange = [0, 3] # 'Demo-OKEX', 'OKEX'
+token = "********** Place Token for Telegram bot there ***********"
+channel_id = "*** Place channel_id there ***"
 
 [[Telegram]]
-id_exchange = [2, 19, 20, 21] # "Bitfinex"
-token = "1869121486:AAEHzce-lk-u8IGgwPZbBKbu76F4BAzvzz0"
-channel_id = "966247982"
+id_exchange = [8, 9] # "FTX"
+token = "********** Place Token for Telegram bot there ***********"
+channel_id = "*** Place channel_id there ***"
 
 [[Telegram]]
-id_exchange = [5] # "Huobi"
-token = "2133814893:AAHAxvG4qVxx8vB5QuYLJwXxFEAn_FycB0w"
-channel_id = "966247982"
-
-[[Telegram]]
-id_exchange = [7, 14] # "Demo - Binance"
-token = "1757110755:AAGk1R_wG3zhbNfDBX2FahtwsMGnnRXhNWw"
-channel_id = "966247982"
-
-[[Telegram]]
-id_exchange = [8] # "BinanceSub1"
-token = "2004599843:AAE-jxZu7Q3beGkoQw8YgzEKC7f5WtwYk_g"
-channel_id = "966247982"
-
-[[Telegram]]
-id_exchange = [9] # "Binance"
-token = "2029496400:AAFftV6AgFz-jx7uymn6zyYkFJRrU91iLKY"
-channel_id = "966247982"
-
-[[Telegram]]
-id_exchange = [10] # "BinanceSub2"
-token = "2032958063:AAHHY81LKIJLzXd6-D0DX2pLiRQvaKGlzGA"
-channel_id = "966247982"
-
-[[Telegram]]
-id_exchange = [11] # "BinanceSub3"
-token = "2071984432:AAEV9-PXZctl4iHM3cIXdezTRCQD9GcvEII"
-channel_id = "966247982"
-
-[[Telegram]]
-id_exchange = [12] # "BinanceSub4"
-token = "2132268859:AAHYf1xBkPiTblmyjf8Z-4x8VJGhb5BDkDs"
-channel_id = "966247982"
-
-[[Telegram]]
-id_exchange = [13, 15, 16, 17, 18] # "FTX"
-token = "1740431635:AAG7Uxfxnlmg5fjsdKXrHsOWgoACmt9BMto"
-channel_id = "966247982"
+id_exchange = [2, 10] # "Bitfinex"
+token = "********** Place Token for Telegram bot there ***********"
+channel_id = "*** Place channel_id there ***"
