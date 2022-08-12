@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.1"
+__version__ = "1.2.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -472,6 +472,8 @@ def heartbeat():
         last_state['ms.start_time_ms'] = json.dumps(ms.Strategy.start_time_ms)
         last_state['ms.orders'] = jsonpickle.encode(ms.Strategy.orders)
         # print(f"heartbeat.last_state: {last_state}")
+        if os.path.exists(ms.FILE_LAST_STATE):
+            os.rename(ms.FILE_LAST_STATE, f"{ms.FILE_LAST_STATE}.prev")
         with open(ms.FILE_LAST_STATE, 'w') as outfile:
             json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
         time.sleep(HEARTBEAT)
@@ -712,7 +714,8 @@ async def buffered_orders(_stub, _client_id, _symbol):
                 _id = int(order['orderId'])
                 all_orders.append(Order(order))
                 exch_orders_id.append(_id)
-                if order.get('status', None) == 'PARTIALLY_FILLED' and order_trades_sum(_id) < Decimal(order['executedQty']):
+                if (order.get('status', None) == 'PARTIALLY_FILLED'
+                        and order_trades_sum(_id) < Decimal(order['executedQty'])):
                     part_id.append(_id)
             for i in ms.Strategy.all_orders:
                 save_orders_id.append(i.id)
@@ -1086,6 +1089,33 @@ async def on_order_book_update(_stub, _client_id, _symbol):
         ms.Strategy.strategy.on_new_order_book(OrderBook(ms.Strategy.order_book))
 
 
+def load_last_state() -> {}:
+    res = {}
+
+    def load_file(name) -> {}:
+        _res = {}
+        if os.path.exists(name):
+            try:
+                with open(name) as state_file:
+                    _last_state = json.load(state_file)
+            except json.JSONDecodeError as er:
+                print(f"Exception on decode last state file: {er}")
+            else:
+                if _last_state.get('ms.start_time_ms', None):
+                    _res = _last_state
+            return _res
+
+    if os.path.exists(ms.FILE_LAST_STATE):
+        res = load_file(ms.FILE_LAST_STATE)
+        if not res:
+            print(f"Can't load last state, try load previous saved state")
+            res = load_file(f"{ms.FILE_LAST_STATE}.prev")
+        if res:
+            with open(ms.FILE_LAST_STATE + '.bak', 'w') as outfile:
+                json.dump(res, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+    return res
+
+
 async def main(_symbol):
     ms.Strategy.symbol = _symbol
     StrategyBase.symbol = _symbol
@@ -1124,21 +1154,10 @@ async def main(_symbol):
     # print(f"main._active_orders: {_active_orders}")
     active_orders = json_format.MessageToDict(_active_orders).get('items', [])
     # print(f"main.active_orders: {active_orders}")
-    restore_state = False
-    if os.path.exists(ms.FILE_LAST_STATE):
-        try:
-            with open(ms.FILE_LAST_STATE) as json_file:
-                last_state = json.load(json_file)
-            # print(f"main.last_state: {last_state}")
-            json_file.close()
-        except json.JSONDecodeError as er:
-            print(f"Exception on load last state: {er}")
-        else:
-            if os.path.exists(ms.FILE_LAST_STATE + '.bak'):
-                os.remove(ms.FILE_LAST_STATE + '.bak')
-            os.rename(ms.FILE_LAST_STATE, ms.FILE_LAST_STATE + '.bak')
-            restore_state = True
-            print(f"main.restore_state: {restore_state}")
+    # Try load last strategy state from saved files
+    last_state = load_last_state()
+    restore_state = True if last_state else False
+    print(f"main.restore_state: {restore_state}")
     if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
         answer = input('Are you want cancel all active order for this pair? Y:\n')
         if answer.lower() == 'y':
@@ -1226,6 +1245,9 @@ async def main(_symbol):
     answer = str()
     restored = True
     if restore_state:
+        if last_state.get("command", None) == '"stopped"':
+            input('Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n')
+            last_state["command"] = 'null'
         if not ms.LOAD_LAST_STATE:
             answer = input('Restore saved state after restart? Y:\n')
         if ms.LOAD_LAST_STATE or answer.lower() == 'y':

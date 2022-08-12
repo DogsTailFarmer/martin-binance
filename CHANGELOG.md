@@ -1,3 +1,11 @@
+## v1.2.3 - 2022-mm-dd
+### Fixed
+* [ No status reply #11 ](https://github.com/DogsTailFarmer/martin-binance/issues/11#issue-1328210503)
+* [ Stopped command in last state when low RAM #14 ](https://github.com/DogsTailFarmer/martin-binance/issues/14#issue-1333292978)
+
+### Added for new features
+* Protect against OS failures when saving a state file
+
 ## v1.2.2 - 2022-08-08
 ### Update
 * Add \n on each input request (#13)

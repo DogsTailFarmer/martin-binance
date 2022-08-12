@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.1"
+__version__ = "1.2.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -197,14 +197,15 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                         bot_id = a.split('.')[0]
                         if bot_id == _bot_id:
                             try:
+                                msg_in = str(n['text_in']).lower().strip()
                                 connection_control.execute('insert into t_control values(?,?,?,?)',
-                                                           (n['message_id'], n['text_in'], bot_id, None))
+                                                           (n['message_id'], msg_in, bot_id, None))
                                 connection_control.commit()
                             except sqlite3.Error as ex:
                                 print(f"telegram: insert into t_control: {ex}")
                             else:
                                 # Send receipt
-                                text = f"Received {n['text_in']} command, OK"
+                                text = f"Received {msg_in} command, OK"
                                 requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
         else:
             if text and STOP_TLG in text:
@@ -395,7 +396,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         err = fn(x, **kwargs) - value
         # print(f"err: {err}")
         if abs(err) < max_err and err >= 0:
-            print(f"For {tries} of attempts the best solution was found!", )
+            print(f"In {tries} attempts the best solution was found!", )
             return x
         if err > 0:
             solves.append((err, x))
@@ -1625,7 +1626,6 @@ class Strategy(StrategyBase):
 
     def place_profit_order(self, by_market: bool = False) -> None:
         if not GRID_ONLY and self.check_min_amount_for_tp():
-            self.message_log(f"place_profit_order: by_market: {by_market}", log_level=LogLevel.DEBUG)
             self.tp_order_hold.clear()
             if self.tp_wait_id or self.cancel_order_id or self.tp_was_filled:
                 # Waiting confirm or cancel old or processing ending and replace it
@@ -1815,7 +1815,6 @@ class Strategy(StrategyBase):
         return amount_first_grid
 
     def set_profit(self) -> Decimal:
-        self.message_log("set_profit", LogLevel.DEBUG)
         last_price = None
         tbb = None
         bbb = None
@@ -1863,32 +1862,26 @@ class Strategy(StrategyBase):
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
             target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
-            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_CEILING)
+            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             if target_amount_first - self.tp_amount < step_size:
                 target_amount_first = self.tp_amount + step_size
-            target = target_amount_first
-            self.message_log(f"calc_profit_order.target_amount_first: {target_amount_first}",
-                             log_level=LogLevel.DEBUG)
+            amount = target = target_amount_first
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_FLOOR)
-            price = amount_s / target_amount_first
-            price = f2d(tcm.round_price(float(price), RoundingType.FLOOR))
-            amount = amount_s / price
-            amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
+            price = f2d(tcm.round_price(float(amount_s / target_amount_first), RoundingType.FLOOR))
         else:
             # Calculate target amount for second
             self.tp_amount = self.sum_amount_second
             target_amount_second = self.sum_amount_second + (fee + profit) * self.sum_amount_second / 100
-            target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
+            target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_FLOOR)
             target = target_amount_second
-            self.message_log(f"calc_profit_order.target_amount_second: {target_amount_second}",
-                             log_level=LogLevel.DEBUG)
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
-            price = target_amount_second / amount
-            price = f2d(tcm.round_price(float(price), RoundingType.CEIL))
+            price = f2d(tcm.round_price(float(target_amount_second / amount), RoundingType.CEIL))
         self.tp_init = (self.sum_amount_first, self.sum_amount_second)
-        self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount}", log_level=LogLevel.DEBUG)
+        self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount},"
+                         f" target {'first' if buy_side else 'second'}: {target}",
+                         log_level=LogLevel.DEBUG)
         return {'price': price, 'amount': amount, 'profit': profit, 'target': target}
 
     def calc_over_price(self,
