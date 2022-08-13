@@ -5,6 +5,7 @@
 
 ### Added for new features
 * Protect against OS failures when saving a state file
+* For Telegram bot set up command menu and online help
 
 ## v1.2.2 - 2022-08-08
 ### Update

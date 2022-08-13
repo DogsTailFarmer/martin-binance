@@ -46,7 +46,7 @@ ex.FEE_FTX = False  # https://help.ftx.com/hc/en-us/articles/360024479432-Fees
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
-ex.START_ON_BUY = True  # First cycle direction
+ex.START_ON_BUY = False  # First cycle direction
 ex.AMOUNT_FIRST = Decimal('0.3')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
 ex.AMOUNT_SECOND = Decimal('10000.0')  # Deposit for Buy cycle in second currency

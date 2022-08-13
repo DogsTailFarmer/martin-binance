@@ -143,26 +143,26 @@ def telegram(queue_to_tlg, _bot_id) -> None:
     s.mount('https://', HTTPAdapter(max_retries=retries))
 
     def requests_post(_method, _data, session):
-        res = None
+        _res = None
         try:
-            res = session.post(_method, data=_data)
+            _res = session.post(_method, data=_data)
         except requests.exceptions.RetryError as _exc:
             print(f"Telegram: {_exc}")
         except Exception as _exc:
             print(f"Telegram: {_exc}")
-        return res
+        return _res
 
     def telegram_get(offset=None) -> []:
         command_list = []
         _method = url + '/getUpdates'
-        res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
-        if res and res.status_code == 200:
-            result = res.json().get('result')
-            # print(f"telegram_get.result: {result}")
+        _res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
+        if _res and _res.status_code == 200:
+            __result = _res.json().get('result')
+            # print(f"telegram_get.result: {__result}")
             message_id = None
             text_in = None
             reply_to_message = None
-            for i in result:
+            for i in __result:
                 update_id = i.get('update_id')
                 message = i.get('message')
                 if message:
@@ -174,10 +174,34 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                             reply_to_message = i.get('message').get('reply_to_message').get('text')
                         except AttributeError:
                             reply_to_message = None
+                            _text = "The command must be a response to any message from a specific strategy," \
+                                    " use Reply + Menu combination"
+                            requests_post(method, _data={'chat_id': channel_id, 'text': _text}, session=s)
                 command_list.append({'update_id': update_id, 'message_id': message_id,
                                      'text_in': text_in, 'reply_to_message': reply_to_message})
         return command_list
 
+    # Set command for Telegram bot
+    _command = requests_post(url + '/getMyCommands', _data=None,  session=s)
+    # print(f"_command: code: {_command.status_code}, {_command.json()}")
+    if _command and _command.status_code == 200 and _command.json().get('result', None):
+        result = _command.json().get('result', None)
+        # print(f"telegram _command.result: {result}")
+    else:
+        _commands = {
+            "commands": json.dumps([
+                {"command": "status",
+                 "description": "Get strategy status"},
+                {"command": "stop",
+                 "description": "Stop strategy after end of cycle, not for Reverse"},
+                {"command": "end",
+                 "description": "Stop strategy after executed TP order, in Direct and Reverse, all the same"}
+            ])
+        }
+        res = requests_post(url + '/setMyCommands', _data=_commands, session=s)
+        print(f"Set command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
+              f"restart Telegram bot by /start command for update it")
+    #
     connection_control = sqlite3.connect(WORK_PATH + DB_FILE)
     offset_id = None
     while True:
@@ -197,7 +221,8 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                         bot_id = a.split('.')[0]
                         if bot_id == _bot_id:
                             try:
-                                msg_in = str(n['text_in']).lower().strip()
+                                msg_in = str(n['text_in']).lower().strip().replace('/', '')
+                                print(f"command: {msg_in}")
                                 connection_control.execute('insert into t_control values(?,?,?,?)',
                                                            (n['message_id'], msg_in, bot_id, None))
                                 connection_control.commit()
@@ -205,7 +230,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                                 print(f"telegram: insert into t_control: {ex}")
                             else:
                                 # Send receipt
-                                text = f"Received {msg_in} command, OK"
+                                text = f"Received '{msg_in}' command, OK"
                                 requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
         else:
             if text and STOP_TLG in text:
