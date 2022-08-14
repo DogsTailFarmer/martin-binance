@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.4"
+__version__ = "1.2.3.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -183,11 +183,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
 
     # Set command for Telegram bot
     _command = requests_post(url + '/getMyCommands', _data=None,  session=s)
-    # print(f"_command: code: {_command.status_code}, {_command.json()}")
-    if _command and _command.status_code == 200 and _command.json().get('result', None):
-        result = _command.json().get('result', None)
-        # print(f"telegram _command.result: {result}")
-    else:
+    if _command and _command.status_code == 200 and not _command.json().get('result', None):
         _commands = {
             "commands": json.dumps([
                 {"command": "status",
@@ -860,7 +856,8 @@ class Strategy(StrategyBase):
         if (stable_state
                 and ADAPTIVE_TRADE_CONDITION
                 and not self.reverse
-                and not self.part_amount_first):
+                and not self.part_amount_first
+                and self.command not in ('stopped', 'stop', 'end')):
             if self.heartbeat_counter % 150 == 0:
                 self.grid_update(frequency='low')
             elif self.heartbeat_counter % 30 == 0:
@@ -1203,6 +1200,9 @@ class Strategy(StrategyBase):
 
     def start(self) -> None:
         self.message_log('Start')
+        if self.command == 'stopped':
+            self.message_log('Strategy stopped, waiting manual action')
+            return
         # Cancel take profit order in all state
         self.tp_order_hold.clear()
         self.tp_hold = False
@@ -1416,7 +1416,7 @@ class Strategy(StrategyBase):
             amount_first_grid = amount_min_dec
         if self.order_q > 1:
             self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
-                             f" cycle set {self.order_q} orders for {self.over_price:.2f}% over price", tlg=False)
+                             f" cycle set {self.order_q} orders for {self.over_price:.4f}% over price", tlg=False)
         else:
             self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
                              f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
@@ -1799,7 +1799,7 @@ class Strategy(StrategyBase):
             else:
                 tbb = bb.get('tbb')
                 over_price = 100 * (f2d(tbb) - base_price) / base_price
-        self.over_price = max(over_price, over_price_min, OVER_PRICE)
+        self.over_price = max(over_price, over_price_min)
         # Adapt grid orders quantity for current over price
         order_q = int(self.over_price * ORDER_Q / OVER_PRICE)
         depo_c = (depo / base_price) if buy_side else depo
@@ -1889,7 +1889,7 @@ class Strategy(StrategyBase):
             target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
             target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             if target_amount_first - self.tp_amount < step_size:
-                target_amount_first = self.tp_amount + step_size
+                target_amount_first += step_size
             amount = target = target_amount_first
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_FLOOR)
@@ -1899,6 +1899,8 @@ class Strategy(StrategyBase):
             self.tp_amount = self.sum_amount_second
             target_amount_second = self.sum_amount_second + (fee + profit) * self.sum_amount_second / 100
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_FLOOR)
+            if target_amount_second - self.tp_amount < step_size:
+                target_amount_second += step_size
             target = target_amount_second
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
@@ -1917,32 +1919,42 @@ class Strategy(StrategyBase):
                         min_delta: Decimal,
                         amount_first_grid: Decimal,
                         amount_min: Decimal) -> Decimal:
+        """
+        Calculate over price for depo refund after Reverse cycle
+        :param buy_side:
+        :param depo:
+        :param base_price:
+        :param reverse_target_amount:
+        :param min_delta:
+        :param amount_first_grid:
+        :param amount_min:
+        :return: Decimal calculated over price
+        """
         self.message_log(f"calc_over_price: buy_side: {buy_side}, depo: {depo:.6f}, base_price: {base_price:f},"
                          f" reverse_target_amount: {reverse_target_amount}, order_q: {self.order_q},"
                          f" amount_first_grid: {amount_first_grid}",
                          log_level=LogLevel.DEBUG)
-        over_price = f2d(0)
-        over_price_coarse = f2d(0)
-        if self.order_q > 1:
-            # Calculate over price for depo refund after Reverse cycle
+        if buy_side:
+            over_price_coarse = 100 * (base_price - (depo / reverse_target_amount)) / base_price
+            max_err = self.round_truncate(f2d(0.00000001), base=True, _rounding=ROUND_CEILING)
+        else:
+            over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
+            max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
+        self.message_log(f"over_price coarse: {over_price_coarse:.6f}, max_err: {max_err}", log_level=LogLevel.DEBUG)
+        if self.order_q > 1 and over_price_coarse > 0:
+            # Fine calculate over_price for target return amount
             params = {'buy_side': buy_side,
                       'depo': depo,
                       'base_price': base_price,
                       'amount_first_grid': amount_first_grid,
                       'min_delta': min_delta,
                       'amount_min': amount_min}
-            if buy_side:
-                over_price_coarse = 100 * (base_price - (depo / reverse_target_amount)) / base_price
-                max_err = self.round_truncate(f2d(0.00000001), base=True, _rounding=ROUND_CEILING)
-            else:
-                over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
-                max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
-            over_price_coarse *= f2d(2.0)
-            self.message_log(f"over_price coarse: {over_price_coarse:.6f}, max_err: {max_err}",
-                             log_level=LogLevel.DEBUG)
-            # Fine calculate over_price for target return amount
             over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
-        return over_price or over_price_coarse
+        elif self.order_q == 1 and over_price_coarse > 0:
+            over_price = over_price_coarse
+        else:
+            over_price = 0
+        return over_price
 
     def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
         """
@@ -2651,6 +2663,7 @@ class Strategy(StrategyBase):
             else:
                 go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
             if go_trade:
+                print("Start after on_new_funds())")
                 self.start()
                 return
         if self.tp_order_hold:

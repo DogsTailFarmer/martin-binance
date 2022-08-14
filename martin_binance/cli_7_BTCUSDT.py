@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.1.2"
+__version__ = "1.2.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -46,11 +46,11 @@ ex.FEE_FTX = False  # https://help.ftx.com/hc/en-us/articles/360024479432-Fees
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
-ex.START_ON_BUY = False  # First cycle direction
+ex.START_ON_BUY = True  # First cycle direction
 ex.AMOUNT_FIRST = Decimal('0.3')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
-ex.AMOUNT_SECOND = Decimal('10000.0')  # Deposit for Buy cycle in second currency
-ex.PRICE_SHIFT = 0.05  # 'No market' shift price in % from current bid/ask price
+ex.AMOUNT_SECOND = Decimal('300.0')  # Deposit for Buy cycle in second currency
+ex.PRICE_SHIFT = 0.01  # 'No market' shift price in % from current bid/ask price
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()
@@ -70,7 +70,7 @@ ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list memb
 ex.ADAPTIVE_TRADE_CONDITION = True
 ex.BB_CANDLE_SIZE_IN_MINUTES = 60
 ex.BB_NUMBER_OF_CANDLES = 20
-ex.KBB = 2.0  # k for Bollinger Band
+ex.KBB = 0.1  # k for Bollinger Band
 ex.PROFIT_K = 2 * 0.75 / ex.KBB  # k for place profit in relation to BB value
 # Parameter for calculate price of grid orders by logarithmic scale
 # If -1 function is disabled, can take a value from 0 to infinity (in practice no more 1000)
