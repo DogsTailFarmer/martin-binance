@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.3.2"
+__version__ = "1.2.3_2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -469,7 +469,7 @@ def heartbeat():
         last_state = ms.Strategy.strategy.save_strategy_state()
         # print(f"tik-tak ', {time.time()}")
         last_state['ms.order_id'] = json.dumps(ms.Strategy.order_id)
-        last_state['ms.start_time_ms'] = json.dumps(ms.Strategy.start_time_ms)
+        last_state['ms_start_time_ms'] = json.dumps(ms.Strategy.start_time_ms)
         last_state['ms.orders'] = jsonpickle.encode(ms.Strategy.orders)
         # print(f"heartbeat.last_state: {last_state}")
         if os.path.exists(ms.FILE_LAST_STATE):
@@ -760,7 +760,7 @@ async def buffered_orders(_stub, _client_id, _symbol):
                         ms.Strategy.last_state = None
                         # Restore StrategyBase class var
                         ms.Strategy.order_id = json.loads(last_state.pop('ms.order_id', 0))
-                        ms.Strategy.start_time_ms = json.loads(last_state.pop('ms.start_time_ms',
+                        ms.Strategy.start_time_ms = json.loads(last_state.pop('ms_start_time_ms',
                                                                               str(int(time.time() * 1000)))
                                                                )
                         #
@@ -1099,7 +1099,9 @@ def load_last_state() -> {}:
             except json.JSONDecodeError as er:
                 print(f"Exception on decode last state file: {er}")
             else:
-                if _last_state.get('ms.start_time_ms', None):
+                # TODO Correct on next version
+                # if _last_state.get('ms.start_time_ms', None):
+                if _last_state.get('ms_start_time_ms', _last_state.get('ms.start_time_ms', None)):
                     _res = _last_state
         return _res
 
