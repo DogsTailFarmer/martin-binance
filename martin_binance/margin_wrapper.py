@@ -1090,8 +1090,6 @@ async def on_order_book_update(_stub, _client_id, _symbol):
 
 
 def load_last_state() -> {}:
-    res = {}
-
     def load_file(name) -> {}:
         _res = {}
         if os.path.exists(name):
@@ -1103,12 +1101,13 @@ def load_last_state() -> {}:
             else:
                 if _last_state.get('ms.start_time_ms', None):
                     _res = _last_state
-            return _res
+        return _res
 
+    res = {}
     if os.path.exists(ms.FILE_LAST_STATE):
         res = load_file(ms.FILE_LAST_STATE)
         if not res:
-            print(f"Can't load last state, try load previous saved state")
+            print("Can't load last state, try load previous saved state")
             res = load_file(f"{ms.FILE_LAST_STATE}.prev")
         if res:
             with open(ms.FILE_LAST_STATE + '.bak', 'w') as outfile:
@@ -1156,7 +1155,7 @@ async def main(_symbol):
     # print(f"main.active_orders: {active_orders}")
     # Try load last strategy state from saved files
     last_state = load_last_state()
-    restore_state = True if last_state else False
+    restore_state = bool(last_state)
     print(f"main.restore_state: {restore_state}")
     if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
         answer = input('Are you want cancel all active order for this pair? Y:\n')
