@@ -70,7 +70,7 @@ ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list memb
 ex.ADAPTIVE_TRADE_CONDITION = True
 ex.BB_CANDLE_SIZE_IN_MINUTES = 60
 ex.BB_NUMBER_OF_CANDLES = 20
-ex.KBB = 0.1  # k for Bollinger Band
+ex.KBB = 2.0  # k for Bollinger Band
 ex.PROFIT_K = 2 * 0.75 / ex.KBB  # k for place profit in relation to BB value
 # Parameter for calculate price of grid orders by logarithmic scale
 # If -1 function is disabled, can take a value from 0 to infinity (in practice no more 1000)

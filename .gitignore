@@ -8,6 +8,7 @@ venv/
 !/martin_binance/log/.gitkeep
 /martin_binance/cli*.py
 !/martin_binance/cli_7_BTCUSDT.py
+!/martin_binance/cli_10_AAABBB.py
 /dist/**
 /lgtm.template.yml
 /martin_binance/funds_rate.db
