@@ -1,3 +1,18 @@
+## v1.2.3 - 2022-08-14
+### Fixed
+* [No status reply #11](https://github.com/DogsTailFarmer/martin-binance/issues/11#issue-1328210503)
+* [Stopped command in last state when low RAM #14](https://github.com/DogsTailFarmer/martin-binance/issues/14#issue-1333292978)
+
+### Added for new features
+* Protect against OS failures when saving a state file
+* [No help it Telegram bot #8:](https://github.com/DogsTailFarmer/martin-binance/issues/8#issue-1315732905)
+For Telegram bot set up command menu and online help
+
+### Update
+* Dependencies
+* Refactoring calculate TP
+* Refactoring calculate over price
+
 ## v1.2.2 - 2022-08-08
 ### Update
 * Add \n on each input request (#13)

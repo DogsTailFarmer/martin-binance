@@ -1,0 +1,14 @@
+.idea
+__pycache__/
+venv/
+.gitignore
+/martin_binance/last_state/**
+!/martin_binance/last_state/.gitkeep
+/martin_binance/log/**
+!/martin_binance/log/.gitkeep
+/martin_binance/cli*.py
+!/martin_binance/cli_7_BTCUSDT.py
+/dist/**
+/lgtm.template.yml
+/martin_binance/funds_rate.db
+/martin_binance/ms_cfg.toml

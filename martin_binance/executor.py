@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.2"
+__version__ = "1.2.3.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -143,26 +143,26 @@ def telegram(queue_to_tlg, _bot_id) -> None:
     s.mount('https://', HTTPAdapter(max_retries=retries))
 
     def requests_post(_method, _data, session):
-        res = None
+        _res = None
         try:
-            res = session.post(_method, data=_data)
+            _res = session.post(_method, data=_data)
         except requests.exceptions.RetryError as _exc:
             print(f"Telegram: {_exc}")
         except Exception as _exc:
             print(f"Telegram: {_exc}")
-        return res
+        return _res
 
     def telegram_get(offset=None) -> []:
         command_list = []
         _method = url + '/getUpdates'
-        res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
-        if res and res.status_code == 200:
-            result = res.json().get('result')
-            # print(f"telegram_get.result: {result}")
+        _res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
+        if _res and _res.status_code == 200:
+            __result = _res.json().get('result')
+            # print(f"telegram_get.result: {__result}")
             message_id = None
             text_in = None
             reply_to_message = None
-            for i in result:
+            for i in __result:
                 update_id = i.get('update_id')
                 message = i.get('message')
                 if message:
@@ -174,10 +174,30 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                             reply_to_message = i.get('message').get('reply_to_message').get('text')
                         except AttributeError:
                             reply_to_message = None
+                            _text = "The command must be a response to any message from a specific strategy," \
+                                    " use Reply + Menu combination"
+                            requests_post(method, _data={'chat_id': channel_id, 'text': _text}, session=s)
                 command_list.append({'update_id': update_id, 'message_id': message_id,
                                      'text_in': text_in, 'reply_to_message': reply_to_message})
         return command_list
 
+    # Set command for Telegram bot
+    _command = requests_post(url + '/getMyCommands', _data=None,  session=s)
+    if _command and _command.status_code == 200 and not _command.json().get('result', None):
+        _commands = {
+            "commands": json.dumps([
+                {"command": "status",
+                 "description": "Get strategy status"},
+                {"command": "stop",
+                 "description": "Stop strategy after end of cycle, not for Reverse"},
+                {"command": "end",
+                 "description": "Stop strategy after executed TP order, in Direct and Reverse, all the same"}
+            ])
+        }
+        res = requests_post(url + '/setMyCommands', _data=_commands, session=s)
+        print(f"Set command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
+              f"restart Telegram bot by /start command for update it")
+    #
     connection_control = sqlite3.connect(WORK_PATH + DB_FILE)
     offset_id = None
     while True:
@@ -197,14 +217,16 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                         bot_id = a.split('.')[0]
                         if bot_id == _bot_id:
                             try:
+                                msg_in = str(n['text_in']).lower().strip().replace('/', '')
+                                print(f"command: {msg_in}")
                                 connection_control.execute('insert into t_control values(?,?,?,?)',
-                                                           (n['message_id'], n['text_in'], bot_id, None))
+                                                           (n['message_id'], msg_in, bot_id, None))
                                 connection_control.commit()
                             except sqlite3.Error as ex:
                                 print(f"telegram: insert into t_control: {ex}")
                             else:
                                 # Send receipt
-                                text = f"Received {n['text_in']} command, OK"
+                                text = f"Received '{msg_in}' command, OK"
                                 requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
         else:
             if text and STOP_TLG in text:
@@ -395,7 +417,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         err = fn(x, **kwargs) - value
         # print(f"err: {err}")
         if abs(err) < max_err and err >= 0:
-            print(f"For {tries} of attempts the best solution was found!", )
+            print(f"In {tries} attempts the best solution was found!", )
             return x
         if err > 0:
             solves.append((err, x))
@@ -834,7 +856,8 @@ class Strategy(StrategyBase):
         if (stable_state
                 and ADAPTIVE_TRADE_CONDITION
                 and not self.reverse
-                and not self.part_amount_first):
+                and not self.part_amount_first
+                and self.command not in ('stopped', 'stop', 'end')):
             if self.heartbeat_counter % 150 == 0:
                 self.grid_update(frequency='low')
             elif self.heartbeat_counter % 30 == 0:
@@ -1177,6 +1200,9 @@ class Strategy(StrategyBase):
 
     def start(self) -> None:
         self.message_log('Start')
+        if self.command == 'stopped':
+            self.message_log('Strategy stopped, waiting manual action')
+            return
         # Cancel take profit order in all state
         self.tp_order_hold.clear()
         self.tp_hold = False
@@ -1390,7 +1416,7 @@ class Strategy(StrategyBase):
             amount_first_grid = amount_min_dec
         if self.order_q > 1:
             self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
-                             f" cycle set {self.order_q} orders for {self.over_price:.2f}% over price", tlg=False)
+                             f" cycle set {self.order_q} orders for {self.over_price:.4f}% over price", tlg=False)
         else:
             self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
                              f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
@@ -1625,7 +1651,6 @@ class Strategy(StrategyBase):
 
     def place_profit_order(self, by_market: bool = False) -> None:
         if not GRID_ONLY and self.check_min_amount_for_tp():
-            self.message_log(f"place_profit_order: by_market: {by_market}", log_level=LogLevel.DEBUG)
             self.tp_order_hold.clear()
             if self.tp_wait_id or self.cancel_order_id or self.tp_was_filled:
                 # Waiting confirm or cancel old or processing ending and replace it
@@ -1774,7 +1799,7 @@ class Strategy(StrategyBase):
             else:
                 tbb = bb.get('tbb')
                 over_price = 100 * (f2d(tbb) - base_price) / base_price
-        self.over_price = max(over_price, over_price_min, OVER_PRICE)
+        self.over_price = max(over_price, over_price_min)
         # Adapt grid orders quantity for current over price
         order_q = int(self.over_price * ORDER_Q / OVER_PRICE)
         depo_c = (depo / base_price) if buy_side else depo
@@ -1815,7 +1840,6 @@ class Strategy(StrategyBase):
         return amount_first_grid
 
     def set_profit(self) -> Decimal:
-        self.message_log("set_profit", LogLevel.DEBUG)
         last_price = None
         tbb = None
         bbb = None
@@ -1863,32 +1887,28 @@ class Strategy(StrategyBase):
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
             target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
-            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_CEILING)
+            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             if target_amount_first - self.tp_amount < step_size:
-                target_amount_first = self.tp_amount + step_size
-            target = target_amount_first
-            self.message_log(f"calc_profit_order.target_amount_first: {target_amount_first}",
-                             log_level=LogLevel.DEBUG)
+                target_amount_first += step_size
+            amount = target = target_amount_first
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_FLOOR)
-            price = amount_s / target_amount_first
-            price = f2d(tcm.round_price(float(price), RoundingType.FLOOR))
-            amount = amount_s / price
-            amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
+            price = f2d(tcm.round_price(float(amount_s / target_amount_first), RoundingType.FLOOR))
         else:
             # Calculate target amount for second
             self.tp_amount = self.sum_amount_second
             target_amount_second = self.sum_amount_second + (fee + profit) * self.sum_amount_second / 100
-            target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
+            target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_FLOOR)
+            if target_amount_second - self.tp_amount < step_size:
+                target_amount_second += step_size
             target = target_amount_second
-            self.message_log(f"calc_profit_order.target_amount_second: {target_amount_second}",
-                             log_level=LogLevel.DEBUG)
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
-            price = target_amount_second / amount
-            price = f2d(tcm.round_price(float(price), RoundingType.CEIL))
+            price = f2d(tcm.round_price(float(target_amount_second / amount), RoundingType.CEIL))
         self.tp_init = (self.sum_amount_first, self.sum_amount_second)
-        self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount}", log_level=LogLevel.DEBUG)
+        self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount},"
+                         f" target {'first' if buy_side else 'second'}: {target}",
+                         log_level=LogLevel.DEBUG)
         return {'price': price, 'amount': amount, 'profit': profit, 'target': target}
 
     def calc_over_price(self,
@@ -1899,32 +1919,42 @@ class Strategy(StrategyBase):
                         min_delta: Decimal,
                         amount_first_grid: Decimal,
                         amount_min: Decimal) -> Decimal:
+        """
+        Calculate over price for depo refund after Reverse cycle
+        :param buy_side:
+        :param depo:
+        :param base_price:
+        :param reverse_target_amount:
+        :param min_delta:
+        :param amount_first_grid:
+        :param amount_min:
+        :return: Decimal calculated over price
+        """
         self.message_log(f"calc_over_price: buy_side: {buy_side}, depo: {depo:.6f}, base_price: {base_price:f},"
                          f" reverse_target_amount: {reverse_target_amount}, order_q: {self.order_q},"
                          f" amount_first_grid: {amount_first_grid}",
                          log_level=LogLevel.DEBUG)
-        over_price = f2d(0)
-        over_price_coarse = f2d(0)
-        if self.order_q > 1:
-            # Calculate over price for depo refund after Reverse cycle
+        if buy_side:
+            over_price_coarse = 100 * (base_price - (depo / reverse_target_amount)) / base_price
+            max_err = self.round_truncate(f2d(0.00000001), base=True, _rounding=ROUND_CEILING)
+        else:
+            over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
+            max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
+        self.message_log(f"over_price coarse: {over_price_coarse:.6f}, max_err: {max_err}", log_level=LogLevel.DEBUG)
+        if self.order_q > 1 and over_price_coarse > 0:
+            # Fine calculate over_price for target return amount
             params = {'buy_side': buy_side,
                       'depo': depo,
                       'base_price': base_price,
                       'amount_first_grid': amount_first_grid,
                       'min_delta': min_delta,
                       'amount_min': amount_min}
-            if buy_side:
-                over_price_coarse = 100 * (base_price - (depo / reverse_target_amount)) / base_price
-                max_err = self.round_truncate(f2d(0.00000001), base=True, _rounding=ROUND_CEILING)
-            else:
-                over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
-                max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
-            over_price_coarse *= f2d(2.0)
-            self.message_log(f"over_price coarse: {over_price_coarse:.6f}, max_err: {max_err}",
-                             log_level=LogLevel.DEBUG)
-            # Fine calculate over_price for target return amount
             over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
-        return over_price or over_price_coarse
+        elif self.order_q == 1 and over_price_coarse > 0:
+            over_price = over_price_coarse
+        else:
+            over_price = 0
+        return over_price
 
     def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
         """
@@ -2633,6 +2663,7 @@ class Strategy(StrategyBase):
             else:
                 go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
             if go_trade:
+                print("Start after on_new_funds())")
                 self.start()
                 return
         if self.tp_order_hold:
