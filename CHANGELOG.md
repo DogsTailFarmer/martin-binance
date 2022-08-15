@@ -1,3 +1,7 @@
+## v1.2.4 Hotfix - 2022-08-15 
+### Fixed
+* Incorrect calculation TP parameters for TP sell, price < 1, (fee + profit) amount < step_size
+
 ## v1.2.3 - 2022-08-14
 ### Fixed
 * [No status reply #11](https://github.com/DogsTailFarmer/martin-binance/issues/11#issue-1328210503)

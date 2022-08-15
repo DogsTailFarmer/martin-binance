@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.3_3"
+__version__ = "1.2.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -218,7 +218,6 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                         if bot_id == _bot_id:
                             try:
                                 msg_in = str(n['text_in']).lower().strip().replace('/', '')
-                                print(f"command: {msg_in}")
                                 connection_control.execute('insert into t_control values(?,?,?,?)',
                                                            (n['message_id'], msg_in, bot_id, None))
                                 connection_control.commit()
@@ -1882,30 +1881,33 @@ class Strategy(StrategyBase):
         else:
             fee = FEE_MAKER
         fee = fee if FEE_IN_PAIR else fee + FEE_MAKER
-        step_size = f2d(tcm.get_minimal_amount_change(0.0))
+        step_size_f = f2d(tcm.get_minimal_amount_change(0.0))
         if buy_side:
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
             target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
             target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
-            if target_amount_first - self.tp_amount < step_size:
-                target_amount_first += step_size
+            if target_amount_first - self.tp_amount < step_size_f:
+                target_amount_first = self.tp_amount + step_size_f
             amount = target = target_amount_first
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_FLOOR)
             price = f2d(tcm.round_price(float(amount_s / target_amount_first), RoundingType.FLOOR))
         else:
+            step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
             # Calculate target amount for second
             self.tp_amount = self.sum_amount_second
             target_amount_second = self.sum_amount_second + (fee + profit) * self.sum_amount_second / 100
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_FLOOR)
-            if target_amount_second - self.tp_amount < step_size:
-                target_amount_second += step_size
+            if target_amount_second - self.tp_amount < step_size_s:
+                target_amount_second = self.tp_amount + step_size_s
             target = target_amount_second
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
             price = f2d(tcm.round_price(float(target_amount_second / amount), RoundingType.CEIL))
         self.tp_init = (self.sum_amount_first, self.sum_amount_second)
+        # Calc real margin for TP
+        profit = (100 * (target - self.tp_amount) / self.tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
         self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount},"
                          f" target {'first' if buy_side else 'second'}: {target}",
                          log_level=LogLevel.DEBUG)

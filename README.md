@@ -129,6 +129,18 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 ```console
 pip install martin-binance
 ```
+
+### Update
+
+Before update save configurations file:
+* ```martin_binance/ms_cfg.toml```
+* ```exchanges_wrapper/exch_srv.py```
+
+```console
+pip install martin-binance --upgrade
+```
+After update for restore config use saved files
+
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
 * Get token
