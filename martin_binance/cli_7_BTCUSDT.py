@@ -47,7 +47,7 @@ ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
-ex.AMOUNT_FIRST = Decimal('0.3')  # Deposit for Sale cycle in first currency
+ex.AMOUNT_FIRST = Decimal('0.012680')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
 ex.AMOUNT_SECOND = Decimal('300.0')  # Deposit for Buy cycle in second currency
 ex.PRICE_SHIFT = 0.01  # 'No market' shift price in % from current bid/ask price
@@ -83,9 +83,9 @@ ex.ADX_PERIOD = 14
 ex.ADX_THRESHOLD = 40  # ADX value that indicates a strong trend
 ex.ADX_PRICE_THRESHOLD = 0.05  # % Max price drift before release Hold reverse cycle
 # Start first as Reverse cycle, also set appropriate AMOUNT
-ex.REVERSE = False
-ex.REVERSE_TARGET_AMOUNT = Decimal('0')
-ex.REVERSE_INIT_AMOUNT = Decimal('0')
+ex.REVERSE = True
+ex.REVERSE_TARGET_AMOUNT = Decimal('301')
+ex.REVERSE_INIT_AMOUNT = Decimal('300')
 ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 ################################################################
 # DO NOT EDIT UNDER THIS LINE EXCEPT SYMBOL SET LINE         ###
