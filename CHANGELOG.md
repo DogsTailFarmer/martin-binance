@@ -4,6 +4,10 @@
 
 ### Update
 * calculate round quote pattern
+* optimize place grid method
+
+### Added for new features
+* implemented first grid order volume calculating for effective FTX trading
 
 ## v1.2.4 Hotfix - 2022-08-15 
 ### Fixed

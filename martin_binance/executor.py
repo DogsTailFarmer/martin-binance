@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.4-5"
+__version__ = "1.2.4-6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1411,59 +1411,59 @@ class Strategy(StrategyBase):
                          f" grid_update: {grid_update}", log_level=LogLevel.DEBUG)
         self.grid_hold.clear()
         self.last_shift_time = None
-        tcm = self.get_trading_capability_manager()
-        last_executed_grid_price = float(self.avg_rate) if grid_update else 0
-        if buy_side:
-            _price = last_executed_grid_price or self.get_buffered_order_book().bids[0].price
-            base_price = _price - PRICE_SHIFT * _price / 100
-            amount_min = tcm.get_min_buy_amount(base_price)
-        else:
-            _price = last_executed_grid_price or self.get_buffered_order_book().asks[0].price
-            base_price = _price + PRICE_SHIFT * _price / 100
-            amount_min = tcm.get_min_sell_amount(base_price)
-        min_delta = f2d(tcm.get_minimal_price_change(base_price))
-        base_price_dec = f2d(tcm.round_price(base_price, RoundingType.ROUND))
-        amount_min_dec = f2d(amount_min)
-        if ADAPTIVE_TRADE_CONDITION or self.reverse or additional_grid:
-            try:
-                amount_first_grid = self.set_trade_conditions(buy_side,
-                                                              depo,
-                                                              base_price_dec,
-                                                              reverse_target_amount,
-                                                              min_delta,
-                                                              amount_min_dec,
-                                                              additional_grid=additional_grid,
-                                                              grid_update=grid_update)
-            except Exception as ex:
-                self.message_log(f"Can't set trade conditions: {ex}\n"
-                                 f"{traceback.print_exc()}", log_level=LogLevel.ERROR)
-                return
-        else:
-            self.over_price = OVER_PRICE
-            self.order_q = ORDER_Q
-            amount_first_grid = amount_min_dec
-        if self.order_q > 1:
-            self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
-                             f" cycle set {self.order_q} orders for {self.over_price:.4f}% over price", tlg=False)
-        else:
-            self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
-                             f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
-                             tlg=False)
-        if self.order_q > 1:
-            delta_price = self.over_price * base_price_dec / (100 * (self.order_q - 1))
-        else:
-            delta_price = Decimal('0.0')
         funds = self.get_buffered_funds()
-        price_prev = base_price_dec
         if buy_side:
-            fund = funds.get(self.s_currency, 0)
-            fund = f2d(fund.available) if fund else Decimal('0.0')
             currency = self.s_currency
-        else:
-            fund = funds.get(self.f_currency, 0)
+            fund = funds.get(currency, 0)
             fund = f2d(fund.available) if fund else Decimal('0.0')
+        else:
             currency = self.f_currency
+            fund = funds.get(currency, 0)
+            fund = f2d(fund.available) if fund else Decimal('0.0')
         if depo <= fund:
+            tcm = self.get_trading_capability_manager()
+            last_executed_grid_price = float(self.avg_rate) if grid_update else 0
+            if buy_side:
+                _price = last_executed_grid_price or self.get_buffered_order_book().bids[0].price
+                base_price = _price - PRICE_SHIFT * _price / 100
+                amount_min = tcm.get_min_buy_amount(base_price)
+            else:
+                _price = last_executed_grid_price or self.get_buffered_order_book().asks[0].price
+                base_price = _price + PRICE_SHIFT * _price / 100
+                amount_min = tcm.get_min_sell_amount(base_price)
+            min_delta = f2d(tcm.get_minimal_price_change(base_price))
+            base_price_dec = f2d(tcm.round_price(base_price, RoundingType.ROUND))
+            amount_min_dec = f2d(amount_min)
+            if ADAPTIVE_TRADE_CONDITION or self.reverse or additional_grid:
+                try:
+                    amount_first_grid = self.set_trade_conditions(buy_side,
+                                                                  depo,
+                                                                  base_price_dec,
+                                                                  reverse_target_amount,
+                                                                  min_delta,
+                                                                  amount_min_dec,
+                                                                  additional_grid=additional_grid,
+                                                                  grid_update=grid_update)
+                except Exception as ex:
+                    self.message_log(f"Can't set trade conditions: {ex}\n"
+                                     f"{traceback.print_exc()}", log_level=LogLevel.ERROR)
+                    return
+            else:
+                self.over_price = OVER_PRICE
+                self.order_q = ORDER_Q
+                amount_first_grid = amount_min_dec
+            if self.order_q > 1:
+                self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
+                                 f" cycle set {self.order_q} orders for {self.over_price:.4f}% over price", tlg=False)
+            else:
+                self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
+                                 f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
+                                 tlg=False)
+            if self.order_q > 1:
+                delta_price = self.over_price * base_price_dec / (100 * (self.order_q - 1))
+            else:
+                delta_price = Decimal('0.0')
+            price_prev = base_price_dec
             total_grid_amount_f = f2d(0)
             total_grid_amount_s = f2d(0)
             amount_last_grid = f2d(0)
@@ -1916,7 +1916,7 @@ class Strategy(StrategyBase):
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
             target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
-            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_CEILING)
+            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             if target_amount_first - self.tp_amount < step_size_f:
                 target_amount_first = self.tp_amount + step_size_f
             amount = target = target_amount_first
