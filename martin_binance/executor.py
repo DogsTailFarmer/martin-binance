@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.4-6"
+__version__ = "1.2.4-7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -683,7 +683,7 @@ class Strategy(StrategyBase):
             if self.cycle_buy:
                 ds = self.get_buffered_funds().get(self.s_currency, 0)
                 ds = ds.available if ds else 0
-                if check_funds and self.deposit_second > ds:
+                if check_funds and self.deposit_second > f2d(ds):
                     self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                     if STANDALONE:
                         raise SystemExit(1)
@@ -694,7 +694,7 @@ class Strategy(StrategyBase):
                 if USE_ALL_FIRST_FUND:
                     self.deposit_first = f2d(df)
                 else:
-                    if check_funds and self.deposit_first > df:
+                    if check_funds and self.deposit_first > f2d(df):
                         self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
                         if STANDALONE:
                             raise SystemExit(1)
@@ -705,7 +705,6 @@ class Strategy(StrategyBase):
             k_m = 1 - float(PROFIT_MAX) / 100
             amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
             if self.cycle_buy:
-                print(f"amount_first_grid: {amount_first_grid}, deposit_second: {self.deposit_second}")
                 if amount_first_grid > 80 * self.deposit_second / 100:
                     self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
                                      f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
@@ -716,7 +715,6 @@ class Strategy(StrategyBase):
                                      f" for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
             else:
                 amount_first_grid /= last_price
-                print(f"amount_first_grid: {amount_first_grid}, deposit_first: {self.deposit_first}")
                 if amount_first_grid > 80 * self.deposit_first / 100:
                     self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
                                      f" a small deposit {self.deposit_first}", log_level=LogLevel.ERROR)
