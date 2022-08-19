@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.4-3"
+__version__ = "1.2.4-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1772,8 +1772,8 @@ class Strategy(StrategyBase):
                          LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
         if not additional_grid and not grid_update and not GRID_ONLY and PROFIT_MAX < 100:
-            k = (1 + PROFIT_MAX / 100) / (1 - PROFIT_MAX / 100)
-            amount_first_grid = max(amount_min, (step_size / ((k / base_price) - 1 / base_price)) / base_price)
+            k_m = 1 - PROFIT_MAX / 100
+            amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             # For Bitfinex test accounts correction
             if amount_first_grid >= f2d(tcm.get_max_sell_amount(0)) or amount_first_grid >= depo_c:
                 amount_first_grid /= ORDER_Q
@@ -1884,7 +1884,7 @@ class Strategy(StrategyBase):
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
             target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
-            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
+            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_CEILING)
             if target_amount_first - self.tp_amount < step_size_f:
                 target_amount_first = self.tp_amount + step_size_f
             amount = target = target_amount_first
@@ -1892,13 +1892,13 @@ class Strategy(StrategyBase):
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_FLOOR)
             price = f2d(tcm.round_price(float(amount_s / target_amount_first), RoundingType.FLOOR))
         else:
-            # step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
+            step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
             # Calculate target amount for second
             self.tp_amount = self.sum_amount_second
             target_amount_second = self.sum_amount_second + (fee + profit) * self.sum_amount_second / 100
-            target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_FLOOR)
-            # if target_amount_second - self.tp_amount < step_size_s:
-            #     target_amount_second = self.tp_amount + step_size_s
+            target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
+            if target_amount_second - self.tp_amount < step_size_s:
+                target_amount_second = self.tp_amount + step_size_s
             target = target_amount_second
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
