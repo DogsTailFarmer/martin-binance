@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.4-4"
+__version__ = "1.2.4-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -671,41 +671,73 @@ class Strategy(StrategyBase):
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
                                               Decimal(str(tcm.round_price(1.123456789, RoundingType.FLOOR))))
         print(f"Round pattern, for base: {self.round_base}, quote: {self.round_quote}")
-        last_price = f2d(self.get_buffered_ticker().last_price)
+        last_price = self.get_buffered_ticker().last_price
         if last_price:
             print('Last ticker price: ', last_price)
-            self.avg_rate = last_price
+            self.avg_rate = f2d(last_price)
             df = self.get_buffered_funds().get(self.f_currency, 0)
-            df = f2d(df.available) if df else Decimal('0.0')
+            df = df.available if df else 0
             if USE_ALL_FIRST_FUND and df and self.cycle_buy:
                 self.message_log('Check USE_ALL_FIRST_FUND parameter. You may have loss on Reverse cycle',
                                  color=Style.B_WHITE)
             if self.cycle_buy:
                 ds = self.get_buffered_funds().get(self.s_currency, 0)
-                ds = f2d(ds.available) if ds else Decimal('0.0')
+                ds = ds.available if ds else 0
                 if check_funds and self.deposit_second > ds:
                     self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                     if STANDALONE:
                         raise SystemExit(1)
                 first_order_vlm = self.deposit_second * 1 * (1 - self.martin) / (1 - self.martin**ORDER_Q)
-                first_order_vlm /= last_price
+                first_order_vlm /= self.avg_rate
+                amount_min = tcm.get_min_buy_amount(last_price)
             else:
                 if USE_ALL_FIRST_FUND:
-                    self.deposit_first = df
+                    self.deposit_first = f2d(df)
                 else:
                     if check_funds and self.deposit_first > df:
                         self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
                         if STANDALONE:
                             raise SystemExit(1)
                 first_order_vlm = self.deposit_first * 1 * (1 - self.martin) / (1 - pow(self.martin, ORDER_Q))
-            if self.cycle_buy and first_order_vlm < f2d(tcm.get_min_buy_amount(float(last_price))):
+                amount_min = tcm.get_min_sell_amount(last_price)
+            # Calculate the recommended size of the first grid order depending on the step_size
+            step_size = tcm.get_minimal_amount_change(amount_min)
+            k_m = 1 - float(PROFIT_MAX) / 100
+            amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
+            if self.cycle_buy:
+                print(f"amount_first_grid: {amount_first_grid}, deposit_second: {self.deposit_second}")
+                if amount_first_grid > 80 * self.deposit_second / 100:
+                    self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
+                                     f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
+                    if STANDALONE and self.first_run:
+                        raise SystemExit(1)
+                elif amount_first_grid > 20 * self.deposit_second / 100:
+                    self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather big"
+                                     f" for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
+            else:
+                amount_first_grid /= last_price
+                print(f"amount_first_grid: {amount_first_grid}, deposit_first: {self.deposit_first}")
+                if amount_first_grid > 80 * self.deposit_first / 100:
+                    self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
+                                     f" a small deposit {self.deposit_first}", log_level=LogLevel.ERROR)
+                    if STANDALONE and self.first_run:
+                        raise SystemExit(1)
+                elif amount_first_grid > 20 * self.deposit_first / 100:
+                    self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather big"
+                                     f" for a small deposit {self.deposit_first}", log_level=LogLevel.WARNING)
+            #
+            if self.cycle_buy and first_order_vlm < tcm.get_min_buy_amount(last_price):
                 self.message_log(f"Total deposit {AMOUNT_SECOND}{self.s_currency}"
                                  f" not enough for min amount for {ORDER_Q} orders.", color=Style.B_RED)
-            elif not self.cycle_buy and first_order_vlm < f2d(tcm.get_min_sell_amount(float(last_price))):
+                if STANDALONE and self.first_run:
+                    raise SystemExit(1)
+            elif not self.cycle_buy and first_order_vlm < tcm.get_min_sell_amount(last_price):
                 self.message_log(f"Total deposit {self.deposit_first}{self.f_currency}"
                                  f" not enough for min amount for {ORDER_Q} orders.", color=Style.B_RED)
-            buy_amount = tcm.get_min_buy_amount(float(last_price))
-            sell_amount = tcm.get_min_sell_amount(float(last_price))
+                if STANDALONE and self.first_run:
+                    raise SystemExit(1)
+            buy_amount = tcm.get_min_buy_amount(last_price)
+            sell_amount = tcm.get_min_sell_amount(last_price)
             print(f"buy_amount: {buy_amount}, sell_amount: {sell_amount}")
         else:
             print('Actual price not received, initialization checks skipped')

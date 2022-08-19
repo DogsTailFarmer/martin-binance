@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.3-2"
+__version__ = "1.2.3-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1118,150 +1118,154 @@ def load_last_state() -> {}:
 
 
 async def main(_symbol):
-    ms.Strategy.symbol = _symbol
-    StrategyBase.symbol = _symbol
-    # ms.Strategy.loop = loop
-    account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
-    print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
-    channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
-    stub = api_pb2_grpc.MartinStub(channel)
-    client_id = None
-    exchange = None
     try:
-        client_id_msg = await stub.OpenClientConnection(api_pb2.OpenClientConnectionRequest(
-            account_name=account_name,
-            rate_limiter=StrategyBase.rate_limiter))
-    except asyncio.CancelledError:
-        pass  # Task cancellation should not be logged as an error.
-    except grpc.RpcError as ex:
-        # noinspection PyUnresolvedReferences
-        status_code = ex.code()
-        # noinspection PyUnresolvedReferences
-        print(f"Exception on register client: {status_code.name}, {ex.details()}")
-        # noinspection PyProtectedMember, PyUnresolvedReferences
-        os._exit(1)
-    else:
-        client_id = client_id_msg.client_id
-        exchange = client_id_msg.exchange
-        print(f"main.exchange: {exchange}")
-        print(f"main.client_id: {client_id}")
-        print(f"main.srv_version: {client_id_msg.srv_version}")
-    ms.Strategy.exchange = exchange
-    ms.Strategy.stub = stub
-    ms.Strategy.client_id = client_id
-    # Check and Cancel ALL ACTIVE ORDER
-    _active_orders = await stub.FetchOpenOrders(api_pb2.MarketRequest(client_id=client_id,
-                                                                      symbol=_symbol))
-    # print(f"main._active_orders: {_active_orders}")
-    active_orders = json_format.MessageToDict(_active_orders).get('items', [])
-    # print(f"main.active_orders: {active_orders}")
-    # Try load last strategy state from saved files
-    last_state = load_last_state()
-    restore_state = bool(last_state)
-    print(f"main.restore_state: {restore_state}")
-    if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
-        answer = input('Are you want cancel all active order for this pair? Y:\n')
-        if answer.lower() == 'y':
-            restore_state = False
-            await stub.CancelAllOrders(
-                api_pb2.MarketRequest(
-                    client_id=client_id,
-                    symbol=_symbol
-                ))
-            cancel_orders = json_format.MessageToDict(_active_orders).get('items', [])
-            print('Before start was canceled orders:')
-            for i in cancel_orders:
-                print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
-            print('================================================================')
-    # Init section
-    _exchange_info_symbol = await stub.FetchExchangeInfoSymbol(
-        api_pb2.MarketRequest(client_id=client_id, symbol=_symbol)
-    )
-    exchange_info_symbol = json_format.MessageToDict(_exchange_info_symbol)
-    # print("\n".join(f"{k}\t{v}" for k, v in exchange_info_symbol.items()))
-    filters = exchange_info_symbol.get('filters')
-    for _filter in filters:
-        print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
-    base_asset = exchange_info_symbol.get('baseAsset')
-    quote_asset = exchange_info_symbol.get('quoteAsset')
-    # init Strategy class var
-    ms.Strategy.info_symbol = exchange_info_symbol
-    ms.Strategy.tcm = TradingCapabilityManager(exchange_info_symbol)
-    ms.Strategy.base_asset = base_asset
-    ms.Strategy.quote_asset = quote_asset
-    await buffered_funds(stub, client_id, _symbol, base_asset, quote_asset)
-    # region Get and processing Order book
-    _order_book = await stub.FetchOrderBook(api_pb2.MarketRequest(
-        client_id=client_id,
-        symbol=_symbol))
-    order_book = json_format.MessageToDict(_order_book)
-    order_book_bids = order_book.pop('bids', [])
-    order_book_asks = order_book.pop('asks', [])
-    _bids = []
-    for bid in order_book_bids:
-        _bids.append(json.loads(bid))
-    _asks = []
-    for ask in order_book_asks:
-        _asks.append(json.loads(ask))
-    order_book.update({'bids': _bids})
-    order_book.update({'asks': _asks})
-    if not order_book['bids'] or not order_book['asks']:
-        _price = await stub.FetchSymbolPriceTicker(api_pb2.MarketRequest(
+        ms.Strategy.symbol = _symbol
+        StrategyBase.symbol = _symbol
+        # ms.Strategy.loop = loop
+        account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
+        print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
+        channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
+        stub = api_pb2_grpc.MartinStub(channel)
+        client_id = None
+        exchange = None
+        try:
+            client_id_msg = await stub.OpenClientConnection(api_pb2.OpenClientConnectionRequest(
+                account_name=account_name,
+                rate_limiter=StrategyBase.rate_limiter))
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error.
+        except grpc.RpcError as ex:
+            # noinspection PyUnresolvedReferences
+            status_code = ex.code()
+            # noinspection PyUnresolvedReferences
+            print(f"Exception on register client: {status_code.name}, {ex.details()}")
+            # noinspection PyProtectedMember, PyUnresolvedReferences
+            os._exit(1)
+        else:
+            client_id = client_id_msg.client_id
+            exchange = client_id_msg.exchange
+            print(f"main.exchange: {exchange}")
+            print(f"main.client_id: {client_id}")
+            print(f"main.srv_version: {client_id_msg.srv_version}")
+        ms.Strategy.exchange = exchange
+        ms.Strategy.stub = stub
+        ms.Strategy.client_id = client_id
+        # Check and Cancel ALL ACTIVE ORDER
+        _active_orders = await stub.FetchOpenOrders(api_pb2.MarketRequest(client_id=client_id,
+                                                                          symbol=_symbol))
+        # print(f"main._active_orders: {_active_orders}")
+        active_orders = json_format.MessageToDict(_active_orders).get('items', [])
+        # print(f"main.active_orders: {active_orders}")
+        # Try load last strategy state from saved files
+        last_state = load_last_state()
+        restore_state = bool(last_state)
+        print(f"main.restore_state: {restore_state}")
+        if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
+            answer = input('Are you want cancel all active order for this pair? Y:\n')
+            if answer.lower() == 'y':
+                restore_state = False
+                await stub.CancelAllOrders(
+                    api_pb2.MarketRequest(
+                        client_id=client_id,
+                        symbol=_symbol
+                    ))
+                cancel_orders = json_format.MessageToDict(_active_orders).get('items', [])
+                print('Before start was canceled orders:')
+                for i in cancel_orders:
+                    print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
+                print('================================================================')
+        # Init section
+        _exchange_info_symbol = await stub.FetchExchangeInfoSymbol(
+            api_pb2.MarketRequest(client_id=client_id, symbol=_symbol)
+        )
+        exchange_info_symbol = json_format.MessageToDict(_exchange_info_symbol)
+        # print("\n".join(f"{k}\t{v}" for k, v in exchange_info_symbol.items()))
+        filters = exchange_info_symbol.get('filters')
+        for _filter in filters:
+            print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
+        base_asset = exchange_info_symbol.get('baseAsset')
+        quote_asset = exchange_info_symbol.get('quoteAsset')
+        # init Strategy class var
+        ms.Strategy.info_symbol = exchange_info_symbol
+        ms.Strategy.tcm = TradingCapabilityManager(exchange_info_symbol)
+        ms.Strategy.base_asset = base_asset
+        ms.Strategy.quote_asset = quote_asset
+        await buffered_funds(stub, client_id, _symbol, base_asset, quote_asset)
+        # region Get and processing Order book
+        _order_book = await stub.FetchOrderBook(api_pb2.MarketRequest(
             client_id=client_id,
             symbol=_symbol))
-        price = json_format.MessageToDict(_price)
-        print(f"Not bids or asks for pair {price.get('symbol')}, last known price is {price.get('price')}")
-        amount = exchange_info_symbol['filters']['lotSize']['minQty']
-        order_book['bids'] = order_book['bids'] or [[price['price'], amount]]
-        order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
-    # print(f"main.order_book: {order_book}")
-    ms.Strategy.order_book = order_book
-    # endregion
-    _ticker = await stub.FetchTickerPriceChangeStatistics(api_pb2.MarketRequest(
-        client_id=client_id,
-        symbol=_symbol))
-    ms.Strategy.ticker = json_format.MessageToDict(_ticker)
-    # print(f"main.ticker: {ms.Strategy.ticker}")
-    # init Strategy class
-    m_strategy = ms.Strategy()
-    # print(f"main.m_strategy: {m_strategy}")
-    ms.Strategy.strategy = m_strategy
-    await buffered_candle(stub, client_id, _symbol)
-    # Market stream
-    loop.create_task(on_ticker_update(stub, client_id, _symbol))
-    loop.create_task(on_order_book_update(stub, client_id, _symbol))
-    # User Stream
-    loop.create_task(on_funds_update(stub, client_id, _symbol, base_asset, quote_asset))
-    loop.create_task(on_order_update(stub, client_id, _symbol))
-    # Start section
-    '''
-    market_stream_count=5, user_stream_count=2
-    These values directly depend on the number of market and user ws streams used in the strategy and declared above
-    '''
-    await stub.StartStream(api_pb2.StartStreamRequest(client_id=client_id,
-                                                      symbol=_symbol,
-                                                      market_stream_count=5,
-                                                      user_stream_count=2))
-    loop.create_task(save_asset(stub, client_id, base_asset, quote_asset))
-    answer = str()
-    restored = True
-    if restore_state:
-        if last_state.get("command", None) == '"stopped"':
-            input('Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n')
-            last_state["command"] = 'null'
-        if not ms.LOAD_LAST_STATE:
-            answer = input('Restore saved state after restart? Y:\n')
-        if ms.LOAD_LAST_STATE or answer.lower() == 'y':
-            ms.Strategy.last_state = last_state
-            try:
-                m_strategy.init(check_funds=False)
-            except Exception as ex:
-                print(f"Strategy init error: {ex}")
-                restored = False
-    loop.create_task(buffered_orders(stub, client_id, _symbol))
-    if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
-        m_strategy.init()
-        input('Press Enter for Start or Ctrl-Z for Cancel\n')
-        m_strategy.start()
-    if restored:
-        loop.run_in_executor(None, heartbeat)
+        order_book = json_format.MessageToDict(_order_book)
+        order_book_bids = order_book.pop('bids', [])
+        order_book_asks = order_book.pop('asks', [])
+        _bids = []
+        for bid in order_book_bids:
+            _bids.append(json.loads(bid))
+        _asks = []
+        for ask in order_book_asks:
+            _asks.append(json.loads(ask))
+        order_book.update({'bids': _bids})
+        order_book.update({'asks': _asks})
+        if not order_book['bids'] or not order_book['asks']:
+            _price = await stub.FetchSymbolPriceTicker(api_pb2.MarketRequest(
+                client_id=client_id,
+                symbol=_symbol))
+            price = json_format.MessageToDict(_price)
+            print(f"Not bids or asks for pair {price.get('symbol')}, last known price is {price.get('price')}")
+            amount = exchange_info_symbol['filters']['lotSize']['minQty']
+            order_book['bids'] = order_book['bids'] or [[price['price'], amount]]
+            order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
+        # print(f"main.order_book: {order_book}")
+        ms.Strategy.order_book = order_book
+        # endregion
+        _ticker = await stub.FetchTickerPriceChangeStatistics(api_pb2.MarketRequest(
+            client_id=client_id,
+            symbol=_symbol))
+        ms.Strategy.ticker = json_format.MessageToDict(_ticker)
+        # print(f"main.ticker: {ms.Strategy.ticker}")
+        # init Strategy class
+        m_strategy = ms.Strategy()
+        # print(f"main.m_strategy: {m_strategy}")
+        ms.Strategy.strategy = m_strategy
+        await buffered_candle(stub, client_id, _symbol)
+        # Market stream
+        loop.create_task(on_ticker_update(stub, client_id, _symbol))
+        loop.create_task(on_order_book_update(stub, client_id, _symbol))
+        # User Stream
+        loop.create_task(on_funds_update(stub, client_id, _symbol, base_asset, quote_asset))
+        loop.create_task(on_order_update(stub, client_id, _symbol))
+        # Start section
+        '''
+        market_stream_count=5, user_stream_count=2
+        These values directly depend on the number of market and user ws streams used in the strategy and declared above
+        '''
+        await stub.StartStream(api_pb2.StartStreamRequest(client_id=client_id,
+                                                          symbol=_symbol,
+                                                          market_stream_count=5,
+                                                          user_stream_count=2))
+        loop.create_task(save_asset(stub, client_id, base_asset, quote_asset))
+        answer = str()
+        restored = True
+        if restore_state:
+            if last_state.get("command", None) == '"stopped"':
+                input('Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n')
+                last_state["command"] = 'null'
+            if not ms.LOAD_LAST_STATE:
+                answer = input('Restore saved state after restart? Y:\n')
+            if ms.LOAD_LAST_STATE or answer.lower() == 'y':
+                ms.Strategy.last_state = last_state
+                try:
+                    m_strategy.init(check_funds=False)
+                except Exception as ex:
+                    print(f"Strategy init error: {ex}")
+                    restored = False
+        loop.create_task(buffered_orders(stub, client_id, _symbol))
+        if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
+            m_strategy.init()
+            input('Press Enter for Start or Ctrl-Z for Cancel\n')
+            m_strategy.start()
+        if restored:
+            loop.run_in_executor(None, heartbeat)
+    except (KeyboardInterrupt, SystemExit):
+        # noinspection PyProtectedMember, PyUnresolvedReferences
+        os._exit(1)
