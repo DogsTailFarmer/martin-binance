@@ -47,7 +47,7 @@ ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
-ex.AMOUNT_FIRST = Decimal('0.1')  # Deposit for Sale cycle in first currency
+ex.AMOUNT_FIRST = Decimal('0.0')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FIRST_FUND = False  # Use all available fund for first current
 ex.AMOUNT_SECOND = Decimal('300.0')  # Deposit for Buy cycle in second currency
 ex.PRICE_SHIFT = 0.01  # 'No market' shift price in % from current bid/ask price
