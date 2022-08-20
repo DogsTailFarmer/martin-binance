@@ -1,3 +1,14 @@
+## v1.2.5 2022-08-20
+### Fixed
+* if not FEE_IN_PAIR and Reverse: underreporting of income as a result of excess fee accrual
+
+### Update
+* calculate round quote pattern
+* optimize place grid method
+
+### Added for new features
+* implemented first grid order volume calculating for effective FTX trading
+
 ## v1.2.4 Hotfix - 2022-08-15 
 ### Fixed
 * Incorrect calculation TP parameters for TP sell, price < 1, (fee + profit) amount < step_size

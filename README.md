@@ -181,7 +181,7 @@ Extract [win_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance
 
 to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
 * Copy ```martin_binance/ms_cfg.toml``` and ```martin_binance/funds_rate.db``` to the ```C:\Users\user\AppData\Local\Programs\margin```
-* Copy executor.py to the ```C:\Users\user\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+* Copy executor.py to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
 
 #### For macOS
 Extract [MacOS_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/MacOS_site-packages.zip)
