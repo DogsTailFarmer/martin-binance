@@ -46,6 +46,17 @@ Strategy logic realized at executor.py and trading parameters settings in the AP
 
 You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
 
+## Important notices
+* You cannot run multiple pairs with overlapping currencies on the same account!
+
+Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
+
+Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
+
+As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
+
+* See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
+
 ## Reference
 
 <a href="#trade-idea">Trade idea</a>
@@ -53,6 +64,8 @@ You can modify them for your needs. See <a href="#for-developers">For developers
 <a href="#features">Features</a>
 
 <a href="#quick-start">Quick start</a>
+
+<a href="#add-new-exchange-account">Add new exchange account</a>
 
 <a href="#tmux">Terminal Tmux for STANDALONE mode</a>
 
@@ -134,7 +147,7 @@ pip install martin-binance
 
 Before update save configurations file:
 * ```martin_binance/ms_cfg.toml```
-* ```exchanges_wrapper/exch_srv.py```
+* ```exchanges_wrapper/exch_srv_cfg.toml```
 
 ```console
 pip install martin-binance --upgrade
@@ -154,12 +167,14 @@ After update for restore config use saved files
 #### Start server
 * Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
 * Run ```exchanges_wrapper/exch_srv.py``` in terminal window
+
 #### Start client
 * Run ```martin_binance/cli_7_BTCUSDT.py``` in other terminal window
 
 Strategy is started.
 
-Setting trade pair. You must set pair name in three places the same (yes, it is crooked, but so far):
+#### Setting trade pair
+You must set pair name in three places the same (yes, it is crooked, but so far):
 * base setting at bottom of the ```martin_binance/cli_X_AAABBB.py``` in "__main__" section, SYMBOL = 'AAABBB'
 * the name of ```cli_X_AAABBB.py``` must match
 * the name of pane in <a href="#tmux">Tmux terminal window</a>
@@ -201,8 +216,18 @@ to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7
 
 Strategy is started.
 
-Setting trade pair. The selection of the pair is determined by the window of the terminal in which the strategy is
-launched. The "__ main __" section settings are ignored.
+#### Setting trade pair
+The selection of the pair is determined by the window of the terminal in which the strategy is launched.
+The "__ main __" section settings are ignored.
+
+### Add new exchange account
+<p id="add-new-exchange-account"></p>
+Adding an account is in two parts
+
+* For server, it is exchanges_wrapper/exch_srv_cfg.toml, where you place API key and *account name*
+* For client, it's martin_binance/ms_cfg.toml, where you add *account name* into exchange list
+
+The *account name* _must_ be identically for account.
 
 ## Terminal Tmux (Linux)
 <p id="tmux"></p>
@@ -556,11 +581,17 @@ Use Telegram control function, described above.
 <p id="specific-ftx-requirements"></p>
 
 These comments relate to this strategy, perhaps for another algorithm these restrictions will not be significant.
-This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
+
+* This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
 profit order price, a giant gap is obtained between the first grid order and the take profit order.
 This is due to the large price change step and the large minimum order size.
-
 To get a Maker fee = 0% you need a stake 25 FTT. [Details here](https://help.ftx.com/hc/en-us/articles/360052410392). 
+
+* Have a small stock of assets for both currencies, over and above used for deposit. 0.1% of the deposit
+volume is enough. Otherwise, the exchange rejects the last grid order and the TP order, provided that there
+is an accurately available balance sheet.
+```[2022-08-27 04:17:26,560: ERROR] handle_errors.response.status >= 400: {'success': False, 'error': 'Not enough balances'}```
+*FTX support rejected this issue.*
 
 
 ## For developers

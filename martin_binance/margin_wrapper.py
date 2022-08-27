@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.5"
+__version__ = "1.2.5-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -607,17 +607,17 @@ async def save_asset(_stub, _client_id, _base_asset, _quote_asset):
         await asyncio.sleep(delay)
 
 
-async def ask_exit(_loop):
+async def ask_exit():
     _stub = ms.Strategy.stub
     _client_id = ms.Strategy.client_id
     _symbol = ms.Strategy.symbol
     if ms.Strategy.strategy:
         ms.Strategy.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
         await _stub.StopStream(api_pb2.MarketRequest(client_id=_client_id, symbol=_symbol))
-        tasks = [t for t in asyncio.all_tasks(_loop) if t is not asyncio.current_task(_loop)]
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
         print(f"Cancelling {len(tasks)} outstanding tasks")
-        await asyncio.gather(*tasks, loop=_loop, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
         try:
             ms.Strategy.strategy.stop()
         except Exception as _err:
@@ -941,7 +941,9 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
         status_code = ex.code()
         ms.Strategy.strategy.message_log(f"Exception creating order {_id}: {status_code.name}, {ex.details()}")
         if status_code == grpc.StatusCode.FAILED_PRECONDITION:
-            ms.Strategy.strategy.message_log('Error code: FAILED_PRECONDITION')
+            # Supress order timeout message
+            ms.Strategy.wait_order_id.append(_id)
+            ms.Strategy.strategy.on_place_order_error_string(_id, error=f"FAILED_PRECONDITION: {ex.details()}")
     except Exception as _ex:
         ms.Strategy.strategy.message_log(f"Exception creating order {_id}: {_ex}")
     else:
@@ -1099,9 +1101,7 @@ def load_last_state() -> {}:
             except json.JSONDecodeError as er:
                 print(f"Exception on decode last state file: {er}")
             else:
-                # TODO Correct on next version
-                # if _last_state.get('ms.start_time_ms', None):
-                if _last_state.get('ms_start_time_ms', _last_state.get('ms.start_time_ms', None)):
+                if _last_state.get('ms_start_time_ms', None):
                     _res = _last_state
         return _res
 
@@ -1122,7 +1122,12 @@ async def main(_symbol):
         ms.Strategy.symbol = _symbol
         StrategyBase.symbol = _symbol
         # ms.Strategy.loop = loop
-        account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
+        if len(ms.EXCHANGE) > ms.ID_EXCHANGE:
+            account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
+        else:
+            print(f"ID_EXCHANGE = {ms.ID_EXCHANGE} not in list. Add new exchange into martin_binance/ms_cfg.toml"
+                  f" See readme 'Add new exchange'")
+            raise SystemExit(1)
         print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
         channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
         stub = api_pb2_grpc.MartinStub(channel)
@@ -1139,8 +1144,7 @@ async def main(_symbol):
             status_code = ex.code()
             # noinspection PyUnresolvedReferences
             print(f"Exception on register client: {status_code.name}, {ex.details()}")
-            # noinspection PyProtectedMember, PyUnresolvedReferences
-            os._exit(1)
+            raise SystemExit(1)
         else:
             client_id = client_id_msg.client_id
             exchange = client_id_msg.exchange

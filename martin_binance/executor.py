@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.5"
+__version__ = "1.2.5-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -629,6 +629,7 @@ class Strategy(StrategyBase):
         self.cycle_status = ()  # - Operational status for current cycle, orders count
         self.grid_update_started = None  # - Flag when grid update process started
         self.start_reverse_time = None  # -
+        self.last_ticker_update = 0  # -
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         # self.message_log('Start Init section')
@@ -700,29 +701,35 @@ class Strategy(StrategyBase):
                             raise SystemExit(1)
                 first_order_vlm = self.deposit_first * 1 * (1 - self.martin) / (1 - pow(self.martin, ORDER_Q))
                 amount_min = tcm.get_min_sell_amount(last_price)
-            # Calculate the recommended size of the first grid order depending on the step_size
-            step_size = tcm.get_minimal_amount_change(amount_min)
-            k_m = 1 - float(PROFIT_MAX) / 100
-            amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
-            if self.cycle_buy:
-                if amount_first_grid > 80 * self.deposit_second / 100:
-                    self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
-                                     f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
-                    if STANDALONE and self.first_run:
-                        raise SystemExit(1)
-                elif amount_first_grid > 20 * self.deposit_second / 100:
-                    self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather big"
-                                     f" for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
-            else:
-                amount_first_grid /= last_price
-                if amount_first_grid > 80 * self.deposit_first / 100:
-                    self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
-                                     f" a small deposit {self.deposit_first}", log_level=LogLevel.ERROR)
-                    if STANDALONE and self.first_run:
-                        raise SystemExit(1)
-                elif amount_first_grid > 20 * self.deposit_first / 100:
-                    self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather big"
-                                     f" for a small deposit {self.deposit_first}", log_level=LogLevel.WARNING)
+            if not GRID_ONLY and PROFIT_MAX < 100:
+                # Calculate the recommended size of the first grid order depending on the step_size
+                step_size = tcm.get_minimal_amount_change(amount_min)
+                k_m = 1 - float(PROFIT_MAX) / 100
+                amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
+                # For Bitfinex test accounts correction
+                if (amount_first_grid >= float(self.deposit_second) if self.cycle_buy else float(self.deposit_first) or
+                        amount_first_grid >= tcm.get_max_sell_amount(0)):
+                    amount_first_grid /= ORDER_Q
+                #
+                if self.cycle_buy:
+                    if amount_first_grid > 80 * self.deposit_second / 100:
+                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
+                                         f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
+                        if STANDALONE and self.first_run:
+                            raise SystemExit(1)
+                    elif amount_first_grid > 20 * self.deposit_second / 100:
+                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather"
+                                         f" big for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
+                else:
+                    amount_first_grid /= last_price
+                    if amount_first_grid > 80 * self.deposit_first / 100:
+                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
+                                         f" a small deposit {self.deposit_first}", log_level=LogLevel.ERROR)
+                        if STANDALONE and self.first_run:
+                            raise SystemExit(1)
+                    elif amount_first_grid > 20 * self.deposit_first / 100:
+                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather"
+                                         f" big for a small deposit {self.deposit_first}", log_level=LogLevel.WARNING)
             #
             if self.cycle_buy and first_order_vlm < tcm.get_min_buy_amount(last_price):
                 self.message_log(f"Total deposit {AMOUNT_SECOND}{self.s_currency}"
@@ -816,6 +823,7 @@ class Strategy(StrategyBase):
         if command or (STATUS_DELAY and (time.time() - self.status_time) / 60 > STATUS_DELAY):
             # Report current status
             last_price = self.get_buffered_ticker().last_price
+            ticker_update = int(time.time()) - self.last_ticker_update
             if self.cycle_time:
                 ct = str(datetime.utcnow() - self.cycle_time).rsplit('.')[0]
             else:
@@ -841,6 +849,7 @@ class Strategy(StrategyBase):
                                  f" {self.grid_hold['depo']}{currency} depo.\n"
                                  f"Available funds is {fund} {currency}\n"
                                  f"Last ticker price: {last_price}\n"
+                                 f"WSS status: {ticker_update}s\n"
                                  f"From start {ct}\n"
                                  f"Time difference: {time_diff} sec", tlg=True)
             else:
@@ -871,6 +880,7 @@ class Strategy(StrategyBase):
                                  f"Last ticker price: {last_price}\n"
                                  f"ver: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
                                  f"From start {ct}\n"
+                                 f"WSS status: {ticker_update}s\n"
                                  f"{'-   ***   ***   ***   -' if self.command == 'stop' else ''}\n"
                                  f"{'Waiting for end of cycle for manual action' if command else ''}",
                                  tlg=True)
@@ -2650,6 +2660,7 @@ class Strategy(StrategyBase):
     ##############################################################
     def on_new_ticker(self, ticker: Ticker) -> None:
         # print(f"on_new_ticker:ticker.last_price: {ticker.last_price}")
+        self.last_ticker_update = int(time.time())
         if (self.shift_grid_threshold and self.last_shift_time and time.time() - self.last_shift_time > SHIFT_GRID_DELAY
             and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
                  or
@@ -2946,6 +2957,7 @@ class Strategy(StrategyBase):
 
     def on_place_order_error_string(self, place_order_id: int, error: str) -> None:
         # Check all orders on exchange if exists required
+        self.message_log(f"On place order {place_order_id} error: {error}", LogLevel.ERROR, tlg=True)
         open_orders = self.get_buffered_open_orders(True)  # lgtm [py/call/wrong-arguments]
         order = None
         if self.orders_init.exist(place_order_id):
@@ -2955,9 +2967,10 @@ class Strategy(StrategyBase):
                 if o.buy == self.tp_order[0] and o.amount == self.tp_order[1] and o.price == self.tp_order[2]:
                     order = open_orders[k]
         if order:
+            self.message_log(f"Order {place_order_id} placed", tlg=True)
             self.on_place_order_success(place_order_id, order)
-        else:
-            self.message_log(f"On place order {place_order_id} error: {error}", LogLevel.ERROR, tlg=True)
+        elif 'FAILED_PRECONDITION' not in error:
+            self.message_log(f"Trying place order {place_order_id} one else time", tlg=True)
             if self.orders_init.exist(place_order_id):
                 _buy, _amount, _price = self.orders_init.get_by_id(place_order_id)
                 self.orders_hold.append(place_order_id, _buy, _amount, _price)
@@ -2967,6 +2980,12 @@ class Strategy(StrategyBase):
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
                 self.tp_error = True
+        else:
+            self.message_log(f"Order {place_order_id} can't be placed. Check it manually", LogLevel.ERROR, tlg=True)
+            if self.orders_init.exist(place_order_id):
+                self.orders_init.remove(place_order_id)
+            elif place_order_id == self.tp_wait_id:
+                self.tp_wait_id = None
 
     def on_cancel_order_success(self, order_id: int, canceled_order: Order) -> None:
         if self.orders_grid.exist(order_id):
