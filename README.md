@@ -46,6 +46,17 @@ Strategy logic realized at executor.py and trading parameters settings in the AP
 
 You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
 
+## Important notices
+* You cannot run multiple pairs with overlapping currencies on the same account!
+
+Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
+
+Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
+
+As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
+
+* See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
+
 ## Reference
 
 <a href="#trade-idea">Trade idea</a>
@@ -570,11 +581,17 @@ Use Telegram control function, described above.
 <p id="specific-ftx-requirements"></p>
 
 These comments relate to this strategy, perhaps for another algorithm these restrictions will not be significant.
-This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
+
+* This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
 profit order price, a giant gap is obtained between the first grid order and the take profit order.
 This is due to the large price change step and the large minimum order size.
-
 To get a Maker fee = 0% you need a stake 25 FTT. [Details here](https://help.ftx.com/hc/en-us/articles/360052410392). 
+
+* Have a small stock of assets for both currencies, over and above used for deposit. 0.1% of the deposit
+volume is enough. Otherwise, the exchange rejects the last grid order and the TP order, provided that there
+is an accurately available balance sheet.
+```[2022-08-27 04:17:26,560: ERROR] handle_errors.response.status >= 400: {'success': False, 'error': 'Not enough balances'}```
+*FTX support rejected this issue.*
 
 
 ## For developers

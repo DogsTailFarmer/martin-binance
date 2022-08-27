@@ -1,9 +1,11 @@
-## v1.2.6 2022-mm-dd
+## v1.2.6 2022-08-27
 ### Fixed
 * [Incomplete account setup](DogsTailFarmer/martin-binance#17)
 
 ### Update
 * up to Python 3.10.6
+* 1.2.5-3 update on_place_order_error_string() to avoid the cyclical sending of an order rejected by the exchange
+* [Update readme - limit for several pair with intersecting coin](DogsTailFarmer/martin-binance#18)
 
 ## v1.2.5 2022-08-20
 ### Fixed
