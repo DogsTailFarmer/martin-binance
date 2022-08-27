@@ -1,3 +1,10 @@
+## v1.2.6 2022-mm-dd
+### Fixed
+* [Incomplete account setup](DogsTailFarmer/martin-binance#17)
+
+### Update
+* up to Python 3.10.6
+
 ## v1.2.5 2022-08-20
 ### Fixed
 * if not FEE_IN_PAIR and Reverse: underreporting of income as a result of excess fee accrual
@@ -15,12 +22,12 @@
 
 ## v1.2.3 - 2022-08-14
 ### Fixed
-* [No status reply #11](https://github.com/DogsTailFarmer/martin-binance/issues/11#issue-1328210503)
-* [Stopped command in last state when low RAM #14](https://github.com/DogsTailFarmer/martin-binance/issues/14#issue-1333292978)
+* [No status reply](DogsTailFarmer/martin-binance#11)
+* [Stopped command in last state when low RAM](DogsTailFarmer/martin-binance#14)
 
 ### Added for new features
 * Protect against OS failures when saving a state file
-* [No help it Telegram bot #8:](https://github.com/DogsTailFarmer/martin-binance/issues/8#issue-1315732905)
+* [No help it Telegram bot](DogsTailFarmer/martin-binance#8)
 For Telegram bot set up command menu and online help
 
 ### Update
@@ -30,7 +37,7 @@ For Telegram bot set up command menu and online help
 
 ## v1.2.2 - 2022-08-08
 ### Update
-* Add \n on each input request (#13)
+* [Add \n on each input request](DogsTailFarmer/martin-binance#13)
 * Handling HTTP 429 error for coinmarketcap
 
 ## v1.2.1 - 2022-08-07

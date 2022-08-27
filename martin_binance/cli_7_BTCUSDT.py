@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.3"
+__version__ = "1.2.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -143,7 +143,7 @@ if __name__ == "__main__" and STANDALONE:
         pass
     finally:
         try:
-            loop.run_until_complete(ask_exit(loop))
+            loop.run_until_complete(ask_exit())
         except asyncio.CancelledError:
             pass
         except Exception as _err:

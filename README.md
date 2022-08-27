@@ -54,6 +54,8 @@ You can modify them for your needs. See <a href="#for-developers">For developers
 
 <a href="#quick-start">Quick start</a>
 
+<a href="#add-new-exchange-account">Add new exchange account</a>
+
 <a href="#tmux">Terminal Tmux for STANDALONE mode</a>
 
 <a href="#how-its-work">How it's work</a>
@@ -134,7 +136,7 @@ pip install martin-binance
 
 Before update save configurations file:
 * ```martin_binance/ms_cfg.toml```
-* ```exchanges_wrapper/exch_srv.py```
+* ```exchanges_wrapper/exch_srv_cfg.toml```
 
 ```console
 pip install martin-binance --upgrade
@@ -154,12 +156,14 @@ After update for restore config use saved files
 #### Start server
 * Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
 * Run ```exchanges_wrapper/exch_srv.py``` in terminal window
+
 #### Start client
 * Run ```martin_binance/cli_7_BTCUSDT.py``` in other terminal window
 
 Strategy is started.
 
-Setting trade pair. You must set pair name in three places the same (yes, it is crooked, but so far):
+#### Setting trade pair
+You must set pair name in three places the same (yes, it is crooked, but so far):
 * base setting at bottom of the ```martin_binance/cli_X_AAABBB.py``` in "__main__" section, SYMBOL = 'AAABBB'
 * the name of ```cli_X_AAABBB.py``` must match
 * the name of pane in <a href="#tmux">Tmux terminal window</a>
@@ -201,8 +205,18 @@ to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7
 
 Strategy is started.
 
-Setting trade pair. The selection of the pair is determined by the window of the terminal in which the strategy is
-launched. The "__ main __" section settings are ignored.
+#### Setting trade pair
+The selection of the pair is determined by the window of the terminal in which the strategy is launched.
+The "__ main __" section settings are ignored.
+
+### Add new exchange account
+<p id="add-new-exchange-account"></p>
+Adding an account is in two parts
+
+* For server, it is exchanges_wrapper/exch_srv_cfg.toml, where you place API key and *account name*
+* For client, it's martin_binance/ms_cfg.toml, where you add *account name* into exchange list
+
+The *account name* _must_ be identically for account.
 
 ## Terminal Tmux (Linux)
 <p id="tmux"></p>
