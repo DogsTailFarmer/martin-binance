@@ -149,10 +149,12 @@ Before update save configurations file:
 * ```martin_binance/ms_cfg.toml```
 * ```exchanges_wrapper/exch_srv_cfg.toml```
 
+Also save ```martin_binance/last_state``` folder after manually stop strategy.
+
 ```console
 pip install martin-binance --upgrade
 ```
-After update for restore config use saved files
+After update for restore config use saved files. Before restart replace ```martin_binance/last_state``` from saved.
 
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
