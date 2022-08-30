@@ -10,3 +10,4 @@ simplejson==3.17.6
 toml>=0.10.2
 libtmux==0.14.0
 colorama==0.4.5
+prometheus-client==0.14.1
