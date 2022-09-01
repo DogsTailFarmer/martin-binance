@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-1"
+__version__ = "1.2.6-7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1800,10 +1800,10 @@ class Strategy(StrategyBase):
         self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f}, base_price: {base_price},"
                          f" reverse_target_amount: {reverse_target_amount}, amount_min: {amount_min},"
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
-        if additional_grid:
+        if additional_grid or grid_update:
             grid_min = 1
         else:
-            if (FEE_FTX and not self.reverse) or grid_update:
+            if FEE_FTX and not self.reverse:
                 grid_min = GRID_MAX_COUNT
             else:
                 grid_min = ORDER_Q

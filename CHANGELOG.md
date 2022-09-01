@@ -1,3 +1,10 @@
+## v1.2.6-7 2022-09-01
+### Fixed
+* Incorrect settings for max grid orders count at grid update (Filter failure: MIN_NOTIONAL)
+
+### Update
+* requirements.txt exchanges-wrapper>=1.2.4-5
+
 ## v1.2.6 2022-08-27
 ### Fixed
 * [Incomplete account setup](DogsTailFarmer/martin-binance#17)
