@@ -19,6 +19,7 @@ import os
 import time
 from decimal import Decimal
 import sqlite3
+from pathlib import Path
 
 # noinspection PyPackageRequirements
 import grpc
@@ -47,6 +48,7 @@ TRADES_LIST_LIMIT = 100
 HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
+LAST_STATE = None
 logger = logging.getLogger('logger')
 color_init()
 
@@ -472,9 +474,9 @@ def heartbeat():
         last_state['ms_start_time_ms'] = json.dumps(ms.Strategy.start_time_ms)
         last_state['ms.orders'] = jsonpickle.encode(ms.Strategy.orders)
         # print(f"heartbeat.last_state: {last_state}")
-        if os.path.exists(ms.FILE_LAST_STATE):
-            os.rename(ms.FILE_LAST_STATE, f"{ms.FILE_LAST_STATE}.prev")
-        with open(ms.FILE_LAST_STATE, 'w') as outfile:
+        if LAST_STATE.exists():
+            LAST_STATE.replace(LAST_STATE.with_suffix('.prev'))
+        with LAST_STATE.open(mode='w') as outfile:
             json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
         time.sleep(HEARTBEAT)
 
@@ -623,12 +625,10 @@ async def ask_exit():
         except Exception as _err:
             print(f"ask_exit.strategy.stop: {_err}")
         ms.Strategy.strategy = None
-        if os.path.exists(ms.FILE_LAST_STATE):
+        if LAST_STATE.exists():
             answer = input('Save current state? y/n:\n')
             if answer.lower() != 'y':
-                if os.path.exists(ms.FILE_LAST_STATE + '.bak'):
-                    os.remove(ms.FILE_LAST_STATE + '.bak')
-                os.rename(ms.FILE_LAST_STATE, ms.FILE_LAST_STATE + '.bak')
+                LAST_STATE.replace(LAST_STATE.with_suffix('.bak'))
                 print('Current state cleared')
             else:
                 print('OK')
@@ -1092,11 +1092,11 @@ async def on_order_book_update(_stub, _client_id, _symbol):
 
 
 def load_last_state() -> {}:
-    def load_file(name) -> {}:
+    def load_file(name: Path) -> {}:
         _res = {}
-        if os.path.exists(name):
+        if name.exists():
             try:
-                with open(name) as state_file:
+                with name.open() as state_file:
                     _last_state = json.load(state_file)
             except json.JSONDecodeError as er:
                 print(f"Exception on decode last state file: {er}")
@@ -1106,18 +1106,20 @@ def load_last_state() -> {}:
         return _res
 
     res = {}
-    if os.path.exists(ms.FILE_LAST_STATE):
-        res = load_file(ms.FILE_LAST_STATE)
+    if LAST_STATE.exists():
+        res = load_file(LAST_STATE)
         if not res:
             print("Can't load last state, try load previous saved state")
-            res = load_file(f"{ms.FILE_LAST_STATE}.prev")
+            res = load_file(LAST_STATE.with_suffix('.prev'))
         if res:
-            with open(ms.FILE_LAST_STATE + '.bak', 'w') as outfile:
+            with LAST_STATE.with_suffix('.bak').open(mode='w') as outfile:
                 json.dump(res, outfile, sort_keys=True, indent=4, ensure_ascii=False)
     return res
 
 
 async def main(_symbol):
+    global LAST_STATE
+    LAST_STATE = Path(ms.FILE_LAST_STATE)
     try:
         ms.Strategy.symbol = _symbol
         StrategyBase.symbol = _symbol
