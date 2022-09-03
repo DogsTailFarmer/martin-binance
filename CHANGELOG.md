@@ -1,3 +1,7 @@
+## v1.2.6-8-hotfix 2022-09-03
+### Fixed
+* [File exist error on Windows 11](https://github.com/DogsTailFarmer/martin-binance/issues/19#issue-1360296628)
+
 ## v1.2.6-7 2022-09-01
 ### Fixed
 * Incorrect settings for max grid orders count at grid update (Filter failure: MIN_NOTIONAL)
@@ -7,12 +11,12 @@
 
 ## v1.2.6 2022-08-27
 ### Fixed
-* [Incomplete account setup](DogsTailFarmer/martin-binance#17)
+* [Incomplete account setup](https://github.com/DogsTailFarmer/martin-binance/issues/17#issue-1347470971)
 
 ### Update
 * up to Python 3.10.6
 * 1.2.5-3 update on_place_order_error_string() to avoid the cyclical sending of an order rejected by the exchange
-* [Update readme - limit for several pair with intersecting coin](DogsTailFarmer/martin-binance#18)
+* [Update readme - limit for several pair with intersecting coin](https://github.com/DogsTailFarmer/martin-binance/issues/18#issue-1347575119)
 
 ## v1.2.5 2022-08-20
 ### Fixed
@@ -31,12 +35,12 @@
 
 ## v1.2.3 - 2022-08-14
 ### Fixed
-* [No status reply](DogsTailFarmer/martin-binance#11)
-* [Stopped command in last state when low RAM](DogsTailFarmer/martin-binance#14)
+* [No status reply](https://github.com/DogsTailFarmer/martin-binance/issues/11#issue-1328210503)
+* [Stopped command in last state when low RAM](https://github.com/DogsTailFarmer/martin-binance/issues/14#issue-1333292978)
 
 ### Added for new features
 * Protect against OS failures when saving a state file
-* [No help it Telegram bot](DogsTailFarmer/martin-binance#8)
+* [No help it Telegram bot](https://github.com/DogsTailFarmer/martin-binance/issues/8#issue-1315732905)
 For Telegram bot set up command menu and online help
 
 ### Update
@@ -46,7 +50,7 @@ For Telegram bot set up command menu and online help
 
 ## v1.2.2 - 2022-08-08
 ### Update
-* [Add \n on each input request](DogsTailFarmer/martin-binance#13)
+* Add \n on each input request
 * Handling HTTP 429 error for coinmarketcap
 
 ## v1.2.1 - 2022-08-07
