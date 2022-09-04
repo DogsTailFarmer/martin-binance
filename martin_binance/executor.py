@@ -10,25 +10,9 @@ __version__ = "1.2.6-7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
-
-try:
-    from margin_wrapper import *  # lgtm [py/polluting-import]
-    from margin_wrapper import __version__ as msb_ver
-except ImportError:
-    from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
-    from typing import Dict, List
-    import time
-    import math
-    import simplejson as json
-    import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
-    msb_ver = str()
-    STANDALONE = False
-else:
-    STANDALONE = True
-
+import platform
 import gc
 import psutil
-import sqlite3
 import statistics
 from datetime import datetime
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
@@ -37,6 +21,35 @@ import queue
 import requests
 from requests.adapters import HTTPAdapter, Retry
 import traceback
+#
+try:
+    from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
+    from martin_binance.margin_wrapper import __version__ as msb_ver
+    from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH, DB_FILE
+except ImportError:
+    from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
+    from typing import Dict, List
+    import os
+    import sqlite3
+    import time
+    import math
+    import simplejson as json
+    import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
+    msb_ver = str()
+    STANDALONE = False
+    if platform.system() == 'Darwin':
+        user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
+        WORK_PATH = os.path.join("Users", user, ".margin")
+    else:
+        WORK_PATH = "."
+
+    CONFIG_FILE = os.path.join(WORK_PATH, "ms_cfg.toml")
+    LOG_PATH = os.path.join(WORK_PATH, "log")
+    LAST_STATE_PATH = os.path.join(WORK_PATH, "last_state")
+    # DB_FILE = os.path.join(WORK_PATH, "funds_rate.db")
+    DB_FILE = "funds_rate.db"
+else:
+    STANDALONE = True
 
 # region SetParameters
 SYMBOL = str()
@@ -95,11 +108,7 @@ REVERSE_STOP = bool()
 HEAD_VERSION = str()
 LOAD_LAST_STATE = int()
 # Path and files name
-DB_FILE = 'funds_rate.db'
-LOG_PATH = str()
-WORK_PATH = str()
-LAST_STATE_PATH = str()
-FILE_LAST_STATE = str()
+LAST_STATE_FILE = str()
 VPS_NAME = str()
 # Telegram
 TELEGRAM_URL = str()
@@ -197,7 +206,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
         print(f"Set command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
               f"restart Telegram bot by /start command for update it")
     #
-    connection_control = sqlite3.connect(WORK_PATH + DB_FILE)
+    connection_control = sqlite3.connect(DB_FILE)
     offset_id = None
     while True:
         try:
@@ -234,7 +243,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
 
 
 def db_management() -> None:
-    conn = sqlite3.connect(WORK_PATH + DB_FILE, check_same_thread=False)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     conn.execute("CREATE TABLE IF NOT EXISTS t_orders (\
                   id_exchange   INTEGER REFERENCES t_exchange (id_exchange)\
                                     ON DELETE RESTRICT ON UPDATE CASCADE NOT NULL,\
@@ -280,7 +289,7 @@ def db_management() -> None:
 
 
 def save_to_db(queue_to_db) -> None:
-    connection_analytic = sqlite3.connect(WORK_PATH + DB_FILE, check_same_thread=False, timeout=10)
+    connection_analytic = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
     # Save data to .db
     data = None
     result = True
@@ -1320,10 +1329,10 @@ class Strategy(StrategyBase):
                              f"Second: {self.sum_profit_second}\n"
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
         mem = psutil.virtual_memory().percent
-        if mem > 80:
+        if 0:  # mem > 80:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
             self.command = 'end'
-        elif mem > 70:
+        elif 0:  # mem > 70:
             self.message_log(f"For {VPS_NAME} low memory availability, stop after end of cycle", tlg=True)
             self.command = 'stop'
         if self.command == 'end' or (self.command == 'stop' and
@@ -2059,7 +2068,7 @@ class Strategy(StrategyBase):
 
     def start_process(self):
         # Init analytic
-        self.connection_analytic = self.connection_analytic or sqlite3.connect(WORK_PATH + DB_FILE,
+        self.connection_analytic = self.connection_analytic or sqlite3.connect(DB_FILE,
                                                                                check_same_thread=False,
                                                                                timeout=10)
         # Create processes for save to .db and send Telegram message

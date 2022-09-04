@@ -32,7 +32,7 @@ from exchanges_wrapper.definitions import Interval
 from exchanges_wrapper.events import OrderUpdateWrapper
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
-import executor as ms
+from martin_binance import executor as ms
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -1119,7 +1119,7 @@ def load_last_state() -> {}:
 
 async def main(_symbol):
     global LAST_STATE
-    LAST_STATE = Path(ms.FILE_LAST_STATE)
+    LAST_STATE = Path(ms.LAST_STATE_FILE)
     try:
         ms.Strategy.symbol = _symbol
         StrategyBase.symbol = _symbol
