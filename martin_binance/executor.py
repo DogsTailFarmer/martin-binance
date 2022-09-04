@@ -21,12 +21,12 @@ import queue
 import requests
 from requests.adapters import HTTPAdapter, Retry
 import traceback
-#
-try:
+# noinspection PyUnresolvedReferences
+from martin_binance import Path, STANDALONE, WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH, DB_FILE
+if STANDALONE:
     from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
     from martin_binance.margin_wrapper import __version__ as msb_ver
-    from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH, DB_FILE
-except ImportError:
+else:
     from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
     from typing import Dict, List
     import os
@@ -34,22 +34,21 @@ except ImportError:
     import time
     import math
     import simplejson as json
-    import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
+    # import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
     msb_ver = str()
-    STANDALONE = False
     if platform.system() == 'Darwin':
         user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
-        WORK_PATH = os.path.join("Users", user, ".margin")
+        WORK_PATH = Path("Users", user, ".margin")
     else:
-        WORK_PATH = "."
+        WORK_PATH = Path().resolve()
+    CONFIG_FILE = Path(WORK_PATH, "ms_cfg.toml")
+    DB_FILE = Path(WORK_PATH, "funds_rate.db")
+    LOG_PATH = None
+    LAST_STATE_PATH = None
 
-    CONFIG_FILE = os.path.join(WORK_PATH, "ms_cfg.toml")
-    LOG_PATH = os.path.join(WORK_PATH, "log")
-    LAST_STATE_PATH = os.path.join(WORK_PATH, "last_state")
-    # DB_FILE = os.path.join(WORK_PATH, "funds_rate.db")
-    DB_FILE = "funds_rate.db"
-else:
-    STANDALONE = True
+
+print(f"CONFIG_FILE: {CONFIG_FILE}")
+print(f"DB_FILE: {DB_FILE}")
 
 # region SetParameters
 SYMBOL = str()

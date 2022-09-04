@@ -90,9 +90,8 @@ ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 #                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
 config = None
-config_file = str(ex.CONFIG_FILE)
-if os.path.isfile(config_file):
-    config = toml.load(config_file)
+if ex.CONFIG_FILE.exists():
+    config = toml.load(str(ex.CONFIG_FILE))
 ex.HEAD_VERSION = __version__
 ex.EXCHANGE = config.get('exchange')
 ex.VPS_NAME = config.get('Exporter').get('vps_name')
@@ -111,8 +110,8 @@ if __name__ == "__main__" and STANDALONE:
     # For autoload last state
     ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
     #
-    log_file = os.path.join(ex.LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
-    ex.LAST_STATE_FILE = os.path.join(ex.LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
+    log_file = Path(ex.LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
+    ex.LAST_STATE_FILE = Path(ex.LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
     #
     logger = logging.getLogger('logger')
     logger.setLevel(logging.DEBUG)
