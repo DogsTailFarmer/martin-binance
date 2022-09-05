@@ -6,11 +6,12 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-13"
+__version__ = "1.2.6-14"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import asyncio
+
 from colorama import init as color_init
 import simplejson as json
 import logging
@@ -20,6 +21,7 @@ import time
 from decimal import Decimal
 import sqlite3
 from pathlib import Path
+import random
 
 # noinspection PyPackageRequirements
 import grpc
@@ -33,6 +35,7 @@ from exchanges_wrapper.events import OrderUpdateWrapper
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
 from martin_binance import executor as ms
+from martin_binance.client import Client
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -1119,7 +1122,7 @@ def load_last_state() -> {}:
     return res
 
 
-async def main(_symbol):
+async def main_(_symbol):
     global LAST_STATE
     LAST_STATE = ms.LAST_STATE_FILE
     try:
@@ -1274,6 +1277,46 @@ async def main(_symbol):
             m_strategy.start()
         if restored:
             loop.run_in_executor(None, heartbeat)
+    except (KeyboardInterrupt, SystemExit):
+        # noinspection PyProtectedMember, PyUnresolvedReferences
+        os._exit(1)
+
+
+async def main(_symbol):
+    try:
+        ms.Strategy.symbol = _symbol
+        StrategyBase.symbol = _symbol
+        if len(ms.EXCHANGE) > ms.ID_EXCHANGE:
+            account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
+        else:
+            print(f"ID_EXCHANGE = {ms.ID_EXCHANGE} not in list. Add new exchange into martin_binance/ms_cfg.toml"
+                  f" See readme 'Add new exchange'")
+            raise SystemExit(1)
+        print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
+
+        session = Client(channel_options=CHANNEL_OPTIONS,
+                         account_name=account_name,
+                         rate_limiter=StrategyBase.rate_limiter)
+
+        await session.get_client()
+
+        client_id = session.client.client_id
+        exchange = session.client.exchange
+        print(f"main.exchange: {exchange}")
+        print(f"main.client_id: {client_id}")
+        print(f"main.srv_version: {session.client.srv_version}")
+
+        ms.Strategy.exchange = exchange
+        ms.Strategy.client_id = client_id
+
+        while True:
+            print('send request')
+            try:
+                await session.send_request(session.stub.FetchServerTime, api_pb2.OpenClientConnectionId)
+            except Exception as ex:
+                print(f"main.ex: {ex}")
+            await asyncio.sleep(3)
+
     except (KeyboardInterrupt, SystemExit):
         # noinspection PyProtectedMember, PyUnresolvedReferences
         os._exit(1)
