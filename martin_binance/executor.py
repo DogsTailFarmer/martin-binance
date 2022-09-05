@@ -21,7 +21,6 @@ except ImportError:
     import math
     import simplejson as json
     import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
-
     msb_ver = str()
     STANDALONE = False
 else:
@@ -108,8 +107,6 @@ TOKEN = str()
 CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
-
-
 # endregion
 
 
@@ -493,7 +490,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         slope = dx(fn, x, delta, **kwargs)
         # print(f"slope: {slope}")
         if slope != 0.0:
-            x -= err / slope
+            x -= err/slope
             # print(f"x: {x}")
         else:
             delta *= 10
@@ -759,7 +756,7 @@ class Strategy(StrategyBase):
                     self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                     if STANDALONE:
                         raise SystemExit(1)
-                first_order_vlm = self.deposit_second * 1 * (1 - self.martin) / (1 - self.martin ** ORDER_Q)
+                first_order_vlm = self.deposit_second * 1 * (1 - self.martin) / (1 - self.martin**ORDER_Q)
                 first_order_vlm /= self.avg_rate
                 amount_min = tcm.get_min_buy_amount(last_price)
             else:
@@ -778,8 +775,8 @@ class Strategy(StrategyBase):
                 k_m = 1 - float(PROFIT_MAX) / 100
                 amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
                 # For Bitfinex test accounts correction
-                if (amount_first_grid >= float(self.deposit_second) if self.cycle_buy else float(
-                        self.deposit_first) or amount_first_grid >= tcm.get_max_sell_amount(0)):
+                if (amount_first_grid >= float(self.deposit_second) if self.cycle_buy else float(self.deposit_first) or
+                        amount_first_grid >= tcm.get_max_sell_amount(0)):
                     amount_first_grid /= ORDER_Q
                 #
                 if self.cycle_buy:
@@ -1574,11 +1571,11 @@ class Strategy(StrategyBase):
                     amount = depo
                     rounding = ROUND_FLOOR
                 elif i == 0:
-                    amount_0 = depo * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
+                    amount_0 = depo * self.martin**i * (self.martin - 1) / (self.martin**self.order_q - 1)
                     amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
                     depo_i = depo - amount
                 elif i < self.order_q - 1:
-                    amount = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
+                    amount = depo_i * self.martin**i * (self.martin - 1) / (self.martin**self.order_q - 1)
                 else:
                     amount = amount_last_grid
                     rounding = ROUND_FLOOR
@@ -1824,7 +1821,7 @@ class Strategy(StrategyBase):
             tlg = True
             color = Style.B_RED
         color = color if STANDALONE else 0
-        color_msg = color + msg + Style.RESET if color else msg
+        color_msg = color+msg+Style.RESET if color else msg
         if log_level not in LOG_LEVEL_NO_PRINT:
             print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
         write_log(log_level, msg)
@@ -2522,7 +2519,7 @@ class Strategy(StrategyBase):
                         reverse_target_amount = self.reverse_target_amount * _amount_f / self.reverse_init_amount
                     else:
                         reverse_target_amount = _amount_f + (FEE_MAKER * 2 + PROFIT) * _amount_f / 100
-                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin ** GRID_MAX_COUNT)
+                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin**GRID_MAX_COUNT)
                     first_order_vlm /= self.avg_rate
                 else:
                     min_trade_amount = tcm.get_min_sell_amount(float(self.avg_rate))
@@ -2531,7 +2528,7 @@ class Strategy(StrategyBase):
                         reverse_target_amount = self.reverse_target_amount * _amount_s / self.reverse_init_amount
                     else:
                         reverse_target_amount = _amount_s + (FEE_MAKER * 2 + PROFIT) * _amount_s / 100
-                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin ** GRID_MAX_COUNT)
+                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin**GRID_MAX_COUNT)
                 self.message_log(f"Min trade amount is: {min_trade_amount}")
                 self.debug_output()
                 self.message_log(f"For additional grid amount: {amount},"
@@ -2733,9 +2730,9 @@ class Strategy(StrategyBase):
         # print(f"on_new_ticker:ticker.last_price: {ticker.last_price}")
         self.last_ticker_update = int(time.time())
         if (self.shift_grid_threshold and self.last_shift_time and time.time() - self.last_shift_time > SHIFT_GRID_DELAY
-                and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
-                     or
-                     (not self.cycle_buy and ticker.last_price <= self.shift_grid_threshold))):
+            and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
+                 or
+                 (not self.cycle_buy and ticker.last_price <= self.shift_grid_threshold))):
             self.message_log('Shift grid', color=Style.B_WHITE)
             self.shift_grid_threshold = None
             self.start_after_shift = True
