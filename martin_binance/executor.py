@@ -34,7 +34,6 @@ else:
     import time
     import math
     import simplejson as json
-    # import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
     msb_ver = str()
     if platform.system() == 'Darwin':
         user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
@@ -1328,10 +1327,10 @@ class Strategy(StrategyBase):
                              f"Second: {self.sum_profit_second}\n"
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
         mem = psutil.virtual_memory().percent
-        if 0:  # mem > 80:
+        if mem > 80:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
             self.command = 'end'
-        elif 0:  # mem > 70:
+        elif mem > 70:
             self.message_log(f"For {VPS_NAME} low memory availability, stop after end of cycle", tlg=True)
             self.command = 'stop'
         if self.command == 'end' or (self.command == 'stop' and
