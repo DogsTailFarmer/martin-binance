@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-7"
+__version__ = "1.2.6-13"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -44,7 +44,6 @@ else:
     DB_FILE = Path(WORK_PATH, "funds_rate.db")
     LOG_PATH = None
     LAST_STATE_PATH = None
-
 
 print(f"CONFIG_FILE: {CONFIG_FILE}")
 print(f"DB_FILE: {DB_FILE}")
@@ -106,7 +105,7 @@ REVERSE_STOP = bool()
 HEAD_VERSION = str()
 LOAD_LAST_STATE = int()
 # Path and files name
-LAST_STATE_FILE = str()
+LAST_STATE_FILE: Path
 VPS_NAME = str()
 # Telegram
 TELEGRAM_URL = str()
@@ -707,7 +706,7 @@ class Strategy(StrategyBase):
         self.last_ticker_update = 0  # -
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
-        # self.message_log('Start Init section')
+        self.message_log('Start Init section')
         if Decimal('0.0') > PROFIT_REVERSE > Decimal('0.75'):
             init_params_error = 'PROFIT_REVERSE'
         elif FEE_SECOND and FEE_FTX:

@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6"
+__version__ = "1.2.6-13"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -48,7 +48,7 @@ TRADES_LIST_LIMIT = 100
 HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
-LAST_STATE = None
+LAST_STATE: Path = None
 logger = logging.getLogger('logger')
 color_init()
 
@@ -103,6 +103,7 @@ def convert_from_minute(m: int) -> str:
 class StrategyBase:
     exchange = str()
     symbol = str()
+    channel = grpc.Channel
     stub = api_pb2_grpc.MartinStub
     client_id = int()
     strategy = None
@@ -624,6 +625,7 @@ async def ask_exit():
             ms.Strategy.strategy.stop()
         except Exception as _err:
             print(f"ask_exit.strategy.stop: {_err}")
+        await ms.Strategy.channel.close()
         ms.Strategy.strategy = None
         if LAST_STATE.exists():
             answer = input('Save current state? y/n:\n')
@@ -1119,11 +1121,10 @@ def load_last_state() -> {}:
 
 async def main(_symbol):
     global LAST_STATE
-    LAST_STATE = Path(ms.LAST_STATE_FILE)
+    LAST_STATE = ms.LAST_STATE_FILE
     try:
         ms.Strategy.symbol = _symbol
         StrategyBase.symbol = _symbol
-        # ms.Strategy.loop = loop
         if len(ms.EXCHANGE) > ms.ID_EXCHANGE:
             account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
         else:
@@ -1132,6 +1133,7 @@ async def main(_symbol):
             raise SystemExit(1)
         print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
         channel = grpc.aio.insecure_channel(target='localhost:50051', options=CHANNEL_OPTIONS)
+        ms.Strategy.channel = channel
         stub = api_pb2_grpc.MartinStub(channel)
         client_id = None
         exchange = None
