@@ -116,6 +116,7 @@ for tlg in telegram:
     if ex.ID_EXCHANGE in tlg.get('id_exchange'):
         ex.TOKEN = tlg.get('token')
         ex.CHANNEL_ID = tlg.get('channel_id')
+        ex.INLINE_BOT = tlg.get('inline')
         break
 
 

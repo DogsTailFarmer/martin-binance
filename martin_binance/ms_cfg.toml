@@ -38,18 +38,22 @@ last_state_path = "./last_state/"
 id_exchange = [1, 7] # 'Binance', 'Demo - Binance'
 token = "********** Place Token for Telegram bot there ***********"
 channel_id = "*** Place channel_id there ***"
+inline = true
 
 [[Telegram]]
 id_exchange = [0, 3] # 'Demo-OKEX', 'OKEX'
 token = "********** Place Token for Telegram bot there ***********"
 channel_id = "*** Place channel_id there ***"
+inline = false
 
 [[Telegram]]
 id_exchange = [8, 9] # "FTX"
 token = "********** Place Token for Telegram bot there ***********"
 channel_id = "*** Place channel_id there ***"
+inline = false
 
 [[Telegram]]
 id_exchange = [2, 10] # "Bitfinex"
 token = "********** Place Token for Telegram bot there ***********"
 channel_id = "*** Place channel_id there ***"
+inline = false
