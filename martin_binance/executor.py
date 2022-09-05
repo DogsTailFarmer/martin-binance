@@ -21,6 +21,7 @@ except ImportError:
     import math
     import simplejson as json
     import charset_normalizer  # lgtm [py/unused-import] skipcq: PY-W2000
+
     msb_ver = str()
     STANDALONE = False
 else:
@@ -106,6 +107,9 @@ TELEGRAM_URL = str()
 TOKEN = str()
 CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
+INLINE_BOT = True
+
+
 # endregion
 
 
@@ -131,7 +135,6 @@ class Style:
 
 
 def telegram(queue_to_tlg, _bot_id) -> None:
-
     url = TELEGRAM_URL
     token = TOKEN
     channel_id = CHANNEL_ID
@@ -141,7 +144,21 @@ def telegram(queue_to_tlg, _bot_id) -> None:
     retries = Retry(total=5, backoff_factor=1, status_forcelist=[101, 111, 502, 503, 504])
     s.mount('https://', HTTPAdapter(max_retries=retries))
 
-    def requests_post(_method, _data, session):
+    def get_keyboard_markup():
+        return json.dumps({
+            "inline_keyboard": [
+                [
+                    {'text': 'status', 'callback_data': 'status_callback'},
+                    {'text': 'stop', 'callback_data': 'stop_callback'},
+                    {'text': 'end', 'callback_data': 'end_callback'}
+                ]
+            ]})
+
+    def requests_post(_method, _data, session, inline_buttons=False):
+        if INLINE_BOT and inline_buttons:
+            keyboard = get_keyboard_markup()
+            _data['reply_markup'] = keyboard
+
         _res = None
         try:
             _res = session.post(_method, data=_data)
@@ -151,37 +168,105 @@ def telegram(queue_to_tlg, _bot_id) -> None:
             print(f"Telegram: {_exc}")
         return _res
 
+    def parse_query(update_inner):
+        update_id = update_inner.get('update_id')
+        query = update_inner.get('callback_query')
+        from_id = query.get('from').get('id')
+
+        if from_id != int(channel_id):
+            return None
+
+        message = query.get('message')
+        message_id = message.get('message_id')
+        query_data = query.get('data')
+        reply_to_message = message.get('text')
+
+        command = None
+        if query_data == 'status_callback':
+            command = 'status'
+        elif query_data == 'stop_callback':
+            command = 'stop'
+        elif query_data == 'end_callback':
+            command = 'end'
+
+        requests_post(url + '/answerCallbackQuery', {'callback_query_id': query.get('id')}, s)
+
+        return {
+            'update_id': update_id,
+            'message_id': message_id,
+            'text_in': command,
+            'reply_to_message': reply_to_message
+        }
+
+    def parse_command(update_inner):
+        update_id = update_inner.get('update_id')
+        message = update_inner.get('message')
+        from_id = message.get('from').get('id')
+        if from_id != int(channel_id):
+            return None
+
+        message_id = message.get('message_id')
+        text_in = update_inner.get('message').get('text')
+
+        try:
+            reply_to_message = message.get('reply_to_message').get('text')
+        except AttributeError:
+            reply_to_message = None
+            _text = "The command must be a response to any message from a specific strategy," \
+                    " use Reply + Menu combination"
+            requests_post(method, _data={'chat_id': channel_id, 'text': _text}, session=s)
+
+        return {
+            'update_id': update_id,
+            'message_id': message_id,
+            'text_in': text_in,
+            'reply_to_message': reply_to_message
+        }
+
     def telegram_get(offset=None) -> []:
         command_list = []
         _method = url + '/getUpdates'
         _res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
-        if _res and _res.status_code == 200:
-            __result = _res.json().get('result')
-            # print(f"telegram_get.result: offset: {offset}, {__result}")
-            message_id = None
-            text_in = None
-            reply_to_message = None
-            for i in __result:
-                update_id = i.get('update_id')
-                message = i.get('message')
-                if message:
-                    from_id = message.get('from').get('id')
-                    if from_id == int(channel_id):
-                        message_id = message.get('message_id')
-                        text_in = i.get('message').get('text')
-                        try:
-                            reply_to_message = i.get('message').get('reply_to_message').get('text')
-                        except AttributeError:
-                            reply_to_message = None
-                            _text = "The command must be a response to any message from a specific strategy," \
-                                    " use Reply + Menu combination"
-                            requests_post(method, _data={'chat_id': channel_id, 'text': _text}, session=s)
-                command_list.append({'update_id': update_id, 'message_id': message_id,
-                                     'text_in': text_in, 'reply_to_message': reply_to_message})
+
+        if not _res or _res.status_code != 200:
+            return command_list
+
+        __result = _res.json().get('result')
+        for result_in in __result:
+            parsed = None
+            if result_in.get('message') is not None:
+                parsed = parse_command(result_in)
+            if result_in.get('callback_query') is not None:
+                parsed = parse_query(result_in)
+            if parsed:
+                command_list.append(parsed)
+
         return command_list
 
+    def process_update(update_inner):
+        reply = update_inner.get('reply_to_message')
+
+        if not reply:
+            return
+
+        in_bot_id = reply.split('.')[0]
+        if in_bot_id != _bot_id:
+            return
+
+        try:
+            msg_in = str(update_inner['text_in']).lower().strip().replace('/', '')
+            connection_control.execute('insert into t_control values(?,?,?,?)',
+                                       (update_inner['message_id'], msg_in, in_bot_id, None))
+            connection_control.commit()
+        except sqlite3.Error as ex:
+            print(f"telegram: insert into t_control: {ex}")
+        else:
+            # Send receipt
+            post_text = f"Received '{msg_in}' command, OK"
+            requests_post(method, _data={'chat_id': channel_id, 'text': post_text}, session=s)
+
     # Set command for Telegram bot
-    _command = requests_post(url + '/getMyCommands', _data=None,  session=s)
+    _command = requests_post(url + '/getMyCommands', _data=None, session=s)
     if _command and _command.status_code == 200 and not _command.json().get('result', None):
         _commands = {
             "commands": json.dumps([
@@ -206,31 +291,17 @@ def telegram(queue_to_tlg, _bot_id) -> None:
             break
         except queue.Empty:
             # Get external command from Telegram bot
-            x = telegram_get(offset_id)
-            if x:
-                offset_id = x[-1].get('update_id')
-                offset_id += 1
-                for n in x:
-                    a = n.get('reply_to_message')
-                    if a:
-                        bot_id = a.split('.')[0]
-                        if bot_id == _bot_id:
-                            try:
-                                msg_in = str(n['text_in']).lower().strip().replace('/', '')
-                                connection_control.execute('insert into t_control values(?,?,?,?)',
-                                                           (n['message_id'], msg_in, bot_id, None))
-                                connection_control.commit()
-                            except sqlite3.Error as ex:
-                                print(f"telegram: insert into t_control: {ex}")
-                            else:
-                                # Send receipt
-                                text = f"Received '{msg_in}' command, OK"
-                                requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
+            updates = telegram_get(offset_id)
+            if not updates:
+                continue
+            offset_id = updates[-1].get('update_id') + 1
+            for update in updates:
+                process_update(update)
         else:
             if text and STOP_TLG in text:
                 connection_control.close()
                 break
-            requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s)
+            requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s, inline_buttons=True)
 
 
 def db_management() -> None:
@@ -422,7 +493,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         slope = dx(fn, x, delta, **kwargs)
         # print(f"slope: {slope}")
         if slope != 0.0:
-            x -= err/slope
+            x -= err / slope
             # print(f"x: {x}")
         else:
             delta *= 10
@@ -688,7 +759,7 @@ class Strategy(StrategyBase):
                     self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                     if STANDALONE:
                         raise SystemExit(1)
-                first_order_vlm = self.deposit_second * 1 * (1 - self.martin) / (1 - self.martin**ORDER_Q)
+                first_order_vlm = self.deposit_second * 1 * (1 - self.martin) / (1 - self.martin ** ORDER_Q)
                 first_order_vlm /= self.avg_rate
                 amount_min = tcm.get_min_buy_amount(last_price)
             else:
@@ -708,7 +779,8 @@ class Strategy(StrategyBase):
                 amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
                 # For Bitfinex test accounts correction
                 if (amount_first_grid >= float(self.deposit_second) if self.cycle_buy else float(self.deposit_first) or
-                        amount_first_grid >= tcm.get_max_sell_amount(0)):
+                                                                                           amount_first_grid >= tcm.get_max_sell_amount(
+                    0)):
                     amount_first_grid /= ORDER_Q
                 #
                 if self.cycle_buy:
@@ -1503,11 +1575,11 @@ class Strategy(StrategyBase):
                     amount = depo
                     rounding = ROUND_FLOOR
                 elif i == 0:
-                    amount_0 = depo * self.martin**i * (self.martin - 1) / (self.martin**self.order_q - 1)
+                    amount_0 = depo * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
                     amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
                     depo_i = depo - amount
                 elif i < self.order_q - 1:
-                    amount = depo_i * self.martin**i * (self.martin - 1) / (self.martin**self.order_q - 1)
+                    amount = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
                 else:
                     amount = amount_last_grid
                     rounding = ROUND_FLOOR
@@ -1753,7 +1825,7 @@ class Strategy(StrategyBase):
             tlg = True
             color = Style.B_RED
         color = color if STANDALONE else 0
-        color_msg = color+msg+Style.RESET if color else msg
+        color_msg = color + msg + Style.RESET if color else msg
         if log_level not in LOG_LEVEL_NO_PRINT:
             print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
         write_log(log_level, msg)
@@ -2451,7 +2523,7 @@ class Strategy(StrategyBase):
                         reverse_target_amount = self.reverse_target_amount * _amount_f / self.reverse_init_amount
                     else:
                         reverse_target_amount = _amount_f + (FEE_MAKER * 2 + PROFIT) * _amount_f / 100
-                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin**GRID_MAX_COUNT)
+                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin ** GRID_MAX_COUNT)
                     first_order_vlm /= self.avg_rate
                 else:
                     min_trade_amount = tcm.get_min_sell_amount(float(self.avg_rate))
@@ -2460,7 +2532,7 @@ class Strategy(StrategyBase):
                         reverse_target_amount = self.reverse_target_amount * _amount_s / self.reverse_init_amount
                     else:
                         reverse_target_amount = _amount_s + (FEE_MAKER * 2 + PROFIT) * _amount_s / 100
-                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin**GRID_MAX_COUNT)
+                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin ** GRID_MAX_COUNT)
                 self.message_log(f"Min trade amount is: {min_trade_amount}")
                 self.debug_output()
                 self.message_log(f"For additional grid amount: {amount},"
@@ -2662,9 +2734,9 @@ class Strategy(StrategyBase):
         # print(f"on_new_ticker:ticker.last_price: {ticker.last_price}")
         self.last_ticker_update = int(time.time())
         if (self.shift_grid_threshold and self.last_shift_time and time.time() - self.last_shift_time > SHIFT_GRID_DELAY
-            and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
-                 or
-                 (not self.cycle_buy and ticker.last_price <= self.shift_grid_threshold))):
+                and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
+                     or
+                     (not self.cycle_buy and ticker.last_price <= self.shift_grid_threshold))):
             self.message_log('Shift grid', color=Style.B_WHITE)
             self.shift_grid_threshold = None
             self.start_after_shift = True
