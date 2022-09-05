@@ -778,9 +778,8 @@ class Strategy(StrategyBase):
                 k_m = 1 - float(PROFIT_MAX) / 100
                 amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
                 # For Bitfinex test accounts correction
-                if (amount_first_grid >= float(self.deposit_second) if self.cycle_buy else float(self.deposit_first) or
-                                                                                           amount_first_grid >= tcm.get_max_sell_amount(
-                    0)):
+                if (amount_first_grid >= float(self.deposit_second) if self.cycle_buy else float(
+                        self.deposit_first) or amount_first_grid >= tcm.get_max_sell_amount(0)):
                     amount_first_grid /= ORDER_Q
                 #
                 if self.cycle_buy:
