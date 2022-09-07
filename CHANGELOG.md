@@ -1,3 +1,7 @@
+## v1.2.7 2022-mm-dd
+### Fixed
+
+
 ## v1.2.6-8-hotfix 2022-09-03
 ### Fixed
 * [File exist error on Windows 11](https://github.com/DogsTailFarmer/martin-binance/issues/19#issue-1360296628)

@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-13"
+__version__ = "1.2.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -106,7 +106,7 @@ for tlg in telegram:
         break
 
 
-if __name__ == "__main__" and ex.STANDALONE:
+if __name__ == "__main__" and STANDALONE:
     import logging.handlers
     # For autoload last state
     ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
@@ -132,6 +132,5 @@ if __name__ == "__main__" and ex.STANDALONE:
             pass
         except Exception as _err:
             print(f"Error: {_err}")
-        loop.stop()
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()

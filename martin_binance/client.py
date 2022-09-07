@@ -6,7 +6,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-14"
+__version__ = "1.2.6-15"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -18,7 +18,7 @@ import logging
 
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
-logger = logging.getLogger('logger')
+logger = logging.getLogger('logger.client')
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
 # stream_handler.setLevel(logging.INFO)
@@ -52,37 +52,60 @@ class Client:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error.
         except grpc.RpcError as ex:
-            # noinspection PyUnresolvedReferences
             status_code = ex.code()
-            # noinspection PyUnresolvedReferences
             logger.error(f"Exception on register client: {status_code.name}, {ex.details()}")
             if status_code == grpc.StatusCode.FAILED_PRECONDITION:
                 raise SystemExit(1)
             else:
                 logger.info('Restart gRPC client session')
-                await asyncio.sleep(random.uniform(1, 5))
+                # await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 10))
+                await asyncio.sleep(random.randint(1, 10))
                 return
         else:
             logger.info(f"gRPC session started for client_id: {_client.client_id}")
             return _client
 
     async def send_request(self, _request, _request_type, **kwargs):
-        kwargs['client_id'] = self.client.client_id
-        try:
-            res = await _request(_request_type(**kwargs))
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error.
-        except grpc.RpcError as ex:
-            # noinspection PyUnresolvedReferences
-            status_code = ex.code()
-            # noinspection PyUnresolvedReferences
-            logger.error(f"Exception on send request: {status_code.name}, {ex.details()}")
-            # noinspection PyUnresolvedReferences
-            if status_code == grpc.StatusCode.UNAVAILABLE and ex.details() == 'failed to connect to all addresses':
-                logger.error("Connection to gRPC server failed, try reconnect...")
-                await self.get_client()
+        if self.client:
+            kwargs['client_id'] = self.client.client_id
+            try:
+                res = await _request(_request_type(**kwargs))
+            except asyncio.CancelledError:
+                pass  # Task cancellation should not be logged as an error.
+            except grpc.RpcError as ex:
+                status_code = ex.code()
+                logger.error(f"Exception on send request: {status_code.name}, {ex.details()}")
+                if (
+                    (status_code == grpc.StatusCode.UNAVAILABLE
+                     and ex.details() == 'failed to connect to all addresses')
+                        or
+                    ((status_code == grpc.StatusCode.UNKNOWN
+                     and "'NoneType' object has no attribute 'client'" in ex.details()))
+                    ):
+                    self.client = None
+                    logger.warning("Connection to gRPC server failed, try reconnect...")
+                    await self.get_client()
+                else:
+                    raise
             else:
-                raise
+                # logger.info(f"send_request.res: {res}")
+                return res
         else:
-            logger.info(f"send_request.res: {res}")
-            return res
+            raise UserWarning("Send gRPC request failed, not active client session")
+
+    async def for_request(self, _request, _request_type, **kwargs):
+        if self.client:
+            kwargs['client_id'] = self.client.client_id
+            try:
+                async for res in _request(_request_type(**kwargs)):
+                    yield res
+            except asyncio.CancelledError:
+                pass  # Task cancellation should not be logged as an error.
+            except grpc.RpcError as ex:
+                status_code = ex.code()
+                logger.warning(f"Exception on WSS loop: {status_code.name}, {ex.details()}")
+                raise
+            finally:
+                return
+        else:
+            raise UserWarning("Start gRPC request loop failed, not active client session")
