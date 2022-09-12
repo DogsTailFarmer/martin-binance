@@ -640,7 +640,7 @@ class Strategy(StrategyBase):
         all_order_exist = StrategyBase.all_order_exist
 
     ##############################################################
-    # strategy logic methods
+    # strategy control methods
     ##############################################################
     def __init__(self):
         super().__init__()
@@ -779,76 +779,34 @@ class Strategy(StrategyBase):
         if last_price:
             print('Last ticker price: ', last_price)
             self.avg_rate = f2d(last_price)
-            df = self.get_buffered_funds().get(self.f_currency, 0)
-            df = df.available if df else 0
-            if USE_ALL_FIRST_FUND and df and self.cycle_buy:
-                self.message_log('Check USE_ALL_FIRST_FUND parameter. You may have loss on Reverse cycle',
-                                 color=Style.B_WHITE)
-            if self.cycle_buy:
-                ds = self.get_buffered_funds().get(self.s_currency, 0)
-                ds = ds.available if ds else 0
-                if check_funds and self.deposit_second > f2d(ds):
-                    self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
-                    if STANDALONE:
-                        raise SystemExit(1)
-                first_order_vlm = self.deposit_second * 1 * (1 - self.martin) / (1 - self.martin**ORDER_Q)
-                first_order_vlm /= self.avg_rate
-                amount_min = tcm.get_min_buy_amount(last_price)
-            else:
-                if USE_ALL_FIRST_FUND:
-                    self.deposit_first = f2d(df)
-                else:
-                    if check_funds and self.deposit_first > f2d(df):
-                        self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
+            if self.first_run and check_funds:
+                df = self.get_buffered_funds().get(self.f_currency, 0)
+                df = df.available if df else 0
+                if USE_ALL_FIRST_FUND and df and self.cycle_buy:
+                    self.message_log('Check USE_ALL_FIRST_FUND parameter. You may have loss on Reverse cycle',
+                                     color=Style.B_WHITE)
+                if self.cycle_buy:
+                    ds = self.get_buffered_funds().get(self.s_currency, 0)
+                    ds = ds.available if ds else 0
+                    if self.deposit_second > f2d(ds):
+                        self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                         if STANDALONE:
                             raise SystemExit(1)
-                first_order_vlm = self.deposit_first * 1 * (1 - self.martin) / (1 - pow(self.martin, ORDER_Q))
-                amount_min = tcm.get_min_sell_amount(last_price)
-            if not GRID_ONLY and PROFIT_MAX < 100:
-                # Calculate the recommended size of the first grid order depending on the step_size
-                step_size = tcm.get_minimal_amount_change(amount_min)
-                k_m = 1 - float(PROFIT_MAX) / 100
-                amount_first_grid = (step_size * last_price / ((1 / k_m) - 1))
-                # For Bitfinex test accounts correction
-                if (amount_first_grid >= float(self.deposit_second) if self.cycle_buy else float(self.deposit_first) or
-                        amount_first_grid >= tcm.get_max_sell_amount(0)):
-                    amount_first_grid /= ORDER_Q
-                #
-                if self.cycle_buy:
-                    if amount_first_grid > 80 * self.deposit_second / 100:
-                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
-                                         f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
-                        if STANDALONE and self.first_run:
-                            raise SystemExit(1)
-                    elif amount_first_grid > 20 * self.deposit_second / 100:
-                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather"
-                                         f" big for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
+                    depo = self.deposit_second
                 else:
-                    amount_first_grid /= last_price
-                    if amount_first_grid > 80 * self.deposit_first / 100:
-                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} too large for"
-                                         f" a small deposit {self.deposit_first}", log_level=LogLevel.ERROR)
-                        if STANDALONE and self.first_run:
-                            raise SystemExit(1)
-                    elif amount_first_grid > 20 * self.deposit_first / 100:
-                        self.message_log(f"Recommended size of the first grid order {amount_first_grid:f} it is rather"
-                                         f" big for a small deposit {self.deposit_first}", log_level=LogLevel.WARNING)
-            #
-            if self.cycle_buy and first_order_vlm < tcm.get_min_buy_amount(last_price):
-                self.message_log(f"Total deposit {AMOUNT_SECOND}{self.s_currency}"
-                                 f" not enough for min amount for {ORDER_Q} orders.", color=Style.B_RED)
-                if STANDALONE and self.first_run:
-                    raise SystemExit(1)
-            elif not self.cycle_buy and first_order_vlm < tcm.get_min_sell_amount(last_price):
-                self.message_log(f"Total deposit {self.deposit_first}{self.f_currency}"
-                                 f" not enough for min amount for {ORDER_Q} orders.", color=Style.B_RED)
-                if STANDALONE and self.first_run:
-                    raise SystemExit(1)
-            buy_amount = tcm.get_min_buy_amount(last_price)
-            sell_amount = tcm.get_min_sell_amount(last_price)
-            print(f"buy_amount: {buy_amount}, sell_amount: {sell_amount}")
+                    if USE_ALL_FIRST_FUND:
+                        self.deposit_first = f2d(df)
+                    else:
+                        if self.deposit_first > f2d(df):
+                            self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
+                            if STANDALONE:
+                                raise SystemExit(1)
+                    depo = self.deposit_first
+                self.place_grid(self.cycle_buy, depo, self.reverse_target_amount, init_calc_only=True)
         else:
-            print('Actual price not received, initialization checks skipped')
+            print("Can't get actual price, initialization checks stopped")
+            if STANDALONE:
+                raise SystemExit(1)
         # self.message_log('End Init section')
 
     @staticmethod
@@ -1504,6 +1462,39 @@ class Strategy(StrategyBase):
         print('Unsuspend')
         self.start_process()
 
+    def init_warning(self, _amount_first_grid: Decimal):
+        if self.cycle_buy:
+            depo = self.deposit_second
+        else:
+            depo = self.deposit_first
+        if ADAPTIVE_TRADE_CONDITION:
+            if self.first_run and self.order_q < 3:
+                self.message_log(f"Depo amount {depo} not enough to set the grid with 3 or more orders",
+                                 log_level=LogLevel.ERROR)
+                if STANDALONE:
+                    raise SystemExit(1)
+
+            _amount_first_grid = _amount_first_grid if self.cycle_buy else (_amount_first_grid / self.avg_rate)
+
+            if _amount_first_grid > 80 * depo / 100:
+                self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} too large for"
+                                 f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
+                if STANDALONE and self.first_run:
+                    raise SystemExit(1)
+            elif _amount_first_grid > 20 * depo / 100:
+                self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} it is rather"
+                                 f" big for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
+        else:
+            first_order_vlm = depo * 1 * (1 - self.martin) / (1 - self.martin ** ORDER_Q)
+
+            first_order_vlm = (first_order_vlm / self.avg_rate) if self.cycle_buy else first_order_vlm
+
+            if first_order_vlm < _amount_first_grid:
+                self.message_log(f"Depo amount {depo}{self.s_currency} not enough for {ORDER_Q} orders",
+                                 color=Style.B_RED)
+                if STANDALONE and self.first_run:
+                    raise SystemExit(1)
+
     ##############################################################
     # strategy function
     ##############################################################
@@ -1514,12 +1505,14 @@ class Strategy(StrategyBase):
                    reverse_target_amount: Decimal,
                    allow_grid_shift: bool = True,
                    additional_grid: bool = False,
-                   grid_update: bool = False) -> None:
-        self.message_log(f"place_grid: buy_side: {buy_side}, depo: {depo},"
-                         f" reverse_target_amount: {reverse_target_amount},"
-                         f" allow_grid_shift: {allow_grid_shift},"
-                         f" additional_grid: {additional_grid},"
-                         f" grid_update: {grid_update}", log_level=LogLevel.DEBUG)
+                   grid_update: bool = False,
+                   init_calc_only: bool = False) -> None:
+        if not init_calc_only:
+            self.message_log(f"place_grid: buy_side: {buy_side}, depo: {depo},"
+                             f" reverse_target_amount: {reverse_target_amount},"
+                             f" allow_grid_shift: {allow_grid_shift},"
+                             f" additional_grid: {additional_grid},"
+                             f" grid_update: {grid_update}", log_level=LogLevel.DEBUG)
         self.grid_hold.clear()
         self.last_shift_time = None
         funds = self.get_buffered_funds()
@@ -1565,11 +1558,17 @@ class Strategy(StrategyBase):
                 amount_first_grid = amount_min_dec
             if self.order_q > 1:
                 self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
-                                 f" cycle set {self.order_q} orders for {self.over_price:.4f}% over price", tlg=False)
+                                 f" cycle{' will be' if init_calc_only else ''} set {self.order_q} orders"
+                                 f" for {self.over_price:.4f}% over price", tlg=False)
             else:
                 self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
                                  f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
                                  tlg=False)
+            #
+            if init_calc_only:
+                self.init_warning(amount_first_grid)
+                return
+            #
             if self.order_q > 1:
                 delta_price = self.over_price * base_price_dec / (100 * (self.order_q - 1))
             else:
@@ -1903,16 +1902,6 @@ class Strategy(StrategyBase):
         self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f}, base_price: {base_price},"
                          f" reverse_target_amount: {reverse_target_amount}, amount_min: {amount_min},"
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
-        if additional_grid or grid_update:
-            grid_min = 1
-        else:
-            if FEE_FTX and not self.reverse:
-                grid_min = GRID_MAX_COUNT
-            else:
-                grid_min = ORDER_Q
-        over_price_min = 100 * delta_min * (grid_min + 1) / base_price
-        self.message_log(f"set_trade_conditions.grid_min: {grid_min}, over_price_min: {float(over_price_min):f}",
-                         LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
         if not additional_grid and not grid_update and not GRID_ONLY and PROFIT_MAX < 100:
             k_m = 1 - PROFIT_MAX / 100
@@ -1939,7 +1928,7 @@ class Strategy(StrategyBase):
             else:
                 tbb = bb.get('tbb')
                 over_price = 100 * (f2d(tbb) - base_price) / base_price
-        self.over_price = max(over_price, over_price_min)
+        self.over_price = max(over_price, OVER_PRICE)
         # Adapt grid orders quantity for current over price
         order_q = int(self.over_price * ORDER_Q / OVER_PRICE)
         depo_c = (depo / base_price) if buy_side else depo
@@ -1948,8 +1937,7 @@ class Strategy(StrategyBase):
         self.message_log(f"set_trade_conditions: depo: {float(depo):f}, order_q: {order_q},"
                          f" amount_first_grid: {amount_first_grid:f}, amount_2: {amnt_2:f},"
                          f" q_max: {q_max}, coarse overprice: {float(self.over_price):f}", LogLevel.DEBUG)
-        q_max = max(q_max, grid_min)
-        while q_max > grid_min:
+        while q_max > 3:
             delta_price = self.over_price * base_price / (100 * (q_max - 1))
             if LINEAR_GRID_K >= 0:
                 price_k = f2d(1 - math.log(q_max - 1, q_max + LINEAR_GRID_K))
@@ -1960,13 +1948,7 @@ class Strategy(StrategyBase):
                 break
             q_max -= 1
         #
-        if order_q > q_max:
-            self.order_q = q_max
-        else:
-            if order_q >= grid_min:
-                self.order_q = order_q
-            else:
-                self.order_q = grid_min
+        self.order_q = q_max if order_q > q_max else order_q
         # Correction over_price after change quantity of orders
         if self.reverse and self.order_q > 1:
             over_price = self.calc_over_price(buy_side,
@@ -1976,7 +1958,7 @@ class Strategy(StrategyBase):
                                               delta_min,
                                               amount_first_grid,
                                               amount_min)
-            self.over_price = max(over_price, over_price_min)
+            self.over_price = max(over_price, OVER_PRICE)
         return amount_first_grid
 
     def set_profit(self) -> Decimal:
@@ -2787,6 +2769,9 @@ class Strategy(StrategyBase):
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")
         pass
+    ##############################################################
+    # private update methods
+    ##############################################################
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
@@ -2823,10 +2808,6 @@ class Strategy(StrategyBase):
                                 self.grid_hold['allow_grid_shift'],
                                 self.grid_hold['additional_grid'],
                                 self.grid_hold['grid_update'])
-
-    ##############################################################
-    # private update methods
-    ##############################################################
 
     def on_order_update(self, update: OrderUpdate) -> None:
         # self.message_log(f"Order {update.original_order.id}: {update.status}", log_level=LogLevel.DEBUG)
