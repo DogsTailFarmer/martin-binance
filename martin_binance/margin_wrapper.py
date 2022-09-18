@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-15"
+__version__ = "1.2.7b0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -699,7 +699,7 @@ async def buffered_funds(print_info: bool = True):
     try:
         res = await cls.send_request(cls.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
     except asyncio.CancelledError:
-        logger.info("buffered_funds.Cancelled")
+        pass
     except Exception as _ex:
         logger.warning(f"Exception buffered_funds: {_ex}")
     else:
@@ -914,15 +914,12 @@ async def on_order_update():
                     and cls.order_exist(event.order_id)
                     and event.order_status in ('FILLED', 'PARTIALLY_FILLED')):
                 '''
-                print(f"on_order_update: {event.symbol}\n"
-                      f"order_id: {event.order_id}\n"
+                print(f"on_order_update: {event.symbol}:{event.order_id}({event.client_order_id}):{event.order_status}")
                       f"trade_id: {event.trade_id}\n"
-                      f"order_status: {event.order_status}\n"
                       f"cumulative_filled_quantity: {event.cumulative_filled_quantity}\n"
                       f"last_executed_quantity: {event.last_executed_quantity}\n"
                       f"quote_order_quantity: {event.quote_order_quantity}\n"
-                      f"quote_asset_transacted: {event.quote_asset_transacted}\n"
-                      f"client_order_id: {event.client_order_id}")
+                      f"quote_asset_transacted: {event.quote_asset_transacted}")
                 '''
                 if event.order_status == 'FILLED':
                     # Remove from all_orders and orders lists
@@ -1174,23 +1171,21 @@ async def wss_init():
     logger.info(f"Init WSS, client_id: {cls.client_id}")
     if cls.client_id:
         # WSS declare
-        await buffered_candle()
         # Market stream
         loop.create_task(on_ticker_update())
+        await buffered_candle()
         loop.create_task(on_order_book_update())
         # User Stream
         loop.create_task(on_funds_update())
         loop.create_task(on_order_update())
         # WSS start
         '''
-        market_stream_count=5, user_stream_count=2
-        These values directly depend on the number of market and user ws streams used in the strategy and declared above
+        market_stream_count=5
+        These values directly depend on the number of market ws streams used in the strategy and declared above
         '''
         try:
-            await cls.send_request(cls.stub.StartStream, api_pb2.StartStreamRequest,
-                                   symbol=cls.symbol,
-                                   market_stream_count=5,
-                                   user_stream_count=2)
+            await cls.send_request(
+                cls.stub.StartStream, api_pb2.StartStreamRequest, symbol=cls.symbol, market_stream_count=5)
             cls.wss_fire_up = False
         except UserWarning:
             cls.wss_fire_up = True
@@ -1214,7 +1209,6 @@ async def main(_symbol):
     LAST_STATE = ms.LAST_STATE_FILE
     try:
         cls.symbol = _symbol
-        # StrategyBase.symbol = _symbol
         if len(ms.EXCHANGE) > ms.ID_EXCHANGE:
             account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
         else:
@@ -1259,7 +1253,7 @@ async def main(_symbol):
                     pass  # Task cancellation should not be logged as an error.
                 except grpc.RpcError as ex:
                     status_code = ex.code()
-                    cls.strategy.message_log(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
+                    print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
         # Init section
         _exchange_info_symbol = await send_request(cls.stub.FetchExchangeInfoSymbol,
                                                    api_pb2.MarketRequest,

@@ -7,25 +7,33 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.9r11"
+__version__ = "1.2.7b0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
+import os
 import time
 import sqlite3
 import psutil
 from requests import Session
 import json
 import toml
-
+import platform
+from martin_binance import Path, CONFIG_FILE, DB_FILE
 from prometheus_client import start_http_server, Gauge
 
 # region Import parameters
-FILE_CONFIG = 'ms_cfg.toml'
-config = toml.load(FILE_CONFIG).get('Exporter')
 
-# path to .db
-DATABASE = config.get('database')
+if not CONFIG_FILE.exists():
+    if platform.system() == 'Darwin':
+        user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
+        WORK_PATH = Path("Users", user, ".margin")
+    else:
+        WORK_PATH = Path().resolve()
+    CONFIG_FILE = Path(WORK_PATH, "ms_cfg.toml")
+    DB_FILE = Path(WORK_PATH, "funds_rate.db")
+
+config = toml.load(str(CONFIG_FILE)).get('Exporter')
 
 # external port for prometheus
 PORT = config.get('port')
@@ -327,7 +335,7 @@ if __name__ == '__main__':
     start_http_server(PORT)
     sqlite_connection = None
     try:
-        sqlite_connection = sqlite3.connect(DATABASE, check_same_thread=False, timeout=10)
+        sqlite_connection = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
     except sqlite3.Error as error:
         print("SQLite error:", error)
     while True:

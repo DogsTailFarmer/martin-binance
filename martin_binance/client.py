@@ -6,7 +6,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-15"
+__version__ = "1.2.6-16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -15,6 +15,7 @@ import asyncio
 import grpc
 import random
 import logging
+import uuid
 
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
@@ -34,6 +35,7 @@ class Client:
         self.rate_limiter = rate_limiter
         self.client: api_pb2.OpenClientConnectionId = None
         self.wait_connection = False
+        self.trade_id = str(uuid.uuid4().hex)
 
     async def get_client(self):
         if not self.wait_connection:
@@ -47,6 +49,7 @@ class Client:
     async def connect(self):
         try:
             _client = await self.stub.OpenClientConnection(api_pb2.OpenClientConnectionRequest(
+                trade_id=self.trade_id,
                 account_name=self.account_name,
                 rate_limiter=self.rate_limiter))
         except asyncio.CancelledError:
@@ -58,7 +61,6 @@ class Client:
                 raise SystemExit(1)
             else:
                 logger.info('Restart gRPC client session')
-                # await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 10))
                 await asyncio.sleep(random.randint(1, 10))
                 return
         else:
@@ -68,6 +70,7 @@ class Client:
     async def send_request(self, _request, _request_type, **kwargs):
         if self.client:
             kwargs['client_id'] = self.client.client_id
+            kwargs['trade_id'] = self.trade_id
             try:
                 res = await _request(_request_type(**kwargs))
             except asyncio.CancelledError:
@@ -81,7 +84,7 @@ class Client:
                         or
                     ((status_code == grpc.StatusCode.UNKNOWN
                      and "'NoneType' object has no attribute 'client'" in ex.details()))
-                    ):
+                ):
                     self.client = None
                     logger.warning("Connection to gRPC server failed, try reconnect...")
                     await self.get_client()
@@ -96,6 +99,7 @@ class Client:
     async def for_request(self, _request, _request_type, **kwargs):
         if self.client:
             kwargs['client_id'] = self.client.client_id
+            kwargs['trade_id'] = self.trade_id
             try:
                 async for res in _request(_request_type(**kwargs)):
                     yield res

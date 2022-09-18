@@ -6,7 +6,7 @@ After=network.target
 [Service]
 User=ubuntu
 Group=sudo
-WorkingDirectory=/home/ubuntu/martin_binance/
+WorkingDirectory=/home/ubuntu/.local/lib/python3.8/site-packages/martin_binance/
 ExecStart=python3 relaunch.py
 
 [Install]

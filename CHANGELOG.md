@@ -1,6 +1,10 @@
-## v1.2.7 2022-mm-dd
+## v1.2.7 2022-09-18
 ### Fixed
+* If it is not possible to calculate the price overlap for the cycle reverse, its value set to coarse estimate * 2
+instead of the OVER_PRICE
 
+### Added for new features
+* Disconnecting the gRPC server is now safe, auto reconnect with full recovery of the current session
 
 ## v1.2.6-8-hotfix 2022-09-03
 ### Fixed

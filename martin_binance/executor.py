@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-15"
+__version__ = "1.2.7b0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1549,8 +1549,8 @@ class Strategy(StrategyBase):
                                                                   additional_grid=additional_grid,
                                                                   grid_update=grid_update)
                 except Exception as ex:
-                    self.message_log(f"Can't set trade conditions: {ex}\n"
-                                     f"{traceback.print_exc()}", log_level=LogLevel.ERROR)
+                    self.message_log(f"Can't set trade conditions: {ex}", log_level=LogLevel.ERROR)
+                    self.message_log(f"Can't set trade conditions: {traceback.print_exc()}", log_level=LogLevel.DEBUG)
                     return
             else:
                 self.over_price = OVER_PRICE
@@ -2075,10 +2075,11 @@ class Strategy(StrategyBase):
                       'min_delta': min_delta,
                       'amount_min': amount_min}
             over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
-        elif self.order_q == 1 and over_price_coarse > 0:
-            over_price = over_price_coarse
+            if over_price == 0:
+                self.message_log("Can't calculate over price for reverse cycle", log_level=LogLevel.ERROR)
+                over_price = 2 * over_price_coarse
         else:
-            over_price = 0
+            over_price = over_price_coarse
         return over_price
 
     def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
