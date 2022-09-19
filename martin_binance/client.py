@@ -6,7 +6,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.6-16"
+__version__ = "1.2.7b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -27,7 +27,7 @@ stream_handler.setLevel(logging.DEBUG)
 logger.addHandler(stream_handler)
 
 
-class Client:
+class Trade:
     def __init__(self, channel_options, account_name, rate_limiter):
         self.channel = grpc.aio.insecure_channel(target='localhost:50051', options=channel_options)
         self.stub = api_pb2_grpc.MartinStub(self.channel)
@@ -59,10 +59,9 @@ class Client:
             logger.error(f"Exception on register client: {status_code.name}, {ex.details()}")
             if status_code == grpc.StatusCode.FAILED_PRECONDITION:
                 raise SystemExit(1)
-            else:
-                logger.info('Restart gRPC client session')
-                await asyncio.sleep(random.randint(1, 10))
-                return
+            logger.info('Restart gRPC client session')
+            await asyncio.sleep(random.randint(1, 10))
+            return
         else:
             logger.info(f"gRPC session started for client_id: {_client.client_id}")
             return _client

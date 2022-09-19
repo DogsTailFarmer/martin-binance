@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7b0"
+__version__ = "1.2.7b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -22,6 +22,7 @@ from decimal import Decimal
 import sqlite3
 from pathlib import Path
 import random
+import traceback
 
 # noinspection PyPackageRequirements
 import grpc
@@ -35,7 +36,7 @@ from exchanges_wrapper.events import OrderUpdateWrapper
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
 from martin_binance import executor as ms
-from martin_binance.client import Client
+from martin_binance.client import Trade
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -51,7 +52,6 @@ TRADES_LIST_LIMIT = 100
 HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
-LAST_STATE: Path = None
 # Set logger
 logger = logging.getLogger('logger')
 color_init()
@@ -108,7 +108,7 @@ class StrategyBase:
     client: api_pb2.OpenClientConnectionId = None
     exchange = str()
     symbol = str()
-    channel = grpc.Channel
+    channel: grpc.Channel = None
     stub = api_pb2_grpc.MartinStub
     client_id = int()
     strategy = None
@@ -175,7 +175,7 @@ class StrategyBase:
     @classmethod
     def get_trading_capability_manager(cls) -> TradingCapabilityManager:
         # print(f"get_trading_capability_manager.info_symbol: {cls.info_symbol}")
-        return ms.Strategy.tcm
+        return StrategyBase.tcm
 
     @classmethod
     def get_first_currency(cls) -> str:
@@ -218,11 +218,11 @@ class StrategyBase:
     @classmethod
     def place_limit_order(cls, buy: bool, amount: float, price: float) -> int:
         cls.order_id += 1
-        ms.Strategy.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
-                                         f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
+        StrategyBase.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
+                                          f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
         loop.create_task(create_limit_order(cls.order_id, buy, str(amount), str(price)))
-        if ms.FEE_FTX:
+        if StrategyBase.exchange == 'ftx':
             time.sleep(0.15)
         return cls.order_id
 
@@ -234,8 +234,8 @@ class StrategyBase:
     @classmethod
     def get_buffered_completed_trades(cls, get_all_trades: bool = False) -> List[PrivateTrade]:
         if get_all_trades:
-            return ms.Strategy.all_trades
-        return ms.Strategy.trades
+            return StrategyBase.all_trades
+        return StrategyBase.trades
 
     @classmethod
     def get_buffered_open_orders(cls, get_all_orders: bool = False) -> List[Order]:
@@ -245,12 +245,12 @@ class StrategyBase:
 
 
 def trade_not_exist(_order_id: int, _trade_id: int) -> bool:
-    return all(not(trade.order_id == _order_id and trade.id == _trade_id) for trade in ms.Strategy.trades)
+    return all(not(trade.order_id == _order_id and trade.id == _trade_id) for trade in StrategyBase.trades)
 
 
 def order_trades_sum(_order_id: int) -> Decimal:
     saved_filled_quantity = Decimal(0)
-    for _trade in ms.Strategy.trades:
+    for _trade in StrategyBase.trades:
         if _trade.order_id == _order_id:
             saved_filled_quantity += Decimal(str(_trade.amount))
     return saved_filled_quantity
@@ -287,7 +287,7 @@ class OrderUpdate(OrderUpdate):
         self.original_order = OriginalOrder(event)
         # Trades that belong to the order, if any exist so far.
         self.resulting_trades = []
-        for trade in ms.Strategy.trades:
+        for trade in StrategyBase.trades:
             if trade.order_id == event.order_id:
                 self.resulting_trades.append(trade)
         # Update status defining what happened to the order since the last update.
@@ -381,7 +381,7 @@ class TradingCapabilityManager:
             rounded_amount = round(unrounded_amount, self.base_asset_precision)
         else:
             rounded_amount = unrounded_amount
-            ms.Strategy.strategy.message_log("round_amount: Unknown RoundingType", log_level=LogLevel.ERROR)
+            StrategyBase.strategy.strategy.message_log("round_amount: Unknown RoundingType", log_level=LogLevel.ERROR)
         return rounded_amount
 
     def round_price(self, unrounded_price: float, rounding_type: RoundingType) -> float:
@@ -396,7 +396,7 @@ class TradingCapabilityManager:
             rounded_price = round(unrounded_price, k)
         else:
             rounded_price = unrounded_price
-            ms.Strategy.strategy.message_log("round_price: Unknown RoundingType", log_level=LogLevel.ERROR)
+            StrategyBase.strategy.message_log("round_price: Unknown RoundingType", log_level=LogLevel.ERROR)
         return rounded_price
 
     def get_min_sell_amount(self, price: float) -> float:
@@ -475,7 +475,7 @@ class OrderBook:
 
 
 async def heartbeat(_session):
-    cls = ms.Strategy
+    cls = StrategyBase
     _client_id = cls.client_id
     # print(f"tik-tak ', {int(time.time() * 1000)}, _client_id: {_client_id}")
     while cls.strategy:
@@ -487,9 +487,9 @@ async def heartbeat(_session):
             last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
             last_state['ms.orders'] = jsonpickle.encode(cls.orders)
             # print(f"heartbeat.last_state: {last_state}")
-            if LAST_STATE.exists():
-                LAST_STATE.replace(LAST_STATE.with_suffix('.prev'))
-            with LAST_STATE.open(mode='w') as outfile:
+            if ms.LAST_STATE_FILE.exists():
+                ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.prev'))
+            with ms.LAST_STATE_FILE.open(mode='w') as outfile:
                 json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
             if cls.client_id and (cls.wss_fire_up or _client_id != cls.client_id):
                 if _client_id != cls.client_id:
@@ -509,7 +509,7 @@ async def save_asset():
     """
     Update account asset list and value in t_asset
     """
-    cls = ms.Strategy
+    cls = StrategyBase
     connection_analytic = None
     while connection_analytic is None:
         connection_analytic = cls.strategy.connection_analytic
@@ -632,7 +632,7 @@ async def save_asset():
 
 
 async def ask_exit():
-    cls = ms.Strategy
+    cls = StrategyBase
     if cls.strategy:
         cls.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
         await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -646,17 +646,17 @@ async def ask_exit():
             print(f"ask_exit.strategy.stop: {_err}")
         await cls.channel.close()
         cls.strategy = None
-        if LAST_STATE.exists():
+        if ms.LAST_STATE_FILE.exists():
             answer = input('Save current state? y/n:\n')
             if answer.lower() != 'y':
-                LAST_STATE.replace(LAST_STATE.with_suffix('.bak'))
+                ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.bak'))
                 print('Current state cleared')
             else:
                 print('OK')
 
 
 async def buffered_candle():
-    cls = ms.Strategy
+    cls = StrategyBase
     StrategyBase.Klines.klines_lim = KLINES_LIM
     klines = {}
     for i in KLINES_INIT:
@@ -681,7 +681,7 @@ async def buffered_candle():
 
 
 async def on_klines_update(_klines):
-    cls = ms.Strategy
+    cls = StrategyBase
     _interval = json.dumps(list(_klines.keys()))
     try:
         async for candle in cls.for_request(cls.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
@@ -695,7 +695,7 @@ async def on_klines_update(_klines):
 
 
 async def buffered_funds(print_info: bool = True):
-    cls = ms.Strategy
+    cls = StrategyBase
     try:
         res = await cls.send_request(cls.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
     except asyncio.CancelledError:
@@ -730,7 +730,7 @@ async def buffered_funds(print_info: bool = True):
 
 
 async def buffered_orders():
-    cls = ms.Strategy
+    cls = StrategyBase
     all_orders = []
     exch_orders_id = []
     save_orders_id = []
@@ -863,7 +863,7 @@ async def buffered_orders():
                                      log_level=LogLevel.WARNING)
             if status_code == grpc.StatusCode.RESOURCE_EXHAUSTED:
                 # Decrease requests frequency if not FTX exchange
-                if not ms.FEE_FTX:
+                if StrategyBase.exchange != 'ftx':
                     StrategyBase.rate_limiter += HEARTBEAT
                     cls.strategy.message_log(f"RATE_LIMITER set to {StrategyBase.rate_limiter}s",
                                              log_level=LogLevel.WARNING)
@@ -873,14 +873,14 @@ async def buffered_orders():
             else:
                 restore = True
         except Exception as _ex:
-            cls.strategy.message_log(f"Exception buffered_orders: {_ex}\n{ms.traceback.format_exc()}",
+            cls.strategy.message_log(f"Exception buffered_orders: {_ex}\n{traceback.format_exc()}",
                                      log_level=LogLevel.ERROR)
             restore = True
         await asyncio.sleep(StrategyBase.rate_limiter)
 
 
 async def on_funds_update():
-    cls = ms.Strategy
+    cls = StrategyBase
     try:
         async for _funds in cls.for_request(cls.stub.OnFundsUpdate, api_pb2.OnFundsUpdateRequest,
                                             symbol=cls.symbol,
@@ -900,27 +900,14 @@ async def on_funds_update():
 
 
 async def on_order_update():
-    cls = ms.Strategy
+    cls = StrategyBase
     try:
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
-            '''
-            print(f"on_order_update: {event.symbol}\n"
-                  f"order_id: {event.order_id}\n"
-                  f"trade_id: {event.trade_id}\n"
-                  f"order_status: {event.order_status}\n")
-            '''
+            # print(f"on_order_update: {event.symbol}:{event.order_id}({event.client_order_id}):{event.order_status}")
             if (cls.symbol == event.symbol
                     and cls.order_exist(event.order_id)
                     and event.order_status in ('FILLED', 'PARTIALLY_FILLED')):
-                '''
-                print(f"on_order_update: {event.symbol}:{event.order_id}({event.client_order_id}):{event.order_status}")
-                      f"trade_id: {event.trade_id}\n"
-                      f"cumulative_filled_quantity: {event.cumulative_filled_quantity}\n"
-                      f"last_executed_quantity: {event.last_executed_quantity}\n"
-                      f"quote_order_quantity: {event.quote_order_quantity}\n"
-                      f"quote_asset_transacted: {event.quote_asset_transacted}")
-                '''
                 if event.order_status == 'FILLED':
                     # Remove from all_orders and orders lists
                     remove_from_orders_lists([event.order_id])
@@ -941,7 +928,7 @@ async def on_order_update():
                     cumulative_quantity = Decimal(event.cumulative_filled_quantity)
                     saved_filled_quantity = order_trades_sum(event.order_id)
                     if event.order_status == 'FILLED' and saved_filled_quantity != cumulative_quantity:
-                        if not ms.FEE_FTX:
+                        if StrategyBase.exchange != 'ftx':
                             cls.strategy.message_log(f"Order: {event.order_id} was missed partially filling event",
                                                      log_level=LogLevel.INFO)
                         # Remove trades associated with order from list
@@ -961,7 +948,7 @@ async def on_order_update():
 
 
 async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> None:
-    cls = ms.Strategy
+    cls = StrategyBase
     try:
         res = await cls.send_request(cls.stub.CreateLimitOrder, api_pb2.CreateLimitOrderRequest,
                                      symbol=cls.symbol,
@@ -1016,7 +1003,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
 
 
 async def place_limit_order_timeout(_id):
-    cls = ms.Strategy
+    cls = StrategyBase
     await asyncio.sleep(ORDER_TIMEOUT)
     if _id in cls.wait_order_id:
         cls.wait_order_id.remove(_id)
@@ -1025,7 +1012,7 @@ async def place_limit_order_timeout(_id):
 
 
 async def cancel_order_call(_id: int):
-    cls = ms.Strategy
+    cls = StrategyBase
     try:
         res = await cls.send_request(cls.stub.CancelOrder, api_pb2.CancelOrderRequest,
                                      symbol=cls.symbol,
@@ -1055,7 +1042,7 @@ async def cancel_order_call(_id: int):
 
 
 async def cancel_order_timeout(_id):
-    cls = ms.Strategy
+    cls = StrategyBase
     await asyncio.sleep(ORDER_TIMEOUT)
     if _id in cls.canceled_order_id:
         cls.canceled_order_id.remove(_id)
@@ -1064,7 +1051,7 @@ async def cancel_order_timeout(_id):
 
 
 async def fetch_order(_id: int, _filled_update_call: bool = False):
-    cls = ms.Strategy
+    cls = StrategyBase
     try:
         res = await cls.send_request(cls.stub.FetchOrder, api_pb2.FetchOrderRequest,
                                      symbol=cls.symbol,
@@ -1089,21 +1076,21 @@ async def fetch_order(_id: int, _filled_update_call: bool = False):
 
 
 def remove_from_orders_lists(_order_id_list: []) -> None:
-    cls = ms.Strategy
+    cls = StrategyBase
     # print(f"remove_from_orders_lists._order_id: {_order_id}")
     cls.orders[:] = [i for i in cls.orders if i.id not in _order_id_list]
     cls.all_orders[:] = [i for i in cls.all_orders if i.id not in _order_id_list]
 
 
 def remove_from_trades_lists(_order_id) -> None:
-    cls = ms.Strategy
+    cls = StrategyBase
     # print(f"remove_from_trades_lists._order_id: {_order_id}")
     cls.trades[:] = [i for i in cls.trades if i.order_id != _order_id]
     cls.all_trades[:] = [i for i in cls.all_trades if i.order_id != _order_id]
 
 
 async def on_ticker_update():
-    cls = ms.Strategy
+    cls = StrategyBase
     try:
         async for ticker in cls.for_request(cls.stub.OnTickerUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             ticker_24h = {'openPrice': ticker.open_price,
@@ -1118,7 +1105,7 @@ async def on_ticker_update():
 
 
 async def on_order_book_update():
-    cls = ms.Strategy
+    cls = StrategyBase
     try:
         async for _order_book in cls.for_request(cls.stub.OnOrderBookUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             order_book = json_format.MessageToDict(_order_book)
@@ -1155,19 +1142,19 @@ def load_last_state() -> {}:
         return _res
 
     res = {}
-    if LAST_STATE.exists():
-        res = load_file(LAST_STATE)
+    if ms.LAST_STATE_FILE.exists():
+        res = load_file(ms.LAST_STATE_FILE)
         if not res:
             print("Can't load last state, try load previous saved state")
-            res = load_file(LAST_STATE.with_suffix('.prev'))
+            res = load_file(ms.LAST_STATE_FILE.with_suffix('.prev'))
         if res:
-            with LAST_STATE.with_suffix('.bak').open(mode='w') as outfile:
+            with ms.LAST_STATE_FILE.with_suffix('.bak').open(mode='w') as outfile:
                 json.dump(res, outfile, sort_keys=True, indent=4, ensure_ascii=False)
     return res
 
 
 async def wss_init():
-    cls = ms.Strategy
+    cls = StrategyBase
     logger.info(f"Init WSS, client_id: {cls.client_id}")
     if cls.client_id:
         # WSS declare
@@ -1196,7 +1183,7 @@ async def wss_init():
 
 
 def update_class_var(_session):
-    cls = ms.Strategy
+    cls = StrategyBase
     cls.client_id = _session.client.client_id if _session.client else None
     cls.exchange = _session.client.exchange if _session.client else None
     cls.send_request = _session.send_request
@@ -1204,9 +1191,8 @@ def update_class_var(_session):
 
 
 async def main(_symbol):
-    cls = ms.Strategy
-    global LAST_STATE
-    LAST_STATE = ms.LAST_STATE_FILE
+    cls = StrategyBase
+    cls.strategy = ms.Strategy()
     try:
         cls.symbol = _symbol
         if len(ms.EXCHANGE) > ms.ID_EXCHANGE:
@@ -1216,9 +1202,9 @@ async def main(_symbol):
                   f" See readme 'Add new exchange'")
             raise SystemExit(1)
         print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
-        session = Client(channel_options=CHANNEL_OPTIONS,
-                         account_name=account_name,
-                         rate_limiter=StrategyBase.rate_limiter)
+        session = Trade(channel_options=CHANNEL_OPTIONS,
+                        account_name=account_name,
+                        rate_limiter=StrategyBase.rate_limiter)
         #
         await session.get_client()
         cls.client = session.client
@@ -1295,19 +1281,11 @@ async def main(_symbol):
         # print(f"main.order_book: {order_book}")
         cls.order_book = order_book
         # endregion
-
         _ticker = await send_request(cls.stub.FetchTickerPriceChangeStatistics, api_pb2.MarketRequest, symbol=_symbol)
         cls.ticker = json_format.MessageToDict(_ticker)
         # print(f"main.ticker: {cls.ticker}")
-
-        # init Strategy class
-        cls.strategy = ms.Strategy()
-        # print(f"main.m_strategy: {m_strategy}")
-
         await wss_init()
-
         loop.create_task(save_asset())
-
         answer = str()
         restored = True
         if restore_state:

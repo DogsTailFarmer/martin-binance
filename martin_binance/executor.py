@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7b0"
+__version__ = "1.2.7b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -607,38 +607,6 @@ class Orders:
 
 
 class Strategy(StrategyBase):
-    if STANDALONE:
-        client = StrategyBase.client
-        exchange = StrategyBase.exchange
-        symbol = StrategyBase.symbol
-        channel = StrategyBase.channel
-        stub = StrategyBase.stub
-        client_id = StrategyBase.client_id
-        strategy = StrategyBase.strategy
-        info_symbol = StrategyBase.info_symbol
-        base_asset = StrategyBase.base_asset
-        quote_asset = StrategyBase.quote_asset
-        ticker = StrategyBase.ticker
-        funds = StrategyBase.funds
-        order_book = StrategyBase.order_book
-        order_id = StrategyBase.order_id
-        wait_order_id = StrategyBase.wait_order_id
-        canceled_order_id = StrategyBase.canceled_order_id
-        all_trades = StrategyBase.all_trades
-        trades = StrategyBase.trades
-        all_orders = StrategyBase.all_orders
-        orders = StrategyBase.orders
-        tcm = StrategyBase.tcm
-        last_state = StrategyBase.last_state
-        get_buffered_funds_last_time = StrategyBase.get_buffered_funds_last_time
-        rate_limiter = StrategyBase.rate_limiter
-        start_time_ms = StrategyBase.start_time_ms
-        send_request = StrategyBase.send_request
-        for_request = StrategyBase.for_request
-        wss_fire_up = StrategyBase.wss_fire_up
-        order_exist = StrategyBase.order_exist
-        all_order_exist = StrategyBase.all_order_exist
-
     ##############################################################
     # strategy control methods
     ##############################################################
