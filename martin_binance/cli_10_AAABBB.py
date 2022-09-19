@@ -132,6 +132,5 @@ if __name__ == "__main__" and STANDALONE:
             pass
         except Exception as _err:
             print(f"Error: {_err}")
-        loop.stop()
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()

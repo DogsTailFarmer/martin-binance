@@ -36,6 +36,10 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
+* From v1.2.7 work path relocated to ```home/user/.MartinBinance/```
+* From v1.2.7 changed format of ```home/user/.MartinBinance/config/ms_cfg.toml```
+* From v1.2.7 changed format of ```home/user/.MartinBinance/cli_7_BTCUSDT.py```
+
 * You cannot run multiple pairs with overlapping currencies on the same account!
 
 Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
@@ -45,7 +49,6 @@ Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
 As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
 
 * See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
-* From v1.2.7 work path relocated to ```home/user/.MartinBinance/```
 
 ## Review
 <p align="center"><img src="https://gist.githubusercontent.com/DogsTailFarmer/b650b9b199666700d2839fb46d3aa1d7/raw/657ea8e7ad79df66d9d373776aeeb8614241f03f/architecture.svg"></p>
