@@ -6,11 +6,12 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7b1"
+__version__ = "1.2.7b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import asyncio
+
 
 from colorama import init as color_init
 import simplejson as json
@@ -29,7 +30,9 @@ import grpc
 import jsonpickle
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
-from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
+# from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
+# noinspection PyUnresolvedReferences
+from margin_strategy_sdk import LogLevel, OrderUpdate, RoundingType, Dict, List, StrategyConfig
 
 from exchanges_wrapper.definitions import Interval
 from exchanges_wrapper.events import OrderUpdateWrapper
@@ -104,146 +107,6 @@ def convert_from_minute(m: int) -> str:
     return s
 
 
-class StrategyBase:
-    client: api_pb2.OpenClientConnectionId = None
-    exchange = str()
-    symbol = str()
-    channel: grpc.Channel = None
-    stub = api_pb2_grpc.MartinStub
-    client_id = int()
-    strategy = None
-    info_symbol = {}
-    base_asset = str()
-    quote_asset = str()
-    ticker = {}
-    funds = {}
-    order_book = {}
-    order_id = 0
-    wait_order_id = []  # List of placed orders for time-out detect
-    canceled_order_id = []  # List canceled orders  for time-out detect
-    all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
-    trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
-    all_orders = []  # List of all open orders for symbol
-    orders = []  # List orders associated with strategy
-    tcm = None  # TradingCapabilityManager
-    last_state = None
-    get_buffered_funds_last_time = time.time()
-    rate_limiter = RATE_LIMITER
-    start_time_ms = int(time.time() * 1000)
-    send_request = None
-    for_request = None
-    wss_fire_up = False
-
-    def __call__(self):
-        return self
-
-    class Klines:
-        klines_series = {}
-        klines_lim = int()
-
-        def __init__(self, _interval):
-            self.interval = _interval
-            self.kline = []
-            self.klines_series[_interval] = self.kline
-
-        def refresh(self, _candle):
-            candle = Candle(_candle)
-            # print(f"refresh.interval: {self.interval}, candle: {candle.min_time}")
-            new_time = candle.min_time
-            last_time = self.kline[-1].min_time if self.kline else 0
-            if new_time >= last_time:
-                if new_time == last_time:
-                    self.kline[-1] = candle
-                else:
-                    self.kline.append(candle)
-                    if len(self.kline) > self.klines_lim:
-                        del self.kline[0]
-                self.klines_series[self.interval] = self.kline
-
-        @classmethod
-        def get_kline(cls, _interval) -> []:
-            return cls.klines_series.get(_interval, [])
-
-    @classmethod
-    def order_exist(cls, _id) -> bool:
-        return any(i.id == _id for i in cls.orders)
-
-    @classmethod
-    def all_order_exist(cls, _id) -> bool:
-        return any(i.id == _id for i in cls.all_orders)
-
-    @classmethod
-    def get_trading_capability_manager(cls) -> TradingCapabilityManager:
-        # print(f"get_trading_capability_manager.info_symbol: {cls.info_symbol}")
-        return StrategyBase.tcm
-
-    @classmethod
-    def get_first_currency(cls) -> str:
-        return cls.info_symbol.get('baseAsset')
-
-    @classmethod
-    def get_second_currency(cls) -> str:
-        return cls.info_symbol.get('quoteAsset')
-
-    @classmethod
-    def get_buffered_ticker(cls) -> Ticker:
-        # print(f"get_buffered_ticker.ticker: {cls.ticker}")
-        return Ticker(cls.ticker)
-
-    @classmethod
-    def get_buffered_funds(cls) -> Dict[str, FundsEntry]:
-        # print(f"get_buffered_funds.funds: {cls.funds}")
-        if time.time() - cls.get_buffered_funds_last_time > cls.rate_limiter:
-            # noinspection PyTypeChecker
-            loop.create_task(buffered_funds(print_info=False))
-            cls.get_buffered_funds_last_time = time.time()
-        return {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
-                cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
-
-    @classmethod
-    def get_buffered_order_book(cls) -> OrderBook:
-        # print(f"get_buffered_order_book.order_book: {cls.order_book}")
-        return OrderBook(cls.order_book)
-
-    @classmethod
-    def get_buffered_recent_candles(cls, candle_size_in_minutes: int, number_of_candles: int = 50,
-                                    include_current_building_candle: bool = False) -> List[Candle]:
-        size = convert_from_minute(candle_size_in_minutes)
-        kline = StrategyBase.Klines.get_kline(size)
-        if len(kline) > number_of_candles+1:
-            return kline[-number_of_candles-(0 if include_current_building_candle else 1):
-                         None if include_current_building_candle else -1]
-        return kline[:None if include_current_building_candle else -1]
-
-    @classmethod
-    def place_limit_order(cls, buy: bool, amount: float, price: float) -> int:
-        cls.order_id += 1
-        StrategyBase.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
-                                          f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
-        loop.create_task(place_limit_order_timeout(cls.order_id))
-        loop.create_task(create_limit_order(cls.order_id, buy, str(amount), str(price)))
-        if StrategyBase.exchange == 'ftx':
-            time.sleep(0.15)
-        return cls.order_id
-
-    @classmethod
-    def cancel_order(cls, order_id: int) -> None:
-        loop.create_task(cancel_order_timeout(order_id))
-        loop.create_task(cancel_order_call(order_id))
-
-    @classmethod
-    def get_buffered_completed_trades(cls, get_all_trades: bool = False) -> List[PrivateTrade]:
-        if get_all_trades:
-            return StrategyBase.all_trades
-        return StrategyBase.trades
-
-    @classmethod
-    def get_buffered_open_orders(cls, get_all_orders: bool = False) -> List[Order]:
-        if get_all_orders:
-            return cls.all_orders
-        return cls.orders
-
-
 def trade_not_exist(_order_id: int, _trade_id: int) -> bool:
     return all(not(trade.order_id == _order_id and trade.id == _trade_id) for trade in StrategyBase.trades)
 
@@ -275,6 +138,7 @@ class PrivateTrade:
         return self
 
 
+# noinspection PyRedeclaration
 class OrderUpdate(OrderUpdate):
     def __init__(self, event: OrderUpdateWrapper) -> None:
         super().__init__()
@@ -472,6 +336,146 @@ class OrderBook:
 
     def __call__(self):
         return self
+
+
+class StrategyBase:
+    client: api_pb2.OpenClientConnectionId = None
+    exchange = str()
+    symbol = str()
+    channel: grpc.Channel = None
+    stub = api_pb2_grpc.MartinStub
+    client_id = int()
+    strategy = None
+    info_symbol = {}
+    base_asset = str()
+    quote_asset = str()
+    ticker = {}
+    funds = {}
+    order_book = {}
+    order_id = 0
+    wait_order_id = []  # List of placed orders for time-out detect
+    canceled_order_id = []  # List canceled orders  for time-out detect
+    all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
+    trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
+    all_orders = []  # List of all open orders for symbol
+    orders = []  # List orders associated with strategy
+    tcm = None  # TradingCapabilityManager
+    last_state = None
+    get_buffered_funds_last_time = time.time()
+    rate_limiter = RATE_LIMITER
+    start_time_ms = int(time.time() * 1000)
+    send_request = None
+    for_request = None
+    wss_fire_up = False
+
+    def __call__(self):
+        return self
+
+    class Klines:
+        klines_series = {}
+        klines_lim = int()
+
+        def __init__(self, _interval):
+            self.interval = _interval
+            self.kline = []
+            self.klines_series[_interval] = self.kline
+
+        def refresh(self, _candle):
+            candle = Candle(_candle)
+            # print(f"refresh.interval: {self.interval}, candle: {candle.min_time}")
+            new_time = candle.min_time
+            last_time = self.kline[-1].min_time if self.kline else 0
+            if new_time >= last_time:
+                if new_time == last_time:
+                    self.kline[-1] = candle
+                else:
+                    self.kline.append(candle)
+                    if len(self.kline) > self.klines_lim:
+                        del self.kline[0]
+                self.klines_series[self.interval] = self.kline
+
+        @classmethod
+        def get_kline(cls, _interval) -> []:
+            return cls.klines_series.get(_interval, [])
+
+    @classmethod
+    def order_exist(cls, _id) -> bool:
+        return any(i.id == _id for i in cls.orders)
+
+    @classmethod
+    def all_order_exist(cls, _id) -> bool:
+        return any(i.id == _id for i in cls.all_orders)
+
+    @classmethod
+    def get_trading_capability_manager(cls) -> TradingCapabilityManager:
+        # print(f"get_trading_capability_manager.info_symbol: {cls.info_symbol}")
+        return StrategyBase.tcm
+
+    @classmethod
+    def get_first_currency(cls) -> str:
+        return cls.info_symbol.get('baseAsset')
+
+    @classmethod
+    def get_second_currency(cls) -> str:
+        return cls.info_symbol.get('quoteAsset')
+
+    @classmethod
+    def get_buffered_ticker(cls) -> Ticker:
+        # print(f"get_buffered_ticker.ticker: {cls.ticker}")
+        return Ticker(cls.ticker)
+
+    @classmethod
+    def get_buffered_funds(cls) -> Dict[str, FundsEntry]:
+        # print(f"get_buffered_funds.funds: {cls.funds}")
+        if time.time() - cls.get_buffered_funds_last_time > cls.rate_limiter:
+            # noinspection PyTypeChecker
+            loop.create_task(buffered_funds(print_info=False))
+            cls.get_buffered_funds_last_time = time.time()
+        return {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
+                cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
+
+    @classmethod
+    def get_buffered_order_book(cls) -> OrderBook:
+        # print(f"get_buffered_order_book.order_book: {cls.order_book}")
+        return OrderBook(cls.order_book)
+
+    @classmethod
+    def get_buffered_recent_candles(cls, candle_size_in_minutes: int, number_of_candles: int = 50,
+                                    include_current_building_candle: bool = False) -> List[Candle]:
+        size = convert_from_minute(candle_size_in_minutes)
+        kline = StrategyBase.Klines.get_kline(size)
+        if len(kline) > number_of_candles+1:
+            return kline[-number_of_candles-(0 if include_current_building_candle else 1):
+                         None if include_current_building_candle else -1]
+        return kline[:None if include_current_building_candle else -1]
+
+    @classmethod
+    def place_limit_order(cls, buy: bool, amount: float, price: float) -> int:
+        cls.order_id += 1
+        StrategyBase.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
+                                          f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
+        loop.create_task(place_limit_order_timeout(cls.order_id))
+        loop.create_task(create_limit_order(cls.order_id, buy, str(amount), str(price)))
+        if StrategyBase.exchange == 'ftx':
+            time.sleep(0.15)
+        return cls.order_id
+
+    @classmethod
+    def cancel_order(cls, order_id: int) -> None:
+        loop.create_task(cancel_order_timeout(order_id))
+        loop.create_task(cancel_order_call(order_id))
+
+    @classmethod
+    def get_buffered_completed_trades(cls, get_all_trades: bool = False) -> List[PrivateTrade]:
+        if get_all_trades:
+            return StrategyBase.all_trades
+        return StrategyBase.trades
+
+    @classmethod
+    def get_buffered_open_orders(cls, get_all_orders: bool = False) -> List[Order]:
+        if get_all_orders:
+            return cls.all_orders
+        return cls.orders
 
 
 async def heartbeat(_session):
@@ -797,8 +801,15 @@ async def buffered_orders():
                         cls.order_id = json.loads(last_state.pop('ms.order_id', 0))
                         cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                         #
-                        cls.orders = jsonpickle.decode(last_state.pop('ms.orders', '[]'))
-                        # print(f"buffered_orders.ms.orders: {cls.orders}")
+                        # TODO Remove after upgrade 1.2.6 -> 1.2.7
+                        _import_orders = last_state.pop('ms.orders', '[]')
+                        _mod_orders = []
+                        for order in json.loads(_import_orders):
+                            order.update({"py/object": "martin_binance.margin_wrapper.Order"})
+                            _mod_orders.append(order)
+                        cls.orders = jsonpickle.decode(json.dumps(_mod_orders))
+                        #
+                        # cls.orders = jsonpickle.decode(last_state.pop('ms.orders', '[]'))
                     else:
                         last_state.pop('ms.order_id', None)
                         # last_state.pop('ms.trades', None)
@@ -817,10 +828,10 @@ async def buffered_orders():
                     ms_orders_id = []
                     for i in cls.all_orders:
                         exch_orders_id.append(i.id)
+                    print(f"buffered_orders.exch_orders_id: {exch_orders_id}")
                     for i in cls.orders:
                         ms_orders_id.append(i.id)
-                    # print(f"buffered_orders.exch_orders_id: {exch_orders_id}")
-                    # print(f"buffered_orders.ms_orders_id: {ms_orders_id}")
+                    print(f"buffered_orders.ms_orders_id: {ms_orders_id}")
                     diff_id = list(set(ms_orders_id).difference(exch_orders_id))
                     if diff_id:
                         cls.strategy.message_log(f"Executed order(s) is: {diff_id}", log_level=LogLevel.INFO)
@@ -847,9 +858,10 @@ async def buffered_orders():
                     # print(f"buffered_orders.cls.orders: {cls.orders}")
                     if not restore:
                         cls.strategy.restore_strategy_state(last_state)
-                except Exception as exc:
+                except Exception as _ex:
                     cls.last_state = None
-                    cls.strategy.message_log(f"Exception restore_strategy_state: {exc}", log_level=LogLevel.WARNING)
+                    cls.strategy.message_log(f"Exception restore_strategy_state: {_ex}\n{traceback.format_exc()}",
+                                             log_level=LogLevel.WARNING)
                 restore = False
         except asyncio.CancelledError:
             # print("buffered_orders.Cancelled")
@@ -1155,7 +1167,7 @@ def load_last_state() -> {}:
 
 async def wss_init():
     cls = StrategyBase
-    logger.info(f"Init WSS, client_id: {cls.client_id}")
+    print(f"Init WSS, client_id: {cls.client_id}")
     if cls.client_id:
         # WSS declare
         # Market stream
@@ -1175,9 +1187,10 @@ async def wss_init():
                 cls.stub.StartStream, api_pb2.StartStreamRequest, symbol=cls.symbol, market_stream_count=5)
             cls.wss_fire_up = False
         except UserWarning:
+            print("Start WSS failed. try one else...")
             cls.wss_fire_up = True
     else:
-        logger.info("Init WSS failed. try one else...")
+        print("Init WSS failed. try one else...")
         await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))
         cls.wss_fire_up = True
 
