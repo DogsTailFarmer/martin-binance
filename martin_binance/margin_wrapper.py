@@ -30,7 +30,6 @@ import grpc
 import jsonpickle
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
-# from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
 # noinspection PyUnresolvedReferences
 from margin_strategy_sdk import LogLevel, OrderUpdate, RoundingType, Dict, List, StrategyConfig
 
