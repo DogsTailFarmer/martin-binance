@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7b2"
+__version__ = "1.2.7b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -23,7 +23,6 @@ session = server.find_where({"session_name": "Trade"})
 
 if session:
     for window in session.list_windows():
-        # print(dir(window))
         window_name = window.get('window_name')
         pane = window.attached_pane
         if window_name == 'srv':

@@ -2,6 +2,7 @@
 ### Fixed
 * If it is not possible to calculate the price overlap for the cycle reverse, its value set to coarse estimate * 2
 instead of the OVER_PRICE
+* In saved state added StrategyBase.trades. This is for correct restore if order was filled partially
 
 ### Added for new features
 * Disconnecting the gRPC server is now safe, auto reconnect with full recovery of the current session

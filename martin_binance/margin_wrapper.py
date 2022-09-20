@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7b6"
+__version__ = "1.2.7b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -492,6 +492,7 @@ async def heartbeat(_session):
             last_state['ms.order_id'] = json.dumps(cls.order_id)
             last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
             last_state['ms.orders'] = jsonpickle.encode(cls.orders)
+            last_state['ms_trades'] = jsonpickle.encode(cls.trades)
             # print(f"heartbeat.last_state: {last_state}")
             if ms.LAST_STATE_FILE.exists():
                 ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.prev'))
@@ -802,6 +803,7 @@ async def buffered_orders():
                         # Restore StrategyBase class var
                         cls.order_id = json.loads(last_state.pop('ms.order_id', 0))
                         cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
+                        cls.trades = jsonpickle.decode(last_state.pop('ms_trades', '[]'))
                         #
                         # TODO Remove after upgrade 1.2.6 -> 1.2.7
                         _import_orders = last_state.pop('ms.orders', '[]')

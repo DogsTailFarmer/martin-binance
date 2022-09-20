@@ -42,11 +42,11 @@ Strongly recommended that you test the strategy in the demo mode before using re
 
 * You cannot run multiple pairs with overlapping currencies on the same account!
 
-Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
-
-Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
-
-As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
+>Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
+> 
+>Incorrectly: (BTC/USDT), (ETH/USDT), (BTC/ETH)
+> 
+>As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
 
 * See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
 
