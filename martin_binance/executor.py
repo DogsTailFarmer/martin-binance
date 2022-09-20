@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7b2"
+__version__ = "1.2.7b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -20,9 +20,13 @@ from threading import Thread
 import queue
 import requests
 from requests.adapters import HTTPAdapter, Retry
-import traceback
 # noinspection PyUnresolvedReferences
-from martin_binance import Path, STANDALONE, WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH, DB_FILE
+import traceback  # lgtm [py/unused-import]
+
+from martin_binance import Path, STANDALONE, DB_FILE
+# noinspection PyUnresolvedReferences
+from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH  # lgtm [py/unused-import]
+
 if STANDALONE:
     from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
     from martin_binance.margin_wrapper import __version__ as msb_ver

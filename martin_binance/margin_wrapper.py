@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7b3"
+__version__ = "1.2.7b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -284,6 +284,9 @@ class TradingCapabilityManager:
         Get the minimal amount change that is possible to use on the exchange.
         """
         return self.step_size
+
+    def is_limit_order_valid(self, buy_side, _amount, _price):
+        pass  # For margin compatibility
 
 
 class Ticker:
@@ -827,10 +830,10 @@ async def buffered_orders():
                     ms_orders_id = []
                     for i in cls.all_orders:
                         exch_orders_id.append(i.id)
-                    print(f"buffered_orders.exch_orders_id: {exch_orders_id}")
+                    # print(f"buffered_orders.exch_orders_id: {exch_orders_id}")
                     for i in cls.orders:
                         ms_orders_id.append(i.id)
-                    print(f"buffered_orders.ms_orders_id: {ms_orders_id}")
+                    # print(f"buffered_orders.ms_orders_id: {ms_orders_id}")
                     diff_id = list(set(ms_orders_id).difference(exch_orders_id))
                     if diff_id:
                         cls.strategy.message_log(f"Executed order(s) is: {diff_id}", log_level=LogLevel.INFO)
@@ -1109,7 +1112,7 @@ async def on_ticker_update():
                           'closeTime': ticker.event_time}
             cls.ticker = ticker_24h
             cls.strategy.on_new_ticker(Ticker(cls.ticker))
-            # print(f"on_ticker_update: {ticker.symbol} {cls.ticker['closeTime']}: {cls.ticker['lastPrice']}")
+            # print(f"on_ticker_update: {ticker.symbol} : {cls.ticker['closeTime']} : {cls.ticker['lastPrice']}")
     except Exception as ex:
         logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex.details()}")
         cls.wss_fire_up = True
@@ -1228,10 +1231,14 @@ async def main(_symbol):
         print(f"main.client_id: {cls.client_id}")
         print(f"main.srv_version: {session.client.srv_version}")
         # Check and Cancel ALL ACTIVE ORDER
-        _active_orders = await send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=_symbol)
-        # print(f"main._active_orders: {_active_orders}")
-        active_orders = json_format.MessageToDict(_active_orders).get('items', [])
-        # print(f"main.active_orders: {active_orders}")
+        active_orders = None
+        try:
+            _active_orders = await send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=_symbol)
+        except Exception as ex:
+            print(f"Can't get active orders: {ex.details()}")
+        else:
+            active_orders = json_format.MessageToDict(_active_orders).get('items', [])
+            # print(f"main.active_orders: {active_orders}")
         # Try load last strategy state from saved files
         last_state = load_last_state()
         restore_state = bool(last_state)
@@ -1242,7 +1249,7 @@ async def main(_symbol):
                 restore_state = False
                 try:
                     await send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=_symbol)
-                    cancel_orders = json_format.MessageToDict(_active_orders).get('items', [])
+                    cancel_orders = active_orders or []
                     print('Before start was canceled orders:')
                     for i in cancel_orders:
                         print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
