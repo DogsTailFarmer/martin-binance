@@ -21,7 +21,6 @@ exchange = [
 ]
 
 [Exporter]
-database = "./funds_rate.db"
 port = 8000
 sleep_time_s = 60
 vps_name = "**** Place VPS Name there ****"

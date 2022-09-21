@@ -62,7 +62,7 @@ The system has two modes:
 * python_strategy modules can be used as plug-in trading strategy for multi-exchange terminal
 <a href="#margin">margin.de</a>, free demo, you can try it.
 
-Strategy logic realized at executor.py and trading parameters settings in the API_1_BTCBUSD.py (cli_7_BTCUSDT.py)
+Strategy logic realized at executor.py and trading parameters settings in the cli_1_AAABBB.py (cli_7_BTCUSDT.py)
 
 You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
 
@@ -92,6 +92,8 @@ You can modify them for your needs. See <a href="#for-developers">For developers
 
 ## Trade idea
 <p id="trade-idea"></p>
+
+<p align="center"><img src="https://user-images.githubusercontent.com/77513676/191544694-21f28b6f-9d6c-4258-b686-c29653dc9c77.png"></p>
 
 Create a grid of increasing volume orders and when they perform
 creation of one take profit order in the opposite direction.
@@ -151,44 +153,45 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 ```console
 pip install martin-binance
 ```
+After first install run ```exchanges_wrapper/exch_srv.py``` and ```martin_binance/cli_7_BTCUSDT.py```
+You can find this where pip installs packages, often it's ```/home/ubuntu/.local/lib/python3.10/site-packages```
 
-### Update
+The structure of the working directory will be created and the necessary files will be copied:
+For Ubuntu it will be here: ```home/user/.MartinBinance/```
 
-Before update save configurations file:
-* ```martin_binance/ms_cfg.toml```
-* ```exchanges_wrapper/exch_srv_cfg.toml```
-
-Also save ```martin_binance/last_state``` folder after manually stop strategy.
-
+For upgrade to latest versions use:
 ```console
-pip install martin-binance --upgrade
+pip install -U martin-binance
 ```
-After update for restore config use saved files. Before restart replace ```martin_binance/last_state``` from saved.
 
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
 * Get token
 * Find channel_id. Just start [IDBot](https://t.me/username_to_id_bot) and get channel_id
-* Specify this data into ```martin_binance/ms_cfg.toml``` for 'Demo - Binance', 7
+* Specify this data into ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml``` for 'Demo - Binance', 7
 
 ### STANDALONE mode
 * Log in at [Binance Spot Test Network](https://testnet.binance.vision/)
 * Create API Key
 
 #### Start server
-* Specify api_key and api_secret in ```exchanges_wrapper/exch_srv_cfg.toml```
-* Run ```exchanges_wrapper/exch_srv.py``` in terminal window
+* Specify api_key and api_secret in ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```
+* Run ```exchanges_wrapper/exch_srv.py``` in terminal window.
 
 #### Start client
-* Run ```martin_binance/cli_7_BTCUSDT.py``` in other terminal window
+* Run ```/home/ubuntu/.MartinBinance/cli_7_BTCUSDT.py``` in other terminal window.
 
 Strategy is started.
 
 #### Setting trade pair
 You must set pair name in three places the same (yes, it is crooked, but so far):
-* base setting at bottom of the ```martin_binance/cli_X_AAABBB.py``` in "__main__" section, SYMBOL = 'AAABBB'
+* base setting at top of the ```cli_X_AAABBB.py```, ```ex.SYMBOL = 'AAABBB'```
 * the name of ```cli_X_AAABBB.py``` must match
-* the name of pane in <a href="#tmux">Tmux terminal window</a>
+* the ```X``` it is index of element from exchange list in ```config/ms_cfg.toml```
+
+>For 'Demo - Binance' and BTC/USDT trade pair it will be cli_7_BTCUSDT.py
+
+* the name of pane in <a href="#tmux">Tmux terminal window</a>, see explanation in the relevant section
 
 For stop strategy use Ctrl-C and/or Telegram control function
 
