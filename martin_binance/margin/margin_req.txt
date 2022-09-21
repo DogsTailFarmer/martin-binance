@@ -19,4 +19,4 @@ unicodedata2==14.0.0
 unittest2==1.1.0
 wheel==0.31.1
 wmi==1.5.1
-
+charset-normalizer==2.1.1

@@ -4,6 +4,9 @@
 instead of the OVER_PRICE
 * In saved state added StrategyBase.trades. This is for correct restore if order was filled partially
 
+### Update
+README.md - renewed installation chapter
+ 
 ### Added for new features
 * Disconnecting the gRPC server is now safe, auto reconnect with full recovery of the current session
 

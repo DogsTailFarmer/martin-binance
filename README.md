@@ -196,28 +196,28 @@ You must set pair name in three places the same (yes, it is crooked, but so far)
 For stop strategy use Ctrl-C and/or Telegram control function
 
 ### MARGIN mode
-* Install [margin](https://margin.de/download/)
+*For different OS paths will be different, this example for Ubuntu*
 
-#### For Linux
-Extract [Linux_site-packages.tar.gz](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/Linux_site-packages.tar.gz)
+* Install [margin](https://margin.de/download/) to the ```~/opt/margin/```
 
-to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
-* Copy ```martin_binance/ms_cfg.toml``` and ```martin_binance/funds_rate.db``` to the ``` ~/margin-linux ```
-* Copy ```martin_binance/executor.py``` to the ```~/margin-linux/resources/python/lib/python3.7/site-packages```
+Change dir to the ```~/opt/margin/resources/python/lib/python3.7/site-packages/``` and install martin-binance there:
+```console
+pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps martin-binance
+```
 
-#### For Windows
-Extract [win_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/win_site-packages.zip)
+The margin terminal uses its own assembly Python3.7 which does not have some packages necessary for the strategy
+to work. They need to be installed.
+```console
+pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps -r ./martin_binance/margin/margin_req.txt
+```
 
-to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
-* Copy ```martin_binance/ms_cfg.toml``` and ```martin_binance/funds_rate.db``` to the ```C:\Users\user\AppData\Local\Programs\margin```
-* Copy executor.py to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+* Rename  ```martin_binance/ms_cfg.toml.template``` to ```martin_binance/ms_cfg.toml```
+* Copy ```ms_cfg.toml``` and ```funds_rate.db``` to the margin install folder ```~/opt/margin/```
+* Create Telegram bot as described above and specify the data in ```ms_cfg.toml```
 
-#### For macOS
-Extract [MacOS_site-packages.zip](https://github.com/DogsTailFarmer/martin-binance/blob/7fdde788fb25df780bf2c9d5084fde9210f9d272/martin_binance/margin/MacOS_site-packages.zip)
-
-to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
-* Copy ms_cfg.toml and funds_rate.db to the ```/Users/current_user/.margin/```
-* Copy executor.py to the ```/Applications/margin-4.4.2.app/Contents/Resources/python/lib/python3.7/site-packages```
+For Ubuntu (Linux) check if exist file
+```~/opt/margin/resources/python/lib/python3.7/lib-dynload/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
+and if not, copy it from ```martin_binance/margin/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
 ***
 * Start margin in Demo mode
 * Add currency pair BTC/USDT
@@ -232,16 +232,17 @@ Strategy is started.
 
 #### Setting trade pair
 The selection of the pair is determined by the window of the terminal in which the strategy is launched.
-The "__ main __" section settings are ignored.
 
-### Add new exchange account
+### Add new exchange account (STANDALONE mode)
 <p id="add-new-exchange-account"></p>
 Adding an account is in two parts
 
-* For server, it is exchanges_wrapper/exch_srv_cfg.toml, where you place API key and *account name*
-* For client, it's martin_binance/ms_cfg.toml, where you add *account name* into exchange list
+* For server, it is ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```,
+where you place API key and *account name*
+* For client, it's ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml```,
+where you add *account name* into exchange list and setup Telegram parameters
 
-The *account name* _must_ be identically for account.
+The *account name* _must_ be identically for server and client configs.
 
 ## Terminal Tmux (Linux)
 <p id="tmux"></p>
@@ -296,7 +297,7 @@ tmux new-session -s Trade
 * Change dir to the ```~/.local/lib/python3.8/site-packages/exchanges_wrapper```
 * Create new pane: Ctrl+B c
 * Rename pane 1: Ctrl+B + , 7-BTC/USDT Enter
-* Change dir to the ```~/martin_binance```
+* Change dir to the ```~/.MartinBinance```
 * Reboot system
 * Attach to the restored session:
 ~~~
