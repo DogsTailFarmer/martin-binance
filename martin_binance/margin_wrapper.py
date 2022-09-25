@@ -58,7 +58,8 @@ ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
 logger = logging.getLogger('logger')
 color_init()
 ms_order_id = 'ms.order_id'
-ms_orders  = 'ms.orders'
+ms_orders = 'ms.orders'
+
 
 def write_log(level: LogLevel, message: str) -> None:
     if level == LogLevel.DEBUG:
