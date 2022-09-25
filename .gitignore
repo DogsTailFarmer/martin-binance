@@ -3,6 +3,3 @@ __pycache__/
 venv/
 .gitignore
 /dist/**
-/martin_binance/cli*.py
-!/martin_binance/cli_7_BTCUSDT.py
-!/martin_binance/cli_10_AAABBB.py

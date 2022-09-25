@@ -1,3 +1,16 @@
+## v1.2.7-1 2022-09-25
+### Fixed
+* #26 #29 - add preliminary calculation of grid parameters
+```console
+25/09 16:33:07 set_trade_conditions: buy_side: False, depo: 0.050000, base_price: 18950.35, reverse_target_amount: 0, amount_min: 0.000528, step_size: 0.000001, delta_min: 0.01
+25/09 16:33:07 set_trade_conditions: depo: 0.050000, order_q: 48, amount_first_grid: 0.000528, amount_2: 0.0005808, q_max: 24, coarse overprice: 1.210355
+25/09 16:33:07 For Sell cycle will be set 24 orders for 1.2104% over price
+```
+Before start, you can correct value depo and other trade parameters 
+
+* #30 Incorrect conversion to comparable currency at initial check of deposit volume
+* For analytic export replace IOT to IOTA for Bitfinex
+
 ## v1.2.7 2022-09-18
 ### Fixed
 * If it is not possible to calculate the price overlap for the cycle reverse, its value set to coarse estimate * 2

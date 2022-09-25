@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7"
+__version__ = "1.2.7-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -57,7 +57,8 @@ ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
 # Set logger
 logger = logging.getLogger('logger')
 color_init()
-
+ms_order_id = 'ms.order_id'
+ms_orders  = 'ms.orders'
 
 def write_log(level: LogLevel, message: str) -> None:
     if level == LogLevel.DEBUG:
@@ -489,9 +490,9 @@ async def heartbeat(_session):
             update_class_var(_session)
             # print(f"tik-tak ', {int(time.time() * 1000)}, cls.client_id: {cls.client_id}")
             last_state = cls.strategy.save_strategy_state()
-            last_state['ms.order_id'] = json.dumps(cls.order_id)
+            last_state[ms_order_id] = json.dumps(cls.order_id)
             last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
-            last_state['ms.orders'] = jsonpickle.encode(cls.orders)
+            last_state[ms_orders] = jsonpickle.encode(cls.orders)
             last_state['ms_trades'] = jsonpickle.encode(cls.trades)
             # print(f"heartbeat.last_state: {last_state}")
             if ms.LAST_STATE_FILE.exists():
@@ -801,23 +802,23 @@ async def buffered_orders():
                         last_state.update(cls.last_state)
                         cls.last_state = None
                         # Restore StrategyBase class var
-                        cls.order_id = json.loads(last_state.pop('ms.order_id', 0))
+                        cls.order_id = json.loads(last_state.pop(ms_order_id, 0))
                         cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                         cls.trades = jsonpickle.decode(last_state.pop('ms_trades', '[]'))
                         #
                         # TODO Remove after upgrade 1.2.6 -> 1.2.7
-                        _import_orders = last_state.pop('ms.orders', '[]')
+                        _import_orders = last_state.pop(ms_orders, '[]')
                         _mod_orders = []
                         for order in json.loads(_import_orders):
                             order.update({"py/object": "martin_binance.margin_wrapper.Order"})
                             _mod_orders.append(order)
                         cls.orders = jsonpickle.decode(json.dumps(_mod_orders))
                         #
-                        # cls.orders = jsonpickle.decode(last_state.pop('ms.orders', '[]'))
+                        # cls.orders = jsonpickle.decode(last_state.pop(ms_orders, '[]'))
                     else:
-                        last_state.pop('ms.order_id', None)
+                        last_state.pop(ms_order_id, None)
                         # last_state.pop('ms.trades', None)
-                        last_state.pop('ms.orders', None)
+                        last_state.pop(ms_orders, None)
                     # Get trades for strategy
                     _trades = await cls.send_request(cls.stub.FetchAccountTradeList, api_pb2.AccountTradeListRequest,
                                                      symbol=cls.symbol,

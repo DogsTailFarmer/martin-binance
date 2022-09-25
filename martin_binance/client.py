@@ -81,8 +81,8 @@ class Trade:
                     (status_code == grpc.StatusCode.UNAVAILABLE
                      and ex.details() == 'failed to connect to all addresses')
                         or
-                    ((status_code == grpc.StatusCode.UNKNOWN
-                     and "'NoneType' object has no attribute 'client'" in ex.details()))
+                    (status_code == grpc.StatusCode.UNKNOWN
+                     and "'NoneType' object has no attribute 'client'" in ex.details())
                 ):
                     self.client = None
                     logger.warning("Connection to gRPC server failed, try reconnect...")
