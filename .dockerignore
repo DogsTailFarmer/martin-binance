@@ -1,0 +1,4 @@
+**/__pycache__/
+martin_binance/margin/
+martin_binance/service/
+# **/*.template

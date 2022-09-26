@@ -1,3 +1,7 @@
+## v1.2.8 2022-09-26
+### Added for new features
+* Powered by [Docker](https://www.docker.com/) deploy
+
 ## v1.2.7-1 2022-09-25
 ### Fixed
 * #26 #29 - add preliminary calculation of grid parameters

@@ -148,7 +148,51 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 ## Quick start
 <p id="quick-start"></p>
 
-### Install
+For STANDALONE mode you can use both - pip and Docker deployment schemas, as you choice.
+
+For *margin* mode - pip only.
+
+#### Create Telegram bot
+* Register [Telegram bot](https://t.me/BotFather)
+* Get token
+* Find channel_id. Just start [IDBot](https://t.me/username_to_id_bot) and get channel_id
+* After next step specify this data into ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml``` for 'Demo - Binance', 7
+
+### Docker
+* Install and run [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper#get-started) server.
+* Pull last version of martin-binance image
+```console
+docker pull ghcr.io/dogstailfarmer/martin-binance:latest
+```
+
+#### First run
+The structure of the working directory will be created and the necessary files will be copied:
+For Ubuntu it will be here: ```home/user/.MartinBinance/```
+```console
+docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/__init__.py" > init.py && \
+  docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/ms_cfg.toml.template" > ms_cfg.toml.template &&\
+  docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/funds_rate.db.template" > funds_rate.db.template &&\
+  docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/cli_7_BTCUSDT.py.template" > cli_7_BTCUSDT.py.template &&\
+  docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/cli_10_AAABBB.py.template" > cli_10_AAABBB.py.template &&\
+  python3 init.py && rm init.py && rm ms_cfg.toml.template && rm funds_rate.db.template && rm cli_7_BTCUSDT.py.template && rm cli_10_AAABBB.py.template
+```
+#### Start client
+```console
+docker run -itP \
+ --mount type=bind,source=/home/ubuntu/.MartinBinance,target=/home/appuser/.MartinBinance \
+ --network=host \
+ --restart=always \
+ --name=7-BTCUSDT \
+ martin-binance \
+ /home/appuser/.MartinBinance/cli_7_BTCUSDT.py 1
+```
+The last '1' it is parameter for silent restart with restore operational status.
+
+```.MartinBinance/cli_7_BTCUSDT.py``` where trading parameters must be setting.
+
+For auto update running containers recommended use [Watchtower](https://github.com/containrrr/watchtower/)
+
+### Install from pip
 
 ```console
 pip install martin-binance
@@ -163,16 +207,6 @@ For upgrade to latest versions use:
 ```console
 pip install -U martin-binance
 ```
-
-#### Create Telegram bot
-* Register [Telegram bot](https://t.me/BotFather)
-* Get token
-* Find channel_id. Just start [IDBot](https://t.me/username_to_id_bot) and get channel_id
-* Specify this data into ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml``` for 'Demo - Binance', 7
-
-### STANDALONE mode
-* Log in at [Binance Spot Test Network](https://testnet.binance.vision/)
-* Create API Key
 
 #### Start server
 * Specify api_key and api_secret in ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```
