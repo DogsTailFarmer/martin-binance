@@ -1,3 +1,10 @@
+## v1.2.8-1 2022-09-27
+### Fixed
+* For analytic export replace IOTA to MIOTA for Bitfinex
+
+### Update
+* dependency exchanges-wrapper up to 1.2.5-3 
+
 ## v1.2.8 2022-09-26
 ### Added for new features
 * Powered by [Docker](https://www.docker.com/) deploy
