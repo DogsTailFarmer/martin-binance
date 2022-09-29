@@ -105,7 +105,7 @@ KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
 def get_rate(_currency_rate) -> {}:
     global request_delay
     # Replace info
-    replace = {'UST': 'USDT', 'IOTA': 'MIOTA'}
+    replace = {'UST': 'USDT', 'IOT': 'MIOTA'}
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
     session = Session()
     session.headers.update(headers)

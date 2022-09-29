@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7-1"
+__version__ = "1.2.8-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -30,8 +30,9 @@ import grpc
 import jsonpickle
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
+from margin_strategy_sdk import LogLevel, OrderUpdate, RoundingType, Dict, List
 # noinspection PyUnresolvedReferences
-from margin_strategy_sdk import LogLevel, OrderUpdate, RoundingType, Dict, List, StrategyConfig
+from margin_strategy_sdk import StrategyConfig  # lgtm [py/unused-import]
 
 from exchanges_wrapper.definitions import Interval
 from exchanges_wrapper.events import OrderUpdateWrapper
@@ -806,16 +807,7 @@ async def buffered_orders():
                         cls.order_id = json.loads(last_state.pop(ms_order_id, 0))
                         cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                         cls.trades = jsonpickle.decode(last_state.pop('ms_trades', '[]'))
-                        #
-                        # TODO Remove after upgrade 1.2.6 -> 1.2.7
-                        _import_orders = last_state.pop(ms_orders, '[]')
-                        _mod_orders = []
-                        for order in json.loads(_import_orders):
-                            order.update({"py/object": "martin_binance.margin_wrapper.Order"})
-                            _mod_orders.append(order)
-                        cls.orders = jsonpickle.decode(json.dumps(_mod_orders))
-                        #
-                        # cls.orders = jsonpickle.decode(last_state.pop(ms_orders, '[]'))
+                        cls.orders = jsonpickle.decode(last_state.pop(ms_orders, '[]'))
                     else:
                         last_state.pop(ms_order_id, None)
                         # last_state.pop('ms.trades', None)

@@ -1,3 +1,9 @@
+## v1.2.8-2 2022-09-29
+### Fixed
+* For analytic export replace Bitfinex mapping from "IOTA to MIOTA" to "IOT to MIOTA"
+* Migration transition solution cleared for saved_state from 1.2.6 - > 1.2.7
+* lgtm [py/unused-import]
+
 ## v1.2.8-1 2022-09-27
 ### Fixed
 * For analytic export replace IOTA to MIOTA for Bitfinex
