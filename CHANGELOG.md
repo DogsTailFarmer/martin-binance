@@ -1,3 +1,7 @@
+## v1.2.8-2 2022-mm-dd
+### Update
+* get_min_buy_amount()
+
 ## v1.2.8-2 2022-09-29
 ### Fixed
 * For analytic export replace Bitfinex mapping from "IOTA to MIOTA" to "IOT to MIOTA"
