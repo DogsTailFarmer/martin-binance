@@ -1,3 +1,10 @@
+## v1.2.9b0 2022-09-26
+### Added for new features
+* Huobi exchange implemented
+
+### Update
+* Dependency exchanges-wrapper==1.2.6
+
 ## v1.2.8-2 2022-mm-dd
 ### Update
 * get_min_buy_amount()

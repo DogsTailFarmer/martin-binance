@@ -5,7 +5,7 @@
 
 <h2 align="center">Cyclic grid strategy for SPOT market</h2>
 
-<h3 align="center">Free trading system for crypto exchanges (Binance, FTX, Bitfinex,)</h3>
+<h3 align="center">Free trading system for crypto exchanges (Binance, FTX, Bitfinex, Huobi,)</h3>
 
 <h4 align="center">Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a></h4>
 
@@ -36,10 +36,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* From v1.2.7 work path relocated to ```home/user/.MartinBinance/```
-* From v1.2.7 changed format of ```home/user/.MartinBinance/config/ms_cfg.toml```
-* From v1.2.7 changed format of ```home/user/.MartinBinance/cli_7_BTCUSDT.py```
-
+* 1.2.9 Before use Huobi exchange update ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml``` to last ver. from ```exchanges-wrapper/exch_srv_cfg.toml.template```
 * You cannot run multiple pairs with overlapping currencies on the same account!
 
 >Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
