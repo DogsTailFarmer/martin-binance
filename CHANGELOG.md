@@ -1,19 +1,27 @@
-## v1.2.9b0 2022-09-26
+## v1.2.9-1 2022-10-14
+### Update
+* Refusal to use PROFIT_REVERSE parameter.
+Valid for Reverse cycle. For a small deposit, the cycle income can be equal to the minimum order size step.
+If you divide it into parts to increase the deposit and make a profit, as a result of rounding the deposit amount does
+not increase, which negatively affects the ability of the strategy to complete the reverse cycle.
+Instead, all cycle profits are allocated either to increase the deposit (for an odd cycle number)
+or to accumulate profits (for an even cycle number)
+
+## v1.2.9 2022-10-13
 ### Added for new features
 * Huobi exchange implemented
 
 ### Update
 * Dependency exchanges-wrapper==1.2.6
 
-## v1.2.8-2 2022-mm-dd
-### Update
-* get_min_buy_amount()
-
 ## v1.2.8-2 2022-09-29
 ### Fixed
 * For analytic export replace Bitfinex mapping from "IOTA to MIOTA" to "IOT to MIOTA"
 * Migration transition solution cleared for saved_state from 1.2.6 - > 1.2.7
 * lgtm [py/unused-import]
+
+### Update
+* get_min_buy_amount()
 
 ## v1.2.8-1 2022-09-27
 ### Fixed

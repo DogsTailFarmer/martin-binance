@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.7"
+__version__ = "1.2.9-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -55,7 +55,6 @@ ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()
 ex.PROFIT = Decimal('0.15')  # 0.15 - 0.85
 ex.PROFIT_MAX = Decimal('0.85')  # If set it is maximum adapted cycle profit
-ex.PROFIT_REVERSE = Decimal('0.5')  # 0.0 - 0.75, In Reverse cycle revenue portion of profit
 ex.OVER_PRICE = Decimal('0.6')  # Overlap price in one direction
 ex.ORDER_Q = 12  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid

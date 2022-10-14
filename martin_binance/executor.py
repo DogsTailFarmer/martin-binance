@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9"
+__version__ = "1.2.9-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -74,7 +74,6 @@ ROUND_QUOTE = str()
 #
 PROFIT = Decimal()
 PROFIT_MAX = Decimal()
-PROFIT_REVERSE = Decimal()
 OVER_PRICE = Decimal()
 ORDER_Q = int()
 MARTIN = Decimal()
@@ -708,9 +707,7 @@ class Strategy(StrategyBase):
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
-        if Decimal('0.0') > PROFIT_REVERSE > Decimal('0.75'):
-            init_params_error = 'PROFIT_REVERSE'
-        elif FEE_SECOND and FEE_FTX:
+        if FEE_SECOND and FEE_FTX:
             init_params_error = 'FEE_SECOND and FEE_FTX'
         elif not FEE_IN_PAIR and FEE_SECOND:
             init_params_error = 'FEE_IN_PAIR and FEE_SECOND'
@@ -1310,12 +1307,6 @@ class Strategy(StrategyBase):
                 go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
             if self.wait_refunding_for_start or go_trade:
                 self.wait_refunding_for_start = False
-                if self.reverse:
-                    pf = PROFIT_REVERSE * self.profit_first / (1 - PROFIT_REVERSE)
-                    ps = PROFIT_REVERSE * self.profit_second / (1 - PROFIT_REVERSE)
-                else:
-                    pf = self.profit_first
-                    ps = self.profit_second
                 if self.cycle_buy:
                     df = Decimal('0')
                     ds = self.deposit_second - self.profit_second
@@ -1332,8 +1323,8 @@ class Strategy(StrategyBase):
                               'cycle_buy': self.cycle_buy,
                               'f_depo': df,
                               's_depo': ds,
-                              'f_profit': pf,
-                              's_profit': ps,
+                              'f_profit': self.profit_first,
+                              's_profit': self.profit_second,
                               'order_q': self.order_q,
                               'over_price': self.over_price,
                               'cycle_time': ct,
@@ -2205,16 +2196,14 @@ class Strategy(StrategyBase):
         # Calculate cycle and total profit, refresh depo
         if self.cycle_buy:
             profit_second = self.round_truncate(amount_second_fee - self.tp_amount, base=False)
-            profit_reverse = self.round_truncate(PROFIT_REVERSE * profit_second if self.reverse else Decimal('0'),
-                                                 base=False)
+            profit_reverse = profit_second if self.reverse and self.cycle_buy_count % 2 == 0 else Decimal('0')
             profit_second -= profit_reverse
             self.profit_second += profit_second
             self.part_profit_second = Decimal('0')
             self.message_log(f"Cycle profit second {self.profit_second} + {profit_reverse}")
         else:
             profit_first = self.round_truncate(amount_first_fee - self.tp_amount, base=True)
-            profit_reverse = self.round_truncate(PROFIT_REVERSE * profit_first if self.reverse else Decimal('0'),
-                                                 base=True)
+            profit_reverse = profit_first if self.reverse and self.cycle_sell_count % 2 == 0 else Decimal('0')
             profit_first -= profit_reverse
             self.profit_first += profit_first
             self.part_profit_first = Decimal('0')
