@@ -194,7 +194,16 @@ For auto update running containers recommended use [Watchtower](https://github.c
 ```console
 pip install martin-binance
 ```
-After first install run ```exchanges_wrapper/exch_srv.py``` and ```martin_binance/cli_7_BTCUSDT.py```
+After first install run
+```console
+exchanges_wrapper/exch_srv.py
+```
+
+and in ```martin_binance``` folder run next command:
+
+```console
+cp cli_7_BTCUSDT.py.template cli_7_BTCUSDT.py && chmod +x cli_7_BTCUSDT.py && ./cli_7_BTCUSDT.py
+```
 You can find this where pip installs packages, often it's ```/home/ubuntu/.local/lib/python3.10/site-packages```
 
 The structure of the working directory will be created and the necessary files will be copied:
