@@ -1,3 +1,21 @@
+### Added for new features
+
+* Before start of cycle are showed free assets' data, what volume of coins does not participate in the turnover
+
+> 19/10 22:26:23 Start
+> 
+>Start process for .db save
+> 
+>Start process for Telegram
+> 
+>Number of unreachable objects collected by GC: 16
+> 
+>19/10 22:26:23 Initial first: 1.009025, second: 9829.04880062
+> 
+>**19/10 22:26:23 Free: First: 1.009025, second: 9629.04880062**
+> 
+>19/10 22:26:24 Start Buy cycle with 200.0 USDT depo
+
 ## v1.2.9-1 2022-10-14
 ### Update
 * Refusal to use PROFIT_REVERSE parameter.

@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-1"
+__version__ = "1.2.9-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1293,12 +1293,7 @@ class Strategy(StrategyBase):
         # Save initial funds and cycle statistics to .db for external analytics
         if self.first_run:
             self.start_process()
-            if self.reverse:
-                self.initial_reverse_first = self.round_truncate(ff, base=True)
-                self.initial_reverse_second = self.round_truncate(fs, base=False)
-            else:
-                self.initial_first = self.round_truncate(ff, base=True)
-                self.initial_second = self.round_truncate(fs, base=False)
+            self.save_init_assets(ff, fs)
         elif self.restart and not GRID_ONLY:
             # Check refunding before start
             if self.cycle_buy:
@@ -1307,6 +1302,7 @@ class Strategy(StrategyBase):
                 go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
             if self.wait_refunding_for_start or go_trade:
                 self.wait_refunding_for_start = False
+                self.save_init_assets(ff, fs)
                 if self.cycle_buy:
                     df = Decimal('0')
                     ds = self.deposit_second - self.profit_second
@@ -1360,6 +1356,21 @@ class Strategy(StrategyBase):
             self.message_log(f"Initial first: {self.initial_reverse_first if self.reverse else self.initial_first},"
                              f" second: {self.initial_reverse_second if self.reverse else self.initial_second}",
                              color=Style.B_WHITE)
+            # Free assets
+            if self.reverse:
+                if self.cycle_buy:
+                    self.message_log(f"Free: First: {ff}, second: {self.initial_reverse_second - self.deposit_second}",
+                                     color=Style.UNDERLINE)
+                else:
+                    self.message_log(f"Free: First: {self.initial_reverse_first - self.deposit_first}, second: {fs}",
+                                     color=Style.UNDERLINE)
+            else:
+                if self.cycle_buy:
+                    self.message_log(f"Free: First: {ff}, second: {self.initial_second - self.deposit_second}",
+                                     color=Style.UNDERLINE)
+                else:
+                    self.message_log(f"Free: First: {self.initial_first - self.deposit_first}, second: {fs}",
+                                     color=Style.UNDERLINE)
             self.restart = None
             # Init variable
             self.profit_first = Decimal('0')
@@ -1455,6 +1466,14 @@ class Strategy(StrategyBase):
                                  color=Style.B_RED)
                 if STANDALONE and self.first_run:
                     raise SystemExit(1)
+
+    def save_init_assets(self, ff, fs):
+        if self.reverse:
+            self.initial_reverse_first = self.round_truncate(ff, base=True)
+            self.initial_reverse_second = self.round_truncate(fs, base=False)
+        else:
+            self.initial_first = self.round_truncate(ff, base=True)
+            self.initial_second = self.round_truncate(fs, base=False)
 
     ##############################################################
     # strategy function
