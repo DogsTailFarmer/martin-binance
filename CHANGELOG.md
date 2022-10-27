@@ -1,3 +1,11 @@
+### Fixed
+* After restart from saved state incorrect value for first_run may cause incorrect data to be saved
+for the start deposit. Because of this, the control of initial balances may not work correctly.
+
+### Update
+* Changed logic for place order error handling. Before - save to hold uncompleted order and wait event from exchange.
+Now - immediately resend order.
+
 ### Added for new features
 
 * Before start of cycle are showed free assets' data, what volume of coins does not participate in the turnover

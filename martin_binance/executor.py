@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-2"
+__version__ = "1.2.9-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1063,6 +1063,7 @@ class Strategy(StrategyBase):
             self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
             self.tp_order = eval(json.loads(strategy_state.get('tp_order'))) if strategy_state.get('tp_order') else ()
             self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id')) if strategy_state.get('tp_wait_id') else None
+            self.first_run = False
         # Variants are processed when the actual order is equal to or less than it should be
         # Exotic when drop during placed grid or unconfirmed TP left for later
         self.start_process()
@@ -1356,21 +1357,6 @@ class Strategy(StrategyBase):
             self.message_log(f"Initial first: {self.initial_reverse_first if self.reverse else self.initial_first},"
                              f" second: {self.initial_reverse_second if self.reverse else self.initial_second}",
                              color=Style.B_WHITE)
-            # Free assets
-            if self.reverse:
-                if self.cycle_buy:
-                    self.message_log(f"Free: First: {ff}, second: {self.initial_reverse_second - self.deposit_second}",
-                                     color=Style.UNDERLINE)
-                else:
-                    self.message_log(f"Free: First: {self.initial_reverse_first - self.deposit_first}, second: {fs}",
-                                     color=Style.UNDERLINE)
-            else:
-                if self.cycle_buy:
-                    self.message_log(f"Free: First: {ff}, second: {self.initial_second - self.deposit_second}",
-                                     color=Style.UNDERLINE)
-                else:
-                    self.message_log(f"Free: First: {self.initial_first - self.deposit_first}, second: {fs}",
-                                     color=Style.UNDERLINE)
             self.restart = None
             # Init variable
             self.profit_first = Decimal('0')
@@ -1379,12 +1365,25 @@ class Strategy(StrategyBase):
             self.over_price = OVER_PRICE
             self.order_q = ORDER_Q
             self.grid_update_started = None
+            #
+            fr_f = None
+            fr_s = None
+            start_cycle_output = not self.start_after_shift or self.first_run
+            if start_cycle_output:
+                if self.cycle_buy:
+                    fr_f = ff
+                    fr_s = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
+                else:
+                    fr_f = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
+                    fr_s = fs
+            #
             if self.cycle_buy:
                 amount = self.deposit_second
-                if not self.start_after_shift or self.first_run:
+                if start_cycle_output:
                     self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
-                                     f"{amount:f} {self.s_currency} depo", tlg=True)
+                                     f"{amount:f} {self.s_currency} depo\n"
+                                     f"Free: First: {fr_f:f}, second: {fr_s:f}", tlg=True)
             else:
                 if USE_ALL_FIRST_FUND and (self.reverse or GRID_ONLY):
                     ff = funds.get(self.f_currency, 0)
@@ -1394,10 +1393,11 @@ class Strategy(StrategyBase):
                         self.message_log('Use all available fund for first currency')
                         self.deposit_first = self.round_truncate(self.deposit_first, base=True)
                 amount = self.deposit_first
-                if not self.start_after_shift or self.first_run:
+                if start_cycle_output:
                     self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
-                                     f"{amount:f} {self.f_currency} depo", tlg=True)
+                                     f"{amount:f} {self.f_currency} depo\n"
+                                     f"Free: First: {fr_f:f}, second: {fr_s:f}", tlg=True)
             if self.reverse:
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
@@ -2057,7 +2057,7 @@ class Strategy(StrategyBase):
             over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
             if over_price == 0:
                 self.message_log("Can't calculate over price for reverse cycle", log_level=LogLevel.ERROR)
-                over_price = 2 * over_price_coarse
+                over_price = 5 * over_price_coarse
         else:
             over_price = over_price_coarse
         return over_price
@@ -2752,6 +2752,9 @@ class Strategy(StrategyBase):
     # private update methods
     ##############################################################
 
+    def on_balance_update(self, asset: str, balance_delta: str) -> None:
+        print(f"on_balance_update.asset: {asset}: balance_delta: {balance_delta}")
+
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
         ff = funds.get(self.f_currency, 0)
@@ -3036,10 +3039,9 @@ class Strategy(StrategyBase):
             self.message_log(f"Trying place order {place_order_id} one else time", tlg=True)
             if self.orders_init.exist(place_order_id):
                 _buy, _amount, _price = self.orders_init.get_by_id(place_order_id)
-                self.orders_hold.append(place_order_id, _buy, _amount, _price)
-                # Sort restored hold orders
-                self.orders_hold.sort(self.cycle_buy)
                 self.orders_init.remove(place_order_id)
+                waiting_order_id = self.place_limit_order_check(_buy, float(_amount), float(_price), check=True)
+                self.orders_init.append(waiting_order_id, _buy, _amount, _price)
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
                 self.tp_error = True

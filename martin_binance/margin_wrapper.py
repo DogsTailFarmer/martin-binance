@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9"
+__version__ = "1.2.9-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -910,6 +910,16 @@ async def on_funds_update():
         cls.wss_fire_up = True
 
 
+async def on_balance_update():
+    cls = StrategyBase
+    try:
+        async for balance in cls.for_request(cls.stub.OnBalanceUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
+            cls.strategy.on_balance_update(balance.asset, balance.balance_delta)
+    except Exception as ex:
+        logger.warning(f"Exception on WSS, on_balance_update loop closed: {ex.details()}")
+        cls.wss_fire_up = True
+
+
 async def on_order_update():
     cls = StrategyBase
     try:
@@ -1175,6 +1185,7 @@ async def wss_init():
         # User Stream
         loop.create_task(on_funds_update())
         loop.create_task(on_order_update())
+        loop.create_task(on_balance_update())
         # WSS start
         '''
         market_stream_count=5
@@ -1226,6 +1237,7 @@ async def main(_symbol):
         print(f"main.exchange: {cls.exchange}")
         print(f"main.client_id: {cls.client_id}")
         print(f"main.srv_version: {session.client.srv_version}")
+        # '''
         # Check and Cancel ALL ACTIVE ORDER
         active_orders = None
         try:
@@ -1320,6 +1332,7 @@ async def main(_symbol):
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))
+        # '''
     except (KeyboardInterrupt, SystemExit):
         # noinspection PyProtectedMember, PyUnresolvedReferences
         os._exit(1)
