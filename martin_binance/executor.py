@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-6"
+__version__ = "1.2.9-7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1298,9 +1298,9 @@ class Strategy(StrategyBase):
         elif self.restart and not GRID_ONLY:
             # Check refunding before start
             if self.cycle_buy:
-                go_trade = fs >= self.initial_reverse_second if self.reverse else self.initial_second
+                go_trade = fs >= (self.initial_reverse_second if self.reverse else self.initial_second)
             else:
-                go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
+                go_trade = ff >= (self.initial_reverse_first if self.reverse else self.initial_first)
             if self.wait_refunding_for_start or go_trade:
                 self.wait_refunding_for_start = False
                 self.save_init_assets(ff, fs)
