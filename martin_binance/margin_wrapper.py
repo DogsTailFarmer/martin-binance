@@ -702,7 +702,7 @@ async def on_klines_update(_klines):
             # print(f"on_klines_update: {candle.symbol}, {candle.interval}")
             _klines.get(candle.interval).refresh(json.loads(candle.candle))
     except Exception as ex:
-        logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex.details()}")
+        logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}")
         cls.wss_fire_up = True
 
 
@@ -906,17 +906,17 @@ async def on_funds_update():
                 cls.strategy.on_new_funds(funds)
                 cls.get_buffered_funds_last_time = time.time()
     except Exception as ex:
-        logger.warning(f"Exception on WSS, on_funds_update loop closed: {ex.details()}")
+        logger.warning(f"Exception on WSS, on_funds_update loop closed: {ex}")
         cls.wss_fire_up = True
 
 
 async def on_balance_update():
     cls = StrategyBase
     try:
-        async for balance in cls.for_request(cls.stub.OnBalanceUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
-            cls.strategy.on_balance_update(balance.asset, balance.balance_delta)
+        async for res in cls.for_request(cls.stub.OnBalanceUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
+            cls.strategy.on_balance_update(json.loads(res.balance))
     except Exception as ex:
-        logger.warning(f"Exception on WSS, on_balance_update loop closed: {ex.details()}")
+        logger.warning(f"Exception on WSS, on_balance_update loop closed: {ex}")
         cls.wss_fire_up = True
 
 
@@ -964,7 +964,7 @@ async def on_order_update():
                         cls.all_trades.append(PrivateTrade(trade))
                     cls.strategy.on_order_update(OrderUpdate(event))
     except Exception as ex:
-        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex.details()}")
+        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
         cls.wss_fire_up = True
 
 
@@ -1120,7 +1120,7 @@ async def on_ticker_update():
             cls.strategy.on_new_ticker(Ticker(cls.ticker))
             # print(f"on_ticker_update: {ticker.symbol} : {cls.ticker['closeTime']} : {cls.ticker['lastPrice']}")
     except Exception as ex:
-        logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex.details()}")
+        logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
         cls.wss_fire_up = True
 
 
@@ -1143,7 +1143,7 @@ async def on_order_book_update():
             cls.order_book = order_book
             cls.strategy.on_new_order_book(OrderBook(cls.order_book))
     except Exception as ex:
-        logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex.details()}")
+        logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
         cls.wss_fire_up = True
 
 
@@ -1243,7 +1243,7 @@ async def main(_symbol):
         try:
             _active_orders = await send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=_symbol)
         except Exception as ex:
-            print(f"Can't get active orders: {ex.details()}")
+            print(f"Can't get active orders: {ex}")
         else:
             active_orders = json_format.MessageToDict(_active_orders).get('items', [])
             # print(f"main.active_orders: {active_orders}")

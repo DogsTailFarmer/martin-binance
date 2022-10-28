@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-5"
+__version__ = "1.2.9-6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1382,8 +1382,8 @@ class Strategy(StrategyBase):
                 if start_cycle_output:
                     self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
-                                     f"{amount:f} {self.s_currency} depo\n"
-                                     f"Free: First: {fr_f:f}, second: {fr_s:f}", tlg=True)
+                                     f"{float(amount):f} {self.s_currency} depo\n"
+                                     f"Free: First: {float(fr_f):f}, second: {float(fr_s):f}", tlg=True)
             else:
                 if USE_ALL_FIRST_FUND and (self.reverse or GRID_ONLY):
                     ff = funds.get(self.f_currency, 0)
@@ -1396,8 +1396,8 @@ class Strategy(StrategyBase):
                 if start_cycle_output:
                     self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
-                                     f"{amount:f} {self.f_currency} depo\n"
-                                     f"Free: First: {fr_f:f}, second: {fr_s:f}", tlg=True)
+                                     f"{float(amount):f} {self.f_currency} depo\n"
+                                     f"Free: First: {float(fr_f):f}, second: {float(fr_s):f}", tlg=True)
             if self.reverse:
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
@@ -2752,8 +2752,69 @@ class Strategy(StrategyBase):
     # private update methods
     ##############################################################
 
-    def on_balance_update(self, asset: str, balance_delta: str) -> None:
-        print(f"on_balance_update.asset: {asset}: balance_delta: {balance_delta}")
+    def on_balance_update(self, balance: Dict) -> None:
+        asset = balance['asset']
+        delta = Decimal(balance['balance_delta'])
+        self.message_log(f"For {'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''} cycle"
+                         f" was {'depositing' if delta > 0 else 'withdrawing'} {delta} {asset}", color=Style.UNDERLINE)
+        #
+        depo_not_released = self.orders_hold.sum_amount(self.cycle_buy)
+        funds = self.get_buffered_funds()
+        ff = funds.get(self.f_currency, 0)
+        ff = f2d(ff.available) if ff else Decimal('0.0')
+        fs = funds.get(self.s_currency, 0)
+        fs = f2d(fs.available) if fs else Decimal('0.0')
+        depo = 0
+        depo_new = 0
+        free_asset = 0
+        if self.cycle_buy:
+            if self.reverse:
+                if asset == self.s_currency:
+                    free_asset = fs
+                    self.initial_reverse_second += delta
+                elif asset == self.f_currency:
+                    self.initial_first += delta
+                    self.initial_reverse_first += delta
+            else:
+                if asset == self.s_currency:
+                    free_asset = fs
+                    depo = self.deposit_second
+                    if delta < 0 and abs(delta) > self.initial_second - depo:
+                        self.deposit_second = self.initial_second + delta
+                    elif delta > 0:
+                        self.deposit_second += delta
+                    depo_new = self.deposit_second
+                    self.initial_second += delta
+                elif asset == self.f_currency:
+                    self.initial_first += delta
+        else:
+            if self.reverse:
+                if asset == self.s_currency:
+                    self.initial_second += delta
+                    self.initial_reverse_second += delta
+                elif asset == self.f_currency:
+                    free_asset = ff
+                    self.initial_reverse_first += delta
+            else:
+                if asset == self.s_currency:
+                    self.initial_second += delta
+                elif asset == self.f_currency:
+                    free_asset = ff
+                    depo = self.deposit_first
+                    if delta < 0 and abs(delta) > self.initial_first - depo:
+                        self.deposit_first = self.initial_first + delta
+                    elif delta > 0:
+                        self.deposit_first += delta
+                    depo_new = self.deposit_first
+                    self.initial_first += delta
+
+        if depo_new and depo != depo_new:
+            self.message_log(f"New depo is {depo_new}, difference is {depo_new - depo}", color=Style.B_WHITE)
+
+        if free_asset and (free_asset - depo_not_released) < 0:
+            self.message_log(f"Insufficient funds to realize held orders."
+                             f" Need refund {abs(free_asset - depo_not_released)} {asset}",
+                             log_level=LogLevel.CRITICAL)
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
