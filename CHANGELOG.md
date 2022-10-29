@@ -4,11 +4,15 @@ for the start deposit. Because of this, the control of initial balances may not 
 
 ### Update
 * Changed logic for place order error handling. Before - save to hold uncompleted order and wait event from exchange.
-Now - immediately resend order.
+Now - resend order after timeout.
 
 ### Added for new features
+* Before start of cycle and in periodically report are showed free assets' data, what volume of coins does
+not participate in the turnover
+* #7 Allow to withdraw and deposit on active strategy with autocorrection initial balance and depo. See [manual]() for
+detail
 
-* Before start of cycle are showed free assets' data, what volume of coins does not participate in the turnover
+
 
 > 19/10 22:26:23 Start
 > 

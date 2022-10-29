@@ -67,7 +67,8 @@ class Trade:
             await asyncio.sleep(random.randint(5, 15))
             raise UserWarning
         else:
-            logger.info(f"gRPC session started for client_id: {_client.client_id}")
+            logger.info(f"gRPC session started for client_id: {_client.client_id}\n"
+                        f"trade_id: {self.trade_id}")
             return _client
 
     async def send_request(self, _request, _request_type, **kwargs):

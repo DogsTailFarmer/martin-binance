@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-7"
+__version__ = "1.2.9-8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -900,6 +900,7 @@ class Strategy(StrategyBase):
                                  f"First: {self.sum_profit_first}\n"
                                  f"Second: {self.sum_profit_second}\n"
                                  f"Summary: {sum_profit}\n"
+                                 f"{self.get_free_assets(mode='free')[2]}\n"
                                  f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* ***  ***  *** *'}\n"
                                  f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
                                  f"{' Hold reverse' if self.reverse_hold else ''}"
@@ -1286,11 +1287,7 @@ class Strategy(StrategyBase):
             # Wait tp order and cancel in on_cancel_order_success and restart
             self.tp_cancel = True
             return
-        funds = self.get_buffered_funds()
-        ff = funds.get(self.f_currency, 0)
-        ff = f2d(ff.total_for_currency) if ff else Decimal('0.0')
-        fs = funds.get(self.s_currency, 0)
-        fs = f2d(fs.total_for_currency) if fs else Decimal('0.0')
+        ff, fs, _x = self.get_free_assets()
         # Save initial funds and cycle statistics to .db for external analytics
         if self.first_run:
             self.start_process()
@@ -1366,30 +1363,18 @@ class Strategy(StrategyBase):
             self.order_q = ORDER_Q
             self.grid_update_started = None
             #
-            fr_f = None
-            fr_s = None
             start_cycle_output = not self.start_after_shift or self.first_run
-            if start_cycle_output:
-                if self.cycle_buy:
-                    fr_f = ff
-                    fr_s = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
-                else:
-                    fr_f = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
-                    fr_s = fs
-            #
             if self.cycle_buy:
                 amount = self.deposit_second
                 if start_cycle_output:
                     self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
                                      f"{float(amount):f} {self.s_currency} depo\n"
-                                     f"Free: First: {float(fr_f):f}, second: {float(fr_s):f}", tlg=True)
+                                     f"{self.get_free_assets(ff, fs)[2]}", tlg=True)
             else:
                 if USE_ALL_FIRST_FUND and (self.reverse or GRID_ONLY):
-                    ff = funds.get(self.f_currency, 0)
-                    fund = f2d(ff.available) if ff else Decimal('0.0')
-                    if fund > self.deposit_first:
-                        self.deposit_first = fund
+                    if ff > self.deposit_first:
+                        self.deposit_first = ff
                         self.message_log('Use all available fund for first currency')
                         self.deposit_first = self.round_truncate(self.deposit_first, base=True)
                 amount = self.deposit_first
@@ -1397,7 +1382,7 @@ class Strategy(StrategyBase):
                     self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
                                      f"{float(amount):f} {self.f_currency} depo\n"
-                                     f"Free: First: {float(fr_f):f}, second: {float(fr_s):f}", tlg=True)
+                                     f"{self.get_free_assets(ff, fs)[2]}", tlg=True)
             if self.reverse:
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
@@ -2719,6 +2704,40 @@ class Strategy(StrategyBase):
                              log_level=LogLevel.DEBUG)
         return waiting_order_id
 
+    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode='total') -> ():
+        """
+        Get free asset for current trade pair
+        :param fs:
+        :param ff:
+        :param mode: 'total', 'free', 'reserved'
+        :return: (ff, fs, free_asset: str)
+        """
+        if ff is None or fs is None:
+            funds = self.get_buffered_funds()
+            _ff = funds.get(self.f_currency, 0)
+            _fs = funds.get(self.s_currency, 0)
+            ff = Decimal('0.0')
+            fs = Decimal('0.0')
+            if _ff and _fs:
+                if mode == 'total':
+                    ff = f2d(_ff.total_for_currency)
+                    fs = f2d(_fs.total_for_currency)
+                elif mode == 'free':
+                    ff = f2d(_ff.available)
+                    fs = f2d(_fs.available)
+                elif mode == 'reserved':
+                    ff = f2d(_ff.reserved)
+                    fs = f2d(_fs.reserved)
+        #
+        if self.cycle_buy:
+            fr_f = ff
+            fr_s = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
+        else:
+            fr_f = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
+            fr_s = fs
+        free_assets = f"Free: First: {float(fr_f):f}, Second: {float(fr_s):f}"
+        return ff, fs, free_assets
+
     ##############################################################
     # public data update methods
     ##############################################################
@@ -2759,11 +2778,7 @@ class Strategy(StrategyBase):
                          f" was {'depositing' if delta > 0 else 'withdrawing'} {delta} {asset}", color=Style.UNDERLINE)
         #
         depo_not_released = self.orders_hold.sum_amount(self.cycle_buy)
-        funds = self.get_buffered_funds()
-        ff = funds.get(self.f_currency, 0)
-        ff = f2d(ff.available) if ff else Decimal('0.0')
-        fs = funds.get(self.s_currency, 0)
-        fs = f2d(fs.available) if fs else Decimal('0.0')
+        ff, fs, _x = self.get_free_assets(mode='free')
         depo = 0
         depo_new = 0
         free_asset = 0
@@ -2818,11 +2833,8 @@ class Strategy(StrategyBase):
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
-        ff = funds.get(self.f_currency, 0)
-        fs = funds.get(self.s_currency, 0)
         if self.wait_refunding_for_start:
-            ff = f2d(ff.total_for_currency) if ff else Decimal('0.0')
-            fs = f2d(fs.total_for_currency) if fs else Decimal('0.0')
+            ff, fs, _x = self.get_free_assets()
             if self.cycle_buy:
                 go_trade = fs >= self.initial_reverse_second if self.reverse else self.initial_second
             else:
@@ -2831,19 +2843,14 @@ class Strategy(StrategyBase):
                 print("Start after on_new_funds())")
                 self.start()
                 return
+        ff, fs, _x = self.get_free_assets(mode='free')
         if self.tp_order_hold:
-            if self.tp_order_hold['buy_side']:
-                available_fund = f2d(fs.available) if fs else Decimal('0.0')
-            else:
-                available_fund = f2d(ff.available) if ff else Decimal('0.0')
+            available_fund = fs if self.tp_order_hold['buy_side'] else ff
             if available_fund >= self.tp_order_hold['amount']:
                 self.place_profit_order(by_market=self.tp_order_hold['by_market'])
                 return
         if self.grid_hold:
-            if self.grid_hold['buy_side']:
-                available_fund = f2d(fs.available) if fs else Decimal('0.0')
-            else:
-                available_fund = f2d(ff.available) if ff else Decimal('0.0')
+            available_fund = fs if self.grid_hold['buy_side'] else ff
             if available_fund >= self.grid_hold['depo']:
                 self.place_grid(self.grid_hold['buy_side'],
                                 self.grid_hold['depo'],
