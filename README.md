@@ -579,7 +579,7 @@ Use the exchange tools for I/O funds, the necessary and possible adjustments wil
 Basic information about the state of the bot, for example, about the start and results of the cycle,
 can be sent to Telegram bot.
 
-<p align="center"><img src="https://git.io/JDIPe"></p>
+<p align="center"><img src="https://user-images.githubusercontent.com/77513676/198888456-5d1af806-d0f3-42dd-be03-dad57669e6a7.png"></p>
 
 ### Telegram control
 <p id="telegram-control"></p>
