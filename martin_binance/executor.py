@@ -2783,45 +2783,39 @@ class Strategy(StrategyBase):
         depo_new = 0
         free_asset = 0
         if self.cycle_buy:
-            if self.reverse:
-                if asset == self.s_currency:
-                    free_asset = fs
+            if asset == self.s_currency:
+                free_asset = fs
+                depo = self.deposit_second
+                if delta < 0 and abs(delta) > self.initial_second - depo:
+                    self.deposit_second = self.initial_second + delta
+                elif delta > 0 and not self.reverse:
+                    self.deposit_second += delta
+                depo_new = self.deposit_second
+                self.initial_second += delta
+                if self.reverse:
                     self.initial_reverse_second += delta
-                elif asset == self.f_currency:
-                    self.initial_first += delta
+            elif asset == self.f_currency:
+                self.initial_first += delta
+                if self.reverse:
+                    free_asset = ff
                     self.initial_reverse_first += delta
-            else:
-                if asset == self.s_currency:
-                    free_asset = fs
-                    depo = self.deposit_second
-                    if delta < 0 and abs(delta) > self.initial_second - depo:
-                        self.deposit_second = self.initial_second + delta
-                    elif delta > 0:
-                        self.deposit_second += delta
-                    depo_new = self.deposit_second
-                    self.initial_second += delta
-                elif asset == self.f_currency:
-                    self.initial_first += delta
         else:
-            if self.reverse:
-                if asset == self.s_currency:
-                    self.initial_second += delta
-                    self.initial_reverse_second += delta
-                elif asset == self.f_currency:
-                    free_asset = ff
+            if asset == self.f_currency:
+                free_asset = ff
+                depo = self.deposit_first
+                if delta < 0 and abs(delta) > self.initial_first - depo:
+                    self.deposit_first = self.initial_first + delta
+                elif delta > 0 and not self.reverse:
+                    self.deposit_first += delta
+                depo_new = self.deposit_first
+                self.initial_first += delta
+                if self.reverse:
                     self.initial_reverse_first += delta
-            else:
-                if asset == self.s_currency:
-                    self.initial_second += delta
-                elif asset == self.f_currency:
-                    free_asset = ff
-                    depo = self.deposit_first
-                    if delta < 0 and abs(delta) > self.initial_first - depo:
-                        self.deposit_first = self.initial_first + delta
-                    elif delta > 0:
-                        self.deposit_first += delta
-                    depo_new = self.deposit_first
-                    self.initial_first += delta
+            elif asset == self.s_currency:
+                self.initial_second += delta
+                if self.reverse:
+                    free_asset = fs
+                    self.initial_reverse_second += delta
 
         if depo_new and depo != depo_new:
             self.message_log(f"New depo is {depo_new}, difference is {depo_new - depo}", color=Style.B_WHITE)

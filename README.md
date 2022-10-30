@@ -141,6 +141,8 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 * Telegram notification
 * External control from Telegram bot
 * Restore state after restart strategy
+* From 1.2.9-8 you can withdraw and deposit assets on active strategy with autocorrection depo and initial assets
+control values
 
 ## Quick start
 <p id="quick-start"></p>
@@ -394,6 +396,8 @@ Where X is exchange number, see it in ms_cfg.toml and AAABBB is trade pair, for 
 
 <a href="#fee-options">Fee options</a>
 
+<a href="#deposit-and-withdraw-assets-on-active-strategy">Deposit and withdraw assets on active strategy</a>
+
 <a href="#telegram-notification">Telegram notification</a>
 
 <a href="#telegram-control">Telegram control</a>
@@ -547,6 +551,27 @@ Priority of parameters from larger to smaller is:
 
 Attention: the commission, which is charged in the third coin, is not taken into account in the calculation of income.
 Control the return on the balance of three coins.
+
+### Deposit and withdraw assets on active strategy
+<p id="deposit-and-withdraw-assets-on-active-strategy"></p>
+
+It is better to change the assets amount for the strategy when it has completed the cycle and stopped. However,
+subject to the following conditions and restrictions and some luck, you can do this on a running strategy.
+
+Limits there are next:
+* strategy must be in "stable state". This means that the grid and take profit order are placed and the current price is
+equidistant from them.
+* Before withdrawing you must get actual info about Free assets (find it on status report in Telegram)
+
+*Deposit* asset: For Reverse cycle the increase in the current deposit volume does not occur, the added volume will be
+taken into account as free. For a direct cycle, the deposit will be increased for the second currency in the Buy cycle
+and for the first in the Sell cycle.
+
+*Withdraw* asset: If all grid orders and take profit order are placed, then only free assets that are not involved
+in the turnover are available for withdrawal. If some orders are held, you may accidentally withdraw the asset
+necessary for their placement. In this case, you will receive a warning.
+
+Use the exchange tools for I/O funds, the necessary and possible adjustments will be made automatically.
 
 ### Telegram notification
 <p id="telegram-notification"></p>
