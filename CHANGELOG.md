@@ -9,10 +9,6 @@ Now - resend order after timeout.
 ### Added for new features
 * Before start of cycle and in periodically report are showed free assets' data, what volume of coins does
 not participate in the turnover
-* #7 Allow to withdraw and deposit on active strategy with autocorrection initial balance and depo. See [manual]() for
-detail
-
-
 
 > 19/10 22:26:23 Start
 > 
@@ -27,6 +23,9 @@ detail
 >**19/10 22:26:23 Free: First: 1.009025, second: 9629.04880062**
 > 
 >19/10 22:26:24 Start Buy cycle with 200.0 USDT depo
+
+* #7 Allow to withdraw and deposit on active strategy with autocorrection initial balance and depo. See
+[manual](https://github.com/DogsTailFarmer/martin-binance#deposit-and-withdraw-assets-on-active-strategy) for detail
 
 ## v1.2.9-1 2022-10-14
 ### Update

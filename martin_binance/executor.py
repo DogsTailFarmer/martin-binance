@@ -2827,8 +2827,11 @@ class Strategy(StrategyBase):
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
+        ff = funds.get(self.f_currency, 0)
+        fs = funds.get(self.s_currency, 0)
         if self.wait_refunding_for_start:
-            ff, fs, _x = self.get_free_assets()
+            ff = f2d(ff.total_for_currency) if ff else Decimal('0.0')
+            fs = f2d(fs.total_for_currency) if fs else Decimal('0.0')
             if self.cycle_buy:
                 go_trade = fs >= self.initial_reverse_second if self.reverse else self.initial_second
             else:
@@ -2837,14 +2840,19 @@ class Strategy(StrategyBase):
                 print("Start after on_new_funds())")
                 self.start()
                 return
-        ff, fs, _x = self.get_free_assets(mode='free')
         if self.tp_order_hold:
-            available_fund = fs if self.tp_order_hold['buy_side'] else ff
+            if self.tp_order_hold['buy_side']:
+                available_fund = f2d(fs.available) if fs else Decimal('0.0')
+            else:
+                available_fund = f2d(ff.available) if ff else Decimal('0.0')
             if available_fund >= self.tp_order_hold['amount']:
                 self.place_profit_order(by_market=self.tp_order_hold['by_market'])
                 return
         if self.grid_hold:
-            available_fund = fs if self.grid_hold['buy_side'] else ff
+            if self.grid_hold['buy_side']:
+                available_fund = f2d(fs.available) if fs else Decimal('0.0')
+            else:
+                available_fund = f2d(ff.available) if ff else Decimal('0.0')
             if available_fund >= self.grid_hold['depo']:
                 self.place_grid(self.grid_hold['buy_side'],
                                 self.grid_hold['depo'],
