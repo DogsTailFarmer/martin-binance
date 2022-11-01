@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-8"
+__version__ = "1.2.9-9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1922,7 +1922,8 @@ class Strategy(StrategyBase):
                                               reverse_target_amount,
                                               delta_min,
                                               amount_first_grid,
-                                              amount_min)
+                                              amount_min,
+                                              over_price)
             self.over_price = max(over_price, OVER_PRICE)
         return amount_first_grid
 
@@ -2008,7 +2009,8 @@ class Strategy(StrategyBase):
                         reverse_target_amount: Decimal,
                         min_delta: Decimal,
                         amount_first_grid: Decimal,
-                        amount_min: Decimal) -> Decimal:
+                        amount_min: Decimal,
+                        over_price_previous: Decimal = None) -> Decimal:
         """
         Calculate over price for depo refund after Reverse cycle
         :param buy_side:
@@ -2018,6 +2020,7 @@ class Strategy(StrategyBase):
         :param min_delta:
         :param amount_first_grid:
         :param amount_min:
+        :param over_price_previous:
         :return: Decimal calculated over price
         """
         self.message_log(f"calc_over_price: buy_side: {buy_side}, depo: {depo:.6f}, base_price: {base_price:f},"
@@ -2041,8 +2044,9 @@ class Strategy(StrategyBase):
                       'amount_min': amount_min}
             over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
             if over_price == 0:
-                self.message_log("Can't calculate over price for reverse cycle", log_level=LogLevel.ERROR)
-                over_price = 5 * over_price_coarse
+                self.message_log("Can't calculate over price for reverse cycle,"
+                                 "use previous or over_price_coarse * 3", log_level=LogLevel.ERROR)
+                over_price = over_price_previous or 3 * over_price_coarse
         else:
             over_price = over_price_coarse
         return over_price
