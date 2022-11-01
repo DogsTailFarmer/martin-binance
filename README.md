@@ -671,7 +671,7 @@ To get a Maker fee = 0% you need a stake 25 FTT. [Details here](https://help.ftx
 volume is enough. Otherwise, the exchange rejects the last grid order and the TP order, provided that there
 is an accurately available balance sheet.
 ```[2022-08-27 04:17:26,560: ERROR] handle_errors.response.status >= 400: {'success': False, 'error': 'Not enough balances'}```
-*FTX support rejected this issue.*
+*FTX support rejected this issue*
 
 
 ## For developers

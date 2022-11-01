@@ -1237,7 +1237,6 @@ async def main(_symbol):
         print(f"main.exchange: {cls.exchange}")
         print(f"main.client_id: {cls.client_id}")
         print(f"main.srv_version: {session.client.srv_version}")
-        # '''
         # Check and Cancel ALL ACTIVE ORDER
         active_orders = None
         try:
@@ -1332,7 +1331,6 @@ async def main(_symbol):
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))
-        # '''
     except (KeyboardInterrupt, SystemExit):
         # noinspection PyProtectedMember, PyUnresolvedReferences
         os._exit(1)

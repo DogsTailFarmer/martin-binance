@@ -2779,7 +2779,8 @@ class Strategy(StrategyBase):
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
         self.message_log(f"For {'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''} cycle"
-                         f" was {'depositing' if delta > 0 else 'withdrawing'} {delta} {asset}", color=Style.UNDERLINE)
+                         f" was {'depositing' if delta > 0 else 'withdrawing'} {float(delta):f} {asset}",
+                         color=Style.UNDERLINE)
         #
         depo_not_released = self.orders_hold.sum_amount(self.cycle_buy)
         ff, fs, _x = self.get_free_assets(mode='free')
@@ -2822,11 +2823,12 @@ class Strategy(StrategyBase):
                     self.initial_reverse_second += delta
 
         if depo_new and depo != depo_new:
-            self.message_log(f"New depo is {depo_new}, difference is {depo_new - depo}", color=Style.B_WHITE)
+            self.message_log(f"New depo is {float(depo_new):f}, difference is {float(depo_new - depo):f}",
+                             color=Style.B_WHITE)
 
         if free_asset and (free_asset - depo_not_released) < 0:
             self.message_log(f"Insufficient funds to realize held orders."
-                             f" Need refund {abs(free_asset - depo_not_released)} {asset}",
+                             f" Need refund {float(abs(free_asset - depo_not_released)):f} {asset}",
                              log_level=LogLevel.CRITICAL)
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
