@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-9"
+__version__ = "1.2.9-10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2791,14 +2791,15 @@ class Strategy(StrategyBase):
             if asset == self.s_currency:
                 free_asset = fs
                 depo = self.deposit_second
-                if delta < 0 and abs(delta) > self.initial_second - depo:
-                    self.deposit_second = self.initial_second + delta
-                elif delta > 0 and not self.reverse:
-                    self.deposit_second += delta
-                depo_new = self.deposit_second
-                self.initial_second += delta
                 if self.reverse:
                     self.initial_reverse_second += delta
+                else:
+                    if delta < 0 and abs(delta) > self.initial_second - depo:
+                        self.deposit_second = self.initial_second + delta
+                    elif delta > 0:
+                        self.deposit_second += delta
+                depo_new = self.deposit_second
+                self.initial_second += delta
             elif asset == self.f_currency:
                 self.initial_first += delta
                 if self.reverse:
@@ -2808,14 +2809,15 @@ class Strategy(StrategyBase):
             if asset == self.f_currency:
                 free_asset = ff
                 depo = self.deposit_first
-                if delta < 0 and abs(delta) > self.initial_first - depo:
-                    self.deposit_first = self.initial_first + delta
-                elif delta > 0 and not self.reverse:
-                    self.deposit_first += delta
-                depo_new = self.deposit_first
-                self.initial_first += delta
                 if self.reverse:
                     self.initial_reverse_first += delta
+                else:
+                    if delta < 0 and abs(delta) > self.initial_first - depo:
+                        self.deposit_first = self.initial_first + delta
+                    elif delta > 0:
+                        self.deposit_first += delta
+                depo_new = self.deposit_first
+                self.initial_first += delta
             elif asset == self.s_currency:
                 self.initial_second += delta
                 if self.reverse:
