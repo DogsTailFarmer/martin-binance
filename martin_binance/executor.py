@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-10"
+__version__ = "1.2.9-11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1084,7 +1084,7 @@ class Strategy(StrategyBase):
         grid_less = grid_orders_len > open_orders_len > 0
         grid_hold = open_orders_len == 0 and self.orders_hold
         grid_more = grid_orders_len < open_orders_len  # Grid more, some order(s) was placed
-        grid_filled = grid_orders_len > 0 and open_orders_len == 0 and not self.orders_hold  # Grid was complete
+        grid_filled = grid_orders_len > 0 and open_orders_len == 0 and not self.orders_hold and not self.orders_save
         tp_no_change = (tp_order and self.tp_order_id) or (not tp_order and not self.tp_order_id)
         tp_placed = tp_order and not self.tp_order_id
         tp_filled = not tp_order and self.tp_order_id
@@ -2405,18 +2405,15 @@ class Strategy(StrategyBase):
         self.grid_place_flag = True
         k = 0
         n = len(self.orders_grid) + len(self.orders_init)
-        check_i = len(self.orders_grid) + len(self.orders_hold)
         for i in self.orders_hold:
             if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
                 if k + n >= ORDER_Q:
                     self.order_q_placed = True
                 break
-            check = check_i <= 1
-            check_i -= 1
             waiting_order_id = self.place_limit_order_check(i['buy'],
                                                             float(i['amount']),
                                                             float(i['price']),
-                                                            check=check)
+                                                            check=True)
             self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
             k += 1
         del self.orders_hold.orders_list[:k]
