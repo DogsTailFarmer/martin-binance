@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-11"
+__version__ = "1.2.9-13"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1440,7 +1440,9 @@ class Strategy(StrategyBase):
                     raise SystemExit(1)
             elif _amount_first_grid > 20 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} it is rather"
-                                 f" big for a small deposit {self.deposit_second}", log_level=LogLevel.WARNING)
+                                 f" big for a small deposit"
+                                 f" {self.deposit_second if self.cycle_buy else self.deposit_first}",
+                                 log_level=LogLevel.WARNING)
         else:
             first_order_vlm = depo * 1 * (1 - self.martin) / (1 - self.martin ** ORDER_Q)
 
@@ -1530,83 +1532,62 @@ class Strategy(StrategyBase):
                                  f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
                                  tlg=False)
             #
+            '''
+            params = {'buy_side': buy_side,
+                      'depo': depo,
+                      'base_price': base_price_dec,
+                      'amount_first_grid': amount_first_grid,
+                      'min_delta': min_delta,
+                      'amount_min': amount_min_dec}
+
+            params = {'buy_side': True,
+                      'depo': f2d(1082.5589),
+                      'base_price': f2d(7.05),
+                      'amount_first_grid': f2d(1.5),
+                      'min_delta': f2d(0.01),
+                      'amount_min': f2d(1.42)}
+
+            self.order_q = 20
+            self.calc_grid(f2d(112.2771), **params)
+            '''
+            #
             if init_calc_only:
                 self.init_warning(amount_first_grid)
                 return
             #
-            if self.order_q > 1:
-                delta_price = self.over_price * base_price_dec / (100 * (self.order_q - 1))
-            else:
-                delta_price = Decimal('0.0')
-            price_prev = base_price_dec
-            total_grid_amount_f = f2d(0)
-            total_grid_amount_s = f2d(0)
-            amount_last_grid = f2d(0)
-            depo_i = f2d(0)
-            rounding = ROUND_CEILING
-            last_order_pass = False
-            price_k = 1
-            price_last_grid = 1
-            for i in range(self.order_q):
-                if self.order_q > 1 or self.order_q == 1 and not self.reverse:
-                    if LINEAR_GRID_K >= 0:
-                        price_k = f2d(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
-                    if buy_side:
-                        price = base_price_dec - i * delta_price * price_k
-                    else:
-                        price = base_price_dec + i * delta_price * price_k
-                else:
+            if self.order_q == 1:
+                if self.reverse:
                     price = (depo / reverse_target_amount) if buy_side else (reverse_target_amount / depo)
+                else:
+                    price = base_price_dec
+                amount = self.round_truncate(depo, base=True, _rounding=ROUND_FLOOR)
                 price = f2d(tcm.round_price(float(price), RoundingType.ROUND))
-                if buy_side:
-                    if i and price_prev - price < min_delta:
-                        price = price_prev - min_delta
-                else:
-                    if i and price - price_prev < min_delta:
-                        price = price_prev + min_delta
-                price_prev = price
-                # print(f"place_grid.round_price: {price}")
-                if self.order_q == 1:
-                    amount = depo
-                    rounding = ROUND_FLOOR
-                elif i == 0:
-                    amount_0 = depo * self.martin**i * (self.martin - 1) / (self.martin**self.order_q - 1)
-                    amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
-                    depo_i = depo - amount
-                elif i < self.order_q - 1:
-                    amount = depo_i * self.martin**i * (self.martin - 1) / (self.martin**self.order_q - 1)
-                else:
-                    amount = amount_last_grid
-                    rounding = ROUND_FLOOR
-                if buy_side:
-                    amount /= price
-                amount = self.round_truncate(amount, base=True, _rounding=rounding)
-                total_grid_amount_f += amount
-                total_grid_amount_s += amount * price
-                # Check last order volume
-                if i == self.order_q - 2:
-                    amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
-                    if buy_side:
-                        if LINEAR_GRID_K >= 0:
-                            price_k = f2d(1 - math.log(self.order_q - (i + 1), self.order_q + LINEAR_GRID_K))
-                        price_last_grid = base_price_dec + (i + 1) * delta_price * price_k * (-1 if buy_side else 1)
-                        price_last_grid = f2d(tcm.round_price(float(price_last_grid), RoundingType.ROUND))
-                    if amount_last_grid < amount_min_dec * price_last_grid:
-                        # Skip last order
-                        amount += amount_last_grid / price_last_grid
-                        amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
-                        last_order_pass = True
-                # print(f"{i}, amount: {amount},price: {price}, {amount * price}")
+                orders = [(0, amount, price)]
+            else:
+                params = {'buy_side': buy_side,
+                          'depo': depo,
+                          'base_price': base_price_dec,
+                          'amount_first_grid': amount_first_grid,
+                          'min_delta': min_delta,
+                          'amount_min': amount_min_dec}
+                grid_calc = self.calc_grid(self.over_price, calc_avg_amount=False, **params)
+                orders = grid_calc['orders']
+                total_grid_amount_f = grid_calc['total_grid_amount_f']
+                total_grid_amount_s = grid_calc['total_grid_amount_s']
+                self.message_log(f"Total grid amount: first: {total_grid_amount_f}, second: {total_grid_amount_s}",
+                                 log_level=LogLevel.DEBUG, color=Style.CYAN)
+
+            for order in orders:
+                i = order[0]
+                amount = order[1]
+                price = order[2]
                 # create order for grid
                 if i < GRID_MAX_COUNT:
                     waiting_order_id = self.place_limit_order(buy_side, float(amount), float(price))
                     self.orders_init.append(waiting_order_id, buy_side, amount, price)
                 else:
                     self.orders_hold.append(i, buy_side, amount, price)
-                if last_order_pass:
-                    break
-            self.message_log(f"Total grid amount: first: {total_grid_amount_f}, second: {total_grid_amount_s}",
-                             log_level=LogLevel.DEBUG, color=Style.CYAN)
+
             if not GRID_ONLY and allow_grid_shift:
                 if buy_side:
                     self.shift_grid_threshold = base_price + 2 * PRICE_SHIFT * base_price / 100
@@ -1631,12 +1612,13 @@ class Strategy(StrategyBase):
             self.tp_hold_additional = False
             self.place_profit_order()
 
-    def calc_grid(self, over_price: Decimal, **kwargs) -> Decimal:
+    def calc_grid(self, over_price: Decimal, calc_avg_amount=True, **kwargs):
         """
-        Calculate return average amount in second coin for grid orders with fixed initial parameters
+        Calculate return average amount in second coin for grid orders with fixed initial parameters by default
         :param over_price:
+        :param calc_avg_amount: False: Return Dict with prepared grid orders
         :param kwargs:
-        :return: Decimal(avg_amount)
+        :return:
         """
         buy_side = kwargs.get('buy_side')
         depo = kwargs.get('depo')
@@ -1657,6 +1639,8 @@ class Strategy(StrategyBase):
         last_order_pass = False
         price_k = 1
         price_last_grid = 1
+        amount_last_grid = f2d(0)
+        orders = []
         for i in range(self.order_q):
             if LINEAR_GRID_K >= 0:
                 price_k = f2d(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
@@ -1681,7 +1665,7 @@ class Strategy(StrategyBase):
                 amount = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
                 # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
             else:
-                amount = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
+                amount = amount_last_grid
                 rounding = ROUND_FLOOR
                 # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
             if buy_side:
@@ -1708,10 +1692,24 @@ class Strategy(StrategyBase):
                 avg_amount += amount * price
             if last_order_pass:
                 break
-            # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
-        # print(f"calc_grid: total_grid_amount_f: {total_grid_amount_f}, total_grid_amount_s: {total_grid_amount_s}")
-        # print(f"calc_grid: order_q: {self.order_q}, over_price: {float(over_price):f}, avg_amount: {avg_amount}")
-        return avg_amount
+
+            if not calc_avg_amount:
+                orders.append((i, amount, price))
+
+            print(f"calc_grid: {i}, amount: {amount}, price: {price}")
+
+        print(f"calc_grid: total_grid_amount_f: {total_grid_amount_f}, total_grid_amount_s: {total_grid_amount_s}")
+        print(f"calc_grid: order_q: {self.order_q}, over_price: {float(over_price):f}, avg_amount: {avg_amount}")
+
+        if calc_avg_amount:
+            return avg_amount
+        else:
+            res = {
+                'total_grid_amount_f': total_grid_amount_f,
+                'total_grid_amount_s': total_grid_amount_s,
+                'orders': orders
+            }
+            return res
 
     def grid_update(self, frequency: str):
         try:
