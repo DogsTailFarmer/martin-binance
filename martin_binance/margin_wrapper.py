@@ -231,6 +231,8 @@ class TradingCapabilityManager:
         self.step_size = float(_exchange_info_symbol['filters']['lotSize']['stepSize'])
         self.min_notional = float(_exchange_info_symbol['filters']['minNotional']['minNotional'])
         self.tick_size = float(_exchange_info_symbol['filters']['priceFilter']['tickSize'])
+        self.multiplier_up = float(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
+        self.multiplier_down = float(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
 
     def __call__(self):
         return self
@@ -290,6 +292,12 @@ class TradingCapabilityManager:
 
     def is_limit_order_valid(self, buy_side, _amount, _price):
         pass  # For margin compatibility
+
+    def get_max_sell_price(self, avg_price: float) -> float:
+        return self.round_price(avg_price * self.multiplier_up, RoundingType.FLOOR)
+
+    def get_min_buy_price(self, avg_price: float) -> float:
+        return self.round_price(avg_price * self.multiplier_down, RoundingType.CEIL)
 
 
 class Ticker:

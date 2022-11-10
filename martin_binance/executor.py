@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-13"
+__version__ = "1.2.9-14"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1531,26 +1531,6 @@ class Strategy(StrategyBase):
                 self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
                                  f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
                                  tlg=False)
-            #
-            '''
-            params = {'buy_side': buy_side,
-                      'depo': depo,
-                      'base_price': base_price_dec,
-                      'amount_first_grid': amount_first_grid,
-                      'min_delta': min_delta,
-                      'amount_min': amount_min_dec}
-
-            params = {'buy_side': True,
-                      'depo': f2d(1082.5589),
-                      'base_price': f2d(7.05),
-                      'amount_first_grid': f2d(1.5),
-                      'min_delta': f2d(0.01),
-                      'amount_min': f2d(1.42)}
-
-            self.order_q = 20
-            self.calc_grid(f2d(112.2771), **params)
-            '''
-            #
             if init_calc_only:
                 self.init_warning(amount_first_grid)
                 return
@@ -1576,18 +1556,16 @@ class Strategy(StrategyBase):
                 total_grid_amount_s = grid_calc['total_grid_amount_s']
                 self.message_log(f"Total grid amount: first: {total_grid_amount_f}, second: {total_grid_amount_s}",
                                  log_level=LogLevel.DEBUG, color=Style.CYAN)
-
+            #
             for order in orders:
-                i = order[0]
-                amount = order[1]
-                price = order[2]
+                i, amount, price = order
                 # create order for grid
                 if i < GRID_MAX_COUNT:
                     waiting_order_id = self.place_limit_order(buy_side, float(amount), float(price))
                     self.orders_init.append(waiting_order_id, buy_side, amount, price)
                 else:
                     self.orders_hold.append(i, buy_side, amount, price)
-
+            #
             if not GRID_ONLY and allow_grid_shift:
                 if buy_side:
                     self.shift_grid_threshold = base_price + 2 * PRICE_SHIFT * base_price / 100
@@ -1629,6 +1607,14 @@ class Strategy(StrategyBase):
         #
         tcm = self.get_trading_capability_manager()
         # Decimal zone
+        avg_rate = self.avg_rate or base_price
+        try:
+            max_price = f2d(tcm.get_max_sell_price(float(avg_rate)))
+            min_price = f2d(tcm.get_min_buy_price(float(avg_rate)))
+        except AttributeError:
+            max_price = avg_rate * f2d(5)
+            min_price = avg_rate * f2d(0.2)
+        #
         delta_price = over_price * base_price / (100 * (self.order_q - 1))
         price_prev = base_price
         avg_amount = f2d(0)
@@ -1638,7 +1624,6 @@ class Strategy(StrategyBase):
         rounding = ROUND_CEILING
         last_order_pass = False
         price_k = 1
-        price_last_grid = 1
         amount_last_grid = f2d(0)
         orders = []
         for i in range(self.order_q):
@@ -1655,19 +1640,23 @@ class Strategy(StrategyBase):
             else:
                 if i and price - price_prev < min_delta:
                     price = price_prev + min_delta
+            if buy_side:
+                price = max(price, min_price)
+            else:
+                price = min(price, max_price)
             price_prev = price
             if i == 0:
                 amount_0 = depo * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
                 amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
                 depo_i = depo - amount
-                # print(f"calc_grid: {i}, amount: {amount}, price: {price}, depo: {depo}, depo_i: {depo_i}")
+                # print(f"calc_grid 0: {i}, amount: {amount}, price: {price}, depo: {depo}, depo_i: {depo_i}")
             elif i < self.order_q - 1:
                 amount = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
-                # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
+                # print(f"calc_grid 1: {i}, amount: {amount}, price: {price}")
             else:
                 amount = amount_last_grid
                 rounding = ROUND_FLOOR
-                # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
+                # print(f"calc_grid last: {i}, amount: {amount}, price: {price}")
             if buy_side:
                 amount /= price
             amount = self.round_truncate(amount, base=True, _rounding=rounding)
@@ -1676,30 +1665,28 @@ class Strategy(StrategyBase):
             # Check last order volume
             if i == self.order_q - 2:
                 amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
-                if buy_side:
-                    if LINEAR_GRID_K >= 0:
-                        price_k = f2d(1 - math.log(self.order_q - (i + 1), self.order_q + LINEAR_GRID_K))
-                    price_last_grid = base_price + (i + 1) * delta_price * price_k * (-1 if buy_side else 1)
-                    price_last_grid = f2d(tcm.round_price(float(price_last_grid), RoundingType.ROUND))
-                if amount_last_grid < amount_min * price_last_grid:
+                if amount_last_grid < amount_min * (price if buy_side else 1):
                     # Skip last order
-                    amount += amount_last_grid / price_last_grid
+                    total_grid_amount_f -= amount
+                    total_grid_amount_s -= amount * price
+                    amount += amount_last_grid / (price if buy_side else 1)
                     amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
                     last_order_pass = True
+
             if buy_side:
                 avg_amount += amount
             else:
                 avg_amount += amount * price
-            if last_order_pass:
-                break
-
             if not calc_avg_amount:
                 orders.append((i, amount, price))
+            # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
+            if last_order_pass:
+                total_grid_amount_f += amount
+                total_grid_amount_s += amount * price
+                break
 
-            print(f"calc_grid: {i}, amount: {amount}, price: {price}")
-
-        print(f"calc_grid: total_grid_amount_f: {total_grid_amount_f}, total_grid_amount_s: {total_grid_amount_s}")
-        print(f"calc_grid: order_q: {self.order_q}, over_price: {float(over_price):f}, avg_amount: {avg_amount}")
+        # print(f"calc_grid: total_grid_amount_f: {total_grid_amount_f}, total_grid_amount_s: {total_grid_amount_s}")
+        # print(f"calc_grid: order_q: {self.order_q}, over_price: {float(over_price):f}, avg_amount: {avg_amount}")
 
         if calc_avg_amount:
             return avg_amount
@@ -2533,7 +2520,7 @@ class Strategy(StrategyBase):
                 self.reverse_after_grid_ending()
         else:
             if self.orders_save:
-                self.grid_remove = None
+                self.grid_remove = False if self.grid_order_canceled else None
                 self.start_hold = False
                 self.message_log("grid_handler: Restore deleted and unplaced grid orders")
                 self.orders_hold.orders_list.extend(self.orders_save)
@@ -2596,6 +2583,8 @@ class Strategy(StrategyBase):
                 else:
                     self.grid_update_started = None
                     self.start()
+        else:
+            self.grid_remove = None
 
     def round_truncate(self, _x: Decimal, base: bool, fee: bool = False, _rounding=ROUND_FLOOR) -> Decimal:
         if fee:
@@ -3138,7 +3127,9 @@ class Strategy(StrategyBase):
                     save = False
                     break
             if save:
-                self.orders_save.append(canceled_order.id, canceled_order.buy, f2d(canceled_order.amount),
+                self.orders_save.append(canceled_order.id,
+                                        canceled_order.buy,
+                                        f2d(canceled_order.amount),
                                         f2d(canceled_order.price))
             self.cancel_grid()
         elif order_id == self.cancel_order_id:

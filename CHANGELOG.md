@@ -1,10 +1,16 @@
+## v1.2.9-14 2022-11-11
 ### Fixed
 * After restart from saved state incorrect value for first_run may cause incorrect data to be saved
 for the start deposit. Because of this, the control of initial balances may not work correctly.
+* Calculate parameters for grid. Adding price limitation based on [PERCENT_PRICE](https://github.com/binance/binance-spot-api-docs/blob/master/filters.md#percent_price)
+filter. Without such limit, the task of finding grid parameters for a given volume has several solutions, including in
+the area of negative price values. This is an unlikely event that could have been within the Reverse buy cycle and
+high volatility
 
 ### Update
 * Changed logic for place order error handling. Before - save to hold uncompleted order and wait event from exchange.
 Now - resend order after timeout.
+* Refactoring place_grid() and calc_grid()
 
 ### Added for new features
 * Before start of cycle and in periodically report are showed free assets' data, what volume of coins does
