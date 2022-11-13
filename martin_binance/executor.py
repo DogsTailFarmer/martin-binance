@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-14"
+__version__ = "1.2.9-16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2812,7 +2812,7 @@ class Strategy(StrategyBase):
             self.message_log(f"New depo is {float(depo_new):f}, difference is {float(depo_new - depo):f}",
                              color=Style.B_WHITE)
 
-        if free_asset and (free_asset - depo_not_released) < 0:
+        if depo_new and free_asset and (free_asset - depo_not_released) < 0:
             self.message_log(f"Insufficient funds to realize held orders."
                              f" Need refund {float(abs(free_asset - depo_not_released)):f} {asset}",
                              log_level=LogLevel.CRITICAL)
