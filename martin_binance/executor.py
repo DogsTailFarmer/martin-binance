@@ -924,7 +924,8 @@ class Strategy(StrategyBase):
                 and ADAPTIVE_TRADE_CONDITION
                 and not self.reverse
                 and not self.part_amount_first
-                and self.command not in ('stopped', 'stop', 'end')):
+                and self.command not in ('stopped', 'stop', 'end')
+                and (self.orders_grid or self.orders_hold)):
             if self.heartbeat_counter % 150 == 0:
                 self.grid_update(frequency='low')
             elif self.heartbeat_counter % 30 == 0:
@@ -1705,32 +1706,29 @@ class Strategy(StrategyBase):
             self.message_log(f"Can't get BB in grid update: {ex}", log_level=LogLevel.INFO)
         else:
             do_it = False
-            delta = None
-            try:
-                if self.orders_hold:
-                    last_price = float(self.orders_hold.get_last()[2])
+            if self.orders_hold:
+                last_price = float(self.orders_hold.get_last()[2])
+            else:
+                last_price = float(self.orders_grid.get_last()[2])
+            predicted_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
+            if self.cycle_buy:
+                delta = 100 * (last_price - predicted_price) / last_price
+            else:
+                delta = 100 * (predicted_price - last_price) / last_price
+            depo_remaining = ((self.orders_grid.sum_amount(self.cycle_buy) +
+                               self.orders_hold.sum_amount(self.cycle_buy)) /
+                              (self.deposit_second if self.cycle_buy else self.deposit_first))
+            depo_check = depo_remaining >= f2d(0.8)
+            if frequency == 'hi' and delta > 0:
+                do_it = depo_check and delta > 0.5
+            elif frequency == 'mid' and delta > 0:
+                do_it = depo_check and delta > 0.25
+            elif frequency == 'low':
+                if delta > 0:
+                    do_it = depo_check and delta > 0.12
                 else:
-                    last_price = float(self.orders_grid.get_last()[2])
-                predicted_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
-                if self.cycle_buy:
-                    delta = 100 * (last_price - predicted_price) / last_price
-                else:
-                    delta = 100 * (predicted_price - last_price) / last_price
-                depo_remaining = ((self.orders_grid.sum_amount(self.cycle_buy) +
-                                   self.orders_hold.sum_amount(self.cycle_buy)) /
-                                  (self.deposit_second if self.cycle_buy else self.deposit_first))
-                depo_check = depo_remaining >= f2d(0.8)
-                if frequency == 'hi' and delta > 0:
-                    do_it = depo_check and delta > 0.5
-                elif frequency == 'mid' and delta > 0:
-                    do_it = depo_check and delta > 0.25
-                elif frequency == 'low':
-                    if delta > 0:
-                        do_it = depo_check and delta > 0.12
-                    else:
-                        do_it = depo_remaining >= f2d(0.2) and -1 * delta > 3
-            except Exception as ex:
-                self.message_log(f"Can't get status for grid update: {ex}", log_level=LogLevel.WARNING)
+                    do_it = depo_remaining >= f2d(0.2) and -1 * delta > 3
+
             if do_it:
                 self.message_log(f"Update grid orders, frequency: {frequency},"
                                  f" BB limit difference: {delta:.2f}%", tlg=True)
@@ -2829,7 +2827,7 @@ class Strategy(StrategyBase):
             else:
                 go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
             if go_trade:
-                print("Start after on_new_funds())")
+                self.message_log("Start after on_new_funds())")
                 self.start()
                 return
         if self.tp_order_hold:

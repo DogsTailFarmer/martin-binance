@@ -1,3 +1,8 @@
+## v1.2.9-x 2022-xx-xx
+### Fixed
+* #36
+* #37
+
 ## v1.2.9-14 2022-11-11
 ### Fixed
 * After restart from saved state incorrect value for first_run may cause incorrect data to be saved
