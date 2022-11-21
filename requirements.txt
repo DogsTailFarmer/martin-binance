@@ -1,4 +1,4 @@
-exchanges-wrapper==1.2.6-2
+exchanges-wrapper==1.2.7
 margin-strategy-sdk==0.0.11
 aiohttp==3.8.1
 grpcio==1.48.1

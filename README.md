@@ -5,7 +5,7 @@
 
 <h2 align="center">Cyclic grid strategy for SPOT market</h2>
 
-<h3 align="center">Free trading system for crypto exchanges (Binance, FTX, Bitfinex, Huobi,)</h3>
+<h3 align="center">Free trading system for crypto exchanges (Binance, Bitfinex, Huobi, OKX, FTX,)</h3>
 
 <h4 align="center">Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a></h4>
 
