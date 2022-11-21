@@ -1,4 +1,8 @@
 ## v1.2.9-18 2022-11-21
+### Update
+* Dependency to exchanges-wrapper 1.2.7-1
+
+## v1.2.9-18 2022-11-21
 ### Fixed
 * #36
 * #37
