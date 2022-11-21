@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-5"
+__version__ = "1.2.9-17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -468,7 +468,7 @@ class StrategyBase:
         StrategyBase.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
                                           f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
-        loop.create_task(create_limit_order(cls.order_id, buy, str(amount), str(price)))
+        loop.create_task(create_limit_order(cls.order_id, buy, str(ms.f2d(amount)), str(price)))
         if StrategyBase.exchange == 'ftx':
             time.sleep(0.15)
         elif StrategyBase.exchange == 'huobi':
