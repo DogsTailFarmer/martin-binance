@@ -10,7 +10,7 @@ ENV PYTHONUNBUFFERED = 1
 
 COPY requirements.txt requirements.txt
 
-RUN pip3 install -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY ./martin_binance/* /home/appuser/.local/lib/python3.10/site-packages/martin_binance/
 
