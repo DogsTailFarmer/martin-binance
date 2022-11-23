@@ -1,3 +1,9 @@
+## v1.2.10 2022-11-23
+### Update
+* internal numbering for orders
+* Processing of partial order execution events is linked to a specific order number.
+Previously, events were processed sequentially, which led to an error when the order of receiving events was violated.
+
 ## v1.2.9-18 2022-11-21
 ### Update
 * Dependency to exchanges-wrapper 1.2.7-1

@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.9-21"
+__version__ = "1.2.10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -982,7 +982,7 @@ class Strategy(StrategyBase):
                 'orders_hold': json.dumps(self.orders_hold.get()),
                 'orders_save': json.dumps(self.orders_save.get()),
                 'over_price': json.dumps(self.over_price),
-                'part_amount': json.dumps(str(self.part_amount)),
+                'part_amount': json.dumps(self.part_amount),
                 'initial_first': json.dumps(self.initial_first),
                 'initial_second': json.dumps(self.initial_second),
                 'initial_reverse_first': json.dumps(self.initial_reverse_first),
@@ -1034,7 +1034,7 @@ class Strategy(StrategyBase):
             self.orders_hold.restore(json.loads(strategy_state.get('orders_hold')))
             self.orders_save.restore(json.loads(strategy_state.get('orders_save')))
             self.over_price = json.loads(strategy_state.get('over_price'))
-            self.part_amount = json.loads(strategy_state.get('part_amount', {}))
+            self.part_amount = json.loads(strategy_state.get('part_amount', '{}'))
             self.initial_first = f2d(json.loads(strategy_state.get('initial_first')))
             self.initial_second = f2d(json.loads(strategy_state.get('initial_second')))
             self.initial_reverse_first = f2d(json.loads(strategy_state.get('initial_reverse_first')))
