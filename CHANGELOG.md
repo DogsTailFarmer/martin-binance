@@ -1,3 +1,7 @@
+## v1.2.10-1 2022-11-24
+### Update
+* up requirements for exchanges-wrapper to 1.2.7-3
+
 ## v1.2.10 2022-11-23
 ### Update
 * internal numbering for orders
