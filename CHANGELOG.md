@@ -1,3 +1,8 @@
+## v1.2.10-3 2022-11-25
+### Fixed
+* saving the state for partially executed orders as float() instead of Decimal() causes an error when restarting
+from the saved state if the last snapshot contains partial execution data.
+
 ## v1.2.10-2 2022-11-25
 ### Fixed
 * save/restore internal order_id
