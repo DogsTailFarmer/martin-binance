@@ -1,3 +1,7 @@
+## v1.2.10-4 2022-11-25
+### Update
+* up requirements for exchanges-wrapper to 1.2.7-4
+
 ## v1.2.10-3 2022-11-25
 ### Fixed
 * saving the state for partially executed orders as float() instead of Decimal() causes an error when restarting
