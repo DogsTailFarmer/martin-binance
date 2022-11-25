@@ -1,3 +1,7 @@
+## v1.2.10-2 2022-11-25
+### Fixed
+* save/restore internal order_id
+
 ## v1.2.10-1 2022-11-24
 ### Update
 * up requirements for exchanges-wrapper to 1.2.7-3
