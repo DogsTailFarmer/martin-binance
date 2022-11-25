@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10"
+__version__ = "1.2.10-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -982,7 +982,7 @@ class Strategy(StrategyBase):
                 'orders_hold': json.dumps(self.orders_hold.get()),
                 'orders_save': json.dumps(self.orders_save.get()),
                 'over_price': json.dumps(self.over_price),
-                'part_amount': json.dumps(self.part_amount),
+                'part_amount': json.dumps(str(self.part_amount)),
                 'initial_first': json.dumps(self.initial_first),
                 'initial_second': json.dumps(self.initial_second),
                 'initial_reverse_first': json.dumps(self.initial_reverse_first),
@@ -1034,7 +1034,19 @@ class Strategy(StrategyBase):
             self.orders_hold.restore(json.loads(strategy_state.get('orders_hold')))
             self.orders_save.restore(json.loads(strategy_state.get('orders_save')))
             self.over_price = json.loads(strategy_state.get('over_price'))
-            self.part_amount = json.loads(strategy_state.get('part_amount', '{}'))
+            #
+            # Upgrade from 1.2.10 to 1.2.10-3
+            self.part_amount = {}
+            if strategy_state.get('part_amount'):
+                _part_amount = json.loads(strategy_state.get('part_amount'))
+                if isinstance(_part_amount, str):
+                    self.part_amount = eval(_part_amount)
+                elif _part_amount and isinstance(_part_amount, dict):
+                    for k, v in _part_amount.items():
+                        self.part_amount.update({int(k): (Decimal(str(v[0])), Decimal(str(v[1])))})
+            # TODO Later change to:
+            # self.part_amount = eval(json.loads(strategy_state.get('part_amount')))
+            #
             self.initial_first = f2d(json.loads(strategy_state.get('initial_first')))
             self.initial_second = f2d(json.loads(strategy_state.get('initial_second')))
             self.initial_reverse_first = f2d(json.loads(strategy_state.get('initial_reverse_first')))
@@ -1058,8 +1070,8 @@ class Strategy(StrategyBase):
             self.tp_part_amount_first = f2d(json.loads(strategy_state.get('tp_part_amount_first')))
             self.tp_part_amount_second = f2d(json.loads(strategy_state.get('tp_part_amount_second')))
             self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
-            self.tp_order = eval(json.loads(strategy_state.get('tp_order'))) if strategy_state.get('tp_order') else ()
-            self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id')) if strategy_state.get('tp_wait_id') else None
+            self.tp_order = eval(json.loads(strategy_state.get('tp_order')))
+            self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id'))
             self.first_run = False
         # Variants are processed when the actual order is equal to or less than it should be
         # Exotic when drop during placed grid or unconfirmed TP left for later
@@ -1073,13 +1085,6 @@ class Strategy(StrategyBase):
                     tp_order = open_orders[i]
                     del open_orders[i]  # skipcq: PYL-E1138
                     break
-        # Get partially filled
-        part_amount_first = Decimal('0')
-        part_amount_second = Decimal('0')
-        for i in self.part_amount.keys():
-            part_amount = self.part_amount.pop(i)
-            part_amount_first += part_amount[0]
-            part_amount_second += part_amount[1]
         # Possible strategy states in compare with saved one
         grid_orders_len = len(self.orders_grid)
         open_orders_len = len(open_orders)
@@ -1092,6 +1097,13 @@ class Strategy(StrategyBase):
         tp_placed = tp_order and not self.tp_order_id
         tp_filled = not tp_order and self.tp_order_id
         no_orders = grid_orders_len == 0 and not self.tp_order_id
+        #
+        part_amount_first = Decimal('0')
+        part_amount_second = Decimal('0')
+        if grid_filled:
+            for v in self.part_amount.values():
+                part_amount_first += v[0]
+                part_amount_second += v[1]
         #
         self.avg_rate = f2d(self.get_buffered_ticker().last_price)
         #
@@ -1139,6 +1151,7 @@ class Strategy(StrategyBase):
                 print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
             amount_first += part_amount_first
             amount_second += part_amount_second
+            self.part_amount.clear()
             print(f"Total grid amount first: {amount_first}, second: {amount_second}")
             # Clear list of grid order
             self.orders_grid.orders_list.clear()
@@ -1157,6 +1170,7 @@ class Strategy(StrategyBase):
                 print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
             amount_first += part_amount_first
             amount_second += part_amount_second
+            self.part_amount.clear()
             print(f"Total amount first: {amount_first}, second: {amount_second}")
             # Clear list of grid order
             self.orders_grid.orders_list.clear()
@@ -1201,6 +1215,7 @@ class Strategy(StrategyBase):
                     amount_first += i['amount']
                     amount_second += i['amount'] * i['price']
                     print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
+                    part_amount_first, part_amount_second = self.part_amount.pop(i['id'], (Decimal('0'), Decimal('0')))
             amount_first += part_amount_first
             amount_second += part_amount_second
             self.message_log(f"Total amount first: {amount_first:f}, second: {amount_second:f}", color=Style.B_WHITE)
@@ -1237,6 +1252,7 @@ class Strategy(StrategyBase):
                     amount_first += i['amount']
                     amount_second += i['amount'] * i['price']
                     print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
+                    part_amount_first, part_amount_second = self.part_amount.pop(i['id'], (Decimal('0'), Decimal('0')))
             amount_first += part_amount_first
             amount_second += part_amount_second
             self.message_log(f"Total amount first: {amount_first:f}, second: {amount_second:f}", color=Style.B_WHITE)
