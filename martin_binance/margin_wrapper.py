@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10"
+__version__ = "1.2.10-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -814,7 +814,8 @@ async def buffered_orders():
                         last_state.update(cls.last_state)
                         cls.last_state = None
                         # Restore StrategyBase class var
-                        cls.order_id = json.loads(last_state.pop(ms_order_id, 0))
+                        cls.order_id = (json.loads(last_state.pop(ms_order_id, 0)) or
+                                        int(ms.datetime.now().strftime("%S%M")) * 1000)
                         cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                         cls.trades = jsonpickle.decode(last_state.pop('ms_trades', '[]'))
                         cls.orders = jsonpickle.decode(last_state.pop(ms_orders, '[]'))
@@ -978,6 +979,7 @@ async def on_order_update():
 
 async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> None:
     cls = StrategyBase
+    cls.order_id = _id
     try:
         res = await cls.send_request(cls.stub.CreateLimitOrder, api_pb2.CreateLimitOrderRequest,
                                      symbol=cls.symbol,
