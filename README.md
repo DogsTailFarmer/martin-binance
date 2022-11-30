@@ -5,7 +5,7 @@
 
 <h2 align="center">Cyclic grid strategy for SPOT market</h2>
 
-<h3 align="center">Free trading system for crypto exchanges (Binance, Bitfinex, Huobi, OKX, FTX,)</h3>
+<h3 align="center">Free trading system for crypto exchanges (Binance, Bitfinex, Huobi, OKX,)</h3>
 
 <h4 align="center">Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a></h4>
 
@@ -45,8 +45,6 @@ Strongly recommended that you test the strategy in the demo mode before using re
 > 
 >As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
 
-* See <a href="#specific-ftx-requirements">Specific FTX requirements</a>
-
 ## Review
 <p align="center"><img src="https://gist.githubusercontent.com/DogsTailFarmer/b650b9b199666700d2839fb46d3aa1d7/raw/657ea8e7ad79df66d9d373776aeeb8614241f03f/architecture.svg"></p>
 
@@ -76,8 +74,6 @@ You can modify them for your needs. See <a href="#for-developers">For developers
 <a href="#tmux">Terminal Tmux for STANDALONE mode</a>
 
 <a href="#how-its-work">How it's work</a>
-
-<a href="#specific-ftx-requirements">Specific FTX requirements</a>
 
 <a href="#for-developers">For developers</a>
 
@@ -546,7 +542,6 @@ For fee processing for second currency only, like as KRAKEN, use FEE_SECOND = Tr
 Priority of parameters from larger to smaller is:
 * FEE_IN_PAIR 
 * FEE_BNB_IN_PAIR
-* FEE_FTX
 * FEE_SECOND
 
 Attention: the commission, which is charged in the third coin, is not taken into account in the calculation of income.
@@ -657,23 +652,6 @@ and I am not sure that it is necessary.
 If you need setup new version margin or Python strategy, first you need stop strategy.
 Use Telegram control function, described above.
 
-## Specific FTX requirements
-<p id="specific-ftx-requirements"></p>
-
-These comments relate to this strategy, perhaps for another algorithm these restrictions will not be significant.
-
-* This strategy can be use on FTX only in fee free mode. If this condition is not met, when calculating the take
-profit order price, a giant gap is obtained between the first grid order and the take profit order.
-This is due to the large price change step and the large minimum order size.
-To get a Maker fee = 0% you need a stake 25 FTT. [Details here](https://help.ftx.com/hc/en-us/articles/360052410392). 
-
-* Have a small stock of assets for both currencies, over and above used for deposit. 0.1% of the deposit
-volume is enough. Otherwise, the exchange rejects the last grid order and the TP order, provided that there
-is an accurately available balance sheet.
-```[2022-08-27 04:17:26,560: ERROR] handle_errors.response.status >= 400: {'success': False, 'error': 'Not enough balances'}```
-*FTX support rejected this issue*
-
-
 ## For developers
 <p id="for-developers"></p>
 
@@ -692,8 +670,7 @@ both independently (STANDALONE mode) and together with [margin.de](https://margi
 
 ### Independent way
 A fully independent strategy that can be used on exchanges that are supported by the
-[exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper). Now it Binance and FTX.
-Their list will expand. Description and examples of use referenced above.
+[exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper). Description and examples of use referenced above.
 
 ## Known issue
 <p id="known-issue"></p>
@@ -730,9 +707,8 @@ on all trading fee
 
 Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
 
-Create account on [FTX](https://ftx.com/profile#a=62025440)
 
-Create account on [OKEX](https://www.okex.com/join/2607649)
+Create account on [OKEX](https://www.okex.com/join/2607649) and get Mystery Boxes worth up to $10,000
 
 ### margin.de
 <p id="margin"></p>
