@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.8-1"
+__version__ = "1.2.10-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -105,7 +105,11 @@ KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
 def get_rate(_currency_rate) -> {}:
     global request_delay
     # Replace info
-    replace = {'UST': 'USDT', 'IOT': 'MIOTA'}
+    replace = {'UST': 'USDT',
+               'IOT': 'MIOTA',
+               'LUNA': 'LUNC',
+               'LUNA2': 'LUNA'
+               }
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
     session = Session()
     session.headers.update(headers)
