@@ -1,3 +1,9 @@
+## v1.2.10-5 2022-12-04
+### Update
+* OKX: adding delay in place_limit_order() for avoid exceeding the rate limit (60 orders / 2s)
+* Some minor improvements
+* up requirements for exchanges-wrapper to 1.2.7-5
+
 ## v1.2.10-4 2022-11-25
 ### Update
 * up requirements for exchanges-wrapper to 1.2.7-4

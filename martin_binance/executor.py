@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10-3"
+__version__ = "1.2.10-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2840,6 +2840,11 @@ class Strategy(StrategyBase):
                 if self.reverse:
                     free_asset = fs
                     self.initial_reverse_second += delta
+
+        self.initial_first = max(self.initial_first, Decimal('0'))
+        self.initial_reverse_first = max(self.initial_reverse_first, Decimal('0'))
+        self.initial_second = max(self.initial_second, Decimal('0'))
+        self.initial_reverse_second = max(self.initial_reverse_second, Decimal('0'))
 
         if depo_new and depo != depo_new:
             self.message_log(f"New depo is {float(depo_new):f}, difference is {float(depo_new - depo):f}",

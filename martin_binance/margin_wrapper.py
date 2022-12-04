@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10-2"
+__version__ = "1.2.10-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -473,6 +473,8 @@ class StrategyBase:
             time.sleep(0.15)
         elif StrategyBase.exchange == 'huobi':
             time.sleep(0.02)
+        elif StrategyBase.exchange == 'okx':
+            time.sleep(0.035)
         return cls.order_id
 
     @classmethod
