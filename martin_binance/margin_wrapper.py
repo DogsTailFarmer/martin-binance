@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10-5"
+__version__ = "1.2.10-6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1097,7 +1097,7 @@ async def fetch_order(_id: int, _filled_update_call: bool = False):
         cls.strategy.message_log(f"Exception in fetch_order: {_ex}", log_level=LogLevel.ERROR)
         return {}
     else:
-        cls.strategy.message_log(f"For order {result.get('orderId')} fetched status is {result.get('status')}",
+        cls.strategy.message_log(f"For order {_id} fetched status is {result.get('status')}",
                                  log_level=LogLevel.INFO)
         if _filled_update_call and result and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
