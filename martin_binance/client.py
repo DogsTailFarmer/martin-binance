@@ -113,7 +113,5 @@ class Trade:
                 status_code = ex.code()
                 logger.warning(f"Exception on WSS loop: {status_code.name}, {ex.details()}")
                 raise
-            # finally:
-            #     return
         else:
             raise UserWarning("Start gRPC request loop failed, not active client session")
