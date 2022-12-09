@@ -548,7 +548,7 @@ class Orders:
         for i in self.orders_list:
             if i['id'] == _id:
                 return i['buy'], i['amount'], i['price']
-        return ()
+        return True, f2d(0), f2d(0)
 
     def exist(self, _id: int) -> bool:
         return any(i['id'] == _id for i in self.orders_list)
@@ -2651,11 +2651,8 @@ class Strategy(StrategyBase):
         strategy_orders_id = self.orders_grid.get_id_list()
         if self.tp_order_id and not self.cancel_order_id:
             strategy_orders_id.append(self.tp_order_id)
-        if self.grid_order_canceled:
-            try:
-                strategy_orders_id.remove(self.grid_order_canceled)
-            except ValueError:
-                pass
+        if self.grid_order_canceled in strategy_orders_id:
+            strategy_orders_id.remove(self.grid_order_canceled)
         diff_id = list(set(strategy_orders_id).difference(market_orders_id))
         if diff_id:
             self.message_log(f"Orders not present on exchange: {diff_id}", tlg=True)
@@ -2671,14 +2668,12 @@ class Strategy(StrategyBase):
                 self.shift_grid_threshold = None
                 amount_first = Decimal('0')
                 amount_second = Decimal('0')
-                _price = None
                 for _id in diff_id:
                     _buy, _amount, _price = self.orders_grid.get_by_id(_id)
                     self.orders_grid.remove(_id)
-                    amount_first += f2d(_amount)
-                    amount_second += f2d(_amount) * f2d(_price)
-                self.message_log(f"Grid amount: First: {amount_first}, Second: {amount_second},"
-                                 f" price: {_price}")
+                    amount_first += _amount
+                    amount_second += _amount * _price
+                self.message_log(f"Grid amount: First: {amount_first}, Second: {amount_second}")
                 self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
             elif self.tp_was_filled:
                 self.cancel_grid()
@@ -3225,8 +3220,8 @@ class Strategy(StrategyBase):
                 self.message_log("It's was grid order, probably filled", LogLevel.WARNING)
                 self.grid_order_canceled = None
                 _buy, _amount, _price = self.orders_grid.get_by_id(order_id)
-                amount_first = f2d(_amount)
-                amount_second = f2d(_amount) * f2d(_price)
+                amount_first = _amount
+                amount_second = _amount * _price
                 self.avg_rate = amount_second / amount_first
                 self.message_log(f"Executed amount: First: {amount_first}, Second: {amount_second},"
                                  f" price: {self.avg_rate}")
