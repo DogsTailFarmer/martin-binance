@@ -1,6 +1,8 @@
-## v1.2.10-7 2022-12-xx
+## v1.2.10-7 2022-12-14
 ### Fixed
 * fix #39, fix #40, fix #41
+* grid_handler: No grid orders after part filled TP, fixed additional order params
+and part code refactoring
 
 ## v1.2.10-6 2022-12-08
 ### Update

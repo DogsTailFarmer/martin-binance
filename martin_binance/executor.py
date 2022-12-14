@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10-5"
+__version__ = "1.2.10-7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2480,30 +2480,28 @@ class Strategy(StrategyBase):
                 return
             if GRID_ONLY:
                 self.grid_only_stop()
-            elif (self.tp_part_amount_first or self.tp_part_amount_second
-                  or self.correction_amount_first or self.correction_amount_second):
+            elif self.tp_part_amount_first or self.correction_amount_first:
                 self.message_log("grid_handler: No grid orders after part filled TP, converse TP to grid", tlg=True)
-                # Correction sum_amount
-                self.message_log(f"Before Correction: Sum_amount_first: {self.sum_amount_first},"
-                                 f" Sum_amount_second: {self.sum_amount_second}",
-                                 log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-                self.sum_amount_first -= self.tp_part_amount_first
-                self.sum_amount_second -= self.tp_part_amount_second
-                self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
-                                 f" Sum_amount_second: {self.sum_amount_second}",
-                                 log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-                self.tp_part_amount_first += self.correction_amount_first
-                self.tp_part_amount_second += self.correction_amount_second
+                if self.tp_part_amount_first:
+                    # Correction sum_amount
+                    self.message_log(f"Before Correction: Sum_amount_first: {self.sum_amount_first},"
+                                     f" Sum_amount_second: {self.sum_amount_second}",
+                                     log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+                    self.sum_amount_first -= self.tp_part_amount_first
+                    self.sum_amount_second -= self.tp_part_amount_second
+                    self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
+                                     f" Sum_amount_second: {self.sum_amount_second}",
+                                     log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+                _amount_f = self.tp_part_amount_first + self.correction_amount_first
+                _amount_s = self.tp_part_amount_second + self.correction_amount_second
                 self.correction_amount_first = Decimal('0')
                 self.correction_amount_second = Decimal('0')
-                tcm = self.get_trading_capability_manager()
-                # Return depo in turnover without loss
-                self.message_log(f"Saved TP part amount was: first: {self.tp_part_amount_first},"
-                                 f" second: {self.tp_part_amount_second}", log_level=LogLevel.DEBUG)
-                _amount_f = self.tp_part_amount_first
-                _amount_s = self.tp_part_amount_second
                 self.tp_part_amount_first = Decimal('0')
                 self.tp_part_amount_second = Decimal('0')
+                self.message_log(f"Saved TP part amount was: first: {_amount_f}, second: {_amount_s}",
+                                 log_level=LogLevel.DEBUG)
+                tcm = self.get_trading_capability_manager()
+                # Return depo in turnover without loss
                 if self.cycle_buy:
                     min_trade_amount = tcm.get_min_buy_amount(float(self.avg_rate))
                     amount = _amount_s
@@ -2532,11 +2530,12 @@ class Strategy(StrategyBase):
                 if float(amount) > min_trade_amount:
                     self.message_log(f"Too small amount for place additional grid,"
                                      f" add grid order for {'Buy' if self.cycle_buy else 'Sell'}"
-                                     f" {amount} by {reverse_target_amount / amount:f}")
-                    waiting_order_id = self.place_limit_order_check(self.cycle_buy, float(amount),
-                                                                    float(reverse_target_amount / amount))
-                    self.orders_init.append(waiting_order_id, self.cycle_buy, amount,
-                                            reverse_target_amount / amount)
+                                     f" {reverse_target_amount} by {amount / reverse_target_amount:f}")
+                    waiting_order_id = self.place_limit_order_check(self.cycle_buy, float(reverse_target_amount),
+                                                                    float(amount / reverse_target_amount))
+                    self.orders_init.append(waiting_order_id, self.cycle_buy, reverse_target_amount,
+                                            amount / reverse_target_amount)
+                self.place_profit_order(by_market)
             elif self.tp_was_filled:
                 self.message_log("grid_handler: Was filled TP and all grid orders, converse TP to grid", tlg=True)
                 self.after_filled_tp(one_else_grid=True)
