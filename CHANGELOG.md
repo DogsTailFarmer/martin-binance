@@ -1,3 +1,10 @@
+## v1.2.10-8 2022-12-15
+### Fixed
+* fix #42
+ 
+### Update
+* up requirements for exchanges-wrapper to 1.2.7-7
+
 ## v1.2.10-7 2022-12-14
 ### Fixed
 * fix #39, fix #40, fix #41
