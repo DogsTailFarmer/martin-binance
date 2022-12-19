@@ -190,7 +190,7 @@ For auto update running containers recommended use [Watchtower](https://github.c
 ### Install from pip
 
 ```console
-pip install martin-binance
+pip install martin-binance==1.2.11b1
 ```
 After first install find where pip installs packages, often it's ```/home/ubuntu/.local/lib/python3.10/site-packages```
 and run:
@@ -198,7 +198,7 @@ and run:
 exchanges_wrapper/__init__.py
 ```
 then
-```
+```console
 martin_binance/__init__.py
 ```
 The structure of the working directory will be created and the necessary files will be copied. On __init__ output
@@ -237,9 +237,8 @@ For stop strategy use Ctrl-C and/or Telegram control function
 
 Change dir to the ```~/opt/margin/resources/python/lib/python3.7/site-packages/``` and install martin-binance there:
 ```console
-pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps martin-binance
+pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps martin-binance==1.2.11b1
 ```
-
 The margin terminal uses its own assembly Python3.7 which does not have some packages necessary for the strategy
 to work. They need to be installed.
 
