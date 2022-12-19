@@ -6,13 +6,12 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10-7"
+__version__ = "1.2.11b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
 import platform
 import gc
-import psutil
 import statistics
 from datetime import datetime
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
@@ -30,6 +29,7 @@ from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH  # 
 if STANDALONE:
     from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
     from martin_binance.margin_wrapper import __version__ as msb_ver
+    import psutil
 else:
     from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
     from typing import Dict, List
@@ -39,15 +39,7 @@ else:
     import math
     import simplejson as json
     msb_ver = str()
-    if platform.system() == 'Darwin':
-        user = (lambda: os.environ["USERNAME"] if "C:" in os.getcwd() else os.environ["USER"])()
-        WORK_PATH = Path("Users", user, ".margin")
-    else:
-        WORK_PATH = Path().resolve()
-    CONFIG_FILE = Path(WORK_PATH, "ms_cfg.toml")
-    DB_FILE = Path(WORK_PATH, "funds_rate.db")
-    LOG_PATH = None
-    LAST_STATE_PATH = None
+    psutil = None
 
 # region SetParameters
 SYMBOL = str()
@@ -1364,7 +1356,7 @@ class Strategy(StrategyBase):
                              f"First: {self.sum_profit_first}\n"
                              f"Second: {self.sum_profit_second}\n"
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
-        mem = psutil.virtual_memory().percent
+        mem = psutil.virtual_memory().percent if psutil else 0
         if mem > 80:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
             self.command = 'end'

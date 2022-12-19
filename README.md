@@ -192,25 +192,17 @@ For auto update running containers recommended use [Watchtower](https://github.c
 ```console
 pip install martin-binance
 ```
-After first install run
+After first install find where pip installs packages, often it's ```/home/ubuntu/.local/lib/python3.10/site-packages```
+and run:
 ```console
-exchanges_wrapper/exch_srv.py
+exchanges_wrapper/__init__.py
 ```
-
-and in ```martin_binance``` folder run next command:
-
-```console
-cp cli_7_BTCUSDT.py.template cli_7_BTCUSDT.py && chmod +x cli_7_BTCUSDT.py && ./cli_7_BTCUSDT.py
+then
 ```
-You can find this where pip installs packages, often it's ```/home/ubuntu/.local/lib/python3.10/site-packages```
-
-The structure of the working directory will be created and the necessary files will be copied:
-For Ubuntu it will be here: ```home/user/.MartinBinance/```
-
-For upgrade to latest versions use:
-```console
-pip install -U martin-binance
+martin_binance/__init__.py
 ```
+The structure of the working directory will be created and the necessary files will be copied. On __init__ output
+you can find location.
 
 #### Start server
 * Specify api_key and api_secret in ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml```
@@ -221,6 +213,11 @@ pip install -U martin-binance
 
 Strategy is started.
 
+For upgrade to latest versions use:
+```console
+pip install -U martin-binance
+```
+
 #### Setting trade pair
 You must set pair name in three places the same (yes, it is crooked, but so far):
 * base setting at top of the ```cli_X_AAABBB.py```, ```ex.SYMBOL = 'AAABBB'```
@@ -229,7 +226,7 @@ You must set pair name in three places the same (yes, it is crooked, but so far)
 
 >For 'Demo - Binance' and BTC/USDT trade pair it will be cli_7_BTCUSDT.py
 
-* the name of pane in <a href="#tmux">Tmux terminal window</a>, see explanation in the relevant section
+* the name of pane in <a href="#tmux">Tmux terminal window</a> must match too, see explanation in the relevant section
 
 For stop strategy use Ctrl-C and/or Telegram control function
 
@@ -245,17 +242,37 @@ pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps martin-bin
 
 The margin terminal uses its own assembly Python3.7 which does not have some packages necessary for the strategy
 to work. They need to be installed.
+
+For Ubuntu (Linux):
 ```console
 pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps -r ./martin_binance/margin/margin_req.txt
 ```
-
-* Rename  ```martin_binance/ms_cfg.toml.template``` to ```martin_binance/ms_cfg.toml```
-* Copy ```ms_cfg.toml``` and ```funds_rate.db``` to the margin install folder ```~/opt/margin/```
-* Create Telegram bot as described above and specify the data in ```ms_cfg.toml```
-
-For Ubuntu (Linux) check if exist file
+*For Ubuntu (Linux) check if exist file*
 ```~/opt/margin/resources/python/lib/python3.7/lib-dynload/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
 and if not, copy it from ```martin_binance/margin/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
+
+For Windows:
+```console
+pip install -U wheel
+```
+```console
+pip install -U setuptools
+```
+```console
+pip install --use-pep517 --no-cache-dir -t . -U --ignore-requires-python --no-deps -r ./martin_binance/margin/margin_req_win.txt
+```
+*For Windows* download file [margin_win_addon.zip](https://github.com/DogsTailFarmer/martin-binance/files/10262282/margin_win_addon.zip)
+and unzip it to the ```C:\Users\UserName\AppData\Local\Programs\margin\resources\python\lib\python3.7\site-packages```
+if margin installed in that place or find it yourself
+***
+After first install run
+```
+site-packages/martin_binance/__init__.py
+```
+The structure of the working directory will be created and the necessary files will be copied. On __init__ output
+you can find location.
+
+* Create Telegram bot as described above and specify the data in ```ms_cfg.toml```
 ***
 * Start margin in Demo mode
 * Add currency pair BTC/USDT
@@ -263,7 +280,7 @@ and if not, copy it from ```martin_binance/margin/_sqlite3.cpython-37m-x86_64-li
 * Add Python strategy:
 <p align="center"><img src="https://git.io/JDIiQ"></p>
 
-* Copy/paste the contents of the file cli_7_BTCUSDT.py to the Code Editor window
+* Copy/paste the contents of the file ```/home/ubuntu/.MartinBinance/cli_7_BTCUSDT.py``` to the Code Editor window
 * Save, Run Strategy, Start
 
 Strategy is started.
