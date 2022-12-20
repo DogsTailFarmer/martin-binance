@@ -1,6 +1,6 @@
-## v1.2.11 2022-12-xx
+## v1.2.11 2022-12-20
 ### Fixed
-* fix #43
+* fix #43, import error in margin mode under Windows
 
 ## v1.2.10-8 2022-12-15
 ### Fixed
