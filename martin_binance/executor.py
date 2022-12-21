@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.11"
+__version__ = "1.2.11-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1391,11 +1391,10 @@ class Strategy(StrategyBase):
                                      f"{float(amount):f} {self.s_currency} depo\n"
                                      f"{self.get_free_assets(ff, fs)[2]}", tlg=True)
             else:
-                if USE_ALL_FIRST_FUND and (self.reverse or GRID_ONLY):
-                    if ff > self.deposit_first:
-                        self.deposit_first = ff
-                        self.message_log('Use all available fund for first currency')
-                        self.deposit_first = self.round_truncate(self.deposit_first, base=True)
+                if USE_ALL_FIRST_FUND and (self.reverse or GRID_ONLY) and ff > self.deposit_first:
+                    self.deposit_first = ff
+                    self.message_log('Use all available fund for first currency')
+                    self.deposit_first = self.round_truncate(self.deposit_first, base=True)
                 amount = self.deposit_first
                 if start_cycle_output:
                     self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
@@ -1691,7 +1690,6 @@ class Strategy(StrategyBase):
                     amount += amount_last_grid / (price if buy_side else 1)
                     amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
                     last_order_pass = True
-
             if buy_side:
                 avg_amount += amount
             else:
@@ -1703,19 +1701,16 @@ class Strategy(StrategyBase):
                 total_grid_amount_f += amount
                 total_grid_amount_s += amount * price
                 break
-
         # print(f"calc_grid: total_grid_amount_f: {total_grid_amount_f}, total_grid_amount_s: {total_grid_amount_s}")
         # print(f"calc_grid: order_q: {self.order_q}, over_price: {float(over_price):f}, avg_amount: {avg_amount}")
-
         if calc_avg_amount:
             return avg_amount
-        else:
-            res = {
-                'total_grid_amount_f': total_grid_amount_f,
-                'total_grid_amount_s': total_grid_amount_s,
-                'orders': orders
-            }
-            return res
+        res = {
+            'total_grid_amount_f': total_grid_amount_f,
+            'total_grid_amount_s': total_grid_amount_s,
+            'orders': orders
+        }
+        return res
 
     def grid_update(self, frequency: str):
         try:

@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.11"
+__version__ = "1.2.11-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -47,5 +47,4 @@ else:
     print(f"Before the first run, set the parameters in {CONFIG_FILE}")
     if STANDALONE:
         raise SystemExit(1)
-    else:
-        raise UserWarning()
+    raise UserWarning()
