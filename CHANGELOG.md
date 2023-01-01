@@ -1,3 +1,10 @@
+## v1.2.12 2023-01-01
+### Added for new features
+* Add connection to Binance US (binance.us)
+
+### Update
+* up requirements for exchanges-wrapper to 1.2.8
+
 ## v1.2.11 2022-12-20
 ### Fixed
 * fix #43, import error in margin mode under Windows
