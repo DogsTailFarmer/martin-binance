@@ -1,3 +1,8 @@
+## v1.2.12-1 2023-01-xx
+### Update
+* Config templates
+* up requirements for exchanges-wrapper to 1.2.x-x
+
 ## v1.2.12 2023-01-01
 ### Added for new features
 * Add connection to Binance US (binance.us)

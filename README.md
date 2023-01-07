@@ -55,7 +55,7 @@ The system has two modes:
 * python_strategy modules can be used as plug-in trading strategy for multi-exchange terminal
 <a href="#margin">margin.de</a>, free demo, you can try it.
 
-Strategy logic realized at executor.py and trading parameters settings in the cli_1_AAABBB.py (cli_7_BTCUSDT.py)
+Strategy logic realized at executor.py and trading parameters settings in the cli_X_AAABBB.py (cli_0_BTCUSDT.py)
 
 You can modify them for your needs. See <a href="#for-developers">For developers</a> section.
 
@@ -153,7 +153,7 @@ For test purpose in *STANDALONE* mode create API key pair:
 * Register [Telegram bot](https://t.me/BotFather)
 * Get token
 * Find channel_id. Just start [IDBot](https://t.me/username_to_id_bot) and get channel_id
-* After next step specify this data into ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml``` for 'Demo - Binance', 7
+* After next step specify this data into ```/home/ubuntu/.MartinBinance/config/ms_cfg.toml``` for 'Demo - Binance', 0
 
 ### Docker
 * Install and run [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper#get-started) server.
@@ -169,9 +169,9 @@ For Ubuntu it will be here: ```home/user/.MartinBinance/```
 docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/__init__.py" > init.py && \
   docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/ms_cfg.toml.template" > ms_cfg.toml.template &&\
   docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/funds_rate.db.template" > funds_rate.db.template &&\
-  docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/cli_7_BTCUSDT.py.template" > cli_7_BTCUSDT.py.template &&\
-  docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/cli_10_AAABBB.py.template" > cli_10_AAABBB.py.template &&\
-  python3 init.py && rm init.py && rm ms_cfg.toml.template && rm funds_rate.db.template && rm cli_7_BTCUSDT.py.template && rm cli_10_AAABBB.py.template
+  docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/cli_0_BTCUSDT.py.template" > cli_0_BTCUSDT.py.template &&\
+  docker run --rm --entrypoint /bin/sh martin-binance -c "cat ./martin_binance/cli_2_AAABBB.py.template" > cli_2_AAABBB.py.template &&\
+  python3 init.py && rm init.py && rm ms_cfg.toml.template && rm funds_rate.db.template && rm cli_0_BTCUSDT.py.template && rm cli_2_AAABBB.py.template
 ```
 #### Start client
 ```console
@@ -179,13 +179,13 @@ docker run -itP \
  --mount type=bind,source=/home/ubuntu/.MartinBinance,target=/home/appuser/.MartinBinance \
  --network=host \
  --restart=always \
- --name=7-BTCUSDT \
+ --name=0-BTCUSDT \
  martin-binance \
- /home/appuser/.MartinBinance/cli_7_BTCUSDT.py 1
+ /home/appuser/.MartinBinance/cli_0_BTCUSDT.py 1
 ```
 The last '1' it is parameter for silent restart with restore operational status.
 
-```.MartinBinance/cli_7_BTCUSDT.py``` where trading parameters must be setting.
+```.MartinBinance/cli_0_BTCUSDT.py``` where trading parameters must be setting.
 
 For auto update running containers recommended use [Watchtower](https://github.com/containrrr/watchtower/)
 
@@ -211,7 +211,7 @@ you can find location.
 * Run ```exchanges_wrapper/exch_srv.py``` in terminal window.
 
 #### Start client
-* Run ```/home/ubuntu/.MartinBinance/cli_7_BTCUSDT.py``` in other terminal window.
+* Run ```/home/ubuntu/.MartinBinance/cli_0_BTCUSDT.py``` in other terminal window.
 
 Strategy is started.
 
@@ -226,7 +226,7 @@ You must set pair name in three places the same (yes, it is crooked, but so far)
 * the name of ```cli_X_AAABBB.py``` must match
 * the ```X``` it is index of element from exchange list in ```config/ms_cfg.toml```
 
->For 'Demo - Binance' and BTC/USDT trade pair it will be cli_7_BTCUSDT.py
+>For 'Demo - Binance' and BTC/USDT trade pair it will be cli_0_BTCUSDT.py
 
 * the name of pane in <a href="#tmux">Tmux terminal window</a> must match too, see explanation in the relevant section
 
@@ -248,7 +248,7 @@ For Ubuntu (Linux):
 ```console
 pip install --no-cache-dir -t . -U --ignore-requires-python --no-deps -r ./martin_binance/margin/margin_req.txt
 ```
-*For Ubuntu (Linux) check if exist file*
+*For Ubuntu (Linux) also check if exist file*
 ```~/opt/margin/resources/python/lib/python3.7/lib-dynload/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
 and if not, copy it from ```martin_binance/margin/_sqlite3.cpython-37m-x86_64-linux-gnu.so```
 
@@ -281,7 +281,7 @@ you can find location.
 * Add Python strategy:
 <p align="center"><img src="https://git.io/JDIiQ"></p>
 
-* Copy/paste the contents of the file ```/home/ubuntu/.MartinBinance/cli_7_BTCUSDT.py``` to the Code Editor window
+* Copy/paste the contents of the file ```/home/ubuntu/.MartinBinance/cli_0_BTCUSDT.py``` to the Code Editor window
 * Save, Run Strategy, Start
 
 Strategy is started.
@@ -342,7 +342,7 @@ set -g prefix C-b
 run '~/.tmux/plugins/tpm/tpm'
 ~~~
 
-Attention: The name of session ('Trade') and pane ('srv', '7-BTC/USDT') must be same as in example and correspond pair
+Attention: The name of session ('Trade') and pane ('srv', '0-BTC/USDT') must be same as in example and correspond pair
 which start in this pane. For example cli_1_BTCUSDT.py must be started in pane with name '1-BTC/USDT'
 
 * Start new session:
@@ -352,7 +352,7 @@ tmux new-session -s Trade
 * Rename pane 0: Ctrl+B + , srv Enter
 * Change dir to the ```~/.local/lib/python3.8/site-packages/exchanges_wrapper```
 * Create new pane: Ctrl+B c
-* Rename pane 1: Ctrl+B + , 7-BTC/USDT Enter
+* Rename pane 1: Ctrl+B + , 0-BTC/USDT Enter
 * Change dir to the ```~/.MartinBinance```
 * Reboot system
 * Attach to the restored session:
@@ -370,9 +370,9 @@ For each pane appropriate dir must be selected.
 ~~~
 ./exch_srv.py
 ~~~
-* Run in the pane 1:7-BTC/USDT trade strategy script:
+* Run in the pane 1:0-BTC/USDT trade strategy script:
 ~~~
-./cli_7_BTCUSDT.py
+./cli_0_BTCUSDT.py
 ~~~
 
 Final test, reboot system. After reboot connect to the tmux session:

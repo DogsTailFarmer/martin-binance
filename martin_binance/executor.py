@@ -6,11 +6,10 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.11-1"
+__version__ = "1.2.12-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
-import platform
 import gc
 import statistics
 from datetime import datetime
@@ -33,7 +32,6 @@ if STANDALONE:
 else:
     from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
     from typing import Dict, List
-    import os
     import sqlite3
     import time
     import math
@@ -473,32 +471,33 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
     """
     delta = f2d(0.000001)
     solves = []
+    tries = 0
 
     def dx(_fn, _x, _delta, **_kwargs):
         return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
 
-    for tries in range(max_tries):
+    while 1:
+        tries += 1
         err = fn(x, **kwargs) - value
-        # print(f"err: {err}")
         if abs(err) < max_err and err >= 0:
             print(f"In {tries} attempts the best solution was found!", )
             return x
         if err > 0:
             solves.append((err, x))
         slope = dx(fn, x, delta, **kwargs)
-        # print(f"slope: {slope}")
         if slope != 0.0:
             x -= err/slope
-            # print(f"x: {x}")
         else:
             delta *= 10
             if delta > 1:
                 break
-            # print(f"solve.delta: {delta}")
-    if solves:
-        solves.sort(key=lambda a: a[0], reverse=False)
-        print('Solve return the best of the right value ;-)')
-        return solves[0][1]
+        if tries > max_tries and solves:
+            solves.sort(key=lambda a: a[0], reverse=False)
+            print('Solve return the best of the right value ;-)')
+            # print("\n".join(f"{k}\t{v}" for k, v in solves))
+            return solves[0][1]
+        if tries > max_tries * 10:
+            break
     print('Oops. No solution found')
     return f2d(0)
 
@@ -1523,6 +1522,17 @@ class Strategy(StrategyBase):
             min_delta = f2d(tcm.get_minimal_price_change(base_price))
             base_price_dec = f2d(tcm.round_price(base_price, RoundingType.ROUND))
             amount_min_dec = f2d(amount_min)
+            '''
+            # For test purpose only ###########################################
+            self.reverse = True
+            buy_side = False
+            depo = f2d(75.3810)
+            base_price_dec = f2d(26.378)
+            reverse_target_amount = f2d(2228.0301309)
+            min_delta = f2d(0.001)
+            amount_min_dec = f2d(0.1)
+            ###################################################################
+            '''
             if ADAPTIVE_TRADE_CONDITION or self.reverse or additional_grid:
                 try:
                     amount_first_grid = self.set_trade_conditions(buy_side,
@@ -1860,6 +1870,11 @@ class Strategy(StrategyBase):
                              grid_update: bool = False) -> Decimal:
         tcm = self.get_trading_capability_manager()
         step_size = f2d(tcm.get_minimal_amount_change(float(amount_min)))
+
+        # For test purpose only ###########################################
+        # step_size = f2d(0.0001)
+        ###################################################################
+
         self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f}, base_price: {base_price},"
                          f" reverse_target_amount: {reverse_target_amount}, amount_min: {amount_min},"
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
@@ -2029,6 +2044,11 @@ class Strategy(StrategyBase):
         else:
             over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
             max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
+
+        # For test purpose only ###########################################
+        # max_err = f2d(0.001)
+        ###################################################################
+
         self.message_log(f"over_price coarse: {over_price_coarse:.6f}, max_err: {max_err}", log_level=LogLevel.DEBUG)
         if self.order_q > 1 and over_price_coarse > 0:
             # Fine calculate over_price for target return amount
