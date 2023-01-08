@@ -1,6 +1,6 @@
 # Parameters for martin-binance strategy
 # Copyright © 2021 Jerry Fedorenko aka VM
-# __version__ = "1.2.12-1"
+# __version__ = "1.2.13"
 
 telegram_url = "https://api.telegram.org/bot"
 

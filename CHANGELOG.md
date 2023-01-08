@@ -1,7 +1,12 @@
-## v1.2.12-1 2023-01-xx
+## v1.2.13 2023-01-08
+### Fixed
+* Optimized numerical solution of grid parameters in Reverse cycle to avoid rare cases of calculation failure
+
 ### Update
 * Config templates
-* up requirements for exchanges-wrapper to 1.2.x-x
+* Removing FTX smell
+* Add cumulative Free assets chart into Grafana template
+* up requirements for exchanges-wrapper to 1.2.9
 
 ## v1.2.12 2023-01-01
 ### Added for new features
