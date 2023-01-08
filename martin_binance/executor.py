@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13"
+__version__ = "1.2.13-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -482,7 +482,7 @@ def solve(fn, value: Decimal, x: Decimal, max_tries=50, **kwargs) -> Decimal:
         if err == _err and err >= 0:
             print(f"In {tries} attempts the best solution was found!", )
             return x
-        if err > 0:
+        if err >= 0:
             _err = err
             solves.append((err, x))
         slope = dx(fn, x, delta, **kwargs)
@@ -492,12 +492,11 @@ def solve(fn, value: Decimal, x: Decimal, max_tries=50, **kwargs) -> Decimal:
             delta *= 10
             if delta > 1:
                 break
-        if tries > max_tries and len(solves) > 10:
+        if tries > max_tries and len(solves) > 5:
             solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
             print('Solve return the best of the right value ;-)')
-            print("\n".join(f"{k}\t{v}" for k, v in solves))
             return solves[0][1]
-        if tries > max_tries * 10:
+        if tries > max_tries * 2:
             break
     print('Oops. No solution found')
     return f2d(0)
@@ -2033,7 +2032,7 @@ class Strategy(StrategyBase):
             over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
             if over_price == 0:
                 self.message_log("Can't calculate over price for reverse cycle,"
-                                 "use previous or over_price_coarse * 3", log_level=LogLevel.ERROR)
+                                 " use previous or over_price_coarse * 3", log_level=LogLevel.ERROR)
                 over_price = over_price_previous or 3 * over_price_coarse
         else:
             over_price = over_price_coarse

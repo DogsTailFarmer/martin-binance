@@ -1,3 +1,7 @@
+## v1.2.13-1 2023-01-08
+### HotFixed
+* Optimized numerical solution of grid parameters in Reverse cycle to avoid rare cases of calculation failure
+
 ## v1.2.13 2023-01-08
 ### Fixed
 * Optimized numerical solution of grid parameters in Reverse cycle to avoid rare cases of calculation failure
