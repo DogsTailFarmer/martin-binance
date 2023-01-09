@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.12-1"
+__version__ = "1.2.13-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -464,14 +464,15 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
     :param fn: Function
     :param value: Specified value
     :param x: Predict of the search value
-    :param max_tries:
     :param max_err:
+    :param max_tries:
     :param kwargs: Function parameters as {}
     :return: fine x
     """
     delta = f2d(0.000001)
     solves = []
     tries = 0
+    _x = x
 
     def dx(_fn, _x, _delta, **_kwargs):
         return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
@@ -479,26 +480,37 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
     while 1:
         tries += 1
         err = fn(x, **kwargs) - value
-        if abs(err) < max_err and err >= 0:
+
+        print(f"tries: {tries}, x: {x}, fn: {fn(x, **kwargs)}, err: {err}")
+
+        if err >= 0 and abs(err) <= max_err:
             print(f"In {tries} attempts the best solution was found!", )
             return x
-        if err > 0:
+        if err >= 0:
             solves.append((err, x))
         slope = dx(fn, x, delta, **kwargs)
+
+        print(f"slope: {slope}")
+
         if slope != 0.0:
             x -= err/slope
+            x = max(_x + delta * tries, x)
         else:
             delta *= 10
             if delta > 1:
                 break
-        if tries > max_tries and solves:
-            solves.sort(key=lambda a: a[0], reverse=False)
+
+        print(f"delta: {delta}")
+
+        if tries > max_tries and len(solves) > 5:
+            solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
             print('Solve return the best of the right value ;-)')
-            # print("\n".join(f"{k}\t{v}" for k, v in solves))
+            print("\n".join(f"{k}\t{v}" for k, v in solves))
             return solves[0][1]
-        if tries > max_tries * 10:
+        if tries > max_tries * 2:
             break
     print('Oops. No solution found')
+    print("\n".join(f"{k}\t{v}" for k, v in solves))
     return f2d(0)
 
 
@@ -697,16 +709,10 @@ class Strategy(StrategyBase):
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
-        if FEE_SECOND and FEE_FTX:
-            init_params_error = 'FEE_SECOND and FEE_FTX'
-        elif not FEE_IN_PAIR and FEE_SECOND:
+        if not FEE_IN_PAIR and FEE_SECOND:
             init_params_error = 'FEE_IN_PAIR and FEE_SECOND'
-        elif not FEE_IN_PAIR and FEE_FTX:
-            init_params_error = 'FEE_IN_PAIR and FEE_FTX'
         elif not FEE_IN_PAIR and FEE_BNB_IN_PAIR:
             init_params_error = 'FEE_IN_PAIR and FEE_BNB_IN_PAIR'
-        elif FEE_BNB_IN_PAIR and FEE_FTX:
-            init_params_error = 'FEE_BNB_IN_PAIR and FEE_FTX'
         else:
             init_params_error = None
         if init_params_error:
@@ -1522,17 +1528,6 @@ class Strategy(StrategyBase):
             min_delta = f2d(tcm.get_minimal_price_change(base_price))
             base_price_dec = f2d(tcm.round_price(base_price, RoundingType.ROUND))
             amount_min_dec = f2d(amount_min)
-            '''
-            # For test purpose only ###########################################
-            self.reverse = True
-            buy_side = False
-            depo = f2d(75.3810)
-            base_price_dec = f2d(26.378)
-            reverse_target_amount = f2d(2228.0301309)
-            min_delta = f2d(0.001)
-            amount_min_dec = f2d(0.1)
-            ###################################################################
-            '''
             if ADAPTIVE_TRADE_CONDITION or self.reverse or additional_grid:
                 try:
                     amount_first_grid = self.set_trade_conditions(buy_side,
@@ -1870,11 +1865,6 @@ class Strategy(StrategyBase):
                              grid_update: bool = False) -> Decimal:
         tcm = self.get_trading_capability_manager()
         step_size = f2d(tcm.get_minimal_amount_change(float(amount_min)))
-
-        # For test purpose only ###########################################
-        # step_size = f2d(0.0001)
-        ###################################################################
-
         self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f}, base_price: {base_price},"
                          f" reverse_target_amount: {reverse_target_amount}, amount_min: {amount_min},"
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
@@ -2044,11 +2034,7 @@ class Strategy(StrategyBase):
         else:
             over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
             max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
-
-        # For test purpose only ###########################################
-        # max_err = f2d(0.001)
-        ###################################################################
-
+        max_err *= 10
         self.message_log(f"over_price coarse: {over_price_coarse:.6f}, max_err: {max_err}", log_level=LogLevel.DEBUG)
         if self.order_q > 1 and over_price_coarse > 0:
             # Fine calculate over_price for target return amount
@@ -2061,7 +2047,7 @@ class Strategy(StrategyBase):
             over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
             if over_price == 0:
                 self.message_log("Can't calculate over price for reverse cycle,"
-                                 "use previous or over_price_coarse * 3", log_level=LogLevel.ERROR)
+                                 " use previous or over_price_coarse * 3", log_level=LogLevel.ERROR)
                 over_price = over_price_previous or 3 * over_price_coarse
         else:
             over_price = over_price_coarse
@@ -2166,7 +2152,7 @@ class Strategy(StrategyBase):
                     amount_first += self.round_fee(fee, amount_first, base=True)
                     self.message_log(f"For grid order First + fee: {amount_first}", log_level=LogLevel.DEBUG)
             else:
-                if (self.cycle_buy and not FEE_FTX) or (self.cycle_buy and FEE_FTX and not by_market):
+                if self.cycle_buy:
                     if FEE_SECOND:
                         amount_second += self.round_fee(fee, amount_second, base=False)
                         self.message_log(f"For grid order Second + fee: {amount_second}", log_level=LogLevel.DEBUG)
@@ -2192,9 +2178,7 @@ class Strategy(StrategyBase):
                     amount_first -= self.round_fee(fee, amount_first, base=True)
                     self.message_log(f"Take profit order First - fee: {amount_first}", log_level=LogLevel.DEBUG)
             else:
-                if ((self.cycle_buy and not FEE_FTX)
-                        or (FEE_FTX and by_market)
-                        or (self.cycle_buy and FEE_FTX and not by_market)):
+                if self.cycle_buy:
                     amount_second -= self.round_fee(fee, amount_second, base=False)
                     self.message_log(f"Take profit order Second - fee: {amount_second}", log_level=LogLevel.DEBUG)
                 else:
