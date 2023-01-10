@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-2b02"
+__version__ = "1.2.13-2b03"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -473,9 +473,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
     solves = []
     tries = 0
     _x = x
-    _err = None
-    slope = None
-    _slope = None
+    _err = []
 
     def dx(_fn, _x, _delta, **_kwargs):
         return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
@@ -490,37 +488,31 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
             print(f"In {tries} attempts the best solution was found!", )
             return x
 
-        correction = (delta * tries) if _err == err and _slope == slope else 0
-
-        print(f"correction: {correction}")
-
         if err >= 0:
             solves.append((err, x))
-        else:
-            _err = err
-            _slope = slope
 
         slope = dx(fn, x, delta, **kwargs)
 
-        print(f"slope: {slope}")
-
         if slope != 0.0:
             x -= err/slope
-            x = max(_x + delta * tries, x + correction)
+            x = max(_x + delta * tries, x)
         else:
             delta *= 10
             if delta > 1:
                 break
 
-        print(f"delta: {delta}")
+        print(f"tries: {tries}, delta: {delta}, slope: {slope}")
 
-        if tries > max_tries and len(solves) > 5:
+        if (_err.count(err) or tries > max_tries) and len(solves) > 5:
             solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
             print('Solve return the best of the right value ;-)')
             print("\n".join(f"{k}\t{v}" for k, v in solves))
             return solves[0][1]
         if tries > max_tries * 2:
             break
+
+        _err.append(err)
+
     print('Oops. No solution found')
     print("\n".join(f"{k}\t{v}" for k, v in solves))
     return f2d(0)
