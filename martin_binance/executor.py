@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-2"
+__version__ = "1.2.13-2b02"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -473,6 +473,9 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
     solves = []
     tries = 0
     _x = x
+    _err = None
+    slope = None
+    _slope = None
 
     def dx(_fn, _x, _delta, **_kwargs):
         return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
@@ -486,15 +489,24 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         if err >= 0 and abs(err) <= max_err:
             print(f"In {tries} attempts the best solution was found!", )
             return x
+
+        correction = (delta * tries) if _err == err and _slope == slope else 0
+
+        print(f"correction: {correction}")
+
         if err >= 0:
             solves.append((err, x))
+        else:
+            _err = err
+            _slope = slope
+
         slope = dx(fn, x, delta, **kwargs)
 
         print(f"slope: {slope}")
 
         if slope != 0.0:
             x -= err/slope
-            x = max(_x + delta * tries, x)
+            x = max(_x + delta * tries, x + correction)
         else:
             delta *= 10
             if delta > 1:
