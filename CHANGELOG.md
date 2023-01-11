@@ -1,10 +1,10 @@
-## v1.2.13-1 2023-01-08
-### HotFixed
-* Optimized numerical solution of grid parameters in Reverse cycle to avoid rare cases of calculation failure
-
-## v1.2.13 2023-01-08
+## v1.2.13-3 2023-01-11
 ### Fixed
 * Optimized numerical solution of grid parameters in Reverse cycle to avoid rare cases of calculation failure
+  + search for a solution with the specified or maximum possible accuracy
+  + effectively finding possible accuracy, as a result, reducing the number of iterations by about 4 times
+  + forced displacement of the starting point during looping allows to find a solution with possible accuracy,
+  if it exists under given conditions
 
 ### Update
 * Config templates
