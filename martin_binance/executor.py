@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-1"
+__version__ = "1.2.13-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -458,12 +458,13 @@ def f2d(_f: float) -> Decimal:
     return Decimal(str(_f))
 
 
-def solve(fn, value: Decimal, x: Decimal, max_tries=50, **kwargs) -> Decimal:
+def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwargs) -> Decimal:
     """
     Numerical solution of the equation, value = fn(x)
     :param fn: Function
     :param value: Specified value
     :param x: Predict of the search value
+    :param max_err:
     :param max_tries:
     :param kwargs: Function parameters as {}
     :return: fine x
@@ -471,7 +472,8 @@ def solve(fn, value: Decimal, x: Decimal, max_tries=50, **kwargs) -> Decimal:
     delta = f2d(0.000001)
     solves = []
     tries = 0
-    _err = None
+    _x = x
+    _err = []
 
     def dx(_fn, _x, _delta, **_kwargs):
         return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
@@ -479,26 +481,32 @@ def solve(fn, value: Decimal, x: Decimal, max_tries=50, **kwargs) -> Decimal:
     while 1:
         tries += 1
         err = fn(x, **kwargs) - value
-        if err == _err and err >= 0:
+        # print(f"tries: {tries}, x: {x}, fn: {fn(x, **kwargs)}, err: {err}")
+        if err >= 0 and abs(err) <= max_err:
             print(f"In {tries} attempts the best solution was found!", )
             return x
+        correction = (delta * tries) if err < 0 and _err.count(err) else 0
         if err >= 0:
-            _err = err
             solves.append((err, x))
         slope = dx(fn, x, delta, **kwargs)
         if slope != 0.0:
             x -= err/slope
+            x = max(_x + delta * tries, x + correction)
         else:
             delta *= 10
             if delta > 1:
                 break
-        if tries > max_tries and len(solves) > 5:
+        # print(f"tries: {tries}, delta: {delta}, correction: {correction}, slope: {slope}")
+        if (_err.count(err) or tries > max_tries) and len(solves) > 5:
             solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
             print('Solve return the best of the right value ;-)')
+            print("\n".join(f"delta: {k}\tresult: {v}" for k, v in solves))
             return solves[0][1]
         if tries > max_tries * 2:
             break
+        _err.append(err)
     print('Oops. No solution found')
+    print("\n".join(f"delta: {k}\tresult: {v}" for k, v in solves))
     return f2d(0)
 
 
@@ -2018,9 +2026,12 @@ class Strategy(StrategyBase):
                          log_level=LogLevel.DEBUG)
         if buy_side:
             over_price_coarse = 100 * (base_price - (depo / reverse_target_amount)) / base_price
+            max_err = self.round_truncate(f2d(0.00000001), base=True, _rounding=ROUND_CEILING)
         else:
             over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
-        self.message_log(f"over_price coarse: {over_price_coarse:.6f}", log_level=LogLevel.DEBUG)
+            max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
+        max_err *= 10
+        self.message_log(f"over_price coarse: {over_price_coarse:.6f}, max_err: {max_err}", log_level=LogLevel.DEBUG)
         if self.order_q > 1 and over_price_coarse > 0:
             # Fine calculate over_price for target return amount
             params = {'buy_side': buy_side,
@@ -2029,7 +2040,7 @@ class Strategy(StrategyBase):
                       'amount_first_grid': amount_first_grid,
                       'min_delta': min_delta,
                       'amount_min': amount_min}
-            over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
+            over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
             if over_price == 0:
                 self.message_log("Can't calculate over price for reverse cycle,"
                                  " use previous or over_price_coarse * 3", log_level=LogLevel.ERROR)
