@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10-6"
+__version__ = "1.2.13"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -469,9 +469,7 @@ class StrategyBase:
                                           f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
         loop.create_task(create_limit_order(cls.order_id, buy, str(ms.f2d(amount)), str(price)))
-        if StrategyBase.exchange == 'ftx':
-            time.sleep(0.15)
-        elif StrategyBase.exchange == 'huobi':
+        if StrategyBase.exchange == 'huobi':
             time.sleep(0.02)
         elif StrategyBase.exchange == 'okx':
             time.sleep(0.035)
@@ -538,9 +536,6 @@ async def save_asset():
         await asyncio.sleep(HEARTBEAT)
     delay = HEARTBEAT * 300  # 10 min
     max_use_update = 60 * 60 * 24  # 24h if the row has not been updated that the asset is not traded
-    id_ftx_main = ms.EXCHANGE.index('FTX') if cls.exchange == 'ftx' and ms.EXCHANGE.count('FTX') else None
-    if cls.exchange == 'ftx' and id_ftx_main is None:
-        logger.warning("For FTX exchange main account name want be 'FTX'")
     while True:
         try:
             res = await cls.send_request(cls.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
@@ -566,17 +561,16 @@ async def save_asset():
             cursor = connection_analytic.cursor()
             try:
                 cursor.execute('SELECT 1 FROM t_asset WHERE id_exchange=:id_exchange AND use=:use',
-                               {'id_exchange': id_ftx_main or ms.ID_EXCHANGE, 'use': 1})
-                ftx_main_active = cursor.fetchone()
+                               {'id_exchange': ms.ID_EXCHANGE, 'use': 1})
+                main_active = cursor.fetchone()
                 cursor.close()
             except sqlite3.Error as err:
                 cursor.close()
-                ftx_main_active = (2,)
+                main_active = (2,)
                 print(f"SELECT from t_asset: {err}")
             funding_wallet = []
             assets_fw = {}
-            if ((id_ftx_main is None or (ftx_main_active is None and id_ftx_main != ms.ID_EXCHANGE))
-                    and cls.exchange not in ('bitfinex', 'huobi')):
+            if cls.exchange not in ('bitfinex', 'huobi'):
                 try:
                     res = await cls.send_request(cls.stub.FetchFundingWallet, api_pb2.FetchFundingWalletRequest)
                 except asyncio.CancelledError:
@@ -588,10 +582,10 @@ async def save_asset():
                 for fw in funding_wallet:
                     assets_fw[fw['asset']] = Decimal(fw['free']) + Decimal(fw['locked']) + Decimal(fw['freeze'])
             # Create list of cumulative asset without current pair, from SPOT wallet
-            # and all assets from Funding wallet on Binance or main account on FTX
+            # and all assets from Funding wallet on Binance
             assets = {}
             for balance in balances:
-                if id_ftx_main is None and cls.exchange != 'bitfinex':
+                if cls.exchange != 'bitfinex':
                     total = assets_fw.pop(balance['asset'], Decimal('0.0'))
                 else:
                     total = Decimal('0.0')
@@ -612,21 +606,19 @@ async def save_asset():
             cursor = connection_analytic.cursor()
             try:
                 cursor.execute('BEGIN')
-                if id_ftx_main is None or ms.ID_EXCHANGE == id_ftx_main or ftx_main_active is None:
-                    cursor.execute('DELETE\
-                                    FROM t_asset\
-                                    WHERE id_exchange=:id_exchange\
-                                    and use=:use',
-                                   {'id_exchange': id_ftx_main or ms.ID_EXCHANGE, 'use': 0})
+                cursor.execute('DELETE\
+                                FROM t_asset\
+                                WHERE id_exchange=:id_exchange\
+                                and use=:use',
+                               {'id_exchange': ms.ID_EXCHANGE, 'use': 0})
                 for row in rows:
-                    if row[1] in (cls.base_asset, cls.quote_asset):
-                        if ftx_main_active == (1,):
-                            assets.pop(row[1], None)
-                            cursor.execute('UPDATE t_asset SET value=:value, timestamp=:timestamp, use=:use\
-                                            WHERE id_exchange=:id_exchange\
-                                            and currency=:currency',
-                                           {'value': 0.0, 'timestamp': int(time.time()), 'use': 1,
-                                            'id_exchange': ms.ID_EXCHANGE, 'currency': row[1]})
+                    if row[1] in (cls.base_asset, cls.quote_asset) and main_active == (1,):
+                        assets.pop(row[1], None)
+                        cursor.execute('UPDATE t_asset SET value=:value, timestamp=:timestamp, use=:use\
+                                        WHERE id_exchange=:id_exchange\
+                                        and currency=:currency',
+                                       {'value': 0.0, 'timestamp': int(time.time()), 'use': 1,
+                                        'id_exchange': ms.ID_EXCHANGE, 'currency': row[1]})
                     elif row[3]:
                         # Check used currency from other pair for last update time
                         if time.time() - row[4] > max_use_update:
@@ -643,7 +635,7 @@ async def save_asset():
                 if assets_fw:
                     for key, value in assets_fw.items():
                         cursor.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
-                                       (id_ftx_main or ms.ID_EXCHANGE, key, float(value), 0, int(time.time())))
+                                       (ms.ID_EXCHANGE, key, float(value), 0, int(time.time())))
                 cursor.execute('COMMIT')
                 cursor.close()
             except sqlite3.Error as err:
@@ -885,11 +877,10 @@ async def buffered_orders():
             cls.strategy.message_log(f"Exception buffered_orders: {status_code.name}, {ex.details()}",
                                      log_level=LogLevel.WARNING)
             if status_code == grpc.StatusCode.RESOURCE_EXHAUSTED:
-                # Decrease requests frequency if not FTX exchange
-                if StrategyBase.exchange != 'ftx':
-                    StrategyBase.rate_limiter += HEARTBEAT
-                    cls.strategy.message_log(f"RATE_LIMITER set to {StrategyBase.rate_limiter}s",
-                                             log_level=LogLevel.WARNING)
+                # Decrease requests frequency
+                StrategyBase.rate_limiter += HEARTBEAT
+                cls.strategy.message_log(f"RATE_LIMITER set to {StrategyBase.rate_limiter}s",
+                                         log_level=LogLevel.WARNING)
                 await asyncio.sleep(ORDER_TIMEOUT)
                 await cls.send_request(cls.stub.ResetRateLimit, api_pb2.OpenClientConnectionId,
                                        rate_limiter=StrategyBase.rate_limiter)
@@ -960,9 +951,8 @@ async def on_order_update():
                     cumulative_quantity = Decimal(event.cumulative_filled_quantity)
                     saved_filled_quantity = order_trades_sum(event.order_id)
                     if event.order_status == 'FILLED' and saved_filled_quantity != cumulative_quantity:
-                        if StrategyBase.exchange != 'ftx':
-                            cls.strategy.message_log(f"Order: {event.order_id} was missed partially filling event",
-                                                     log_level=LogLevel.INFO)
+                        cls.strategy.message_log(f"Order: {event.order_id} was missed partially filling event",
+                                                 log_level=LogLevel.INFO)
                         # Remove trades associated with order from list
                         remove_from_trades_lists(event.order_id)
                         # Update current trade

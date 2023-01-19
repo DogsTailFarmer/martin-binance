@@ -12,16 +12,16 @@ node "binance.com" {
   }
 }
 
-node "ftx.com" {
-    package "Sub account ftx" {
+node "okx.com" {
+    package "Sub account i" {
         [FTTUSDT] <--> (API i)
   }
-     package "Main account ftx" {
+     package "Main account on okx" {
         [PAXGUSDT] <--> (API main)
   }
 }
 
-node "DeFi (coming soon)" {
+node "DeFi (will be later)" {
      package "Account" {
         [DOGEUSDT] <--> (API k)
   }
@@ -53,14 +53,14 @@ package "martin-binance" #D3D3D3 {
             Python trade strategy
         ]
         component c1 [
-            API_1_BTCBUSD.py
+            cli_0_BTCBUSD.py
             ===
             Executable module
             with trade parameter
             setup
         ]
         component cn [
-            API_n_ETHBUSD.py
+            cli_X_ETHBUSD.py
             ===
             Executable module
             with trade parameter

@@ -44,7 +44,7 @@ Strongly recommended that you test the strategy in the demo mode before using re
 >As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
 
 ## Review
-<p align="center"><img src="https://gist.githubusercontent.com/DogsTailFarmer/b650b9b199666700d2839fb46d3aa1d7/raw/657ea8e7ad79df66d9d373776aeeb8614241f03f/architecture.svg"></p>
+<p align="center"><img src="https://user-images.githubusercontent.com/77513676/211158537-9332dc9c-d46d-4d61-ab44-f3ad0fc1374c.jpg"></p>
 
 Starting with version 1.1.0 the project was transformed into two parts:
 * Crypto exchanges API/WSS async wrapper with grpc powered server [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper)
@@ -148,6 +148,8 @@ For *margin* mode - pip only.
 For test purpose in *STANDALONE* mode create API key pair:
 * Log in at [Binance Spot Test Network](https://testnet.binance.vision/)
 * Create API Key
+
+*You can test strategy on Binance, OKX and Bitfinex exchanges, where realized "paper trade mode"*
 
 #### Create Telegram bot
 * Register [Telegram bot](https://t.me/BotFather)
