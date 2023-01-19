@@ -6,7 +6,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13"
+__version__ = "1.2.13-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -789,7 +789,7 @@ async def buffered_orders():
                                          log_level=LogLevel.WARNING, tlg=False)
                 for _id in diff_excess_id:
                     check_status = await fetch_order(_id, _filled_update_call=False)
-                    if check_status.get('status') not in ('FILLED', 'CANCELED'):
+                    if check_status and check_status.get('status') not in ('FILLED', 'CANCELED'):
                         cls.strategy.message_log(f"buffered_orders.create_task: cancel_order: {_id}",
                                                  log_level=LogLevel.INFO)
                         loop.create_task(cancel_order_timeout(_id))

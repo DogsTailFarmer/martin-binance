@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-3"
+__version__ = "1.2.13-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -48,3 +48,8 @@ else:
     if STANDALONE:
         raise SystemExit(1)
     raise UserWarning()
+
+# TODO For remote control add:
+#  * Balancing assets
+#  * Restart current pair
+#  * Reboot server
