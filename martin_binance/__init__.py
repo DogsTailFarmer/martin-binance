@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 #
 import platform
+
 print(f"Python {platform.python_version()}")
 #
 STANDALONE = True
@@ -51,5 +52,3 @@ else:
 
 # TODO For remote control add:
 #  * Balancing assets
-#  * Restart current pair
-#  * Reboot server

@@ -6,10 +6,11 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-3"
+__version__ = "1.2.13-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
+import sys
 import gc
 import statistics
 from datetime import datetime
@@ -143,7 +144,8 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                 [
                     {'text': 'status', 'callback_data': 'status_callback'},
                     {'text': 'stop', 'callback_data': 'stop_callback'},
-                    {'text': 'end', 'callback_data': 'end_callback'}
+                    {'text': 'end', 'callback_data': 'end_callback'},
+                    {'text': 'restart', 'callback_data': 'restart_callback'},
                 ]
             ]})
 
@@ -181,6 +183,8 @@ def telegram(queue_to_tlg, _bot_id) -> None:
             command = 'stop'
         elif query_data == 'end_callback':
             command = 'end'
+        elif query_data == 'restart_callback':
+            command = 'restart_callback'
 
         requests_post(url + '/answerCallbackQuery', {'callback_query_id': query.get('id')}, s)
 
@@ -260,7 +264,8 @@ def telegram(queue_to_tlg, _bot_id) -> None:
 
     # Set command for Telegram bot
     _command = requests_post(url + '/getMyCommands', _data=None, session=s)
-    if _command and _command.status_code == 200 and not _command.json().get('result', None):
+    if _command and _command.status_code == 200 and (not _command.json().get('result') or
+                                                     len(_command.json().get('result')) < 4):
         _commands = {
             "commands": json.dumps([
                 {"command": "status",
@@ -268,11 +273,13 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                 {"command": "stop",
                  "description": "Stop strategy after end of cycle, not for Reverse"},
                 {"command": "end",
-                 "description": "Stop strategy after executed TP order, in Direct and Reverse, all the same"}
+                 "description": "Stop strategy after executed TP order, in Direct and Reverse, all the same"},
+                {"command": "restart",
+                 "description": "Restart current pair with recovery"}
             ])
         }
         res = requests_post(url + '/setMyCommands', _data=_commands, session=s)
-        print(f"Set command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
+        print(f"Set or update command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
               f"restart Telegram bot by /start command for update it")
     #
     connection_control = sqlite3.connect(DB_FILE)
@@ -842,6 +849,9 @@ class Strategy(StrategyBase):
                 except sqlite3.Error as err:
                     print(f"UPDATE t_control: {err}")
             # self.message_log(f"save_strategy_state.command: {self.command}", log_level=LogLevel.DEBUG)
+        if self.command == 'restart':
+            self.stop()
+            os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
         if command or (STATUS_DELAY and (time.time() - self.status_time) / 60 > STATUS_DELAY):
             # Report current status
             last_price = self.get_buffered_ticker().last_price
@@ -1784,12 +1794,12 @@ class Strategy(StrategyBase):
                                           'amount': amount * price,
                                           'by_market': by_market}
                     self.message_log(f"Hold take profit order for Buy {amount} {self.f_currency} by {price},"
-                                     f" wait {amount * price} {self.s_currency}, exist: {fund}")
+                                     f" wait {amount * price} {self.s_currency}, exist: {fund}", tlg=True)
                 elif not buy_side and amount > fund:
                     # Save take profit order and wait update balance
                     self.tp_order_hold = {'buy_side': buy_side, 'amount': amount, 'by_market': by_market}
                     self.message_log(f"Hold take profit order for Sell {amount} {self.f_currency}"
-                                     f" by {price}, exist {fund}")
+                                     f" by {price}, exist {fund}", tlg=True)
                 else:
                     # Create take profit order
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"

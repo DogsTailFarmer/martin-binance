@@ -1,7 +1,9 @@
 ## v1.2.13-4 2023-01-xx
 ### Update
-* minor improvements
+* Some minor improvements
 
+### Added for new features
+* Restart option for Telegram remote control, emergency restart from last saved state
 
 ## v1.2.13-3 2023-01-11
 ### Fixed
