@@ -25,6 +25,8 @@ import traceback  # lgtm [py/unused-import]
 from martin_binance import Path, STANDALONE, DB_FILE
 # noinspection PyUnresolvedReferences
 from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH  # lgtm [py/unused-import]
+# noinspection PyUnresolvedReferences
+from martin_binance.margin_wrapper import ORDER_TIMEOUT  # lgtm [py/unused-import]
 
 if STANDALONE:
     from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
@@ -863,27 +865,36 @@ class Strategy(StrategyBase):
                 ct = str(datetime.utcnow()).rsplit('.')[0]
             if self.command == 'stopped':
                 self.message_log("Strategy stopped. Need manual action", tlg=True)
-            elif self.grid_hold:
+            elif self.grid_hold or self.tp_order_hold:
                 funds = self.get_buffered_funds()
-                if self.cycle_buy:
-                    fund = funds.get(self.s_currency, 0)
-                    fund = fund.available if fund else 0
-                    currency = self.s_currency
-                else:
-                    fund = funds.get(self.f_currency, 0)
-                    fund = fund.available if fund else 0
-                    currency = self.f_currency
-                time_diff = None
+                fund_f = funds.get(self.f_currency, 0)
+                fund_f = fund_f.available if fund_f else 0
+                fund_s = funds.get(self.s_currency, 0)
+                fund_s = fund_s.available if fund_s else 0
                 if self.grid_hold.get('timestamp'):
                     time_diff = int(time.time() - self.grid_hold['timestamp'])
-                self.message_log(f"Exist unreleased grid orders for\n"
-                                 f"{'Buy' if self.cycle_buy else 'Sell'} cycle with"
-                                 f" {self.grid_hold['depo']}{currency} depo.\n"
-                                 f"Available funds is {fund} {currency}\n"
-                                 f"Last ticker price: {last_price}\n"
-                                 f"WSS status: {ticker_update}s\n"
-                                 f"From start {ct}\n"
-                                 f"Time difference: {time_diff} sec", tlg=True)
+                    self.message_log(f"Exist unreleased grid orders for\n"
+                                     f"{'Buy' if self.cycle_buy else 'Sell'} cycle with"
+                                     f" {self.grid_hold['depo']}"
+                                     f" {self.s_currency if self.cycle_buy else self.f_currency} depo.\n"
+                                     f"Available first: {fund_f} {self.f_currency}\n"
+                                     f"Available second: {fund_s} {self.s_currency}\n"
+                                     f"Last ticker price: {last_price}\n"
+                                     f"WSS status: {ticker_update}s\n"
+                                     f"From start {ct}\n"
+                                     f"Delay: {time_diff} sec", tlg=True)
+                elif self.tp_order_hold['timestamp']:
+                    time_diff = int(time.time() - self.tp_order_hold['timestamp'])
+                    if time_diff > ORDER_TIMEOUT:
+                        self.message_log(f"Exist hold TP order for"
+                                         f" {'Sell' if self.cycle_buy else 'Buy'} {self.tp_order_hold['amount']}"
+                                         f" {self.f_currency if self.cycle_buy else self.s_currency}\n"
+                                         f"Available first:{fund_f} {self.f_currency}\n"
+                                         f"Available second:{fund_s} {self.s_currency}\n"
+                                         f"Last ticker price: {last_price}\n"
+                                         f"WSS status: {ticker_update}s\n"
+                                         f"From start {ct}\n"
+                                         f"Delay: {time_diff} sec", tlg=True)
             else:
                 if self.cycle_status:
                     order_buy = self.cycle_status[1]
@@ -1792,14 +1803,18 @@ class Strategy(StrategyBase):
                     # Save take profit order and wait update balance
                     self.tp_order_hold = {'buy_side': buy_side,
                                           'amount': amount * price,
-                                          'by_market': by_market}
+                                          'by_market': by_market,
+                                          'timestamp': time.time()}
                     self.message_log(f"Hold take profit order for Buy {amount} {self.f_currency} by {price},"
-                                     f" wait {amount * price} {self.s_currency}, exist: {fund}", tlg=True)
+                                     f" wait {amount * price} {self.s_currency}, exist: {fund}")
                 elif not buy_side and amount > fund:
                     # Save take profit order and wait update balance
-                    self.tp_order_hold = {'buy_side': buy_side, 'amount': amount, 'by_market': by_market}
+                    self.tp_order_hold = {'buy_side': buy_side,
+                                          'amount': amount,
+                                          'by_market': by_market,
+                                          'timestamp': time.time()}
                     self.message_log(f"Hold take profit order for Sell {amount} {self.f_currency}"
-                                     f" by {price}, exist {fund}", tlg=True)
+                                     f" by {price}, exist {fund}")
                 else:
                     # Create take profit order
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"

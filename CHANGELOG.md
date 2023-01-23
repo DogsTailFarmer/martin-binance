@@ -1,9 +1,10 @@
-## v1.2.13-4 2023-01-xx
+## v1.2.13-5 2023-01-23
+### Added for new features
+* Restart option for Telegram remote control from last saved state
+
 ### Update
 * Some minor improvements
-
-### Added for new features
-* Restart option for Telegram remote control, emergency restart from last saved state
+* up requirements for exchanges-wrapper to 1.2.9-1
 
 ## v1.2.13-3 2023-01-11
 ### Fixed
