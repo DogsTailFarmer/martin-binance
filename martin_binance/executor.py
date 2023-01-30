@@ -397,7 +397,7 @@ def save_to_db(queue_to_db) -> None:
                 connection_analytic.commit()
             except sqlite3.Error as err:
                 result = False
-                print(f"For save data into t_funds: {err}, try one else")
+                print(f"For save data into t_funds: {err}, retry")
             else:
                 result = True
         elif data.get('destination') == 't_orders':
@@ -1298,13 +1298,13 @@ class Strategy(StrategyBase):
             self.cancel_grid()
 
         elif grid_more and self.orders_init:
-            self.message_log('Restore, was placed some grid order(s)', tlg=True)
+            self.message_log('Restored, some grid order(s) was placed', tlg=True)
 
         elif tp_placed:
-            self.message_log('Restore, was placed take profit order(s)', tlg=True)
+            self.message_log('Restored, take profit order(s) was placed', tlg=True)
 
         else:
-            self.message_log('Restore, some else. Need investigations.', tlg=True)
+            self.message_log('Restored, unknown state. Investigation needed', tlg=True)
         # self.unsuspend()
 
     def start(self) -> None:
@@ -3148,7 +3148,7 @@ class Strategy(StrategyBase):
             self.message_log(f"Order {place_order_id} placed", tlg=True)
             self.on_place_order_success(place_order_id, order)
         elif 'FAILED_PRECONDITION' not in error:
-            self.message_log(f"Trying place order {place_order_id} one else time", tlg=True)
+            self.message_log(f"Trying place order {place_order_id} one more time", tlg=True)
             if self.orders_init.exist(place_order_id):
                 _buy, _amount, _price = self.orders_init.get_by_id(place_order_id)
                 self.orders_init.remove(place_order_id)
@@ -3223,7 +3223,7 @@ class Strategy(StrategyBase):
         # Check all orders on exchange if not exists required
         open_orders = self.get_buffered_open_orders(True)  # lgtm [py/call/wrong-arguments]
         if any(i.id == order_id for i in open_orders):
-            self.message_log(f"On cancel order {order_id} {error}, try one else", LogLevel.ERROR)
+            self.message_log(f"On cancel order {order_id} {error}, retry", LogLevel.ERROR)
             self.cancel_order(order_id)
         elif not STANDALONE:
             self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
