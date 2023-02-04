@@ -1,3 +1,12 @@
+## v1.2.13-6 2023-01-xx
+### Fixed
+* [PR#47](https://github.com/DogsTailFarmer/martin-binance/pull/47#issue-1561537039)
+* [Fix shebang](https://github.com/DogsTailFarmer/martin-binance/issues/48#issue-1561939620)
+
+### Update
+* Some minor improvements
+* up requirements for exchanges-wrapper to 1.2.9-2
+
 ## v1.2.13-5 2023-01-23
 ### Added for new features
 * Restart option for Telegram remote control from last saved state

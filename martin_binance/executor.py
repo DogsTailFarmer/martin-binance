@@ -1,12 +1,10 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 ####################################################################
 # Cyclic grid strategy based on martingale
 ##################################################################
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-4"
+__version__ = "1.2.13-6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -25,8 +23,6 @@ import traceback  # lgtm [py/unused-import]
 from martin_binance import Path, STANDALONE, DB_FILE
 # noinspection PyUnresolvedReferences
 from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH  # lgtm [py/unused-import]
-# noinspection PyUnresolvedReferences
-from martin_binance.margin_wrapper import ORDER_TIMEOUT  # lgtm [py/unused-import]
 
 if STANDALONE:
     from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
@@ -75,6 +71,7 @@ SHIFT_GRID_DELAY = int()
 STATUS_DELAY = int()
 GRID_ONLY = bool()
 LOG_LEVEL_NO_PRINT = []
+HOLD_TP_ORDER_TIMEOUT = 30
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()
@@ -885,7 +882,7 @@ class Strategy(StrategyBase):
                                      f"Delay: {time_diff} sec", tlg=True)
                 elif self.tp_order_hold['timestamp']:
                     time_diff = int(time.time() - self.tp_order_hold['timestamp'])
-                    if time_diff > ORDER_TIMEOUT:
+                    if time_diff > HOLD_TP_ORDER_TIMEOUT:
                         self.message_log(f"Exist hold TP order for"
                                          f" {'Sell' if self.cycle_buy else 'Buy'} {self.tp_order_hold['amount']}"
                                          f" {self.f_currency if self.cycle_buy else self.s_currency}\n"

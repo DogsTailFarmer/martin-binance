@@ -1,5 +1,3 @@
-#!/usr/bin/python3.8
-# -*- coding: utf-8 -*-
 """
 gRPC async client for exchanges-wrapper
 """

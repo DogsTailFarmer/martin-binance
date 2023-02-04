@@ -1,5 +1,3 @@
-#!/usr/bin/python3.8
-# -*- coding: utf-8 -*-
 """
 margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exchanges API/WSS
 """
