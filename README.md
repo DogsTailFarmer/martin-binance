@@ -7,7 +7,7 @@
 
 <h3 align="center">Free trading system for crypto exchanges (Binance, Bitfinex, Huobi, OKX,)</h3>
 
-<h4 align="center">Other crypto exchanges available through multi-exchange terminal <a href="#margin">margin.de</a></h4>
+<h4 align="center">Other crypto exchanges available through multi-exchange terminal [margin.de](https://margin.de)</h4>
 
 ***
 <h4 align="center">martin-binance <a href="https://badge.fury.io/py/martin-binance"><img src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="20"></a> <--> exchanges-wrapper <a href="https://badge.fury.io/py/exchanges-wrapper"><img src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version" height="20"></a></h4>
@@ -53,7 +53,7 @@ Starting with version 1.1.0 the project was transformed into two parts:
 The system has two modes:
 * STANDALONE, for free unlimited trading on crypto exchanges SPOT market.
 * python_strategy modules can be used as plug-in trading strategy for multi-exchange terminal
-<a href="#margin">margin.de</a>, free demo, you can try it.
+[margin.de](https://margin.de), now you can try its free unlimited trading capabilities.
 
 Strategy logic realized at executor.py and trading parameters settings in the cli_X_AAABBB.py (cli_0_BTCUSDT.py)
 
@@ -729,11 +729,6 @@ Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP)
 
 
 Create account on [OKEX](https://www.okex.com/join/2607649) and get Mystery Boxes worth up to $10,000
-
-### margin.de
-<p id="margin"></p>
-
-Multi-exchange trade terminal. For 10% discount on [margin license](https://margin.de) use coupon code **Margin9ateuE**
 
 #### VPS
 Also, you can start strategy on [Hetzner](https://hetzner.cloud/?ref=uFdrF8nsdGMc) cloud VPS only for 4.75 € per month

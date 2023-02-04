@@ -1,4 +1,4 @@
-## v1.2.13-6 2023-01-xx
+## v1.2.13-6 2023-02-04
 ### Fixed
 * [PR#47](https://github.com/DogsTailFarmer/martin-binance/pull/47#issue-1561537039)
 * [Fix shebang](https://github.com/DogsTailFarmer/martin-binance/issues/48#issue-1561939620)
