@@ -2630,7 +2630,7 @@ class Strategy(StrategyBase):
     def debug_output(self):
         self.message_log(f"\n"
                          f"! =======================================\n"
-                         f"! debug output:\n"
+                         f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
                          f"! sum_amount_first: {self.sum_amount_first}, sum_amount_second: {self.sum_amount_second}\n"
                          f"! part_amount: {self.part_amount}\n"
                          f"! initial_first: {self.initial_first}, initial_second: {self.initial_second}\n"
