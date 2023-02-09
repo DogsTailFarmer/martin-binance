@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-6"
+__version__ = "1.2.13-7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1542,6 +1542,14 @@ class Strategy(StrategyBase):
             min_delta = f2d(tcm.get_minimal_price_change(base_price))
             base_price_dec = f2d(tcm.round_price(base_price, RoundingType.ROUND))
             amount_min_dec = f2d(amount_min)
+            # Adjust min_amount order quantity per fee
+            _f, _s = self.fee_for_grid(amount_min_dec, amount_min_dec * self.avg_rate, by_market=True, print_info=False)
+            if _f != amount_min_dec:
+                amount_min_dec += amount_min_dec - _f
+            elif _s != amount_min_dec * self.avg_rate:
+                amount_min_dec += (amount_min_dec * self.avg_rate - _s) / self.avg_rate
+            amount_min_dec = self.round_truncate(amount_min_dec, base=True, _rounding=ROUND_CEILING)
+            #
             if ADAPTIVE_TRADE_CONDITION or self.reverse or additional_grid:
                 try:
                     amount_first_grid = self.set_trade_conditions(buy_side,
@@ -2156,30 +2164,37 @@ class Strategy(StrategyBase):
     def round_fee(self, fee, amount, base):
         return self.round_truncate(fee * amount / 100, base=base, fee=True, _rounding=ROUND_CEILING)
 
-    def fee_for_grid(self, amount_first: Decimal, amount_second: Decimal, by_market=False) -> (Decimal, Decimal):
+    def fee_for_grid(self,
+                     amount_first: Decimal,
+                     amount_second: Decimal,
+                     by_market: bool = False,
+                     print_info: bool = True) -> (Decimal, Decimal):
         """
         Calculate trade amount with Fee for grid order for both currency
         """
+        message = str()
         if FEE_IN_PAIR:
             fee = FEE_TAKER if by_market else FEE_MAKER
             if FEE_BNB_IN_PAIR:
                 if self.cycle_buy:
                     amount_first -= self.round_fee(fee, amount_first, base=True)
-                    self.message_log(f"For grid order First - fee: {amount_first}", log_level=LogLevel.DEBUG)
+                    message = f"For grid order First - fee: {amount_first}"
                 else:
                     amount_first += self.round_fee(fee, amount_first, base=True)
-                    self.message_log(f"For grid order First + fee: {amount_first}", log_level=LogLevel.DEBUG)
+                    message = f"For grid order First + fee: {amount_first}"
             else:
                 if self.cycle_buy:
                     if FEE_SECOND:
                         amount_second += self.round_fee(fee, amount_second, base=False)
-                        self.message_log(f"For grid order Second + fee: {amount_second}", log_level=LogLevel.DEBUG)
+                        message = f"For grid order Second + fee: {amount_second}"
                     else:
                         amount_first -= self.round_fee(fee, amount_first, base=True)
-                        self.message_log(f"For grid order First - fee: {amount_first}", log_level=LogLevel.DEBUG)
+                        message = f"For grid order First - fee: {amount_first}"
                 else:
                     amount_second -= self.round_fee(fee, amount_second, base=False)
-                    self.message_log(f"For grid order Second - fee: {amount_second}", log_level=LogLevel.DEBUG)
+                    message = f"For grid order Second - fee: {amount_second}"
+        if print_info and message:
+            self.message_log(message, log_level=LogLevel.DEBUG)
         return self.round_truncate(amount_first, base=True), self.round_truncate(amount_second, base=False)
 
     def fee_for_tp(self, amount_first: Decimal, amount_second: Decimal, by_market=False) -> (Decimal, Decimal):
