@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-9"
+__version__ = "1.2.13-10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -184,7 +184,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
         elif query_data == 'end_callback':
             command = 'end'
         elif query_data == 'restart_callback':
-            command = 'restart_callback'
+            command = 'restart'
 
         requests_post(url + '/answerCallbackQuery', {'callback_query_id': query.get('id')}, s)
 
@@ -224,11 +224,10 @@ def telegram(queue_to_tlg, _bot_id) -> None:
         command_list = []
         _method = url + '/getUpdates'
         _res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
-
         if not _res or _res.status_code != 200:
             return command_list
-
         __result = _res.json().get('result')
+
         for result_in in __result:
             parsed = None
             if result_in.get('message') is not None:
@@ -240,7 +239,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
 
         return command_list
 
-    def process_update(update_inner):
+    def process_update(update_inner, offset=None):
         reply = update_inner.get('reply_to_message')
 
         if not reply:
@@ -252,6 +251,8 @@ def telegram(queue_to_tlg, _bot_id) -> None:
 
         try:
             msg_in = str(update_inner['text_in']).lower().strip().replace('/', '')
+            if offset and msg_in == 'restart':
+                telegram_get(offset_id)
             connection_control.execute('insert into t_control values(?,?,?,?)',
                                        (update_inner['message_id'], msg_in, in_bot_id, None))
             connection_control.commit()
@@ -296,7 +297,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                 continue
             offset_id = updates[-1].get('update_id') + 1
             for update in updates:
-                process_update(update)
+                process_update(update, offset_id)
         else:
             if text and STOP_TLG in text:
                 connection_control.close()
