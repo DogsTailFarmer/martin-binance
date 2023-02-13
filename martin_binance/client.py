@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10-6"
+__version__ = "1.2.13-8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -89,6 +89,8 @@ class Trade:
                     self.client = None
                     logger.warning("Connection to gRPC server failed, try reconnect...")
                     await self.get_client()
+                elif status_code == grpc.StatusCode.RESOURCE_EXHAUSTED:
+                    raise
                 else:
                     logger.error(f"Exception on send request {_request}: {status_code.name}, {ex.details()}")
                     raise

@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-4"
+__version__ = "1.2.13-8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -466,7 +466,7 @@ class StrategyBase:
         StrategyBase.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
                                           f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
-        loop.create_task(create_limit_order(cls.order_id, buy, str(ms.f2d(amount)), str(price)))
+        loop.create_task(create_limit_order(cls.order_id, buy, str(amount), str(price)))
         if StrategyBase.exchange == 'huobi':
             time.sleep(0.02)
         elif StrategyBase.exchange == 'okx':
@@ -489,6 +489,10 @@ class StrategyBase:
         if get_all_orders:
             return cls.all_orders
         return cls.orders
+
+    @classmethod
+    def transfer_to_master(cls, symbol: str, amount: float):
+        loop.create_task(transfer2master(symbol, str(amount)))
 
 
 async def heartbeat(_session):
@@ -873,7 +877,7 @@ async def buffered_orders():
         except grpc.RpcError as ex:
             status_code = ex.code()
             cls.strategy.message_log(f"Exception buffered_orders: {status_code.name}, {ex.details()}",
-                                     log_level=LogLevel.WARNING)
+                                     log_level=LogLevel.WARNING, tlg=True)
             if status_code == grpc.StatusCode.RESOURCE_EXHAUSTED:
                 # Decrease requests frequency
                 StrategyBase.rate_limiter += HEARTBEAT
@@ -1095,6 +1099,28 @@ async def fetch_order(_id: int, _filled_update_call: bool = False):
         return result
 
 
+async def transfer2master(symbol: str, amount: str):
+    cls = StrategyBase
+    try:
+        res = await cls.send_request(cls.stub.TransferToMaster,
+                                     api_pb2.MarketRequest,
+                                     symbol=symbol,
+                                     amount=amount)
+    except asyncio.CancelledError:
+        pass  # Task cancellation should not be logged as an error
+    except grpc.RpcError as ex:
+        status_code = ex.code()
+        cls.strategy.message_log(f"Exception transfer {symbol} to main account: {status_code.name}, {ex.details()}")
+    except Exception as _ex:
+        cls.strategy.message_log(f"Exception transfer {symbol} to main account: {_ex}")
+    else:
+        if res.success:
+            cls.strategy.message_log(f"Transferred {amount} {symbol} to main account", log_level=LogLevel.INFO)
+        else:
+            cls.strategy.message_log(f"Not transferred {amount} {symbol} to main account\n,{res.result}",
+                                     log_level=LogLevel.ERROR)
+
+
 def remove_from_orders_lists(_order_id_list: []) -> None:
     cls = StrategyBase
     # print(f"remove_from_orders_lists._order_id: {_order_id}")
@@ -1196,10 +1222,10 @@ async def wss_init():
                 cls.stub.StartStream, api_pb2.StartStreamRequest, symbol=cls.symbol, market_stream_count=5)
             cls.wss_fire_up = False
         except UserWarning:
-            print("Start WSS failed. try one else...")
+            print("Start WSS failed, retry")
             cls.wss_fire_up = True
     else:
-        print("Init WSS failed. try one else...")
+        print("Init WSS failed, retry")
         await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))
         cls.wss_fire_up = True
 

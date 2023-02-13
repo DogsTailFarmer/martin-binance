@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-7"
+__version__ = "1.2.13-9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -72,6 +72,7 @@ STATUS_DELAY = int()
 GRID_ONLY = bool()
 LOG_LEVEL_NO_PRINT = []
 HOLD_TP_ORDER_TIMEOUT = 30
+COLLECT_ASSETS = bool()
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()
@@ -1339,6 +1340,8 @@ class Strategy(StrategyBase):
             if self.wait_refunding_for_start or go_trade:
                 self.wait_refunding_for_start = False
                 self.save_init_assets(ff, fs)
+                if STANDALONE and COLLECT_ASSETS:
+                    self.collect_assets()
                 if self.cycle_buy:
                     df = Decimal('0')
                     ds = self.deposit_second - self.profit_second
@@ -1498,6 +1501,16 @@ class Strategy(StrategyBase):
         else:
             self.initial_first = self.round_truncate(ff, base=True)
             self.initial_second = self.round_truncate(fs, base=False)
+
+    def collect_assets(self):
+        ff, fs, _x = self.get_free_assets(mode='free')
+        tcm = self.get_trading_capability_manager()
+        if ff >= tcm.min_qty:
+            print(f"collect_assets: transfer ff: {ff}")
+            self.transfer_to_master(self.f_currency, float(ff))
+        if fs >= tcm.min_notional:
+            print(f"collect_assets: transfer fs: {fs}")
+            self.transfer_to_master(self.s_currency, float(fs))
 
     ##############################################################
     # strategy function
@@ -2762,8 +2775,12 @@ class Strategy(StrategyBase):
         if self.cycle_buy:
             fr_f = ff
             fr_s = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
+            if mode == 'free':
+                fs = self.round_truncate(fr_s, base=False)
         else:
             fr_f = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
+            if mode == 'free':
+                ff = self.round_truncate(fr_f, base=True)
             fr_s = fs
         free_assets = f"Free: First: {float(fr_f):f}, Second: {float(fr_s):f}"
         return ff, fs, free_assets
@@ -2814,8 +2831,8 @@ class Strategy(StrategyBase):
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
         self.message_log(f"For {'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''} cycle"
-                         f" was {'depositing' if delta > 0 else 'withdrawing'} {float(delta):f} {asset}",
-                         color=Style.UNDERLINE)
+                         f" was {'depositing' if delta > 0 else 'transferring (withdrawing)'} {delta} {asset}",
+                         color=Style.UNDERLINE, tlg=True)
         #
         depo_not_released = self.orders_hold.sum_amount(self.cycle_buy)
         ff, fs, _x = self.get_free_assets(mode='free')

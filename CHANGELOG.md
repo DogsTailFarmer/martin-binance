@@ -1,3 +1,10 @@
+## v1.2.13-8 2023-02-xx
+### Fixed
+* Fixed #53
+
+### Added for new features
+* Transfer free assets to main account, resolve #54
+
 ## v1.2.13-6 2023-02-04
 ### Fixed
 * [PR#47](https://github.com/DogsTailFarmer/martin-binance/pull/47#issue-1561537039)
