@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.13-8"
+__version__ = "1.2.14b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1115,9 +1115,9 @@ async def transfer2master(symbol: str, amount: str):
         cls.strategy.message_log(f"Exception transfer {symbol} to main account: {_ex}")
     else:
         if res.success:
-            cls.strategy.message_log(f"Transferred {amount} {symbol} to main account", log_level=LogLevel.INFO)
+            cls.strategy.message_log(f"Sent {amount} {symbol} to main account", log_level=LogLevel.INFO)
         else:
-            cls.strategy.message_log(f"Not transferred {amount} {symbol} to main account\n,{res.result}",
+            cls.strategy.message_log(f"Not sent {amount} {symbol} to main account\n,{res.result}",
                                      log_level=LogLevel.ERROR)
 
 
