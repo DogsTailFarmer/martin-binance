@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.14b2"
+__version__ = "1.2.14b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -743,10 +743,10 @@ class Strategy(StrategyBase):
         self.round_base = ROUND_BASE or str(tcm.round_amount(1.123456789, RoundingType.FLOOR))
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
                                               Decimal(str(tcm.round_price(1.123456789, RoundingType.FLOOR))))
-        print(f"Round pattern, for base: {self.round_base}, quote: {self.round_quote}")
+        self.message_log(f"Round pattern, for base: {self.round_base}, quote: {self.round_quote}")
         last_price = self.get_buffered_ticker().last_price
         if last_price:
-            print('Last ticker price: ', last_price)
+            self.message_log(f"Last ticker price: {last_price}")
             self.avg_rate = f2d(last_price)
             if self.first_run and check_funds:
                 df = self.get_buffered_funds().get(self.f_currency, 0)
@@ -773,7 +773,7 @@ class Strategy(StrategyBase):
                     depo = self.deposit_first
                 self.place_grid(self.cycle_buy, depo, self.reverse_target_amount, init_calc_only=True)
         else:
-            print("Can't get actual price, initialization checks stopped")
+            self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
             if STANDALONE:
                 raise SystemExit(1)
         # self.message_log('End Init section')

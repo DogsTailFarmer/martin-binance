@@ -87,8 +87,7 @@ class Trade:
                      and "'NoneType' object has no attribute 'client'" in ex.details())
                 ):
                     self.client = None
-                    logger.warning("Connection to gRPC server failed, try reconnect...")
-                    await self.get_client()
+                    raise UserWarning("Connection to gRPC server failed, wait connection...")
                 elif status_code == grpc.StatusCode.RESOURCE_EXHAUSTED:
                     raise
                 else:

@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.14b2"
+__version__ = "1.2.14b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -350,6 +350,7 @@ class OrderBook:
 
 
 class StrategyBase:
+    session = None
     client: api_pb2.OpenClientConnectionId = None
     exchange = str()
     symbol = str()
@@ -497,11 +498,9 @@ class StrategyBase:
 
 async def heartbeat(_session):
     cls = StrategyBase
-    _client_id = cls.client_id
     # print(f"tik-tak ', {int(time.time() * 1000)}, _client_id: {_client_id}")
     while cls.strategy:
         try:
-            update_class_var(_session)
             # print(f"tik-tak ', {int(time.time() * 1000)}, cls.client_id: {cls.client_id}")
             last_state = cls.strategy.save_strategy_state()
             last_state[ms_order_id] = json.dumps(cls.order_id)
@@ -513,15 +512,17 @@ async def heartbeat(_session):
                 ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.prev'))
             with ms.LAST_STATE_FILE.open(mode='w') as outfile:
                 json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-            if cls.client_id and (cls.wss_fire_up or _client_id != cls.client_id):
-                if _client_id != cls.client_id:
-                    _client_id = cls.client_id
+            #
+            if cls.client_id and cls.wss_fire_up:
                 try:
+                    await cls.session.get_client()
+                    update_class_var(cls.session)
                     asyncio.create_task(wss_init())
                     cls.wss_fire_up = False
                 except Exception as ex:
                     logger.warning(f"Exception on fire up WSS: {ex}")
                     cls.wss_fire_up = True
+            #
             await asyncio.sleep(HEARTBEAT)
         except (KeyboardInterrupt, asyncio.CancelledError):
             break
@@ -1201,7 +1202,7 @@ def load_last_state() -> {}:
 
 async def wss_init():
     cls = StrategyBase
-    print(f"Init WSS, client_id: {cls.client_id}")
+    cls.strategy.message_log(f"Init WSS, client_id: {cls.client_id}")
     if cls.client_id:
         # WSS declare
         # Market stream
@@ -1222,16 +1223,19 @@ async def wss_init():
                 cls.stub.StartStream, api_pb2.StartStreamRequest, symbol=cls.symbol, market_stream_count=5)
             cls.wss_fire_up = False
         except UserWarning:
-            print("Start WSS failed, retry")
+            cls.strategy.message_log("Start WSS failed, retry", log_level=LogLevel.WARNING)
             cls.wss_fire_up = True
     else:
-        print("Init WSS failed, retry")
+        cls.strategy.message_log("Init WSS failed, retry", log_level=LogLevel.WARNING)
         await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))
         cls.wss_fire_up = True
 
 
 def update_class_var(_session):
     cls = StrategyBase
+    cls.client = _session.client
+    cls.stub = _session.stub
+    cls.channel = _session.channel
     cls.client_id = _session.client.client_id if _session.client else None
     cls.exchange = _session.client.exchange if _session.client else None
     cls.send_request = _session.send_request
@@ -1254,10 +1258,9 @@ async def main(_symbol):
                         account_name=account_name,
                         rate_limiter=StrategyBase.rate_limiter)
         #
+        cls.session = session
+        #
         await session.get_client()
-        cls.client = session.client
-        cls.stub = session.stub
-        cls.channel = session.channel
         update_class_var(session)
         send_request = session.send_request
         print(f"main.exchange: {cls.exchange}")
