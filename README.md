@@ -34,6 +34,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
+* From 1.2.10 update exch_srv_cfg.toml (see <a href="#assets-management">Assets management</a>) and cli_X_AAABBB.py
 * 1.2.9 Before use Huobi exchange update ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml``` to last ver. from ```exchanges-wrapper/exch_srv_cfg.toml.template```
 * You cannot run multiple pairs with overlapping currencies on the same account!
 
@@ -137,6 +138,7 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 * Restore state after restart strategy
 * From 1.2.9-8 you can withdraw and deposit assets on active strategy with autocorrection depo and initial assets
 control values
+* <a href="#assets-management">Assets management</a> capabilities added from 1.2.10 (for STANDALONE mode)
 
 ## Quick start
 <p id="quick-start"></p>
@@ -422,6 +424,8 @@ Where X is exchange number, see it in ms_cfg.toml and AAABBB is trade pair, for 
 
 <a href="#consolidated-asset-valuation">Consolidated asset valuation</a>
 
+<a href="#assets-management">Assets management</a>
+
 <a href="#recovery-after-any-reason-crash">Recovery after any reason crash, restart etc.</a>
 
 
@@ -643,6 +647,29 @@ located above.
 To receive quotes, you need to get the free API key on [CoinMarketCap](https://coinmarketcap.com/api/pricing/).
 Specify the key at the top of the ms_cfg.toml and start ```funds_rate_exporter.py``` as service. For Ubuntu,
 you can use ```/service/funds_export.service``` 
+
+### Asset management
+<p id="assets-management"></p>
+
+The result of working in the reverse cycle is a gradual accumulation of assets that are not included in the turnover
+and can be withdrawn. With a significant number of trading pairs on several sub-accounts, this is a rather laborious
+task. First, you need to transfer the available funds to one account and convert these assets into one coin.
+
+
+Starting from version 1.2.10, the function of automatic transfer of free funds from operating sub-accounts to the main
+account is implemented.
+
+In this case, the main account is not used for trading, it serves for asset management:
+accumulation, conversion, distribution, withdrawal.
+
+Some settings change:
+
+Update ```cli_XX_AAABBB.py``` from ```martin_binance/cli_0_BTCUSDT.py.template``` and
+  set up params ```ex.COLLECT_ASSETS = True```
+
+Also need change into exchanges-wrapper server config file, see
+[details here](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/CHANGELOG.md#added-for-new-features)
+
 
 ### Recovery after any reason crash, restart etc.
 <p id="recovery-after-any-reason-crash"></p>
