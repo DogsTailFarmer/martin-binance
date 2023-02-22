@@ -2831,8 +2831,11 @@ class Strategy(StrategyBase):
     def on_balance_update(self, balance: Dict) -> None:
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
-        self.message_log(f"Was {'depositing' if delta > 0 else 'transferring (withdrawing)'} {delta} {asset}",
-                         color=Style.UNDERLINE, tlg=True)
+
+        if delta > 0:
+            delta = self.round_truncate(delta, bool(asset == self.f_currency), _rounding=ROUND_FLOOR)
+        else:
+            delta = self.round_truncate(delta, bool(asset == self.f_currency), _rounding=ROUND_CEILING)
         #
         if self.cycle_buy:
             if asset == self.s_currency:
@@ -2862,6 +2865,8 @@ class Strategy(StrategyBase):
                 self.initial_second += delta
                 if self.reverse:
                     self.initial_reverse_second += delta
+        self.message_log(f"Was {'depositing' if delta > 0 else 'transferring (withdrawing)'} {delta} {asset}",
+                         color=Style.UNDERLINE, tlg=True)
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
