@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.14"
+__version__ = "1.2.14-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -499,6 +499,7 @@ class StrategyBase:
 async def heartbeat(_session):
     cls = StrategyBase
     # print(f"tik-tak ', {int(time.time() * 1000)}, _client_id: {_client_id}")
+    last_exec_time = time.time()
     while cls.strategy:
         try:
             # print(f"tik-tak ', {int(time.time() * 1000)}, cls.client_id: {cls.client_id}")
@@ -513,11 +514,25 @@ async def heartbeat(_session):
             with ms.LAST_STATE_FILE.open(mode='w') as outfile:
                 json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
             #
+            update_max_queue_size = False
+            if time.time() - last_exec_time > HEARTBEAT * 150:
+                last_exec_time = time.time()
+                try:
+                    res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
+                except Exception as ex:
+                    logger.warning(f"Exception on Check WSS: {ex}")
+                else:
+                    if not res.success:
+                        logger.warning(f"Not active WSS for {cls.symbol} on {cls.exchange}, restart request sent")
+                        update_max_queue_size = True
+                        cls.wss_fire_up = True
+            #
             if cls.client_id and cls.wss_fire_up:
                 try:
                     await cls.session.get_client()
                     update_class_var(cls.session)
-                    asyncio.create_task(wss_init())
+                    await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
+                    await wss_init(update_max_queue_size=update_max_queue_size)
                     cls.wss_fire_up = False
                 except Exception as ex:
                     logger.warning(f"Exception on fire up WSS: {ex}")
@@ -1200,7 +1215,7 @@ def load_last_state() -> {}:
     return res
 
 
-async def wss_init():
+async def wss_init(update_max_queue_size=False):
     cls = StrategyBase
     cls.strategy.message_log(f"Init WSS, client_id: {cls.client_id}")
     if cls.client_id:
@@ -1219,8 +1234,11 @@ async def wss_init():
         These values directly depend on the number of market ws streams used in the strategy and declared above
         '''
         try:
-            await cls.send_request(
-                cls.stub.StartStream, api_pb2.StartStreamRequest, symbol=cls.symbol, market_stream_count=5)
+            await cls.send_request(cls.stub.StartStream,
+                                   api_pb2.StartStreamRequest,
+                                   symbol=cls.symbol,
+                                   market_stream_count=5,
+                                   update_max_queue_size=update_max_queue_size)
             cls.wss_fire_up = False
         except UserWarning:
             cls.strategy.message_log("Start WSS failed, retry", log_level=LogLevel.WARNING)
