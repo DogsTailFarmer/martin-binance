@@ -515,7 +515,7 @@ async def heartbeat(_session):
                 json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
             #
             update_max_queue_size = False
-            if time.time() - last_exec_time > HEARTBEAT * 150:
+            if time.time() - last_exec_time > HEARTBEAT * 300:
                 last_exec_time = time.time()
                 try:
                     res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -1297,8 +1297,11 @@ async def main(_symbol):
         last_state = load_last_state()
         restore_state = bool(last_state)
         print(f"main.restore_state: {restore_state}")
-        if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
-            answer = input('Are you want cancel all active order for this pair? Y:\n')
+        if CANCEL_ALL_ORDERS and active_orders and (not ms.LOAD_LAST_STATE or ms.GRID_ONLY):
+            if ms.GRID_ONLY:
+                answer = 'y'
+            else:
+                answer = input('Are you want cancel all active order for this pair? Y:\n')
             if answer.lower() == 'y':
                 restore_state = False
                 try:
@@ -1374,7 +1377,10 @@ async def main(_symbol):
         loop.create_task(buffered_orders())
         if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
             cls.strategy.init()
-            input('Press Enter for Start or Ctrl-Z for Cancel\n')
+
+            if not ms.LOAD_LAST_STATE:
+                input('Press Enter for Start or Ctrl-Z for Cancel\n')
+
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))

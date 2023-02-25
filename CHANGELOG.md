@@ -1,3 +1,9 @@
+## v1.2.14-1 2023-02-xx
+### Added for new features
+* Periodically checking WSS status for active trade by client side.
+This correctly stops the server-side service in the event of an abnormal client shutdown
+and guarantees the service for an active trading session.
+
 ## v1.2.14 2023-02-22
 ### Fixed
 * Fixed #53
