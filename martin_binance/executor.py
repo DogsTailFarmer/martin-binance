@@ -1425,10 +1425,10 @@ class Strategy(StrategyBase):
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
                                      f"{float(amount):f} {self.f_currency} depo\n"
                                      f"{self.get_free_assets(ff, fs)[2]}", tlg=True)
-            self.grid_only_restart = None
             if GRID_ONLY:
                 if not self.check_min_amount(for_tp=False):
                     self.grid_only_restart = True
+                    self.message_log("Waiting funding for convert", color=Style.B_WHITE)
                     return
             if self.reverse:
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
@@ -1594,7 +1594,7 @@ class Strategy(StrategyBase):
                                  f" for {self.over_price:.4f}% over price", tlg=False)
             else:
                 self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
-                                 f" cycle set 1 order{' for additional grid' if additional_grid else ''}",
+                                 f" cycle set {self.order_q} order{' for additional grid' if additional_grid else ''}",
                                  tlg=False)
             if init_calc_only:
                 self.init_warning(amount_first_grid)
@@ -2481,6 +2481,23 @@ class Strategy(StrategyBase):
             k += 1
         del self.orders_hold.orders_list[:k]
 
+    def grid_only_stop(self) -> None:
+        tcm = self.get_trading_capability_manager()
+        avg_rate = tcm.round_price(float(self.sum_amount_second / self.sum_amount_first), RoundingType.FLOOR)
+        if self.cycle_buy:
+            self.message_log(f"Stop after buy asset\n"
+                             f"Sell {self.sum_amount_second} {self.s_currency}\n"
+                             f"Buy {self.sum_amount_first} {self.f_currency}\n"
+                             f"Average rate is {avg_rate}", tlg=True)
+        else:
+            self.message_log(f"Stop after sell asset\n"
+                             f"Buy {self.sum_amount_second} {self.s_currency}\n"
+                             f"Sell {self.sum_amount_first} {self.f_currency}\n"
+                             f"Average rate is {avg_rate}", tlg=True)
+        self.command = 'stop'
+        self.restart = True
+        self.start()
+
     def grid_handler(self,
                      _amount_first=None,
                      _amount_second=None,
@@ -2525,8 +2542,11 @@ class Strategy(StrategyBase):
                 self.tp_cancel_from_grid_handler = True
                 return
             if GRID_ONLY:
-                self.shift_grid_threshold = None
-                self.start()
+                if USE_ALL_FUND:
+                    self.shift_grid_threshold = None
+                    self.start()
+                else:
+                    self.grid_only_stop()
             elif self.tp_part_amount_first or self.correction_amount_first:
                 self.message_log("grid_handler: No grid orders after part filled TP, converse TP to grid", tlg=True)
                 if self.tp_part_amount_first:
@@ -2876,8 +2896,9 @@ class Strategy(StrategyBase):
                     self.initial_reverse_second += delta
         self.message_log(f"Was {'depositing' if delta > 0 else 'transferring (withdrawing)'} {delta} {asset}",
                          color=Style.UNDERLINE, tlg=True)
-        if GRID_ONLY:
+        if self.grid_only_restart or (GRID_ONLY and USE_ALL_FUND):
             if self.check_min_amount(for_tp=False):
+                self.grid_only_restart = None
                 self.start()
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:

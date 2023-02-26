@@ -1,3 +1,7 @@
+## v1.2.15b1 2023-02-xx
+### Added for new features
+* Refactoring and updated auto-convert possibilities
+
 ## v1.2.14-1 2023-02-xx
 ### Added for new features
 * Periodically checking WSS status for active trade by client side.
