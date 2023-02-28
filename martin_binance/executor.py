@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15b1"
+__version__ = "1.2.15b8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -739,7 +739,9 @@ class Strategy(StrategyBase):
         if not check_funds:
             self.first_run = False
         if GRID_ONLY:
-            self.message_log('Mode for buy/sell asset by grid orders placement ON', color=Style.B_WHITE)
+            self.message_log(f"Mode for {'buy' if self.cycle_buy else 'sell'} {self.f_currency} by grid orders"
+                             f" placement ON",
+                             color=Style.B_WHITE)
         # Calculate round float multiplier
         self.round_base = ROUND_BASE or str(tcm.round_amount(1.123456789, RoundingType.FLOOR))
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
@@ -754,7 +756,7 @@ class Strategy(StrategyBase):
                     ds = self.get_buffered_funds().get(self.s_currency, 0)
                     ds = ds.available if ds else 0
                     if USE_ALL_FUND:
-                        self.deposit_second = f2d(ds)
+                        self.deposit_second = self.round_truncate(f2d(ds), base=False)
                     elif self.deposit_second > f2d(ds):
                         self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                         if STANDALONE:
@@ -764,13 +766,14 @@ class Strategy(StrategyBase):
                     df = self.get_buffered_funds().get(self.f_currency, 0)
                     df = df.available if df else 0
                     if USE_ALL_FUND:
-                        self.deposit_first = f2d(df)
+                        self.deposit_first = self.round_truncate(f2d(df), base=True)
                     elif self.deposit_first > f2d(df):
                         self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
                         if STANDALONE:
                             raise SystemExit(1)
                     depo = self.deposit_first
-                self.place_grid(self.cycle_buy, depo, self.reverse_target_amount, init_calc_only=True)
+                if not GRID_ONLY:
+                    self.place_grid(self.cycle_buy, depo, self.reverse_target_amount, init_calc_only=True)
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
             if STANDALONE:
@@ -906,17 +909,24 @@ class Strategy(StrategyBase):
                 sum_profit = self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second,
                                                  base=False)
                 command = bool(self.command in ('end', 'stop'))
-                self.message_log(f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
-                                 f"For all cycles profit:\n"
-                                 f"First: {self.sum_profit_first}\n"
-                                 f"Second: {self.sum_profit_second}\n"
-                                 f"Summary: {sum_profit}\n"
-                                 f"{self.get_free_assets(mode='free')[2]}\n"
+                if GRID_ONLY:
+                    header = (f"{'Buy' if self.cycle_buy else 'Sell'} assets Grid only mode\n"
+                              f"{('Waiting funding for convert'+chr(10)) if self.grid_only_restart else ''}"
+                              f"{self.get_free_assets()[2]}"
+                              )
+                else:
+                    header = (f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
+                              f"For all cycles profit:\n"
+                              f"First: {self.sum_profit_first}\n"
+                              f"Second: {self.sum_profit_second}\n"
+                              f"Summary: {sum_profit}\n"
+                              f"{self.get_free_assets(mode='free')[2]}"
+                              )
+                self.message_log(f"{header}\n"
                                  f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* ***  ***  *** *'}\n"
                                  f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
-                                 f"{' Hold reverse' if self.reverse_hold else ''}"
-                                 f" {'grid only' if GRID_ONLY else 'cycle'} with {order_buy} buy"
-                                 f" and {order_sell} sell active orders.\n"
+                                 f"{' Hold reverse' if self.reverse_hold else ''} cycle with"
+                                 f" {order_buy} buy and {order_sell} sell active orders.\n"
                                  f"{order_hold if order_hold else 'No'} hold grid orders\n"
                                  f"Over price: {self.over_price:.2f}%\n"
                                  f"Last ticker price: {last_price}\n"
@@ -1392,8 +1402,10 @@ class Strategy(StrategyBase):
         else:
             n = gc.collect(generation=2)
             print('Number of unreachable objects collected by GC:', n)
-            self.message_log(f"Initial first: {self.initial_reverse_first if self.reverse else self.initial_first},"
-                             f" second: {self.initial_reverse_second if self.reverse else self.initial_second}",
+            self.message_log(f"Initial first: "
+                             f"{max(ff, self.initial_reverse_first if self.reverse else self.initial_first)},"
+                             f" second: "
+                             f"{max(fs, self.initial_reverse_second if self.reverse else self.initial_second)}",
                              color=Style.B_WHITE)
             self.restart = None
             # Init variable
@@ -1406,25 +1418,25 @@ class Strategy(StrategyBase):
             #
             start_cycle_output = not self.start_after_shift or self.first_run
             if self.cycle_buy:
-                if USE_ALL_FUND and GRID_ONLY:
-                    self.deposit_second = self.round_truncate(fs, base=False)
+                if USE_ALL_FUND and GRID_ONLY and not self.start_after_shift and not self.restart:
+                    self.deposit_second = fs
                     self.message_log(f'Use all available fund for second currency: {self.deposit_second}')
                 amount = self.deposit_second
                 if start_cycle_output:
                     self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
                                      f"{float(amount):f} {self.s_currency} depo\n"
-                                     f"{self.get_free_assets(ff, fs)[2]}", tlg=True)
+                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs)[2]}", tlg=True)
             else:
-                if USE_ALL_FUND and GRID_ONLY:
-                    self.deposit_first = self.round_truncate(ff, base=True)
+                if USE_ALL_FUND and GRID_ONLY and not self.start_after_shift and not self.restart:
+                    self.deposit_first = ff
                     self.message_log(f'Use all available fund for first currency: {self.deposit_first}')
                 amount = self.deposit_first
                 if start_cycle_output:
                     self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with "
                                      f"{float(amount):f} {self.f_currency} depo\n"
-                                     f"{self.get_free_assets(ff, fs)[2]}", tlg=True)
+                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs)[2]}", tlg=True)
             if GRID_ONLY:
                 if not self.check_min_amount(for_tp=False):
                     self.grid_only_restart = True
@@ -1605,8 +1617,8 @@ class Strategy(StrategyBase):
                     price = (depo / reverse_target_amount) if buy_side else (reverse_target_amount / depo)
                 else:
                     price = base_price_dec
-                amount = self.round_truncate(depo, base=True, _rounding=ROUND_FLOOR)
                 price = f2d(tcm.round_price(float(price), RoundingType.ROUND))
+                amount = self.round_truncate((depo / price) if buy_side else depo, base=True, _rounding=ROUND_FLOOR)
                 orders = [(0, amount, price)]
             else:
                 params = {'buy_side': buy_side,
@@ -1643,7 +1655,7 @@ class Strategy(StrategyBase):
                             self.shift_grid_threshold = bb.get('tbb')
                         else:
                             self.shift_grid_threshold = bb.get('bbb')
-                if not GRID_ONLY or (GRID_ONLY and not bb):
+                if not GRID_ONLY or (GRID_ONLY and bb is None):
                     if buy_side:
                         self.shift_grid_threshold = base_price + 2 * PRICE_SHIFT * base_price / 100
                     else:
@@ -1973,7 +1985,7 @@ class Strategy(StrategyBase):
                 break
             q_max -= 1
         #
-        self.order_q = q_max if order_q > q_max else order_q
+        self.order_q = max(q_max if order_q > q_max else order_q, 1)
         # Correction over_price after change quantity of orders
         if self.reverse and self.order_q > 1:
             over_price = self.calc_over_price(buy_side,
@@ -2485,18 +2497,24 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         avg_rate = tcm.round_price(float(self.sum_amount_second / self.sum_amount_first), RoundingType.FLOOR)
         if self.cycle_buy:
-            self.message_log(f"Stop after buy asset\n"
+            self.message_log(f"End buy asset cycle\n"
                              f"Sell {self.sum_amount_second} {self.s_currency}\n"
                              f"Buy {self.sum_amount_first} {self.f_currency}\n"
                              f"Average rate is {avg_rate}", tlg=True)
         else:
-            self.message_log(f"Stop after sell asset\n"
+            self.message_log(f"End sell asset cycle\n"
                              f"Buy {self.sum_amount_second} {self.s_currency}\n"
                              f"Sell {self.sum_amount_first} {self.f_currency}\n"
                              f"Average rate is {avg_rate}", tlg=True)
-        self.command = 'stop'
-        self.restart = True
-        self.start()
+
+        if USE_ALL_FUND:
+            self.grid_only_restart = True
+            self.message_log("Waiting funding for convert", color=Style.B_WHITE)
+            return
+        else:
+            self.command = 'stop'
+            self.restart = True
+            self.start()
 
     def grid_handler(self,
                      _amount_first=None,
@@ -2516,17 +2534,23 @@ class Strategy(StrategyBase):
             else:
                 part_amount = (Decimal('0'), Decimal('0'))
             # Calculate cycle sum trading for both currency
-            self.sum_amount_first += amount_first_fee + part_amount[0]
-            self.sum_amount_second += amount_second_fee + part_amount[1]
+            delta_f = amount_first_fee + part_amount[0]
+            delta_s = amount_second_fee + part_amount[1]
+            self.sum_amount_first += delta_f
+            self.sum_amount_second += delta_s
             self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
                              f" Sum_amount_second: {self.sum_amount_second}",
                              log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-            if GRID_ONLY and not USE_ALL_FUND:
-                # Correct depo amount
+            if GRID_ONLY:
+                # Correct depo and init amount
                 if self.cycle_buy:
-                    self.deposit_second -= amount_second_fee + part_amount[1]
+                    self.deposit_second -= delta_s
+                    self.initial_first += delta_f
+                    self.initial_second -= delta_s
                 else:
-                    self.deposit_first -= amount_first_fee + part_amount[0]
+                    self.deposit_first -= delta_f
+                    self.initial_first -= delta_f
+                    self.initial_second += delta_s
         # State
         no_grid = not self.orders_grid and not self.orders_hold and not self.orders_init
         if no_grid and not self.orders_save:
@@ -2542,11 +2566,8 @@ class Strategy(StrategyBase):
                 self.tp_cancel_from_grid_handler = True
                 return
             if GRID_ONLY:
-                if USE_ALL_FUND:
-                    self.shift_grid_threshold = None
-                    self.start()
-                else:
-                    self.grid_only_stop()
+                self.shift_grid_threshold = None
+                self.grid_only_stop()
             elif self.tp_part_amount_first or self.correction_amount_first:
                 self.message_log("grid_handler: No grid orders after part filled TP, converse TP to grid", tlg=True)
                 if self.tp_part_amount_first:
@@ -2777,7 +2798,7 @@ class Strategy(StrategyBase):
                              log_level=LogLevel.DEBUG)
         return waiting_order_id
 
-    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode='total') -> ():
+    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total') -> ():
         """
         Get free asset for current trade pair
         :param fs:
@@ -2802,18 +2823,16 @@ class Strategy(StrategyBase):
                     ff = f2d(_ff.reserved)
                     fs = f2d(_fs.reserved)
         #
-        if self.cycle_buy:
-            fr_f = ff
-            fr_s = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
-            if mode == 'free':
+        if mode == 'free':
+            if self.cycle_buy:
+                fr_s = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
                 fs = self.round_truncate(fr_s, base=False)
-        else:
-            fr_f = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
-            if mode == 'free':
+            else:
+                fr_f = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
                 ff = self.round_truncate(fr_f, base=True)
-            fr_s = fs
-        free_assets = f"Free: First: {float(fr_f):f}, Second: {float(fr_s):f}"
-        return ff, fs, free_assets
+
+        assets = f"{mode.capitalize()}: First: {float(ff):f}, Second: {float(fs):f}"
+        return ff, fs, assets
 
     ##############################################################
     # public data update methods
@@ -2876,7 +2895,7 @@ class Strategy(StrategyBase):
                     elif delta > 0:
                         self.deposit_second += delta
                 self.initial_second += delta
-            elif asset == self.f_currency:
+            elif asset == self.f_currency and not GRID_ONLY:
                 self.initial_first += delta
                 if self.reverse:
                     self.initial_reverse_first += delta
@@ -2890,7 +2909,7 @@ class Strategy(StrategyBase):
                     elif delta > 0:
                         self.deposit_first += delta
                 self.initial_first += delta
-            elif asset == self.s_currency:
+            elif asset == self.s_currency and not GRID_ONLY:
                 self.initial_second += delta
                 if self.reverse:
                     self.initial_reverse_second += delta
@@ -2899,7 +2918,8 @@ class Strategy(StrategyBase):
         if self.grid_only_restart or (GRID_ONLY and USE_ALL_FUND):
             if self.check_min_amount(for_tp=False):
                 self.grid_only_restart = None
-                self.start()
+                self.grid_remove = None
+                self.cancel_grid()
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
@@ -3072,14 +3092,24 @@ class Strategy(StrategyBase):
                     self.part_amount[update.original_order.id] = (part_amount_first, part_amount_second)
                     self.message_log(f"Part_amount_first: {part_amount_first},"
                                      f" Part_amount_second: {part_amount_second}", log_level=LogLevel.DEBUG)
-                    # Get min trade amount
-                    if self.check_min_amount():
-                        if not GRID_ONLY:
-                            self.shift_grid_threshold = None
-                        self.grid_handler(after_full_fill=False)
+                    if GRID_ONLY:
+                        # Correct depo and init amount
+                        if self.cycle_buy:
+                            self.deposit_second -= amount_second_fee
+                            self.initial_first += amount_first_fee
+                            self.initial_second -= amount_second_fee
+                        else:
+                            self.deposit_first -= amount_first_fee
+                            self.initial_first -= amount_first_fee
+                            self.initial_second += amount_second_fee
                     else:
-                        self.last_shift_time = time.time() + 2 * SHIFT_GRID_DELAY
-                        self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
+                        # Get min trade amount
+                        if self.check_min_amount():
+                            self.shift_grid_threshold = None
+                            self.grid_handler(after_full_fill=False)
+                        else:
+                            self.last_shift_time = time.time() + 2 * SHIFT_GRID_DELAY
+                            self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
 
     def on_place_order_success(self, place_order_id: int, order: Order) -> None:
         # print(f"on_place_order_success.place_order_id: {place_order_id}")

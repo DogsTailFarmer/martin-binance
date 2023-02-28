@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15b1"
+__version__ = "1.2.15b9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -607,7 +607,7 @@ async def save_asset():
                     total = assets_fw.pop(balance['asset'], Decimal('0.0'))
                 else:
                     total = Decimal('0.0')
-                if balance['asset'] not in (cls.base_asset, cls.quote_asset):
+                if balance['asset'] not in (cls.base_asset, cls.quote_asset) or ms.GRID_ONLY:
                     total += Decimal(balance['free']) + Decimal(balance['locked'])
                 assets[balance['asset']] = float(total)
             cursor_analytic = connection_analytic.cursor()
@@ -631,11 +631,11 @@ async def save_asset():
                                {'id_exchange': ms.ID_EXCHANGE, 'use': 0})
                 for row in rows:
                     if row[1] in (cls.base_asset, cls.quote_asset) and main_active == (1,):
-                        assets.pop(row[1], None)
+                        amount = float(assets.pop(row[1], 0))
                         cursor.execute('UPDATE t_asset SET value=:value, timestamp=:timestamp, use=:use\
                                         WHERE id_exchange=:id_exchange\
                                         and currency=:currency',
-                                       {'value': 0.0, 'timestamp': int(time.time()), 'use': 1,
+                                       {'value': amount if ms.GRID_ONLY else 0, 'timestamp': int(time.time()), 'use': 1,
                                         'id_exchange': ms.ID_EXCHANGE, 'currency': row[1]})
                     elif row[3]:
                         # Check used currency from other pair for last update time
@@ -1297,11 +1297,8 @@ async def main(_symbol):
         last_state = load_last_state()
         restore_state = bool(last_state)
         print(f"main.restore_state: {restore_state}")
-        if CANCEL_ALL_ORDERS and active_orders and (not ms.LOAD_LAST_STATE or ms.GRID_ONLY):
-            if ms.GRID_ONLY:
-                answer = 'y'
-            else:
-                answer = input('Are you want cancel all active order for this pair? Y:\n')
+        if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
+            answer = input('Are you want cancel all active order for this pair? Y:\n')
             if answer.lower() == 'y':
                 restore_state = False
                 try:
@@ -1377,10 +1374,7 @@ async def main(_symbol):
         loop.create_task(buffered_orders())
         if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
             cls.strategy.init()
-
-            if not ms.LOAD_LAST_STATE:
-                input('Press Enter for Start or Ctrl-Z for Cancel\n')
-
+            input('Press Enter for Start or Ctrl-Z for Cancel\n')
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))
