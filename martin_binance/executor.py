@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15b8"
+__version__ = "1.2.15b10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -718,6 +718,8 @@ class Strategy(StrategyBase):
             init_params_error = 'FEE_IN_PAIR and FEE_SECOND'
         elif not FEE_IN_PAIR and FEE_BNB_IN_PAIR:
             init_params_error = 'FEE_IN_PAIR and FEE_BNB_IN_PAIR'
+        elif COLLECT_ASSETS and GRID_ONLY:
+            init_params_error = 'COLLECT_ASSETS and GRID_ONLY: one only allowed'
         else:
             init_params_error = None
         if init_params_error:
@@ -1351,7 +1353,9 @@ class Strategy(StrategyBase):
                 self.wait_refunding_for_start = False
                 self.save_init_assets(ff, fs)
                 if STANDALONE and COLLECT_ASSETS:
-                    self.collect_assets()
+                    _ff, _fs = self.collect_assets()
+                    ff -= _ff
+                    fs -= _fs
                 if self.cycle_buy:
                     df = Decimal('0')
                     ds = self.deposit_second - self.profit_second
@@ -1521,15 +1525,20 @@ class Strategy(StrategyBase):
             self.initial_first = self.round_truncate(ff, base=True)
             self.initial_second = self.round_truncate(fs, base=False)
 
-    def collect_assets(self):
+    def collect_assets(self) -> ():
         ff, fs, _x = self.get_free_assets(mode='free')
         tcm = self.get_trading_capability_manager()
         if ff >= tcm.min_qty:
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
             self.transfer_to_master(self.f_currency, float(ff))
+        else:
+            ff = f2d(0)
         if fs >= tcm.min_notional:
             self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
             self.transfer_to_master(self.s_currency, float(fs))
+        else:
+            fs = f2d(0)
+        return ff, fs
 
     ##############################################################
     # strategy function
