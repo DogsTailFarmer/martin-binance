@@ -34,6 +34,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
+* From 1.2.15 update cli_X_AAABBB.py
 * From 1.2.10 update exch_srv_cfg.toml (see <a href="#assets-management">Assets management</a>) and cli_X_AAABBB.py
 * 1.2.9 Before use Huobi exchange update ```/home/ubuntu/.MartinBinance/config/exch_srv_cfg.toml``` to last ver. from ```exchanges-wrapper/exch_srv_cfg.toml.template```
 * You cannot run multiple pairs with overlapping currencies on the same account!
@@ -117,6 +118,9 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 ## Features
 <p id="features"></p>
 
+* <a href="#assets-management">Assets management</a> capabilities added from 1.2.10 (for STANDALONE mode)
+* From 1.2.9-8 you can withdraw and deposit assets on active strategy with autocorrection depo and initial assets
+control values
 * Create grid and take profit orders
 * Logarithm price option for grid orders (customizable)
 * Reverse algo if all grid orders are filling
@@ -136,9 +140,6 @@ The optimal pair choice is a stable coin or fiat plus a coin from the top ten.
 * Telegram notification
 * External control from Telegram bot
 * Restore state after restart strategy
-* From 1.2.9-8 you can withdraw and deposit assets on active strategy with autocorrection depo and initial assets
-control values
-* <a href="#assets-management">Assets management</a> capabilities added from 1.2.10 (for STANDALONE mode)
 
 ## Quick start
 <p id="quick-start"></p>
@@ -531,9 +532,24 @@ PROFIT_REVERSE parameter specifies the reinvestment rule. Leave it as default.
 ### Grid only
 <p id="grid-only"></p>
 
-You can buy/sell asset with grid options. To do this, set the GRID_ONLY = True
+You can buy/sell asset with grid options at the best price at the moment.
+Grid parameters are calculated as usual, except the grid shift price threshold, which is calculated on
+the basis of the Bollinger Band indicator with a period of 15 minutes. In the Bye cycle, the threshold is set at the
+lower limit, for Sell it is set at the upper limit. When executing some orders, the grid shift mode remains ACTIVE,
+which allows us to complete the cycle regardless of the price move.
+
+To do this, set the parameter ```GRID_ONLY = True```
+
 In this case, the take-profit order will not be placed and Reverse cycle not started. After filling all grid orders
-strategy goes to STOP state. All options associated with grid calculation work as usual, except no shifting grid.
+strategy goes to STOP state.
+
+Another option is to set the parameter ```USE_ALL_FUND = True```, which switch-on the mode of continuous Buy/Sell of an
+asset. In this case, the entire available volume will be converted at the best price and the program will go into
+standby mode. The transfer or deposit of the asset activates the conversion mode.
+
+>This mode (on the master account) is convenient in combination with the ```COLLECT_ASSETS``` parameter
+(on the subaccount). Available funds earned in a subaccount are automatically transferred to a master account,
+where they are automatically converted into the selected stablecoin currency.
 
 ### Place take profit
 <p id="place-take-profit"></p>

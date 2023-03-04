@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15b10"
+__version__ = "1.2.15b12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1343,8 +1343,22 @@ class Strategy(StrategyBase):
         if self.first_run:
             self.start_process()
             self.save_init_assets(ff, fs)
-        elif self.restart and not GRID_ONLY:
-            # Check refunding before start
+
+        if GRID_ONLY:
+            if USE_ALL_FUND and not self.start_after_shift:
+                if self.cycle_buy:
+                    self.deposit_second = self.round_truncate(max(fs, self.deposit_second), base=False)
+                    self.message_log(f'Use all available fund for second currency: {self.deposit_second}')
+                else:
+                    self.deposit_first = self.round_truncate(max(ff, self.deposit_first), base=True)
+                    self.message_log(f'Use all available fund for first currency: {self.deposit_first}')
+            if not self.check_min_amount(for_tp=False):
+                self.grid_only_restart = True
+                self.message_log("Waiting funding for convert", color=Style.B_WHITE)
+                return
+
+        if self.restart:
+            # Check refunding before restart
             if self.cycle_buy:
                 go_trade = fs >= (self.initial_reverse_second if self.reverse else self.initial_second)
             else:
@@ -1356,31 +1370,32 @@ class Strategy(StrategyBase):
                     _ff, _fs = self.collect_assets()
                     ff -= _ff
                     fs -= _fs
-                if self.cycle_buy:
-                    df = Decimal('0')
-                    ds = self.deposit_second - self.profit_second
-                else:
-                    df = self.deposit_first - self.profit_first
-                    ds = Decimal('0')
-                ct = datetime.utcnow() - self.cycle_time
-                ct = ct.total_seconds()
-                data_to_db = {'f_currency': self.f_currency,
-                              's_currency': self.s_currency,
-                              'f_funds': ff,
-                              's_funds': fs,
-                              'avg_rate': self.avg_rate,
-                              'cycle_buy': self.cycle_buy,
-                              'f_depo': df,
-                              's_depo': ds,
-                              'f_profit': self.profit_first,
-                              's_profit': self.profit_second,
-                              'order_q': self.order_q,
-                              'over_price': self.over_price,
-                              'cycle_time': ct,
-                              'destination': 't_funds'}
-                if self.queue_to_db:
-                    print('Send data to .db t_funds')
-                    self.queue_to_db.put(data_to_db)
+                if not GRID_ONLY:
+                    if self.cycle_buy:
+                        df = Decimal('0')
+                        ds = self.deposit_second - self.profit_second
+                    else:
+                        df = self.deposit_first - self.profit_first
+                        ds = Decimal('0')
+                    ct = datetime.utcnow() - self.cycle_time
+                    ct = ct.total_seconds()
+                    data_to_db = {'f_currency': self.f_currency,
+                                  's_currency': self.s_currency,
+                                  'f_funds': ff,
+                                  's_funds': fs,
+                                  'avg_rate': self.avg_rate,
+                                  'cycle_buy': self.cycle_buy,
+                                  'f_depo': df,
+                                  's_depo': ds,
+                                  'f_profit': self.profit_first,
+                                  's_profit': self.profit_second,
+                                  'order_q': self.order_q,
+                                  'over_price': self.over_price,
+                                  'cycle_time': ct,
+                                  'destination': 't_funds'}
+                    if self.queue_to_db:
+                        print('Send data to .db t_funds')
+                        self.queue_to_db.put(data_to_db)
             else:
                 self.wait_refunding_for_start = True
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
@@ -1406,10 +1421,8 @@ class Strategy(StrategyBase):
         else:
             n = gc.collect(generation=2)
             print('Number of unreachable objects collected by GC:', n)
-            self.message_log(f"Initial first: "
-                             f"{max(ff, self.initial_reverse_first if self.reverse else self.initial_first)},"
-                             f" second: "
-                             f"{max(fs, self.initial_reverse_second if self.reverse else self.initial_second)}",
+            self.message_log(f"Initial first: {self.initial_reverse_first if self.reverse else self.initial_first},"
+                             f" second: {self.initial_reverse_second if self.reverse else self.initial_second}",
                              color=Style.B_WHITE)
             self.restart = None
             # Init variable
@@ -1422,30 +1435,18 @@ class Strategy(StrategyBase):
             #
             start_cycle_output = not self.start_after_shift or self.first_run
             if self.cycle_buy:
-                if USE_ALL_FUND and GRID_ONLY and not self.start_after_shift and not self.restart:
-                    self.deposit_second = fs
-                    self.message_log(f'Use all available fund for second currency: {self.deposit_second}')
                 amount = self.deposit_second
                 if start_cycle_output:
                     self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
-                                     f" {'asset' if GRID_ONLY else 'cycle'} with "
-                                     f"{float(amount):f} {self.s_currency} depo\n"
-                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs)[2]}", tlg=True)
+                                     f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.s_currency} depo\n"
+                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[2]}", tlg=True)
             else:
-                if USE_ALL_FUND and GRID_ONLY and not self.start_after_shift and not self.restart:
-                    self.deposit_first = ff
-                    self.message_log(f'Use all available fund for first currency: {self.deposit_first}')
                 amount = self.deposit_first
                 if start_cycle_output:
                     self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
-                                     f" {'asset' if GRID_ONLY else 'cycle'} with "
-                                     f"{float(amount):f} {self.f_currency} depo\n"
-                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs)[2]}", tlg=True)
-            if GRID_ONLY:
-                if not self.check_min_amount(for_tp=False):
-                    self.grid_only_restart = True
-                    self.message_log("Waiting funding for convert", color=Style.B_WHITE)
-                    return
+                                     f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
+                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[2]}", tlg=True)
+
             if self.reverse:
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
@@ -2515,14 +2516,15 @@ class Strategy(StrategyBase):
                              f"Buy {self.sum_amount_second} {self.s_currency}\n"
                              f"Sell {self.sum_amount_first} {self.f_currency}\n"
                              f"Average rate is {avg_rate}", tlg=True)
-
+        self.sum_amount_first = Decimal('0')
+        self.sum_amount_second = Decimal('0')
+        self.restart = True
         if USE_ALL_FUND:
             self.grid_only_restart = True
             self.message_log("Waiting funding for convert", color=Style.B_WHITE)
             return
         else:
             self.command = 'stop'
-            self.restart = True
             self.start()
 
     def grid_handler(self,

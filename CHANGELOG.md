@@ -1,6 +1,9 @@
 ## v1.2.15b1 2023-02-xx
 ### Added for new features
-* Refactoring and updated auto-convert possibilities
+* Refactoring and updated auto-convert possibilities [Grid only mode](https://github.com/DogsTailFarmer/martin-binance#grid-only)
+
+### Update
+* up requirements for exchanges-wrapper to 1.2.10-4
 
 ## v1.2.14-1 2023-02-xx
 ### Added for new features
