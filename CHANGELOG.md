@@ -1,11 +1,11 @@
-## v1.2.15b1 2023-02-xx
+## v1.2.15b1 2023-03-06
 ### Added for new features
 * Refactoring and updated auto-convert possibilities [Grid only mode](https://github.com/DogsTailFarmer/martin-binance#grid-only)
 
 ### Update
 * up requirements for exchanges-wrapper to 1.2.10-4
 
-## v1.2.14-1 2023-02-xx
+## v1.2.14-1 2023-02-24
 ### Added for new features
 * Periodically checking WSS status for active trade by client side.
 This correctly stops the server-side service in the event of an abnormal client shutdown
