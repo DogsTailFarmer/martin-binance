@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15"
+__version__ = "1.2.15-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2902,7 +2902,7 @@ class Strategy(StrategyBase):
                         self.deposit_second = self.initial_second + delta
                     elif delta > 0:
                         self.deposit_second += delta
-                self.initial_second += delta
+                    self.initial_second += delta
             elif asset == self.f_currency and not GRID_ONLY:
                 self.initial_first += delta
                 if self.reverse:
@@ -2916,7 +2916,7 @@ class Strategy(StrategyBase):
                         self.deposit_first = self.initial_first + delta
                     elif delta > 0:
                         self.deposit_first += delta
-                self.initial_first += delta
+                    self.initial_first += delta
             elif asset == self.s_currency and not GRID_ONLY:
                 self.initial_second += delta
                 if self.reverse:
