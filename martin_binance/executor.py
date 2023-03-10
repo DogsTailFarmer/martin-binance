@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15b12"
+__version__ = "1.2.15"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -508,7 +508,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         if (_err.count(err) or tries > max_tries) and len(solves) > 5:
             solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
             print('Solve return the best of the right value ;-)')
-            print("\n".join(f"delta: {k}\tresult: {v}" for k, v in solves))
+            # print("\n".join(f"delta: {k}\tresult: {v}" for k, v in solves))
             return solves[0][1]
         if tries > max_tries * 2:
             break
@@ -1343,20 +1343,6 @@ class Strategy(StrategyBase):
         if self.first_run:
             self.start_process()
             self.save_init_assets(ff, fs)
-
-        if GRID_ONLY:
-            if USE_ALL_FUND and not self.start_after_shift:
-                if self.cycle_buy:
-                    self.deposit_second = self.round_truncate(max(fs, self.deposit_second), base=False)
-                    self.message_log(f'Use all available fund for second currency: {self.deposit_second}')
-                else:
-                    self.deposit_first = self.round_truncate(max(ff, self.deposit_first), base=True)
-                    self.message_log(f'Use all available fund for first currency: {self.deposit_first}')
-            if not self.check_min_amount(for_tp=False):
-                self.grid_only_restart = True
-                self.message_log("Waiting funding for convert", color=Style.B_WHITE)
-                return
-
         if self.restart:
             # Check refunding before restart
             if self.cycle_buy:
@@ -1401,6 +1387,18 @@ class Strategy(StrategyBase):
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
         self.avg_rate = f2d(self.get_buffered_ticker().last_price)
+        if GRID_ONLY:
+            if USE_ALL_FUND and not self.start_after_shift:
+                if self.cycle_buy:
+                    self.deposit_second = self.round_truncate(fs, base=False)
+                    self.message_log(f'Use all available fund for second currency: {self.deposit_second}')
+                else:
+                    self.deposit_first = self.round_truncate(ff, base=True)
+                    self.message_log(f'Use all available fund for first currency: {self.deposit_first}')
+            if not self.check_min_amount(for_tp=False) and self.command is None:
+                self.grid_only_restart = True
+                self.message_log("Waiting funding for convert", color=Style.B_WHITE)
+                return
         if not self.first_run and not self.start_after_shift and not self.reverse and not GRID_ONLY:
             self.message_log(f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
                              f"For all cycles profit:\n"
@@ -1446,7 +1444,7 @@ class Strategy(StrategyBase):
                     self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
                                      f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[2]}", tlg=True)
-
+            #
             if self.reverse:
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
@@ -2523,9 +2521,8 @@ class Strategy(StrategyBase):
             self.grid_only_restart = True
             self.message_log("Waiting funding for convert", color=Style.B_WHITE)
             return
-        else:
-            self.command = 'stop'
-            self.start()
+        self.command = 'stop'
+        self.start()
 
     def grid_handler(self,
                      _amount_first=None,
@@ -2926,11 +2923,11 @@ class Strategy(StrategyBase):
                     self.initial_reverse_second += delta
         self.message_log(f"Was {'depositing' if delta > 0 else 'transferring (withdrawing)'} {delta} {asset}",
                          color=Style.UNDERLINE, tlg=True)
-        if self.grid_only_restart or (GRID_ONLY and USE_ALL_FUND):
-            if self.check_min_amount(for_tp=False):
-                self.grid_only_restart = None
-                self.grid_remove = None
-                self.cancel_grid()
+        if (self.grid_only_restart or (GRID_ONLY and USE_ALL_FUND)) and self.check_min_amount(for_tp=False):
+            self.restart = True
+            self.grid_only_restart = None
+            self.grid_remove = None
+            self.cancel_grid()
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         # print(f"on_new_funds.funds: {funds}")
