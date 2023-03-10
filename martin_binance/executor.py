@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15-1"
+__version__ = "1.2.15-1-0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -508,7 +508,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         if (_err.count(err) or tries > max_tries) and len(solves) > 5:
             solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
             print('Solve return the best of the right value ;-)')
-            # print("\n".join(f"delta: {k}\tresult: {v}" for k, v in solves))
+            # print("\n".join(f"delta: {k}\t result: {v}" for k, v in solves))
             return solves[0][1]
         if tries > max_tries * 2:
             break
@@ -2818,8 +2818,8 @@ class Strategy(StrategyBase):
             funds = self.get_buffered_funds()
             _ff = funds.get(self.f_currency, 0)
             _fs = funds.get(self.s_currency, 0)
-            ff = Decimal('0.0')
-            fs = Decimal('0.0')
+            ff = Decimal('0')
+            fs = Decimal('0')
             if _ff and _fs:
                 if mode == 'total':
                     ff = f2d(_ff.total_for_currency)
@@ -2833,13 +2833,12 @@ class Strategy(StrategyBase):
         #
         if mode == 'free':
             if self.cycle_buy:
-                fr_s = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
-                fs = self.round_truncate(fr_s, base=False)
+                fs = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
             else:
-                fr_f = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
-                ff = self.round_truncate(fr_f, base=True)
-
-        assets = f"{mode.capitalize()}: First: {float(ff):f}, Second: {float(fs):f}"
+                ff = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
+        ff = self.round_truncate(ff, base=True)
+        fs = self.round_truncate(fs, base=False)
+        assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
         return ff, fs, assets
 
     ##############################################################
