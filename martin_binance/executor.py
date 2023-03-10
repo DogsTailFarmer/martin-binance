@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15-1-0"
+__version__ = "1.2.15-1-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1518,11 +1518,11 @@ class Strategy(StrategyBase):
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
-            self.initial_reverse_first = self.round_truncate(ff, base=True)
-            self.initial_reverse_second = self.round_truncate(fs, base=False)
+            self.initial_reverse_first = ff
+            self.initial_reverse_second = fs
         else:
-            self.initial_first = self.round_truncate(ff, base=True)
-            self.initial_second = self.round_truncate(fs, base=False)
+            self.initial_first = ff
+            self.initial_second = fs
 
     def collect_assets(self) -> ():
         ff, fs, _x = self.get_free_assets(mode='free')
