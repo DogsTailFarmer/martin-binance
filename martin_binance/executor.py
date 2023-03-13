@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15-1-1"
+__version__ = "1.2.15-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1058,19 +1058,7 @@ class Strategy(StrategyBase):
             self.orders_hold.restore(json.loads(strategy_state.get('orders_hold')))
             self.orders_save.restore(json.loads(strategy_state.get('orders_save')))
             self.over_price = json.loads(strategy_state.get('over_price'))
-            #
-            # Upgrade from 1.2.10 to 1.2.10-3
-            self.part_amount = {}
-            if strategy_state.get('part_amount'):
-                _part_amount = json.loads(strategy_state.get('part_amount'))
-                if isinstance(_part_amount, str):
-                    self.part_amount = eval(_part_amount)
-                elif _part_amount and isinstance(_part_amount, dict):
-                    for k, v in _part_amount.items():
-                        self.part_amount.update({int(k): (Decimal(str(v[0])), Decimal(str(v[1])))})
-            # TODO Later change to:
-            # self.part_amount = eval(json.loads(strategy_state.get('part_amount')))
-            #
+            self.part_amount = eval(json.loads(strategy_state.get('part_amount')))
             self.initial_first = f2d(json.loads(strategy_state.get('initial_first')))
             self.initial_second = f2d(json.loads(strategy_state.get('initial_second')))
             self.initial_reverse_first = f2d(json.loads(strategy_state.get('initial_reverse_first')))
@@ -1097,6 +1085,7 @@ class Strategy(StrategyBase):
             self.tp_order = eval(json.loads(strategy_state.get('tp_order')))
             self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id'))
             self.first_run = False
+            self.start_after_shift = False if GRID_ONLY and USE_ALL_FUND else self.start_after_shift
         # Variants are processed when the actual order is equal to or less than it should be
         # Exotic when drop during placed grid or unconfirmed TP left for later
         self.start_process()
@@ -1391,10 +1380,10 @@ class Strategy(StrategyBase):
             if USE_ALL_FUND and not self.start_after_shift:
                 if self.cycle_buy:
                     self.deposit_second = self.round_truncate(fs, base=False)
-                    self.message_log(f'Use all available fund for second currency: {self.deposit_second}')
+                    self.message_log(f'Use all available funds: {self.deposit_second} {self.s_currency}')
                 else:
                     self.deposit_first = self.round_truncate(ff, base=True)
-                    self.message_log(f'Use all available fund for first currency: {self.deposit_first}')
+                    self.message_log(f'Use all available funds: {self.deposit_first} {self.f_currency}')
             if not self.check_min_amount(for_tp=False) and self.command is None:
                 self.grid_only_restart = True
                 self.message_log("Waiting funding for convert", color=Style.B_WHITE)

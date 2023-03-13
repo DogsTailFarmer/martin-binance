@@ -1,4 +1,4 @@
-## v1.2.15b1 2023-03-06
+## v1.2.15-1 2023-03-13
 ### Added for new features
 * Refactoring and updated auto-convert possibilities [Grid only mode](https://github.com/DogsTailFarmer/martin-binance#grid-only)
 
