@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15-1"
+__version__ = "1.2.15-2b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1335,16 +1335,15 @@ class Strategy(StrategyBase):
         if self.restart:
             # Check refunding before restart
             if self.cycle_buy:
-                go_trade = fs >= (self.initial_reverse_second if self.reverse else self.initial_second)
+                go_trade = fs >= self.initial_reverse_second if self.reverse else self.initial_second
+                if go_trade:
+                    fs = self.initial_reverse_second if self.reverse else self.initial_second
             else:
-                go_trade = ff >= (self.initial_reverse_first if self.reverse else self.initial_first)
+                go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
+                if go_trade:
+                    ff = self.initial_reverse_first if self.reverse else self.initial_first
             if self.wait_refunding_for_start or go_trade:
                 self.wait_refunding_for_start = False
-                self.save_init_assets(ff, fs)
-                if STANDALONE and COLLECT_ASSETS:
-                    _ff, _fs = self.collect_assets()
-                    ff -= _ff
-                    fs -= _fs
                 if not GRID_ONLY:
                     if self.cycle_buy:
                         df = Decimal('0')
@@ -1371,6 +1370,11 @@ class Strategy(StrategyBase):
                     if self.queue_to_db:
                         print('Send data to .db t_funds')
                         self.queue_to_db.put(data_to_db)
+                self.save_init_assets(ff, fs)
+                if STANDALONE and COLLECT_ASSETS:
+                    _ff, _fs = self.collect_assets()
+                    ff -= _ff
+                    fs -= _fs
             else:
                 self.wait_refunding_for_start = True
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
@@ -1379,10 +1383,10 @@ class Strategy(StrategyBase):
         if GRID_ONLY:
             if USE_ALL_FUND and not self.start_after_shift:
                 if self.cycle_buy:
-                    self.deposit_second = self.round_truncate(fs, base=False)
+                    self.deposit_second = fs
                     self.message_log(f'Use all available funds: {self.deposit_second} {self.s_currency}')
                 else:
-                    self.deposit_first = self.round_truncate(ff, base=True)
+                    self.deposit_first = ff
                     self.message_log(f'Use all available funds: {self.deposit_first} {self.f_currency}')
             if not self.check_min_amount(for_tp=False) and self.command is None:
                 self.grid_only_restart = True
@@ -1408,9 +1412,18 @@ class Strategy(StrategyBase):
         else:
             n = gc.collect(generation=2)
             print('Number of unreachable objects collected by GC:', n)
-            self.message_log(f"Initial first: {self.initial_reverse_first if self.reverse else self.initial_first},"
-                             f" second: {self.initial_reverse_second if self.reverse else self.initial_second}",
-                             color=Style.B_WHITE)
+
+            init_f = self.initial_reverse_first if self.reverse else self.initial_first
+            init_s = self.initial_reverse_second if self.reverse else self.initial_second
+            self.message_log(f"Initial first: {init_f}, second: {init_s}", color=Style.B_WHITE)
+            #
+            if self.cycle_buy and self.deposit_second > init_s:
+                self.deposit_second = init_s
+                self.message_log(f"Verify  initial second asset and depo values", log_level=LogLevel.WARNING, tlg=True)
+            elif not self.cycle_buy and self.deposit_first > init_f:
+                self.deposit_first = init_f
+                self.message_log(f"Verify  initial first asset and depo values", log_level=LogLevel.WARNING, tlg=True)
+            #
             self.restart = None
             # Init variable
             self.profit_first = Decimal('0')
@@ -2059,10 +2072,10 @@ class Strategy(StrategyBase):
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             if target_amount_second - self.tp_amount < step_size_s:
                 target_amount_second = self.tp_amount + step_size_s
-            target = target_amount_second
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
             price = f2d(tcm.round_price(float(target_amount_second / amount), RoundingType.CEIL))
+            target = amount * price
         self.tp_init = (self.sum_amount_first, self.sum_amount_second)
         # Calc real margin for TP
         profit = (100 * (target - self.tp_amount) / self.tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
@@ -2341,7 +2354,7 @@ class Strategy(StrategyBase):
             if self.reverse:
                 self.sum_profit_second += profit_reverse
                 self.initial_reverse_first += transfer_sum_amount_first
-                self.initial_reverse_second += profit_reverse - transfer_sum_amount_second
+                self.initial_reverse_second += self.profit_second + profit_reverse - transfer_sum_amount_second
             else:
                 # Take full profit only for non-reverse cycle
                 self.sum_profit_second += self.profit_second
@@ -2355,7 +2368,7 @@ class Strategy(StrategyBase):
             self.deposit_first += self.profit_first - transfer_sum_amount_first
             if self.reverse:
                 self.sum_profit_first += profit_reverse
-                self.initial_reverse_first += profit_reverse - transfer_sum_amount_first
+                self.initial_reverse_first += self.profit_first + profit_reverse - transfer_sum_amount_first
                 self.initial_reverse_second += transfer_sum_amount_second
             else:
                 # Take full account profit only for non-reverse cycle
@@ -3035,13 +3048,15 @@ class Strategy(StrategyBase):
                     _profit_first = Decimal('0')
                     _profit_second = Decimal('0')
                     if self.cycle_buy:
-                        _profit_second = self.round_truncate(((self.tp_target - self.tp_amount) * amount_second_fee /
-                                                              self.tp_target), base=False)
+                        _x, target_fee = self.fee_for_tp(Decimal('0'), self.tp_target)
+                        _profit_second = self.round_truncate(((target_fee - self.tp_amount) * amount_second_fee /
+                                                              target_fee), base=False)
                         self.part_profit_second += _profit_second
                         self.message_log(f"Part profit second {self.part_profit_second}", log_level=LogLevel.DEBUG)
                     else:
-                        _profit_first = self.round_truncate(((self.tp_target - self.tp_amount) * amount_first_fee /
-                                                             self.tp_target), base=True)
+                        target_fee, _x = self.fee_for_tp(self.tp_target, Decimal('0'))
+                        _profit_first = self.round_truncate(((target_fee - self.tp_amount) * amount_first_fee /
+                                                             target_fee), base=True)
                         self.part_profit_first += _profit_first
                         self.message_log(f"Part profit first {self.part_profit_first}", log_level=LogLevel.DEBUG)
                     self.tp_part_amount_first += amount_first_fee - _profit_first
