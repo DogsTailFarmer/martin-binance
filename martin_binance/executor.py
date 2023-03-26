@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15-2b5"
+__version__ = "1.2.15-2b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2889,6 +2889,8 @@ class Strategy(StrategyBase):
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
 
+        self.message_log(f"on_balance_update.delta {delta} {asset}", color=Style.UNDERLINE, tlg=True)
+
         if delta > 0:
             delta = self.round_truncate(delta, bool(asset == self.f_currency), _rounding=ROUND_FLOOR)
         else:
@@ -2924,7 +2926,7 @@ class Strategy(StrategyBase):
                     self.initial_reverse_second += delta
         self.message_log(f"Was {'depositing' if delta > 0 else 'transferring (withdrawing)'} {delta} {asset}",
                          color=Style.UNDERLINE, tlg=True)
-        if (self.grid_only_restart or (GRID_ONLY and USE_ALL_FUND)) and self.check_min_amount(for_tp=False):
+        if (self.grid_only_restart or (GRID_ONLY and USE_ALL_FUND)) and delta > 0:
             self.restart = True
             self.grid_only_restart = None
             self.grid_remove = None
