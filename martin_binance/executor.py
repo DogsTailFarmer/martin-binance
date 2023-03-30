@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15-2b8"
+__version__ = "1.2.15-2b9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1337,13 +1337,15 @@ class Strategy(StrategyBase):
             if self.cycle_buy:
                 go_trade = fs >= self.initial_reverse_second if self.reverse else self.initial_second
                 if go_trade:
-                    fs = self.initial_reverse_second if self.reverse else self.initial_second
+                    if FEE_IN_PAIR and FEE_MAKER:
+                        fs = self.initial_reverse_second if self.reverse else self.initial_second
                     _ff = ff
                     _fs = fs - profit_s
             else:
                 go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
                 if go_trade:
-                    ff = self.initial_reverse_first if self.reverse else self.initial_first
+                    if FEE_IN_PAIR and FEE_MAKER:
+                        ff = self.initial_reverse_first if self.reverse else self.initial_first
                     _ff = ff - profit_f
                     _fs = fs
             if go_trade:
@@ -2246,7 +2248,11 @@ class Strategy(StrategyBase):
             self.message_log(message, log_level=LogLevel.DEBUG)
         return self.round_truncate(amount_first, base=True), self.round_truncate(amount_second, base=False)
 
-    def fee_for_tp(self, amount_first: Decimal, amount_second: Decimal, by_market=False) -> (Decimal, Decimal):
+    def fee_for_tp(self,
+                   amount_first: Decimal,
+                   amount_second: Decimal,
+                   by_market=False,
+                   log_output=True) -> (Decimal, Decimal):
         """
         Calculate trade amount with Fee for take profit order for both currency
         """
@@ -2255,21 +2261,23 @@ class Strategy(StrategyBase):
             if FEE_BNB_IN_PAIR:
                 if self.cycle_buy:
                     amount_first += self.round_fee(fee, amount_first, base=True)
-                    self.message_log(f"Take profit order First + fee: {amount_first}", log_level=LogLevel.DEBUG)
+                    log_text = f"Take profit order First + fee: {amount_first}"
                 else:
                     amount_first -= self.round_fee(fee, amount_first, base=True)
-                    self.message_log(f"Take profit order First - fee: {amount_first}", log_level=LogLevel.DEBUG)
+                    log_text = f"Take profit order First - fee: {amount_first}"
             else:
                 if self.cycle_buy:
                     amount_second -= self.round_fee(fee, amount_second, base=False)
-                    self.message_log(f"Take profit order Second - fee: {amount_second}", log_level=LogLevel.DEBUG)
+                    log_text = f"Take profit order Second - fee: {amount_second}"
                 else:
                     if FEE_SECOND:
                         amount_second += self.round_fee(fee, amount_second, base=False)
-                        self.message_log(f"Take profit order Second + fee: {amount_second}", log_level=LogLevel.DEBUG)
+                        log_text = f"Take profit order Second + fee: {amount_second}"
                     else:
                         amount_first -= self.round_fee(fee, amount_first, base=True)
-                        self.message_log(f"Take profit order First - fee: {amount_first}", log_level=LogLevel.DEBUG)
+                        log_text = f"Take profit order First - fee: {amount_first}"
+            if log_output:
+                self.message_log(log_text, log_level=LogLevel.DEBUG)
         return self.round_truncate(amount_first, base=True), self.round_truncate(amount_second, base=False)
 
     def after_filled_tp(self, one_else_grid: bool = False):
@@ -3056,13 +3064,13 @@ class Strategy(StrategyBase):
                     _profit_first = Decimal('0')
                     _profit_second = Decimal('0')
                     if self.cycle_buy:
-                        _x, target_fee = self.fee_for_tp(Decimal('0'), self.tp_target)
+                        _x, target_fee = self.fee_for_tp(Decimal('0'), self.tp_target, log_output=False)
                         _profit_second = self.round_truncate(((target_fee - self.tp_amount) * amount_second_fee /
                                                               target_fee), base=False)
                         self.part_profit_second += _profit_second
                         self.message_log(f"Part profit second {self.part_profit_second}", log_level=LogLevel.DEBUG)
                     else:
-                        target_fee, _x = self.fee_for_tp(self.tp_target, Decimal('0'))
+                        target_fee, _x = self.fee_for_tp(self.tp_target, Decimal('0'), log_output=False)
                         _profit_first = self.round_truncate(((target_fee - self.tp_amount) * amount_first_fee /
                                                              target_fee), base=True)
                         self.part_profit_first += _profit_first
