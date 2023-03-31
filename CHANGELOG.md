@@ -1,3 +1,7 @@
+## v1.2.15-2 2023-03-31
+### Fixed
+* Bitfinex: was changed balance update order #56 
+
 ## v1.2.15-1 2023-03-13
 ### Added for new features
 * Refactoring and updated auto-convert possibilities [Grid only mode](https://github.com/DogsTailFarmer/martin-binance#grid-only)
