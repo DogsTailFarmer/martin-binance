@@ -1,3 +1,11 @@
+## v1.2.16 2023-04-xx
+### Fixed
+* Handling missed event after restore from current state
+* Some minor improvements
+
+### Update
+* up requirements for exchanges-wrapper to 1.2.xx
+
 ## v1.2.15-2 2023-03-31
 ### Fixed
 * Bitfinex: was changed balance update order #56 
