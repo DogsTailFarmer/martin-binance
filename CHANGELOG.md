@@ -1,7 +1,9 @@
 ## v1.2.16 2023-04-xx
 ### Fixed
 * Handling missed event after restore from current state
+* Exception [<class 'decimal.DivisionByZero'>] if PROFIT_MAX is not setting
 * Some minor improvements
+
 
 ### Update
 * up requirements for exchanges-wrapper to 1.2.xx

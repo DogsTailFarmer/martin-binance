@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.16"
+__version__ = "1.2.16b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1946,7 +1946,7 @@ class Strategy(StrategyBase):
                          f" reverse_target_amount: {reverse_target_amount}, amount_min: {amount_min},"
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
-        if not additional_grid and not grid_update and not GRID_ONLY and PROFIT_MAX < 100:
+        if not additional_grid and not grid_update and not GRID_ONLY and 0 < PROFIT_MAX < 100:
             k_m = 1 - PROFIT_MAX / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             # For Bitfinex test accounts correction
