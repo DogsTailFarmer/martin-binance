@@ -1,3 +1,10 @@
+## v1.2.16-1-HotFix - 2023-04-12
+### Fix
+* Binance: REST API update for endpoint: GET /api/v3/exchangeInfo was changed MIN_NOTIONAL filter
+
+### Update
+* up requirements for exchanges-wrapper to 1.2.10-6
+
 ## v1.2.16 2023-04-05
 ### Fixed
 * Handling missed order event after restore from current state

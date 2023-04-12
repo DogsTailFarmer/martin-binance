@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.16"
+__version__ = "1.2.16-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -227,7 +227,9 @@ class TradingCapabilityManager:
         self.min_qty = float(_exchange_info_symbol['filters']['lotSize']['minQty'])
         self.max_qty = float(_exchange_info_symbol['filters']['lotSize']['maxQty'])
         self.step_size = float(_exchange_info_symbol['filters']['lotSize']['stepSize'])
-        self.min_notional = float(_exchange_info_symbol['filters']['minNotional']['minNotional'])
+        self.min_notional = float(_exchange_info_symbol['filters'].get('notional', {}).get('minNotional', 0))
+        if not self.min_notional:
+            self.min_notional = float(_exchange_info_symbol['filters'].get('minNotional', {}).get('minNotional', 0))
         self.tick_size = float(_exchange_info_symbol['filters']['priceFilter']['tickSize'])
         self.multiplier_up = float(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
         self.multiplier_down = float(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
