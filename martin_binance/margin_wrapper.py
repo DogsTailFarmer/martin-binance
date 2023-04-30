@@ -10,7 +10,6 @@ __contact__ = "https://github.com/DogsTailFarmer"
 
 import asyncio
 
-
 from colorama import init as color_init
 import simplejson as json
 import logging

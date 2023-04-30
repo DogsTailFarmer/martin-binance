@@ -1,3 +1,7 @@
+## v1.2.16-2 - 2023-04-xx
+### Fix
+* Correct ending GRID ONLY cycle if USE_ALL_FUND = False 
+
 ## v1.2.16-1-HotFix - 2023-04-12
 ### Fix
 * Binance: REST API update for endpoint: GET /api/v3/exchangeInfo was changed MIN_NOTIONAL filter

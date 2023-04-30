@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.16"
+__version__ = "1.2.16-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1666,6 +1666,7 @@ class Strategy(StrategyBase):
                         self.shift_grid_threshold = base_price + 2 * PRICE_SHIFT * base_price / 100
                     else:
                         self.shift_grid_threshold = base_price - 2 * PRICE_SHIFT * base_price / 100
+                # TODO round to real assets scale
                 self.message_log(f"Shift grid threshold: {self.shift_grid_threshold:.4f}")
             #
             self.start_after_shift = False
@@ -2532,13 +2533,12 @@ class Strategy(StrategyBase):
                              f"Average rate is {avg_rate}", tlg=True)
         self.sum_amount_first = Decimal('0')
         self.sum_amount_second = Decimal('0')
-        self.restart = True
         if USE_ALL_FUND:
             self.grid_only_restart = True
             self.message_log("Waiting funding for convert", color=Style.B_WHITE)
             return
-        self.command = 'stop'
-        self.start()
+        else:
+            self.command = 'stop'
 
     def grid_handler(self,
                      _amount_first=None,
