@@ -381,6 +381,9 @@ class StrategyBase:
     for_request = None
     wss_fire_up = False
 
+    def __init__(self):
+        self.time_operational = {'start': 0, 'ts': 0, 'new': 1000}  # - See get_time()
+
     def __call__(self):
         return self
 
@@ -496,6 +499,34 @@ class StrategyBase:
     def transfer_to_master(cls, symbol: str, amount: float):
         loop.create_task(transfer2master(symbol, str(amount)))
 
+    def get_time(self) -> int:
+        """
+        For backtesting purpose. Calculating monotonic local time based on self.time_operational['new'] value.
+        It can be set from external source as int(time.time()) getting from historical data. If can't setting
+        return system int(time.time()) Unix time.
+        :return: int
+        """
+        if self.time_operational['new']:
+            if self.time_operational['ts']:
+                diff = int(time.time() - self.time_operational['ts'])
+            else:
+                diff = 0
+            if self.time_operational['start'] == self.time_operational['new']:
+                last = self.time_operational['new'] + diff
+                self.time_operational['start'] = self.time_operational['new'] = last
+            elif self.time_operational['start'] > self.time_operational['new']:
+                last = self.time_operational['start'] + diff
+                self.time_operational['start'] = self.time_operational['new'] = last
+            else:
+                self.time_operational['start'] = last = int(self.time_operational['new'])
+            self.time_operational['ts'] = int(time.time())
+        else:
+            last = int(time.time())
+
+        print(self.time_operational)
+        print(last)
+
+        return last
 
 async def heartbeat(_session):
     cls = StrategyBase
@@ -505,40 +536,41 @@ async def heartbeat(_session):
         try:
             # print(f"tik-tak ', {int(time.time() * 1000)}, cls.client_id: {cls.client_id}")
             last_state = cls.strategy.save_strategy_state()
-            last_state[ms_order_id] = json.dumps(cls.order_id)
-            last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
-            last_state[ms_orders] = jsonpickle.encode(cls.orders)
-            last_state['ms_trades'] = jsonpickle.encode(cls.trades)
-            # print(f"heartbeat.last_state: {last_state}")
-            if ms.LAST_STATE_FILE.exists():
-                ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.prev'))
-            with ms.LAST_STATE_FILE.open(mode='w') as outfile:
-                json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-            #
-            update_max_queue_size = False
-            if time.time() - last_exec_time > HEARTBEAT * 300:
-                last_exec_time = time.time()
-                try:
-                    res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
-                except Exception as ex:
-                    logger.warning(f"Exception on Check WSS: {ex}")
-                else:
-                    if not res.success:
-                        logger.warning(f"Not active WSS for {cls.symbol} on {cls.exchange}, restart request sent")
-                        update_max_queue_size = True
+            if ms.REAL:
+                last_state[ms_order_id] = json.dumps(cls.order_id)
+                last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
+                last_state[ms_orders] = jsonpickle.encode(cls.orders)
+                last_state['ms_trades'] = jsonpickle.encode(cls.trades)
+                # print(f"heartbeat.last_state: {last_state}")
+                if ms.LAST_STATE_FILE.exists():
+                    ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.prev'))
+                with ms.LAST_STATE_FILE.open(mode='w') as outfile:
+                    json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                #
+                update_max_queue_size = False
+                if time.time() - last_exec_time > HEARTBEAT * 300:
+                    last_exec_time = time.time()
+                    try:
+                        res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
+                    except Exception as ex:
+                        logger.warning(f"Exception on Check WSS: {ex}")
+                    else:
+                        if not res.success:
+                            logger.warning(f"Not active WSS for {cls.symbol} on {cls.exchange}, restart request sent")
+                            update_max_queue_size = True
+                            cls.wss_fire_up = True
+                #
+                if cls.client_id and cls.wss_fire_up:
+                    try:
+                        await cls.session.get_client()
+                        update_class_var(cls.session)
+                        await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
+                        await wss_init(update_max_queue_size=update_max_queue_size)
+                        cls.wss_fire_up = False
+                    except Exception as ex:
+                        logger.warning(f"Exception on fire up WSS: {ex}")
                         cls.wss_fire_up = True
-            #
-            if cls.client_id and cls.wss_fire_up:
-                try:
-                    await cls.session.get_client()
-                    update_class_var(cls.session)
-                    await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
-                    await wss_init(update_max_queue_size=update_max_queue_size)
-                    cls.wss_fire_up = False
-                except Exception as ex:
-                    logger.warning(f"Exception on fire up WSS: {ex}")
-                    cls.wss_fire_up = True
-            #
+                #
             await asyncio.sleep(HEARTBEAT)
         except (KeyboardInterrupt, asyncio.CancelledError):
             break
@@ -1222,13 +1254,13 @@ async def main(_symbol):
         if len(ms.EXCHANGE) > ms.ID_EXCHANGE:
             account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
         else:
-            print(f"ID_EXCHANGE = {ms.ID_EXCHANGE} not in list. Add new exchange into martin_binance/ms_cfg.toml"
-                  f" See readme 'Add new exchange'")
+            print(f"ID_EXCHANGE = {ms.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
             raise SystemExit(1)
         print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
         session = Trade(channel_options=CHANNEL_OPTIONS,
                         account_name=account_name,
-                        rate_limiter=StrategyBase.rate_limiter)
+                        rate_limiter=StrategyBase.rate_limiter,
+                        real=ms.REAL)
         #
         cls.session = session
         #
@@ -1238,35 +1270,39 @@ async def main(_symbol):
         print(f"main.exchange: {cls.exchange}")
         print(f"main.client_id: {cls.client_id}")
         print(f"main.srv_version: {session.client.srv_version}")
-        # Check and Cancel ALL ACTIVE ORDER
-        active_orders = None
-        try:
-            _active_orders = await send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=_symbol)
-        except Exception as ex:
-            print(f"Can't get active orders: {ex}")
-        else:
-            active_orders = json_format.MessageToDict(_active_orders).get('items', [])
-            # print(f"main.active_orders: {active_orders}")
-        # Try load last strategy state from saved files
-        last_state = load_last_state()
-        restore_state = bool(last_state)
-        print(f"main.restore_state: {restore_state}")
-        if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
-            answer = input('Are you want cancel all active order for this pair? Y:\n')
-            if answer.lower() == 'y':
-                restore_state = False
-                try:
-                    await send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=_symbol)
-                    cancel_orders = active_orders or []
-                    print('Before start was canceled orders:')
-                    for i in cancel_orders:
-                        print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
-                    print('================================================================')
-                except asyncio.CancelledError:
-                    pass  # Task cancellation should not be logged as an error.
-                except grpc.RpcError as ex:
-                    status_code = ex.code()
-                    print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
+        #
+        restore_state = None
+        last_state = {}
+        if ms.REAL:
+            # Check and Cancel ALL ACTIVE ORDER
+            active_orders = None
+            try:
+                _active_orders = await send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=_symbol)
+            except Exception as ex:
+                print(f"Can't get active orders: {ex}")
+            else:
+                active_orders = json_format.MessageToDict(_active_orders).get('items', [])
+                # print(f"main.active_orders: {active_orders}")
+            # Try load last strategy state from saved files
+            last_state = load_last_state()
+            restore_state = bool(last_state)
+            print(f"main.restore_state: {restore_state}")
+            if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
+                answer = input('Are you want cancel all active order for this pair? Y:\n')
+                if answer.lower() == 'y':
+                    restore_state = False
+                    try:
+                        await send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=_symbol)
+                        cancel_orders = active_orders or []
+                        print('Before start was canceled orders:')
+                        for i in cancel_orders:
+                            print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
+                        print('================================================================')
+                    except asyncio.CancelledError:
+                        pass  # Task cancellation should not be logged as an error.
+                    except grpc.RpcError as ex:
+                        status_code = ex.code()
+                        print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
         # Init section
         _exchange_info_symbol = await send_request(cls.stub.FetchExchangeInfoSymbol,
                                                    api_pb2.MarketRequest,
@@ -1281,7 +1317,9 @@ async def main(_symbol):
         cls.tcm = TradingCapabilityManager(exchange_info_symbol)
         cls.base_asset = exchange_info_symbol.get('baseAsset')
         cls.quote_asset = exchange_info_symbol.get('quoteAsset')
+
         await buffered_funds()
+
         # region Get and processing Order book
         _order_book = await send_request(cls.stub.FetchOrderBook, api_pb2.MarketRequest, symbol=_symbol)
         order_book = json_format.MessageToDict(_order_book)
@@ -1309,7 +1347,8 @@ async def main(_symbol):
         cls.ticker = json_format.MessageToDict(_ticker)
         # print(f"main.ticker: {cls.ticker}")
         await wss_init()
-        loop.create_task(save_asset())
+        if ms.REAL:
+            loop.create_task(save_asset())
         answer = str()
         restored = True
         if restore_state:

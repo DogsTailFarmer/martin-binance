@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.15"
+__version__ = "1.2.17b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -26,7 +26,7 @@ logger.addHandler(stream_handler)
 
 
 class Trade:
-    def __init__(self, channel_options, account_name, rate_limiter):
+    def __init__(self, channel_options, account_name, rate_limiter, real):
         self.channel = grpc.aio.insecure_channel(target='localhost:50051', options=channel_options)
         self.stub = api_pb2_grpc.MartinStub(self.channel)
         self.account_name = account_name
@@ -34,6 +34,7 @@ class Trade:
         self.client: api_pb2.OpenClientConnectionId = None
         self.wait_connection = False
         self.trade_id = str(uuid.uuid4().hex)
+        self.real = real
 
     async def get_client(self):
         if not self.wait_connection:
