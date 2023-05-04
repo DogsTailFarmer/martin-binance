@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.16-2"
+__version__ = "1.2.16-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2006,28 +2006,28 @@ class Strategy(StrategyBase):
             self.over_price = max(over_price, OVER_PRICE)
         return amount_first_grid
 
-    def set_profit(self) -> Decimal:
-        last_price = None
+    def set_profit(self, amount: Decimal) -> Decimal:
         tbb = None
         bbb = None
-        try:
-            bb = self.bollinger_band(15, 20)
-        except statistics.StatisticsError:
-            self.message_log("Set profit Exception, can't calculate BollingerBand, set profit by default",
-                             log_level=LogLevel.WARNING)
-        else:
-            tbb = bb.get('tbb')
-            bbb = bb.get('bbb')
-            last_price = self.get_buffered_ticker().last_price
-        if last_price and tbb and bbb:
-            if self.cycle_buy:
-                profit = PROFIT_K * 100 * (tbb - last_price) / last_price
+        n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
+        if PROFIT_MAX and (n > 1 or self.reverse):
+            try:
+                bb = self.bollinger_band(15, 20)
+            except statistics.StatisticsError:
+                self.message_log("Set profit Exception, can't calculate BollingerBand, set profit by default",
+                                 log_level=LogLevel.WARNING)
             else:
-                profit = PROFIT_K * 100 * (last_price - bbb) / last_price
+                tbb = f2d(bb.get('tbb', 0))
+                bbb = f2d(bb.get('bbb', 0))
+        if tbb and bbb:
+            if self.cycle_buy:
+                profit = 100 * (tbb * amount - self.tp_amount) / self.tp_amount
+            else:
+                profit = 100 * (amount / bbb - self.tp_amount) / self.tp_amount
             profit = min(max(profit, PROFIT), PROFIT_MAX)
         else:
             profit = PROFIT
-        return Decimal(profit).quantize(Decimal("1.00"), rounding=ROUND_CEILING)
+        return Decimal(profit).quantize(Decimal("1.0123"), rounding=ROUND_CEILING)
 
     def calc_profit_order(self, buy_side: bool, by_market: bool = False) -> Dict[str, Decimal]:
         """
@@ -2038,12 +2038,6 @@ class Strategy(StrategyBase):
         """
         self.message_log(f"calc_profit_order: buy_side: {buy_side}, by_market: {by_market}", LogLevel.DEBUG)
         tcm = self.get_trading_capability_manager()
-        # Calculate take profit order
-        n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
-        if PROFIT_MAX and (n > 1 or self.reverse):
-            profit = self.set_profit()
-        else:
-            profit = PROFIT
         if by_market:
             fee = FEE_TAKER
         else:
@@ -2053,6 +2047,7 @@ class Strategy(StrategyBase):
         if buy_side:
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
+            profit = self.set_profit(self.sum_amount_second)
             target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
             target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             if target_amount_first - self.tp_amount < step_size_f:
@@ -2065,6 +2060,7 @@ class Strategy(StrategyBase):
             step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
             # Calculate target amount for second
             self.tp_amount = self.sum_amount_second
+            profit = self.set_profit(self.sum_amount_first)
             target_amount_second = self.sum_amount_second + (fee + profit) * self.sum_amount_second / 100
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             if target_amount_second - self.tp_amount < step_size_s:
