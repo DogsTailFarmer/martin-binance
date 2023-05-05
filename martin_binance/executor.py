@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.16-3"
+__version__ = "1.2.18b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -78,7 +78,6 @@ ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()
 BB_NUMBER_OF_CANDLES = int()
 KBB = float()
-PROFIT_K = float()
 #
 LINEAR_GRID_K = int()
 #
@@ -390,7 +389,7 @@ def save_to_db(queue_to_db) -> None:
                                              LINEAR_GRID_K,
                                              ADAPTIVE_TRADE_CONDITION,
                                              KBB,
-                                             PROFIT_K,
+                                             1,
                                              data.get('cycle_time'),
                                              1))
                 connection_analytic.commit()
@@ -720,6 +719,8 @@ class Strategy(StrategyBase):
             init_params_error = 'FEE_IN_PAIR and FEE_BNB_IN_PAIR'
         elif COLLECT_ASSETS and GRID_ONLY:
             init_params_error = 'COLLECT_ASSETS and GRID_ONLY: one only allowed'
+        elif PROFIT_MAX and PROFIT_MAX < PROFIT + FEE_TAKER:
+            init_params_error = 'PROFIT_MAX'
         else:
             init_params_error = None
         if init_params_error:
@@ -2006,7 +2007,9 @@ class Strategy(StrategyBase):
             self.over_price = max(over_price, OVER_PRICE)
         return amount_first_grid
 
-    def set_profit(self, amount: Decimal) -> Decimal:
+    def set_profit(self, amount: Decimal, by_market: bool) -> Decimal:
+        fee = FEE_TAKER if by_market else FEE_MAKER
+        fee = fee if FEE_IN_PAIR else fee + FEE_MAKER
         tbb = None
         bbb = None
         n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
@@ -2024,9 +2027,9 @@ class Strategy(StrategyBase):
                 profit = 100 * (tbb * amount - self.tp_amount) / self.tp_amount
             else:
                 profit = 100 * (amount / bbb - self.tp_amount) / self.tp_amount
-            profit = min(max(profit, PROFIT), PROFIT_MAX)
+            profit = min(max(profit, PROFIT + fee), PROFIT_MAX)
         else:
-            profit = PROFIT
+            profit = PROFIT + fee
         return Decimal(profit).quantize(Decimal("1.0123"), rounding=ROUND_CEILING)
 
     def calc_profit_order(self, buy_side: bool, by_market: bool = False) -> Dict[str, Decimal]:
@@ -2038,17 +2041,12 @@ class Strategy(StrategyBase):
         """
         self.message_log(f"calc_profit_order: buy_side: {buy_side}, by_market: {by_market}", LogLevel.DEBUG)
         tcm = self.get_trading_capability_manager()
-        if by_market:
-            fee = FEE_TAKER
-        else:
-            fee = FEE_MAKER
-        fee = fee if FEE_IN_PAIR else fee + FEE_MAKER
         step_size_f = f2d(tcm.get_minimal_amount_change(0.0))
         if buy_side:
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
-            profit = self.set_profit(self.sum_amount_second)
-            target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
+            profit = self.set_profit(self.sum_amount_second, by_market)
+            target_amount_first = self.sum_amount_first + profit * self.sum_amount_first / 100
             target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             if target_amount_first - self.tp_amount < step_size_f:
                 target_amount_first = self.tp_amount + step_size_f
@@ -2060,8 +2058,8 @@ class Strategy(StrategyBase):
             step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
             # Calculate target amount for second
             self.tp_amount = self.sum_amount_second
-            profit = self.set_profit(self.sum_amount_first)
-            target_amount_second = self.sum_amount_second + (fee + profit) * self.sum_amount_second / 100
+            profit = self.set_profit(self.sum_amount_first, by_market)
+            target_amount_second = self.sum_amount_second + profit * self.sum_amount_second / 100
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             if target_amount_second - self.tp_amount < step_size_s:
                 target_amount_second = self.tp_amount + step_size_s
@@ -2497,22 +2495,23 @@ class Strategy(StrategyBase):
             self.start(profit_f, profit_s)
 
     def place_grid_part(self) -> None:
-        self.message_log(f"Place next part of grid orders, hold {len(self.orders_hold)}", color=Style.B_WHITE)
         self.grid_place_flag = True
-        k = 0
         n = len(self.orders_grid) + len(self.orders_init)
-        for i in self.orders_hold:
-            if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
-                if k + n >= ORDER_Q:
-                    self.order_q_placed = True
-                break
-            waiting_order_id = self.place_limit_order_check(i['buy'],
-                                                            float(i['amount']),
-                                                            float(i['price']),
-                                                            check=True)
-            self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
-            k += 1
-        del self.orders_hold.orders_list[:k]
+        if n < ORDER_Q:
+            self.message_log(f"Place next part of grid orders, hold {len(self.orders_hold)}", color=Style.B_WHITE)
+            k = 0
+            for i in self.orders_hold:
+                if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
+                    if k + n >= ORDER_Q:
+                        self.order_q_placed = True
+                    break
+                waiting_order_id = self.place_limit_order_check(i['buy'],
+                                                                float(i['amount']),
+                                                                float(i['price']),
+                                                                check=True)
+                self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
+                k += 1
+            del self.orders_hold.orders_list[:k]
 
     def grid_only_stop(self) -> None:
         tcm = self.get_trading_capability_manager()
