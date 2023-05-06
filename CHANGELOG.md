@@ -1,9 +1,11 @@
-## v1.2.16-3 - 2023-04-xx
+## v1.2.18 - 2023-05-06
 ### Fix
 * Correct ending GRID ONLY cycle if USE_ALL_FUND = False 
 
 ### Update
 * Refactoring set_profit() for precision calculate TP order price
+* Parameter PROFIT_K excluded
+* README.md
 
 ## v1.2.16-1-HotFix - 2023-04-12
 ### Fix

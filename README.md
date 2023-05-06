@@ -442,7 +442,9 @@ so a many orders if the deposit is insufficient will not pass the verification d
 
 The size of the order in the grid calculated according to the law of geometric progression,
 while the MARTIN parameter is a coefficient of progression.
+
 The first order, the price of which is closest to the current one is the smallest in volume.
+[On calculation of the volume of the first order.](https://github.com/DogsTailFarmer/martin-binance/discussions/57#discussion-5167551)
 
 To avoid the execution of the first order "by market" its price set with a slight offset,
 which is determined by the parameter PRICE_SHIFT.
@@ -526,8 +528,8 @@ during execution of the Reverse cycle, and the specified profitability parameter
 With each successful completion of the reverse cycle, the accumulated profit volume increases,
 which reduces the necessary price overlap for the profitable completion of the original cycle.
 
-In order for the algorithm not to work for itself in reverse mode, only part of the earned profit is reinvested.
-PROFIT_REVERSE parameter specifies the reinvestment rule. Leave it as default.
+In order for the algorithm not to work for itself in reverse mode, only half part of the earned profit is reinvested.
+Every odd Reverse cycle increase depo, every even - increase Free assets, which can be withdrawal
 
 ### Grid only
 <p id="grid-only"></p>
@@ -535,7 +537,7 @@ PROFIT_REVERSE parameter specifies the reinvestment rule. Leave it as default.
 You can buy/sell asset with grid options at the best price at the moment.
 Grid parameters are calculated as usual, except the grid shift price threshold, which is calculated on
 the basis of the Bollinger Band indicator with a period of 15 minutes. In the Bye cycle, the threshold is set at the
-lower limit, for Sell it is set at the upper limit. When executing some orders, the grid shift mode remains ACTIVE,
+lower limit, for "Sell" it is set at the upper limit. When executing some orders, the grid shift mode remains ACTIVE,
 which allows us to complete the cycle regardless of the price move.
 
 To do this, set the parameter ```GRID_ONLY = True```
@@ -558,11 +560,11 @@ As the grid orders executed, the volume of the take profit order sums up their v
 price averaged and increased to override the fees and earn the specified profit.
 
 Do not set PROFIT too large. This reduces the probability of executing a take profit order
-with small price fluctuations. I settled on a value of about 0.5%
+with small price fluctuations. I settled on a value of about 0.1 - 0.25 The fee amount will be added to this value.
 
-For adaptive calculate profit before place order you can set PROFIT_MAX.
+For adaptive calculate profit before place order you can set PROFIT_MAX (0.5 - 0.85).
 Then its value will be set in the range from PROFIT to PROFIT_MAX. Calculation based on Bollinger Band
-indicator with PROFIT_K coefficient.
+indicator.
 
 ### Restart
 <p id="restart"></p>
@@ -622,6 +624,7 @@ can be sent to Telegram bot.
 * status - get current status
 * stop - stop after end of cycle (if current cycle is reverse - only after back to direct cycle)
 * end - stop after end of cycle, direct and reverse, no difference
+* restart - save current state, reload config and restart
 
 All commands are sent as a reply to message from desired strategy. Use simple text message or menu items. For use menu 
 after first run strategy in Telegram bot use /start command once.
