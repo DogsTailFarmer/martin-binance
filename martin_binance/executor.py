@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18"
+__version__ = "1.2.18-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2532,8 +2532,7 @@ class Strategy(StrategyBase):
             self.grid_only_restart = True
             self.message_log("Waiting funding for convert", color=Style.B_WHITE)
             return
-        else:
-            self.command = 'stop'
+        self.command = 'stop'
 
     def grid_handler(self,
                      _amount_first=None,

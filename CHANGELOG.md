@@ -1,3 +1,9 @@
+## v1.2.18-1 - 2023-05-07
+### Fix
+* [#58](https://github.com/DogsTailFarmer/martin-binance/issues/58#issue-1698914151)
+  A failed optimization of martin_binance/margin_wrapper.buffered_orders() was in version 1.2.16
+
+
 ## v1.2.18 - 2023-05-06
 ### Fix
 * Correct ending GRID ONLY cycle if USE_ALL_FUND = False 
