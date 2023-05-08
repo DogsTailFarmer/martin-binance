@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-1"
+__version__ = "1.2.18-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -794,6 +794,9 @@ class Strategy(StrategyBase):
         return s
 
     def save_strategy_state(self) -> Dict[str, str]:
+
+        self.atr(14)
+
         # region SaveOperationalStatus
         # Skip when transition processes or GRID_ONLY mode
         stable_state = (self.shift_grid_threshold is None
@@ -2850,6 +2853,27 @@ class Strategy(StrategyBase):
         fs = self.round_truncate(fs, base=False)
         assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
         return ff, fs, assets
+
+    def atr(self, interval: int = 14):
+        high = []
+        low = []
+        close = []
+        tr_arr = []
+        candle = self.get_buffered_recent_candles(candle_size_in_minutes=15,
+                                                  number_of_candles=interval,
+                                                  include_current_building_candle=True)
+        for i in candle:
+            high.append(i.high)
+            low.append(i.low)
+            close.append(i.close)
+        n = 1
+        while n <= len(high) - 1:
+            tr_arr.append(max(high[n] - low[n], abs(high[n] - close[n - 1]), abs(low[n] - close[n - 1])))
+            n += 1
+        _atr = statistics.mean(tr_arr)
+        price = self.get_buffered_ticker().last_price
+        print(f"atr: {_atr:f}, price: {price}, delta: {100 * _atr / price:f}")
+        return _atr
 
     ##############################################################
     # public data update methods
