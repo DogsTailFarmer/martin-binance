@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-2"
+__version__ = "1.2.18-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -794,9 +794,6 @@ class Strategy(StrategyBase):
         return s
 
     def save_strategy_state(self) -> Dict[str, str]:
-
-        self.atr(14)
-
         # region SaveOperationalStatus
         # Skip when transition processes or GRID_ONLY mode
         stable_state = (self.shift_grid_threshold is None
@@ -1952,7 +1949,11 @@ class Strategy(StrategyBase):
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
         if not additional_grid and not grid_update and not GRID_ONLY and 0 < PROFIT_MAX < 100:
-            k_m = 1 - PROFIT_MAX / 100
+
+            profit_max = min(PROFIT_MAX, max(PROFIT, f2d(100 * self.atr() / self.get_buffered_ticker().last_price)))
+            print(f"set_trade_conditions.profit_max: {profit_max}")
+
+            k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             # For Bitfinex test accounts correction
             if amount_first_grid >= f2d(tcm.get_max_sell_amount(0)) or amount_first_grid >= depo_c:
@@ -2855,12 +2856,17 @@ class Strategy(StrategyBase):
         return ff, fs, assets
 
     def atr(self, interval: int = 14):
+        """
+        Average True Range
+        :param interval:
+        :return:
+        """
         high = []
         low = []
         close = []
         tr_arr = []
         candle = self.get_buffered_recent_candles(candle_size_in_minutes=15,
-                                                  number_of_candles=interval,
+                                                  number_of_candles=interval + 1,
                                                   include_current_building_candle=True)
         for i in candle:
             high.append(i.high)
@@ -2870,9 +2876,8 @@ class Strategy(StrategyBase):
         while n <= len(high) - 1:
             tr_arr.append(max(high[n] - low[n], abs(high[n] - close[n - 1]), abs(low[n] - close[n - 1])))
             n += 1
-        _atr = statistics.mean(tr_arr)
-        price = self.get_buffered_ticker().last_price
-        print(f"atr: {_atr:f}, price: {price}, delta: {100 * _atr / price:f}")
+        _atr = statistics.geometric_mean(tr_arr)
+        print(f"atr: {_atr:f}")
         return _atr
 
     ##############################################################
