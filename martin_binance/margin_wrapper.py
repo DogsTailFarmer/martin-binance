@@ -382,7 +382,7 @@ class StrategyBase:
     wss_fire_up = False
 
     def __init__(self):
-        self.time_operational = {'start': 0, 'ts': 0, 'new': 1000}  # - See get_time()
+        self.time_operational = {'start': 0, 'ts': 0, 'new': 0}  # - See get_time()
 
     def __call__(self):
         return self
@@ -1146,7 +1146,7 @@ async def on_ticker_update():
                           'closeTime': ticker.event_time}
             cls.ticker = ticker_24h
             cls.strategy.on_new_ticker(Ticker(cls.ticker))
-            # print(f"on_ticker_update: {ticker.symbol} : {cls.ticker['closeTime']} : {cls.ticker['lastPrice']}")
+            print(f"on_ticker_update.ticker_24h: {ticker_24h}")
     except Exception as ex:
         logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
         cls.wss_fire_up = True

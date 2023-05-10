@@ -104,8 +104,9 @@ TOKEN = str()
 CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
-#
+# Backtesting
 REAL = False
+MODE = 'save'
 # endregion
 
 
