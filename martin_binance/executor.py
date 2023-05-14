@@ -106,7 +106,8 @@ STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
 REAL = False
-MODE = 'save'
+MODE = 'R'  # Read / Write data to  from stream
+XTIME = 1  # Time accelerator
 # endregion
 
 
@@ -778,7 +779,7 @@ class Strategy(StrategyBase):
                         if STANDALONE:
                             raise SystemExit(1)
                     depo = self.deposit_first
-                if not GRID_ONLY:
+                if REAL and not GRID_ONLY:
                     self.place_grid(self.cycle_buy, depo, self.reverse_target_amount, init_calc_only=True)
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)

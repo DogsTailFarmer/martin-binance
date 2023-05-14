@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.16-1"
+__version__ = "1.2.17b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -21,6 +21,7 @@ import sqlite3
 from pathlib import Path
 import random
 import traceback
+import pandas as pd
 
 # noinspection PyPackageRequirements
 import grpc
@@ -35,8 +36,9 @@ from exchanges_wrapper.definitions import Interval
 from exchanges_wrapper.events import OrderUpdateWrapper
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
-from martin_binance import executor as ms
+from martin_binance import executor as ms, BACKTEST_PATH
 from martin_binance.client import Trade
+from martin_binance import exchange_sym as backtest
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -383,6 +385,8 @@ class StrategyBase:
 
     def __init__(self):
         self.time_operational = {'start': 0, 'ts': 0, 'new': 0}  # - See get_time()
+        self.ticker = {}
+        self.account = backtest.Account()
 
     def __call__(self):
         return self
@@ -508,7 +512,7 @@ class StrategyBase:
         """
         if self.time_operational['new']:
             if self.time_operational['ts']:
-                diff = int(time.time() - self.time_operational['ts'])
+                diff = int(time.time()) - self.time_operational['ts']
             else:
                 diff = 0
             if self.time_operational['start'] == self.time_operational['new']:
@@ -522,10 +526,6 @@ class StrategyBase:
             self.time_operational['ts'] = int(time.time())
         else:
             last = int(time.time())
-
-        print(self.time_operational)
-        print(last)
-
         return last
 
 async def heartbeat(_session):
@@ -546,7 +546,8 @@ async def heartbeat(_session):
                     ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.prev'))
                 with ms.LAST_STATE_FILE.open(mode='w') as outfile:
                     json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-                #
+            #
+            if ms.REAL or ms.MODE == 'W':
                 update_max_queue_size = False
                 if time.time() - last_exec_time > HEARTBEAT * 300:
                     last_exec_time = time.time()
@@ -700,6 +701,12 @@ async def ask_exit():
     cls = StrategyBase
     if cls.strategy:
         cls.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
+
+        if not ms.REAL and ms.MODE == 'W':
+            print(f"ask_exit: ticker: {cls.strategy.ticker}")
+            ds = pd.Series(cls.strategy.ticker)
+            ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
+
         await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
@@ -762,13 +769,16 @@ async def on_klines_update(_klines):
 async def buffered_funds(print_info: bool = True):
     cls = StrategyBase
     try:
-        res = await cls.send_request(cls.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
+        if ms.REAL or ms.MODE == 'W':
+            res = await cls.send_request(cls.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
+            balances = json_format.MessageToDict(res).get('balances', [])
+        else:
+            balances = cls.strategy.account.funds.get()
     except asyncio.CancelledError:
         pass
     except Exception as _ex:
         logger.warning(f"Exception buffered_funds: {_ex}")
     else:
-        balances = json_format.MessageToDict(res).get('balances', [])
         # print(f"buffered_funds.balances: {balances}")
         try:
             balance_f = next(item for item in balances if item["asset"] == cls.base_asset)
@@ -1137,19 +1147,44 @@ def remove_from_trades_lists(_order_id) -> None:
     cls.all_trades[:] = [i for i in cls.all_trades if i.order_id != _order_id]
 
 
+async def loop_ds(ds):
+    # print(ds)
+    cls = StrategyBase
+    index_prev = 0
+    for index, row in ds.items():
+        delay = (index - index_prev) if index_prev else 0
+        index_prev = index
+        cls.strategy.time_operational['new'] = int(index / 1000)
+        await asyncio.sleep(delay / (1000 * ms.XTIME))
+        # print(row)
+        yield row
+
+
 async def on_ticker_update():
     cls = StrategyBase
-    try:
-        async for ticker in cls.for_request(cls.stub.OnTickerUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
-            ticker_24h = {'openPrice': ticker.open_price,
-                          'lastPrice': ticker.close_price,
-                          'closeTime': ticker.event_time}
-            cls.ticker = ticker_24h
+
+    if ms.REAL or ms.MODE == 'W':
+        try:
+            async for ticker in cls.for_request(cls.stub.OnTickerUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
+                ticker_24h = {'openPrice': ticker.open_price,
+                              'lastPrice': ticker.close_price,
+                              'closeTime': ticker.event_time}
+                cls.ticker = ticker_24h
+                cls.strategy.on_new_ticker(Ticker(cls.ticker))
+
+                if not ms.REAL and ms.MODE == 'W':
+                    # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
+                    cls.strategy.ticker.update({int(time.time() * 1000): ticker_24h})
+        except Exception as ex:
+            logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
+            cls.wss_fire_up = True
+    else:
+        ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
+        async for row in loop_ds(ds):
+            cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(cls.ticker))
-            print(f"on_ticker_update.ticker_24h: {ticker_24h}")
-    except Exception as ex:
-        logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
-        cls.wss_fire_up = True
+
+        print("Backtest ticker DataSeries ended")
 
 
 async def on_order_book_update():
@@ -1157,6 +1192,9 @@ async def on_order_book_update():
     try:
         async for _order_book in cls.for_request(cls.stub.OnOrderBookUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             order_book = json_format.MessageToDict(_order_book)
+
+            # print(f"on_order_book_update.order_book: {order_book}")
+
             order_book_bids = order_book.pop('bids', [])
             order_book_asks = order_book.pop('asks', [])
             _bids = []
@@ -1201,19 +1239,24 @@ def load_last_state() -> {}:
     return res
 
 
+async def wss_declare(update_max_queue_size=False):
+    # Market stream
+    loop.create_task(on_ticker_update())
+
+    await buffered_candle()
+
+    loop.create_task(on_order_book_update())
+    # User Stream
+    loop.create_task(on_funds_update())
+    loop.create_task(on_order_update())
+    loop.create_task(on_balance_update())
+
+
 async def wss_init(update_max_queue_size=False):
     cls = StrategyBase
     cls.strategy.message_log(f"Init WSS, client_id: {cls.client_id}")
     if cls.client_id:
-        # WSS declare
-        # Market stream
-        loop.create_task(on_ticker_update())
-        await buffered_candle()
-        loop.create_task(on_order_book_update())
-        # User Stream
-        loop.create_task(on_funds_update())
-        loop.create_task(on_order_update())
-        loop.create_task(on_balance_update())
+        await wss_declare()
         # WSS start
         '''
         market_stream_count=5
@@ -1226,6 +1269,7 @@ async def wss_init(update_max_queue_size=False):
                                    market_stream_count=5,
                                    update_max_queue_size=update_max_queue_size)
             cls.wss_fire_up = False
+
         except UserWarning:
             cls.strategy.message_log("Start WSS failed, retry", log_level=LogLevel.WARNING)
             cls.wss_fire_up = True
@@ -1259,8 +1303,7 @@ async def main(_symbol):
         print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
         session = Trade(channel_options=CHANNEL_OPTIONS,
                         account_name=account_name,
-                        rate_limiter=StrategyBase.rate_limiter,
-                        real=ms.REAL)
+                        rate_limiter=StrategyBase.rate_limiter)
         #
         cls.session = session
         #
@@ -1303,6 +1346,9 @@ async def main(_symbol):
                     except grpc.RpcError as ex:
                         status_code = ex.code()
                         print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
+        else:
+            BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
+
         # Init section
         _exchange_info_symbol = await send_request(cls.stub.FetchExchangeInfoSymbol,
                                                    api_pb2.MarketRequest,
@@ -1317,6 +1363,17 @@ async def main(_symbol):
         cls.tcm = TradingCapabilityManager(exchange_info_symbol)
         cls.base_asset = exchange_info_symbol.get('baseAsset')
         cls.quote_asset = exchange_info_symbol.get('quoteAsset')
+
+        if not ms.REAL and ms.MODE == 'R':
+            cls.strategy.account.funds.base = {'asset': cls.base_asset,
+                                               'free': f"{ms.AMOUNT_FIRST}",
+                                               'locked': '0.0'}
+            cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
+                                                'free': f"{ms.AMOUNT_SECOND}",
+                                                'locked': '0.0'}
+            cls.strategy.account.fee_maker = ms.FEE_MAKER
+            cls.strategy.account.fee_taker = ms.FEE_TAKER
+
 
         await buffered_funds()
 
@@ -1343,12 +1400,22 @@ async def main(_symbol):
         # print(f"main.order_book: {order_book}")
         cls.order_book = order_book
         # endregion
-        _ticker = await send_request(cls.stub.FetchTickerPriceChangeStatistics, api_pb2.MarketRequest, symbol=_symbol)
-        cls.ticker = json_format.MessageToDict(_ticker)
-        # print(f"main.ticker: {cls.ticker}")
-        await wss_init()
+
+        if ms.REAL or ms.MODE == 'W':
+            _ticker = await send_request(cls.stub.FetchTickerPriceChangeStatistics, api_pb2.MarketRequest,
+                                         symbol=_symbol)
+            cls.ticker = json_format.MessageToDict(_ticker)
+            # print(f"main.ticker: {cls.ticker}")
+
+            await wss_init()
+        else:
+            ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
+            cls.ticker = ds.iat[0]
+            # print(f"main.ticker: {cls.ticker}")
+
         if ms.REAL:
             loop.create_task(save_asset())
+
         answer = str()
         restored = True
         if restore_state:
@@ -1368,6 +1435,10 @@ async def main(_symbol):
         if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
             cls.strategy.init()
             input('Press Enter for Start or Ctrl-Z for Cancel\n')
+
+            if not ms.REAL and ms.MODE == 'R':
+                await wss_declare()
+
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))

@@ -26,7 +26,7 @@ logger.addHandler(stream_handler)
 
 
 class Trade:
-    def __init__(self, channel_options, account_name, rate_limiter, real):
+    def __init__(self, channel_options, account_name, rate_limiter):
         self.channel = grpc.aio.insecure_channel(target='localhost:50051', options=channel_options)
         self.stub = api_pb2_grpc.MartinStub(self.channel)
         self.account_name = account_name
@@ -34,7 +34,6 @@ class Trade:
         self.client: api_pb2.OpenClientConnectionId = None
         self.wait_connection = False
         self.trade_id = str(uuid.uuid4().hex)
-        self.real = real
 
     async def get_client(self):
         if not self.wait_connection:

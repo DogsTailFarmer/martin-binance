@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.17b2"
+__version__ = "1.2.17b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -28,9 +28,11 @@ DB_FILE = Path(WORK_PATH, "funds_rate.db")
 if STANDALONE:
     LOG_PATH = Path(WORK_PATH, "log")
     LAST_STATE_PATH = Path(WORK_PATH, "last_state")
+    BACKTEST_PATH = Path(WORK_PATH, "back_test")
 else:
     LOG_PATH = None
     LAST_STATE_PATH = None
+    BACKTEST_PATH = None
 if CONFIG_FILE.exists():
     print(f"Config found at {CONFIG_FILE}")
 else:
