@@ -16,10 +16,3 @@ class Account:
         self.fee_taker = Decimal('0')
 
 
-a = Account()
-
-a.funds.base = {'asset': 'BNB', 'free': '1000.00000000', 'locked': '0.00000000'}
-a.funds.quote = {'asset': 'BTC', 'free': '1.29030800', 'locked': '0.00000000'}
-
-print(a.funds.get())
-

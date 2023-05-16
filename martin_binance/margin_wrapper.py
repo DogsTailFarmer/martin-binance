@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.17b3"
+__version__ = "1.2.17b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -38,7 +38,7 @@ from exchanges_wrapper import api_pb2, api_pb2_grpc
 
 from martin_binance import executor as ms, BACKTEST_PATH
 from martin_binance.client import Trade
-from martin_binance import exchange_sym as backtest
+from martin_binance import exchange_simulator as backtest
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -386,7 +386,10 @@ class StrategyBase:
     def __init__(self):
         self.time_operational = {'start': 0, 'ts': 0, 'new': 0}  # - See get_time()
         self.ticker = {}
-        self.account = backtest.Account()
+        self.order_book = {}
+        self.klines = {}  # KLines snapshot
+        self.candles = {}  # Candles stream
+        self.account = backtest.Account() if ms.MODE == 'S' else None
 
     def __call__(self):
         return self
@@ -534,9 +537,8 @@ async def heartbeat(_session):
     last_exec_time = time.time()
     while cls.strategy:
         try:
-            # print(f"tik-tak ', {int(time.time() * 1000)}, cls.client_id: {cls.client_id}")
             last_state = cls.strategy.save_strategy_state()
-            if ms.REAL:
+            if ms.MODE in ('T', 'TC'):
                 last_state[ms_order_id] = json.dumps(cls.order_id)
                 last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
                 last_state[ms_orders] = jsonpickle.encode(cls.orders)
@@ -546,8 +548,7 @@ async def heartbeat(_session):
                     ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.prev'))
                 with ms.LAST_STATE_FILE.open(mode='w') as outfile:
                     json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-            #
-            if ms.REAL or ms.MODE == 'W':
+                #
                 update_max_queue_size = False
                 if time.time() - last_exec_time > HEARTBEAT * 300:
                     last_exec_time = time.time()
@@ -571,7 +572,6 @@ async def heartbeat(_session):
                     except Exception as ex:
                         logger.warning(f"Exception on fire up WSS: {ex}")
                         cls.wss_fire_up = True
-                #
             await asyncio.sleep(HEARTBEAT)
         except (KeyboardInterrupt, asyncio.CancelledError):
             break
@@ -702,10 +702,19 @@ async def ask_exit():
     if cls.strategy:
         cls.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
 
-        if not ms.REAL and ms.MODE == 'W':
-            print(f"ask_exit: ticker: {cls.strategy.ticker}")
+        if ms.MODE == 'TC':
+            # Save ticker
             ds = pd.Series(cls.strategy.ticker)
             ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
+            # Save order_book
+            ds = pd.Series(cls.strategy.order_book)
+            ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
+            # Save klines snapshot
+            json.dump(cls.strategy.klines, open(Path(BACKTEST_PATH, f"{ms.SYMBOL}_klines.json"), 'w'))
+            # Save candles
+            for k, v in cls.strategy.candles.items():
+                ds = pd.Series(v)
+                ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_candles_{k}.pkl"))
 
         await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -731,20 +740,29 @@ async def buffered_candle():
     cls = StrategyBase
     StrategyBase.Klines.klines_lim = KLINES_LIM
     klines = {}
+    klines_from_file = {}
+    if ms.MODE == 'S':
+        klines_from_file = json.load(open(Path(BACKTEST_PATH, f"{ms.SYMBOL}_klines.json")))
     for i in KLINES_INIT:
-        res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
-                                     symbol=cls.symbol,
-                                     interval=i.value,
-                                     limit=KLINES_LIM)
-        if res:
+        if ms.MODE in ('T', 'TC'):
+            res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
+                                         symbol=cls.symbol,
+                                         interval=i.value,
+                                         limit=KLINES_LIM)
             kline = json_format.MessageToDict(res)
-            # print(f"buffered_candle.kline: {kline}")
+            if ms.MODE == 'TC':
+                cls.strategy.klines[i.value] = kline
+        else:
+            kline = klines_from_file.get(i.value, {})
+        # print(f"buffered_candle.kline: {kline}")
+        candles = kline.get('klines', [])
+        if candles:
             kline_i = StrategyBase.Klines(i.value)
-            for candle in kline.get('klines', []):
+            for candle in candles:
                 kline_i.refresh(json.loads(candle))
                 # print(f"buffered_candle.candle: {candle}")
             klines[i.value] = kline_i
-    if klines:
+    if len(klines) == len(KLINES_INIT):
         loop.create_task(on_klines_update(klines))
     else:
         logger.info("Init buffered candle failed. try one else...")
@@ -752,24 +770,38 @@ async def buffered_candle():
         cls.wss_fire_up = True
 
 
-async def on_klines_update(_klines):
+async def on_klines_update(_klines: {str: StrategyBase.Klines}):
     cls = StrategyBase
-    _interval = json.dumps(list(_klines.keys()))
-    try:
-        async for candle in cls.for_request(cls.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
-                                            symbol=cls.symbol,
-                                            interval=_interval):
-            # print(f"on_klines_update: {candle.symbol}, {candle.interval}")
-            _klines.get(candle.interval).refresh(json.loads(candle.candle))
-    except Exception as ex:
-        logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}")
-        cls.wss_fire_up = True
+    _interval = list(_klines.keys())
+    if ms.MODE in ('T', 'TC'):
+        try:
+            async for candle in cls.for_request(cls.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
+                                                symbol=cls.symbol,
+                                                interval=json.dumps(_interval)):
+                # print(f"on_klines_update: {candle.symbol}, {candle.interval}, candle: {json.loads(candle.candle)}")
+                _klines.get(candle.interval).refresh(json.loads(candle.candle))
+                if ms.MODE == 'TC':
+                    new_raw = {int(time.time() * 1000): candle.candle}
+                    cls.strategy.candles.setdefault(candle.interval, new_raw).update(new_raw)
+        except Exception as ex:
+            logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}")
+            cls.wss_fire_up = True
+    else:
+        for i in _interval:
+            ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_candles_{i}.pkl"))
+            loop.create_task(aiter_candles(ds, _klines, i))
+
+
+async def aiter_candles(ds: pd.Series, _klines: {str: StrategyBase.Klines}, _i: str):
+    async for row in loop_ds(ds):
+        _klines.get(_i).refresh(json.loads(row))
+    print(f"Backtest candles *** {_i} *** timeSeries ended")
 
 
 async def buffered_funds(print_info: bool = True):
     cls = StrategyBase
     try:
-        if ms.REAL or ms.MODE == 'W':
+        if ms.MODE in ('T', 'TC'):
             res = await cls.send_request(cls.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
             balances = json_format.MessageToDict(res).get('balances', [])
         else:
@@ -1148,7 +1180,11 @@ def remove_from_trades_lists(_order_id) -> None:
 
 
 async def loop_ds(ds):
-    # print(ds)
+    """
+    Pandas time Series asynchronous generator with delay (real time/XTIME) multiplier
+    :param ds: pandas time Series object
+    :return: next row
+    """
     cls = StrategyBase
     index_prev = 0
     for index, row in ds.items():
@@ -1156,14 +1192,12 @@ async def loop_ds(ds):
         index_prev = index
         cls.strategy.time_operational['new'] = int(index / 1000)
         await asyncio.sleep(delay / (1000 * ms.XTIME))
-        # print(row)
         yield row
 
 
 async def on_ticker_update():
     cls = StrategyBase
-
-    if ms.REAL or ms.MODE == 'W':
+    if ms.MODE in ('T', 'TC'):
         try:
             async for ticker in cls.for_request(cls.stub.OnTickerUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
                 ticker_24h = {'openPrice': ticker.open_price,
@@ -1171,8 +1205,8 @@ async def on_ticker_update():
                               'closeTime': ticker.event_time}
                 cls.ticker = ticker_24h
                 cls.strategy.on_new_ticker(Ticker(cls.ticker))
-
-                if not ms.REAL and ms.MODE == 'W':
+                #
+                if ms.MODE == 'TC':
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                     cls.strategy.ticker.update({int(time.time() * 1000): ticker_24h})
         except Exception as ex:
@@ -1180,37 +1214,51 @@ async def on_ticker_update():
             cls.wss_fire_up = True
     else:
         ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
+
+
+
         async for row in loop_ds(ds):
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(cls.ticker))
+        print("Backtest *** ticker *** timeSeries ended")
 
-        print("Backtest ticker DataSeries ended")
+
+def order_book_prepare(_order_book: {}) -> {}:
+    order_book = json_format.MessageToDict(_order_book)
+    order_book_bids = order_book.pop('bids', [])
+    order_book_asks = order_book.pop('asks', [])
+    _bids = []
+    for bid in order_book_bids:
+        _bids.append(json.loads(bid))
+    _asks = []
+    for ask in order_book_asks:
+        _asks.append(json.loads(ask))
+    order_book.update({'bids': _bids})
+    order_book.update({'asks': _asks})
+    return order_book
 
 
 async def on_order_book_update():
     cls = StrategyBase
-    try:
-        async for _order_book in cls.for_request(cls.stub.OnOrderBookUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
-            order_book = json_format.MessageToDict(_order_book)
-
-            # print(f"on_order_book_update.order_book: {order_book}")
-
-            order_book_bids = order_book.pop('bids', [])
-            order_book_asks = order_book.pop('asks', [])
-            _bids = []
-            for bid in order_book_bids:
-                _bids.append(json.loads(bid))
-            _asks = []
-            for ask in order_book_asks:
-                _asks.append(json.loads(ask))
-            order_book.update({'bids': _bids})
-            order_book.update({'asks': _asks})
-            # print(f"on_order_book_update.order_book: {order_book}")
-            cls.order_book = order_book
+    if ms.MODE in ('T', 'TC'):
+        try:
+            async for _order_book in cls.for_request(cls.stub.OnOrderBookUpdate, api_pb2.MarketRequest,
+                                                     symbol=cls.symbol):
+                order_book = order_book_prepare(_order_book)
+                # print(f"on_order_book_update.order_book: {order_book}")
+                cls.order_book = order_book
+                cls.strategy.on_new_order_book(OrderBook(cls.order_book))
+                if ms.MODE == 'TC':
+                    cls.strategy.order_book.update({int(time.time() * 1000): order_book})
+        except Exception as ex:
+            logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
+            cls.wss_fire_up = True
+    else:
+        ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
+        async for row in loop_ds(ds):
+            cls.order_book = row
             cls.strategy.on_new_order_book(OrderBook(cls.order_book))
-    except Exception as ex:
-        logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
-        cls.wss_fire_up = True
+        print("Backtest order_book timeSeries ended")
 
 
 def load_last_state() -> {}:
@@ -1239,12 +1287,10 @@ def load_last_state() -> {}:
     return res
 
 
-async def wss_declare(update_max_queue_size=False):
+async def wss_declare():
     # Market stream
     loop.create_task(on_ticker_update())
-
     await buffered_candle()
-
     loop.create_task(on_order_book_update())
     # User Stream
     loop.create_task(on_funds_update())
@@ -1316,7 +1362,7 @@ async def main(_symbol):
         #
         restore_state = None
         last_state = {}
-        if ms.REAL:
+        if ms.MODE in ('T', 'TC'):
             # Check and Cancel ALL ACTIVE ORDER
             active_orders = None
             try:
@@ -1346,9 +1392,9 @@ async def main(_symbol):
                     except grpc.RpcError as ex:
                         status_code = ex.code()
                         print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
-        else:
+        #
+        if ms.MODE == 'TC':
             BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
-
         # Init section
         _exchange_info_symbol = await send_request(cls.stub.FetchExchangeInfoSymbol,
                                                    api_pb2.MarketRequest,
@@ -1363,8 +1409,27 @@ async def main(_symbol):
         cls.tcm = TradingCapabilityManager(exchange_info_symbol)
         cls.base_asset = exchange_info_symbol.get('baseAsset')
         cls.quote_asset = exchange_info_symbol.get('quoteAsset')
-
-        if not ms.REAL and ms.MODE == 'R':
+        #
+        if ms.MODE in ('T', 'TC'):
+            # region Get and processing Order book
+            _order_book = await send_request(cls.stub.FetchOrderBook, api_pb2.MarketRequest, symbol=_symbol)
+            order_book = order_book_prepare(_order_book)
+            if not order_book['bids'] or not order_book['asks']:
+                _price = await send_request(cls.stub.FetchSymbolPriceTicker, api_pb2.MarketRequest, symbol=_symbol)
+                price = json_format.MessageToDict(_price)
+                print(f"Not bids or asks for pair {price.get('symbol')}, last known price is {price.get('price')}")
+                amount = exchange_info_symbol['filters']['lotSize']['minQty']
+                order_book['bids'] = order_book['bids'] or [[price['price'], amount]]
+                order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
+            cls.order_book = order_book
+            # endregion
+            _ticker = await send_request(cls.stub.FetchTickerPriceChangeStatistics, api_pb2.MarketRequest,
+                                         symbol=_symbol)
+            cls.ticker = json_format.MessageToDict(_ticker)
+            # print(f"main.ticker: {cls.ticker}")
+            await wss_init()
+            loop.create_task(save_asset())
+        else:
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': f"{ms.AMOUNT_FIRST}",
                                                'locked': '0.0'}
@@ -1373,49 +1438,13 @@ async def main(_symbol):
                                                 'locked': '0.0'}
             cls.strategy.account.fee_maker = ms.FEE_MAKER
             cls.strategy.account.fee_taker = ms.FEE_TAKER
-
-
-        await buffered_funds()
-
-        # region Get and processing Order book
-        _order_book = await send_request(cls.stub.FetchOrderBook, api_pb2.MarketRequest, symbol=_symbol)
-        order_book = json_format.MessageToDict(_order_book)
-        order_book_bids = order_book.pop('bids', [])
-        order_book_asks = order_book.pop('asks', [])
-        _bids = []
-        for bid in order_book_bids:
-            _bids.append(json.loads(bid))
-        _asks = []
-        for ask in order_book_asks:
-            _asks.append(json.loads(ask))
-        order_book.update({'bids': _bids})
-        order_book.update({'asks': _asks})
-        if not order_book['bids'] or not order_book['asks']:
-            _price = await send_request(cls.stub.FetchSymbolPriceTicker, api_pb2.MarketRequest, symbol=_symbol)
-            price = json_format.MessageToDict(_price)
-            print(f"Not bids or asks for pair {price.get('symbol')}, last known price is {price.get('price')}")
-            amount = exchange_info_symbol['filters']['lotSize']['minQty']
-            order_book['bids'] = order_book['bids'] or [[price['price'], amount]]
-            order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
-        # print(f"main.order_book: {order_book}")
-        cls.order_book = order_book
-        # endregion
-
-        if ms.REAL or ms.MODE == 'W':
-            _ticker = await send_request(cls.stub.FetchTickerPriceChangeStatistics, api_pb2.MarketRequest,
-                                         symbol=_symbol)
-            cls.ticker = json_format.MessageToDict(_ticker)
-            # print(f"main.ticker: {cls.ticker}")
-
-            await wss_init()
-        else:
             ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
             cls.ticker = ds.iat[0]
-            # print(f"main.ticker: {cls.ticker}")
-
-        if ms.REAL:
-            loop.create_task(save_asset())
-
+            ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
+            cls.order_book = ds.iat[0]
+            del ds
+        #
+        await buffered_funds()
         answer = str()
         restored = True
         if restore_state:
@@ -1431,12 +1460,14 @@ async def main(_symbol):
                 except Exception as ex:
                     print(f"Strategy init error: {ex}")
                     restored = False
+
         loop.create_task(buffered_orders())
+
         if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
             cls.strategy.init()
             input('Press Enter for Start or Ctrl-Z for Cancel\n')
 
-            if not ms.REAL and ms.MODE == 'R':
+            if ms.MODE == 'S':
                 await wss_declare()
 
             cls.strategy.start()

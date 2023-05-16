@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.17b1"
+__version__ = "1.2.17b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -105,8 +105,7 @@ CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
-REAL = False
-MODE = 'R'  # Read / Write data to  from stream
+MODE = 'S'  # T - Trade, TC - Trade and Collect, S - Simulate
 XTIME = 1  # Time accelerator
 # endregion
 
@@ -749,6 +748,8 @@ class Strategy(StrategyBase):
             self.message_log(f"Mode for {'buy' if self.cycle_buy else 'sell'} {self.f_currency} by grid orders"
                              f" placement ON",
                              color=Style.B_WHITE)
+        self.message_log(f"Mode is {'Trade' if MODE == 'T' else ('Trade & Collect' if MODE == 'TC' else 'Simulate')}",
+                         color=Style.B_WHITE)
         # Calculate round float multiplier
         self.round_base = ROUND_BASE or str(tcm.round_amount(1.123456789, RoundingType.FLOOR))
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
@@ -779,7 +780,7 @@ class Strategy(StrategyBase):
                         if STANDALONE:
                             raise SystemExit(1)
                     depo = self.deposit_first
-                if REAL and not GRID_ONLY:
+                if MODE in ('T', 'TC') and not GRID_ONLY:
                     self.place_grid(self.cycle_buy, depo, self.reverse_target_amount, init_calc_only=True)
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
@@ -809,7 +810,7 @@ class Strategy(StrategyBase):
                         and not self.tp_hold
                         and not self.tp_was_filled
                         and not self.orders_init)
-        if REAL and stable_state:
+        if MODE == 'TC' and stable_state:
             orders = self.get_buffered_open_orders()
             order_buy = len([i for i in orders if i.buy is True])
             order_sell = len([i for i in orders if i.buy is False])
@@ -833,7 +834,7 @@ class Strategy(StrategyBase):
         # region ReportStatus
         # Get command from Telegram
         command = None
-        if REAL and self.connection_analytic and self.heartbeat_counter % 5 == 0:
+        if MODE in ('T', 'TC') and self.connection_analytic and self.heartbeat_counter % 5 == 0:
             cursor_analytic = self.connection_analytic.cursor()
             bot_id = self.tlg_header.split('.')[0]
             try:
@@ -862,7 +863,7 @@ class Strategy(StrategyBase):
         if self.command == 'restart':
             self.stop()
             os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
-        if REAL and (command or (STATUS_DELAY and (time.time() - self.status_time) / 60 > STATUS_DELAY)):
+        if MODE in ('T', 'TC') and (command or (STATUS_DELAY and (time.time() - self.status_time) / 60 > STATUS_DELAY)):
             # Report current status
             last_price = self.get_buffered_ticker().last_price
             ticker_update = int(time.time()) - self.last_ticker_update
@@ -962,7 +963,7 @@ class Strategy(StrategyBase):
                 self.grid_update(frequency='hi')
         if self.heartbeat_counter > 150:
             self.heartbeat_counter = 0
-            if REAL:
+            if MODE == 'TC':
                 # Update t_funds.active set True
                 data_to_db = {'f_currency': self.f_currency,
                               's_currency': self.s_currency,
@@ -997,7 +998,7 @@ class Strategy(StrategyBase):
             else:
                 self.start_reverse_time = self.local_time()
         # endregion
-        if REAL:
+        if MODE in ('T', 'TC'):
             return {'command': json.dumps(self.command),
                     'cycle_buy': json.dumps(self.cycle_buy),
                     'cycle_buy_count': json.dumps(self.cycle_buy_count),
@@ -1359,7 +1360,7 @@ class Strategy(StrategyBase):
                     _fs = fs
             if go_trade:
                 self.wait_refunding_for_start = False
-                if REAL and not GRID_ONLY:
+                if MODE in ('T', 'TC') and not GRID_ONLY:
                     if self.cycle_buy:
                         df = Decimal('0')
                         ds = self.deposit_second - self.profit_second
@@ -1913,7 +1914,7 @@ class Strategy(StrategyBase):
         if log_level not in LOG_LEVEL_NO_PRINT:
             print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
         write_log(log_level, msg)
-        if REAL and tlg and self.queue_to_tlg:
+        if MODE in ('T', 'TC') and tlg and self.queue_to_tlg:
             msg = self.tlg_header + msg
             self.status_time = time.time()
             self.queue_to_tlg.put(msg)
