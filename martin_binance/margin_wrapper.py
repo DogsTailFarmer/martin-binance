@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.17b4"
+__version__ = "1.2.17b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1026,6 +1026,9 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                                      price=price,
                                      new_client_order_id=_id)
         result = json_format.MessageToDict(res)
+
+        print(f"create_limit_order.result: {result} ")
+
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except grpc.RpcError as ex:
@@ -1214,9 +1217,6 @@ async def on_ticker_update():
             cls.wss_fire_up = True
     else:
         ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
-
-
-
         async for row in loop_ds(ds):
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(cls.ticker))
@@ -1460,16 +1460,13 @@ async def main(_symbol):
                 except Exception as ex:
                     print(f"Strategy init error: {ex}")
                     restored = False
-
-        loop.create_task(buffered_orders())
-
+        if ms.MODE in ('T', 'TC'):
+            loop.create_task(buffered_orders())
         if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
             cls.strategy.init()
             input('Press Enter for Start or Ctrl-Z for Cancel\n')
-
             if ms.MODE == 'S':
                 await wss_declare()
-
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))
