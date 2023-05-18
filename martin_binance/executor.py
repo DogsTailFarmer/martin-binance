@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-3"
+__version__ = "1.2.18-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1528,12 +1528,12 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         if ff >= tcm.min_qty:
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.f_currency, float(ff))
+            self.transfer_to_master(self.f_currency, str(ff))
         else:
             ff = f2d(0)
         if fs >= tcm.min_notional:
             self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.s_currency, float(fs))
+            self.transfer_to_master(self.s_currency, str(fs))
         else:
             fs = f2d(0)
         return ff, fs
@@ -2038,8 +2038,12 @@ class Strategy(StrategyBase):
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
         if not additional_grid and not grid_update and not GRID_ONLY and 0 < PROFIT_MAX < 100:
-            profit_max = min(PROFIT_MAX, max(PROFIT, f2d(100 * self.atr() / self.get_buffered_ticker().last_price)))
-            self.message_log(f"set_trade_conditions.profit_max: {profit_max}", LogLevel.DEBUG)
+            try:
+                profit_max = min(PROFIT_MAX, max(PROFIT, f2d(100 * self.atr() / self.get_buffered_ticker().last_price)))
+            except statistics.StatisticsError as ex:
+                self.message_log(f"Can't get ATR value: {ex}, use default PROFIT_MAX value", LogLevel.WARNING)
+                profit_max = PROFIT_MAX
+            self.message_log(f"Profit max for first order volume is: {profit_max}", LogLevel.DEBUG)
             k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             # For Bitfinex test accounts correction

@@ -1,3 +1,8 @@
+## v1.2.18-5 2023-05-xx
+### Update
+* Add error handling for atr()
+* Some minor improvements
+
 ## v1.2.18-4 2023-05-18
 ### Added for new features
 * Use ATR (Average True Range with 14 period x 15 min) indicator when

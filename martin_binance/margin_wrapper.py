@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-4"
+__version__ = "1.2.18-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -493,8 +493,8 @@ class StrategyBase:
         return cls.orders
 
     @classmethod
-    def transfer_to_master(cls, symbol: str, amount: float):
-        loop.create_task(transfer2master(symbol, str(amount)))
+    def transfer_to_master(cls, symbol: str, amount: str):
+        loop.create_task(transfer2master(symbol, amount))
 
 
 async def heartbeat(_session):
