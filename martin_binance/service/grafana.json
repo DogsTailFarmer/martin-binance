@@ -114,10 +114,11 @@
             "uid": "E28iFVEGk"
           },
           "editorMode": "code",
-          "exemplar": true,
-          "expr": "sum by (exchange) (margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"})",
+          "exemplar": false,
+          "expr": "sum by (name) (margin_balance_usd{currency=~\"$v_currency\",exchange=~\"$v_exchange\",name=~\"$v_exchange_name\",vps_name=~\"$v_vps_name\"})",
+          "instant": false,
           "interval": "",
-          "legendFormat": " {{exchange}}",
+          "legendFormat": "{{name}}",
           "range": true,
           "refId": "A"
         },
@@ -374,7 +375,7 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ],
           "displayMode": "table",
           "placement": "right",
@@ -482,6 +483,21 @@
         },
         "overrides": [
           {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "super-light-yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
             "__systemRef": "hideSeriesFrom",
             "matcher": {
               "id": "byNames",
@@ -517,7 +533,7 @@
       "options": {
         "legend": {
           "calcs": [
-            "lastNotNull"
+            "last"
           ],
           "displayMode": "table",
           "placement": "right",
@@ -772,13 +788,15 @@
             "type": "prometheus",
             "uid": "E28iFVEGk"
           },
-          "exemplar": true,
-          "expr": "(31536000 * margin_sell_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_sell_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} + 31536000 * margin_buy_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_buy_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}) / 2",
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sort_desc((31536000 * margin_sell_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_sell_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} + 31536000 * margin_buy_interest{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"} / margin_buy_time{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}) / 2)",
           "format": "time_series",
           "hide": false,
-          "instant": false,
+          "instant": true,
           "interval": "",
           "legendFormat": " {{exchange}} {{pair}}",
+          "range": false,
           "refId": "A"
         }
       ],
@@ -847,7 +865,7 @@
         "x": 15,
         "y": 16
       },
-      "id": 27,
+      "id": 44,
       "options": {
         "legend": {
           "calcs": [],
@@ -867,12 +885,13 @@
             "type": "prometheus",
             "uid": "E28iFVEGk"
           },
+          "editorMode": "code",
           "exemplar": true,
-          "expr": "idelta(margin_sum_profit{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}[24h:1h]) / margin_last_rate_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}",
+          "expr": "idelta(margin_sum_profit_usd{pair=~\"$v_pair\",exchange=~\"$v_exchange\",vps_name=~\"$v_vps_name\"}[24h:1h])",
           "format": "time_series",
           "instant": false,
           "interval": "",
-          "legendFormat": "{{pair}}",
+          "legendFormat": " {{exchange}} {{pair}}",
           "refId": "A"
         }
       ],
@@ -981,7 +1000,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "transparent"
+                    "color": "transparent",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1079,7 +1099,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "transparent"
+                    "color": "transparent",
+                    "value": null
                   },
                   {
                     "color": "red",
@@ -1210,7 +1231,8 @@
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green"
+                    "color": "green",
+                    "value": null
                   }
                 ]
               },
@@ -1364,7 +1386,7 @@
             "h": 8,
             "w": 2,
             "x": 0,
-            "y": 42
+            "y": 30
           },
           "id": 12,
           "options": {
@@ -1479,13 +1501,38 @@
               },
               "unit": "currencyBTC"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "__systemRef": "hideSeriesFrom",
+                "matcher": {
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "Profit"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": true
+                    }
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 8,
             "w": 9,
             "x": 2,
-            "y": 42
+            "y": 30
           },
           "id": 2,
           "options": {
@@ -1638,7 +1685,7 @@
             "h": 8,
             "w": 9,
             "x": 11,
-            "y": 42
+            "y": 30
           },
           "id": 14,
           "options": {
@@ -1852,7 +1899,7 @@
             "h": 13,
             "w": 4,
             "x": 20,
-            "y": 42
+            "y": 30
           },
           "id": 8,
           "options": {
@@ -2055,7 +2102,7 @@
             "h": 5,
             "w": 20,
             "x": 0,
-            "y": 50
+            "y": 38
           },
           "id": 13,
           "options": {
@@ -2316,7 +2363,10 @@
                   "options": {
                     "mode": "exclude",
                     "names": [
-                      "Second free"
+                      "Second depo",
+                      "First free",
+                      "Second free",
+                      "Buy/Sell"
                     ],
                     "prefix": "All except:",
                     "readOnly": true
@@ -2339,7 +2389,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 55
+            "y": 43
           },
           "id": 33,
           "options": {
@@ -2496,7 +2546,7 @@
         "definition": "label_values(vps_name)",
         "hide": 0,
         "includeAll": true,
-        "label": "vps_name",
+        "label": "VPS",
         "multi": true,
         "name": "v_vps_name",
         "options": [],
@@ -2517,10 +2567,53 @@
         "current": {
           "selected": true,
           "text": [
-            "All"
+            "binance",
+            "bitfinex",
+            "huobi",
+            "okx"
           ],
           "value": [
-            "$__all"
+            "binance",
+            "bitfinex",
+            "huobi",
+            "okx"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "E28iFVEGk"
+        },
+        "definition": "label_values({vps_name=~\"$v_vps_name\"},name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Exchange",
+        "multi": true,
+        "name": "v_exchange_name",
+        "options": [],
+        "query": {
+          "query": "label_values({vps_name=~\"$v_vps_name\"},name)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": [
+            "Binance",
+            "BitFinex",
+            "Huobi",
+            "OKX",
+          ],
+          "value": [
+            "Binance",
+            "BitFinex",
+            "Huobi",
+            "OKX",
           ]
         },
         "datasource": {
@@ -2530,7 +2623,7 @@
         "definition": "label_values({vps_name=~\"$v_vps_name\"},exchange)",
         "hide": 0,
         "includeAll": true,
-        "label": "Exchange",
+        "label": "Account",
         "multi": true,
         "name": "v_exchange",
         "options": [],
@@ -2541,7 +2634,7 @@
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
-        "sort": 0,
+        "sort": 1,
         "tagValuesQuery": "",
         "tagsQuery": "",
         "type": "query",
@@ -2549,13 +2642,9 @@
       },
       {
         "current": {
-          "selected": true,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
@@ -2575,7 +2664,7 @@
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
-        "sort": 0,
+        "sort": 1,
         "tagValuesQuery": "",
         "tagsQuery": "",
         "type": "query",
@@ -2583,13 +2672,9 @@
       },
       {
         "current": {
-          "selected": true,
-          "text": [
-            "All"
-          ],
-          "value": [
-            "$__all"
-          ]
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
@@ -2609,7 +2694,7 @@
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
-        "sort": 0,
+        "sort": 1,
         "tagValuesQuery": "",
         "tagsQuery": "",
         "type": "query",
@@ -2663,7 +2748,7 @@
         "name": "Trust_wallet",
         "options": [],
         "query": "grafana",
-        "queryValue": "0",
+        "queryValue": "9632",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -2676,9 +2761,9 @@
     "to": "now"
   },
   "timepicker": {},
-  "timezone": "Europe/Moscow",
+  "timezone": "utc",
   "title": "Crypto exporter",
   "uid": "9ICv5brMk",
-  "version": 282,
+  "version": 304,
   "weekStart": ""
 }

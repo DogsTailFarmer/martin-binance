@@ -1539,6 +1539,119 @@ class Strategy(StrategyBase):
         return ff, fs
 
     ##############################################################
+    # Technical analysis
+    ##############################################################
+
+    def atr(self, interval: int = 14):
+        """
+        Average True Range
+        :param interval:
+        :return:
+        """
+        high = []
+        low = []
+        close = []
+        tr_arr = []
+        candle = self.get_buffered_recent_candles(candle_size_in_minutes=15,
+                                                  number_of_candles=interval + 1,
+                                                  include_current_building_candle=True)
+        for i in candle:
+            high.append(i.high)
+            low.append(i.low)
+            close.append(i.close)
+        n = 1
+        while n <= len(high) - 1:
+            tr_arr.append(max(high[n] - low[n], abs(high[n] - close[n - 1]), abs(low[n] - close[n - 1])))
+            n += 1
+        _atr = statistics.geometric_mean(tr_arr)
+        return _atr
+
+    def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
+        """
+        Average Directional Index
+        Math from https://blog.quantinsti.com/adx-indicator-python/
+        Test data
+        high = [90, 95, 105, 120, 140, 165, 195, 230, 270, 315, 365]
+        low = [82, 85, 93, 106, 124, 147, 175, 208, 246, 289, 337]
+        close = [87, 87, 97, 114, 133, 157, 186, 223, 264, 311, 350]
+        ##############################################################
+        """
+        high = []
+        low = []
+        close = []
+        candle = self.get_buffered_recent_candles(candle_size_in_minutes=adx_candle_size_in_minutes,
+                                                  number_of_candles=adx_number_of_candles,
+                                                  include_current_building_candle=True)
+        for i in candle:
+            high.append(i.high)
+            low.append(i.low)
+            close.append(i.close)
+        dm_pos = []
+        dm_neg = []
+        tr_arr = []
+        dm_pos_smooth = []
+        dm_neg_smooth = []
+        tr_smooth = []
+        di_pos = []
+        di_neg = []
+        dx = []
+        n = 1
+        n_max = len(high) - 1
+        while n <= n_max:
+            m_pos = high[n] - high[n - 1]
+            m_neg = low[n - 1] - low[n]
+            _m_pos = 0
+            _m_neg = 0
+            if m_pos and m_pos > m_neg:
+                _m_pos = m_pos
+            if m_neg and m_neg > m_pos:
+                _m_neg = m_neg
+            dm_pos.append(_m_pos)
+            dm_neg.append(_m_neg)
+            tr = max(high[n], close[n - 1]) - min(low[n], close[n - 1])
+            tr_arr.append(tr)
+            if n == adx_period:
+                dm_pos_smooth.append(sum(dm_pos))
+                dm_neg_smooth.append(sum(dm_neg))
+                tr_smooth.append(sum(tr_arr))
+            if n > adx_period:
+                dm_pos_smooth.append((dm_pos_smooth[-1] - dm_pos_smooth[-1] / adx_period) + _m_pos)
+                dm_neg_smooth.append((dm_neg_smooth[-1] - dm_neg_smooth[-1] / adx_period) + _m_neg)
+                tr_smooth.append((tr_smooth[-1] - tr_smooth[-1] / adx_period) + tr)
+            if n >= adx_period:
+                # Calculate +DI, -DI and DX
+                di_pos.append(100 * dm_pos_smooth[-1] / tr_smooth[-1])
+                di_neg.append(100 * dm_neg_smooth[-1] / tr_smooth[-1])
+                dx.append(100 * abs(di_pos[-1] - di_neg[-1]) / abs(di_pos[-1] + di_neg[-1]))
+            n += 1
+        _adx = statistics.mean(dx[len(dx) - adx_period::])
+        return {'adx': _adx, '+DI': di_pos[-1], '-DI': di_neg[-1]}
+
+    def bollinger_band(self, candle_size_in_minutes: int, number_of_candles: int) -> Dict[str, float]:
+        # Bottom BB as sma-kb*stdev
+        # Top BB as sma+kt*stdev
+        # For Buy cycle over_price as 100*(Ticker.last_price - bbb) / Ticker.last_price
+        # For Sale cycle over_price as 100*(tbb - Ticker.last_price) / Ticker.last_price
+        candle_close = []
+        candle = self.get_buffered_recent_candles(candle_size_in_minutes=candle_size_in_minutes,
+                                                  number_of_candles=number_of_candles,
+                                                  include_current_building_candle=True)
+        for i in candle:
+            candle_close.append(i.close)
+        # print(f"bollinger_band.candle_close: {candle_close}")
+        sma = statistics.mean(candle_close)
+        st_dev = statistics.stdev(candle_close)
+        # print('sma={}, st_dev={}'.format(sma, st_dev))
+        tbb = sma + KBB * st_dev
+        bbb = sma - KBB * st_dev
+        min_price = self.get_trading_capability_manager().get_minimal_price_change(0.0)
+        # self.message_log(f"bollinger_band.min_price: {min_price}", log_level=LogLevel.DEBUG)
+        min_price = min_price if min_price and not math.isinf(min_price) else 0.0
+        bbb = max(bbb, min_price)
+        # self.message_log(f"bollinger_band: tbb={tbb:f}, bbb={bbb:f}", log_level=LogLevel.DEBUG)
+        return {'tbb': tbb, 'bbb': bbb}
+
+    ##############################################################
     # strategy function
     ##############################################################
 
@@ -1909,30 +2022,6 @@ class Strategy(StrategyBase):
             self.status_time = time.time()
             self.queue_to_tlg.put(msg)
 
-    def bollinger_band(self, candle_size_in_minutes: int, number_of_candles: int) -> Dict[str, float]:
-        # Bottom BB as sma-kb*stdev
-        # Top BB as sma+kt*stdev
-        # For Buy cycle over_price as 100*(Ticker.last_price - bbb) / Ticker.last_price
-        # For Sale cycle over_price as 100*(tbb - Ticker.last_price) / Ticker.last_price
-        candle_close = []
-        candle = self.get_buffered_recent_candles(candle_size_in_minutes=candle_size_in_minutes,
-                                                  number_of_candles=number_of_candles,
-                                                  include_current_building_candle=True)
-        for i in candle:
-            candle_close.append(i.close)
-        # print(f"bollinger_band.candle_close: {candle_close}")
-        sma = statistics.mean(candle_close)
-        st_dev = statistics.stdev(candle_close)
-        # print('sma={}, st_dev={}'.format(sma, st_dev))
-        tbb = sma + KBB * st_dev
-        bbb = sma - KBB * st_dev
-        min_price = self.get_trading_capability_manager().get_minimal_price_change(0.0)
-        # self.message_log(f"bollinger_band.min_price: {min_price}", log_level=LogLevel.DEBUG)
-        min_price = min_price if min_price and not math.isinf(min_price) else 0.0
-        bbb = max(bbb, min_price)
-        # self.message_log(f"bollinger_band: tbb={tbb:f}, bbb={bbb:f}", log_level=LogLevel.DEBUG)
-        return {'tbb': tbb, 'bbb': bbb}
-
     def set_trade_conditions(self,
                              buy_side: bool,
                              depo: Decimal,
@@ -1949,10 +2038,8 @@ class Strategy(StrategyBase):
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
         if not additional_grid and not grid_update and not GRID_ONLY and 0 < PROFIT_MAX < 100:
-
             profit_max = min(PROFIT_MAX, max(PROFIT, f2d(100 * self.atr() / self.get_buffered_ticker().last_price)))
-            print(f"set_trade_conditions.profit_max: {profit_max}")
-
+            self.message_log(f"set_trade_conditions.profit_max: {profit_max}", LogLevel.DEBUG)
             k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             # For Bitfinex test accounts correction
@@ -2128,67 +2215,6 @@ class Strategy(StrategyBase):
         else:
             over_price = over_price_coarse
         return over_price
-
-    def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
-        """
-        Average Directional Index
-        Math from https://blog.quantinsti.com/adx-indicator-python/
-        Test data
-        high = [90, 95, 105, 120, 140, 165, 195, 230, 270, 315, 365]
-        low = [82, 85, 93, 106, 124, 147, 175, 208, 246, 289, 337]
-        close = [87, 87, 97, 114, 133, 157, 186, 223, 264, 311, 350]
-        ##############################################################
-        """
-        high = []
-        low = []
-        close = []
-        candle = self.get_buffered_recent_candles(candle_size_in_minutes=adx_candle_size_in_minutes,
-                                                  number_of_candles=adx_number_of_candles,
-                                                  include_current_building_candle=True)
-        for i in candle:
-            high.append(i.high)
-            low.append(i.low)
-            close.append(i.close)
-        dm_pos = []
-        dm_neg = []
-        tr_arr = []
-        dm_pos_smooth = []
-        dm_neg_smooth = []
-        tr_smooth = []
-        di_pos = []
-        di_neg = []
-        dx = []
-        n = 1
-        n_max = len(high) - 1
-        while n <= n_max:
-            m_pos = high[n] - high[n - 1]
-            m_neg = low[n - 1] - low[n]
-            _m_pos = 0
-            _m_neg = 0
-            if m_pos and m_pos > m_neg:
-                _m_pos = m_pos
-            if m_neg and m_neg > m_pos:
-                _m_neg = m_neg
-            dm_pos.append(_m_pos)
-            dm_neg.append(_m_neg)
-            tr = max(high[n], close[n - 1]) - min(low[n], close[n - 1])
-            tr_arr.append(tr)
-            if n == adx_period:
-                dm_pos_smooth.append(sum(dm_pos))
-                dm_neg_smooth.append(sum(dm_neg))
-                tr_smooth.append(sum(tr_arr))
-            if n > adx_period:
-                dm_pos_smooth.append((dm_pos_smooth[-1] - dm_pos_smooth[-1] / adx_period) + _m_pos)
-                dm_neg_smooth.append((dm_neg_smooth[-1] - dm_neg_smooth[-1] / adx_period) + _m_neg)
-                tr_smooth.append((tr_smooth[-1] - tr_smooth[-1] / adx_period) + tr)
-            if n >= adx_period:
-                # Calculate +DI, -DI and DX
-                di_pos.append(100 * dm_pos_smooth[-1] / tr_smooth[-1])
-                di_neg.append(100 * dm_neg_smooth[-1] / tr_smooth[-1])
-                dx.append(100 * abs(di_pos[-1] - di_neg[-1]) / abs(di_pos[-1] + di_neg[-1]))
-            n += 1
-        _adx = statistics.mean(dx[len(dx) - adx_period::])
-        return {'adx': _adx, '+DI': di_pos[-1], '-DI': di_neg[-1]}
 
     def start_process(self):
         # Init analytic
@@ -2854,31 +2880,6 @@ class Strategy(StrategyBase):
         fs = self.round_truncate(fs, base=False)
         assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
         return ff, fs, assets
-
-    def atr(self, interval: int = 14):
-        """
-        Average True Range
-        :param interval:
-        :return:
-        """
-        high = []
-        low = []
-        close = []
-        tr_arr = []
-        candle = self.get_buffered_recent_candles(candle_size_in_minutes=15,
-                                                  number_of_candles=interval + 1,
-                                                  include_current_building_candle=True)
-        for i in candle:
-            high.append(i.high)
-            low.append(i.low)
-            close.append(i.close)
-        n = 1
-        while n <= len(high) - 1:
-            tr_arr.append(max(high[n] - low[n], abs(high[n] - close[n - 1]), abs(low[n] - close[n - 1])))
-            n += 1
-        _atr = statistics.geometric_mean(tr_arr)
-        print(f"atr: {_atr:f}")
-        return _atr
 
     ##############################################################
     # public data update methods
