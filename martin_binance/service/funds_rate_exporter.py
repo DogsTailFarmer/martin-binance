@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.10-5"
+__version__ = "1.2.18-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -19,8 +19,10 @@ from requests import Session
 import json
 import toml
 import platform
-from martin_binance import Path, CONFIG_FILE, DB_FILE
 from prometheus_client import start_http_server, Gauge
+
+from martin_binance import Path, CONFIG_FILE, DB_FILE
+from exchanges_wrapper import CONFIG_FILE as SRV_CONFIG_FILE
 
 # region Import parameters
 
@@ -31,9 +33,15 @@ if not CONFIG_FILE.exists():
     else:
         WORK_PATH = Path().resolve()
     CONFIG_FILE = Path(WORK_PATH, "ms_cfg.toml")
+    SRV_CONFIG_FILE = Path(WORK_PATH, "exch_srv_cfg.toml")
     DB_FILE = Path(WORK_PATH, "funds_rate.db")
 
 config = toml.load(str(CONFIG_FILE)).get('Exporter')
+accounts = toml.load(str(SRV_CONFIG_FILE)).get('accounts')
+
+names = {}
+for acc in accounts:
+    names[acc['name']] = acc['exchange']
 
 # external port for prometheus
 PORT = config.get('port')
@@ -77,7 +85,7 @@ F_BALANCE = Gauge("margin_f_balance", "first balance amount", ['exchange', 'pair
 S_BALANCE = Gauge("margin_s_balance", "second balance amount", ['exchange', 'pair', 'vps_name'])
 TOTAL_BALANCE = Gauge("margin_balance", "total balance amount by last rate", ['exchange', 'pair', 'vps_name'])
 
-BALANCE_USD = Gauge("margin_balance_usd", "currency balance amount in USD", ['exchange', 'currency', 'vps_name'])
+BALANCE_USD = Gauge("margin_balance_usd", "balance amount in USD", ['name', 'exchange', 'currency', 'vps_name'])
 
 # VPS control
 VPS_CPU = Gauge("margin_vps_cpu", "average cpu load", ['vps_name'])
@@ -181,6 +189,7 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
     for row in records:
         # print(f"row: {row}")
         exchange = str(row[0])
+        name = names.get(exchange)
         id_exchange = int(row[1])
         f_currency = str(row[2])
         s_currency = str(row[3])
@@ -312,8 +321,8 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
                 except ZeroDivisionError:
                     s_balance_usd = -1
             # print(f"f_balance_usd: {f_balance_usd}, s_balance_usd: {s_balance_usd}")
-            BALANCE_USD.labels(exchange, f_currency, VPS_NAME).set(f_balance_usd)
-            BALANCE_USD.labels(exchange, s_currency, VPS_NAME).set(s_balance_usd)
+            BALANCE_USD.labels(name, exchange, f_currency, VPS_NAME).set(f_balance_usd)
+            BALANCE_USD.labels(name, exchange, s_currency, VPS_NAME).set(s_balance_usd)
             # Cycle parameters
             CYCLE_BUY.labels(exchange, pair, VPS_NAME).set(balance_row[2])
             F_DEPO.labels(exchange, pair, VPS_NAME).set(balance_row[3])
@@ -327,7 +336,7 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
             except ZeroDivisionError:
                 usd_amount = -1
             if usd_amount >= 1.0:
-                BALANCE_USD.labels(asset[1], asset[2], VPS_NAME).set(usd_amount)
+                BALANCE_USD.labels(names.get(asset[1]),asset[1], asset[2], VPS_NAME).set(usd_amount)
 
     cursor.close()
     return currency_rate_last_time

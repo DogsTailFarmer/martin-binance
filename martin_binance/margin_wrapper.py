@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-1"
+__version__ = "1.2.18-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -45,10 +45,10 @@ CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
 
 loop = asyncio.get_event_loop()
 KLINES_INIT = [Interval.ONE_MINUTE, Interval.FIFTY_MINUTES, Interval.ONE_HOUR]
-KLINES_LIM = 100  # Number of candles must be <= 1000
+KLINES_LIM = 50  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and ms.LOAD_LAST_STATE = 0
-ALL_TRADES_LIST_LIMIT = 200
-TRADES_LIST_LIMIT = 100
+ALL_TRADES_LIST_LIMIT = 100
+TRADES_LIST_LIMIT = 50
 HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
