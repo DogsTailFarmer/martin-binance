@@ -105,7 +105,7 @@ CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
-MODE = 'TC'  # T - Trade, TC - Trade and Collect, S - Simulate
+MODE = 'S'  # T - Trade, TC - Trade and Collect, S - Simulate
 XTIME = 1  # Time accelerator
 # endregion
 
