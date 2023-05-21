@@ -389,7 +389,7 @@ class StrategyBase:
         self.order_book = {}
         self.klines = {}  # KLines snapshot
         self.candles = {}  # Candles stream
-        self.account = backtest.Account() if ms.MODE == 'S' else None
+        self.account = None
 
     def __call__(self):
         return self
@@ -941,21 +941,32 @@ async def buffered_orders():
 
 async def on_funds_update():
     cls = StrategyBase
-    try:
-        async for _funds in cls.for_request(cls.stub.OnFundsUpdate, api_pb2.OnFundsUpdateRequest,
-                                            symbol=cls.symbol,
-                                            base_asset=cls.base_asset,
-                                            quote_asset=cls.quote_asset):
-            funds = json.loads(json.loads(json_format.MessageToJson(_funds))['funds'])
-            if funds.get(cls.base_asset) or funds.get(cls.quote_asset):
-                cls.funds.update(funds)
-                funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
-                         cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
-                cls.strategy.on_new_funds(funds)
-                cls.get_buffered_funds_last_time = time.time()
-    except Exception as ex:
-        logger.warning(f"Exception on WSS, on_funds_update loop closed: {ex}")
-        cls.wss_fire_up = True
+    if ms.MODE in ('T', 'TC'):
+        try:
+            async for _funds in cls.for_request(cls.stub.OnFundsUpdate, api_pb2.OnFundsUpdateRequest,
+                                                symbol=cls.symbol,
+                                                base_asset=cls.base_asset,
+                                                quote_asset=cls.quote_asset):
+                funds = json.loads(json.loads(json_format.MessageToJson(_funds))['funds'])
+                if funds.get(cls.base_asset) or funds.get(cls.quote_asset):
+                    cls.funds.update(funds)
+                    funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
+                             cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
+                    cls.strategy.on_new_funds(funds)
+                    cls.get_buffered_funds_last_time = time.time()
+        except Exception as ex:
+            logger.warning(f"Exception on WSS, on_funds_update loop closed: {ex}")
+            cls.wss_fire_up = True
+    else:
+        funds = {}
+        _funds = cls.strategy.account.funds.get()
+        [funds.update({d.get('asset'): {'free': d.get('free'), 'locked': d.get('locked')}}) for d in _funds]
+        # print(f"on_funds_update.funds: {funds}")
+        cls.funds.update(funds)
+        funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
+                 cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
+        cls.strategy.on_new_funds(funds)
+        cls.get_buffered_funds_last_time = time.time()
 
 
 async def on_balance_update():
@@ -974,6 +985,9 @@ async def on_order_update():
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
             # print(f"on_order_update: {event.symbol}:{event.order_id}({event.client_order_id}):{event.order_status}")
+
+            print(f"on_order_update.event: {dir(event)}")
+
             if (cls.symbol == event.symbol
                     and cls.order_exist(event.order_id)
                     and event.order_status in ('FILLED', 'PARTIALLY_FILLED')):
@@ -1019,15 +1033,22 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
     cls = StrategyBase
     cls.order_id = _id
     try:
-        res = await cls.send_request(cls.stub.CreateLimitOrder, api_pb2.CreateLimitOrderRequest,
-                                     symbol=cls.symbol,
-                                     buy_side=buy,
-                                     quantity=amount,
-                                     price=price,
-                                     new_client_order_id=_id)
-        result = json_format.MessageToDict(res)
+        if ms.MODE in ('T', 'TC'):
+            res = await cls.send_request(cls.stub.CreateLimitOrder, api_pb2.CreateLimitOrderRequest,
+                                         symbol=cls.symbol,
+                                         buy_side=buy,
+                                         quantity=amount,
+                                         price=price,
+                                         new_client_order_id=_id)
+            result = json_format.MessageToDict(res)
+        else:
+            result = cls.strategy.account.create_order(symbol=cls.symbol,
+                                                       client_order_id=_id,
+                                                       buy=buy,
+                                                       amount=amount,
+                                                       price=price)
 
-        print(f"create_limit_order.result: {result} ")
+        # print(f"create_limit_order.result: {result} ")
 
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
@@ -1072,6 +1093,8 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                 cls.orders.append(order)
                 cls.all_orders.append(order)
             cls.strategy.on_place_order_success(_id, order)
+            if ms.MODE == 'S':
+                await on_funds_update()
 
 
 async def place_limit_order_timeout(_id):
@@ -1086,10 +1109,16 @@ async def place_limit_order_timeout(_id):
 async def cancel_order_call(_id: int):
     cls = StrategyBase
     try:
-        res = await cls.send_request(cls.stub.CancelOrder, api_pb2.CancelOrderRequest,
-                                     symbol=cls.symbol,
-                                     order_id=_id)
-        result = json_format.MessageToDict(res)
+        if ms.MODE in ('T', 'TC'):
+            res = await cls.send_request(cls.stub.CancelOrder, api_pb2.CancelOrderRequest,
+                                         symbol=cls.symbol,
+                                         order_id=_id)
+            result = json_format.MessageToDict(res)
+        else:
+            result = cls.strategy.account.cancel_order(order_id=_id)
+
+        # print(f"cancel_order_call.result: {result} ")
+
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
     except grpc.RpcError as ex:
@@ -1111,6 +1140,8 @@ async def cancel_order_call(_id: int):
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
             cls.strategy.on_cancel_order_success(_id, Order(result))
             cls.canceled_order_id.append(_id)
+            if ms.MODE == 'S':
+                await on_funds_update()
 
 
 async def cancel_order_timeout(_id):
@@ -1292,10 +1323,11 @@ async def wss_declare():
     loop.create_task(on_ticker_update())
     await buffered_candle()
     loop.create_task(on_order_book_update())
-    # User Stream
-    loop.create_task(on_funds_update())
-    loop.create_task(on_order_update())
-    loop.create_task(on_balance_update())
+    if ms.MODE in ('T', 'TC'):
+        # User Stream
+        loop.create_task(on_funds_update())
+        loop.create_task(on_order_update())
+        loop.create_task(on_balance_update())
 
 
 async def wss_init(update_max_queue_size=False):
@@ -1315,7 +1347,6 @@ async def wss_init(update_max_queue_size=False):
                                    market_stream_count=5,
                                    update_max_queue_size=update_max_queue_size)
             cls.wss_fire_up = False
-
         except UserWarning:
             cls.strategy.message_log("Start WSS failed, retry", log_level=LogLevel.WARNING)
             cls.wss_fire_up = True
@@ -1430,6 +1461,8 @@ async def main(_symbol):
             await wss_init()
             loop.create_task(save_asset())
         else:
+            cls.strategy.account = backtest.Account()
+
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': f"{ms.AMOUNT_FIRST}",
                                                'locked': '0.0'}
