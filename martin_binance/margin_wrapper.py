@@ -949,11 +949,7 @@ async def on_funds_update():
                                                 quote_asset=cls.quote_asset):
                 funds = json.loads(json.loads(json_format.MessageToJson(_funds))['funds'])
                 if funds.get(cls.base_asset) or funds.get(cls.quote_asset):
-                    cls.funds.update(funds)
-                    funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
-                             cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
-                    cls.strategy.on_new_funds(funds)
-                    cls.get_buffered_funds_last_time = time.time()
+                    await on_funds_update_handler(cls, funds)
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_funds_update loop closed: {ex}")
             cls.wss_fire_up = True
@@ -962,11 +958,15 @@ async def on_funds_update():
         _funds = cls.strategy.account.funds.get()
         [funds.update({d.get('asset'): {'free': d.get('free'), 'locked': d.get('locked')}}) for d in _funds]
         # print(f"on_funds_update.funds: {funds}")
-        cls.funds.update(funds)
-        funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
-                 cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
-        cls.strategy.on_new_funds(funds)
-        cls.get_buffered_funds_last_time = time.time()
+        await on_funds_update_handler(cls, funds)
+
+
+async def on_funds_update_handler(cls, funds):
+    cls.funds.update(funds)
+    funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
+             cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
+    cls.strategy.on_new_funds(funds)
+    cls.get_buffered_funds_last_time = time.time()
 
 
 async def on_balance_update():
@@ -1250,7 +1250,8 @@ async def on_ticker_update():
         ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
         async for row in loop_ds(ds):
             cls.ticker = row
-            cls.strategy.on_new_ticker(Ticker(cls.ticker))
+            cls.strategy.on_new_ticker(Ticker(row))
+            print(f"on_ticker_update.row: {row}")
         print("Backtest *** ticker *** timeSeries ended")
 
 
