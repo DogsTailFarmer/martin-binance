@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-6"
+__version__ = "1.2.18-7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1528,12 +1528,12 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         if ff >= f2d(tcm.min_qty):
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.f_currency, f"{ff:f}")
+            self.transfer_to_master(self.f_currency, f"{ff:.10f}")
         else:
             ff = f2d(0)
         if fs >= f2d(tcm.min_notional):
             self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.s_currency, f"{fs:f}")
+            self.transfer_to_master(self.s_currency, f"{fs:.10f}")
         else:
             fs = f2d(0)
         return ff, fs

@@ -1,4 +1,4 @@
-## v1.2.18-6 2023-05-xx
+## v1.2.18-7 2023-05-xx
 ### Fix
 * collect_assets() incorrect convert small decimal.Decimal values to str
 
