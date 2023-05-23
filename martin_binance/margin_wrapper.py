@@ -1259,7 +1259,6 @@ async def on_ticker_update():
             cls.strategy.on_new_ticker(Ticker(row))
             res = cls.strategy.account.on_ticker_update(row)
             for _res in res:
-                print(_res)
                 on_order_update_handler(cls, _res)
                 await on_funds_update()
         print("Backtest *** ticker *** timeSeries ended")

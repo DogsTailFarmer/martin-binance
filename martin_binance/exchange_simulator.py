@@ -157,22 +157,21 @@ class Account:
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def on_ticker_update(self, ticker: {}) -> [dict]:
-        print(f"on_ticker_update.ticker: {ticker}")
-
-        print(f"BUY: {self.orders_buy}")
-        print(f"SELL: {self.orders_sell}")
+        # print(f"on_ticker_update.ticker: {ticker}")
+        # print(f"BUY: {self.orders_buy}")
+        # print(f"SELL: {self.orders_sell}")
         orders_filled = []
         orders_id = []
+        #
         _i = self.orders_buy[self.orders_buy >= Decimal(ticker['lastPrice'])].index
         self.orders_buy = self.orders_buy.drop(_i.values)
         orders_id.extend(_i.values)
         _i = self.orders_sell[self.orders_sell <= Decimal(ticker['lastPrice'])].index
         self.orders_sell = self.orders_sell.drop(_i.values)
         orders_id.extend(_i.values)
+        #
         for order_id in orders_id:
-            print(order_id)
             order = self.orders.pop(order_id)
-
             order.transact_time = int(ticker['closeTime'])
             order.executed_qty = order.orig_qty
             order.cummulative_quote_qty = str(Decimal(order.orig_qty) * Decimal(ticker['lastPrice']))
@@ -185,9 +184,9 @@ class Account:
             order.quote_asset_transacted = order.cummulative_quote_qty
             order.last_quote_asset_transacted = order.cummulative_quote_qty
             order.quote_order_quantity = order.cummulative_quote_qty
-
+            #
             self.orders.insert(order_id, order)
-
+            #
             res = {'event_time': order.event_time,
                    'symbol': order.symbol,
                    'client_order_id': order.client_order_id,
@@ -219,8 +218,8 @@ class Account:
                    'quote_asset_transacted': order.quote_asset_transacted,
                    'last_quote_asset_transacted': order.last_quote_asset_transacted,
                    'quote_order_quantity': order.quote_order_quantity}
+            #
             orders_filled.append(res)
-
             self.funds.on_order_filled(order.side, order.orig_qty, order.last_executed_price, self.fee_maker)
-
+            #
         return orders_filled
