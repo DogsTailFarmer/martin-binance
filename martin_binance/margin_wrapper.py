@@ -33,7 +33,6 @@ from margin_strategy_sdk import LogLevel, OrderUpdate, RoundingType, Dict, List
 from margin_strategy_sdk import StrategyConfig  # lgtm [py/unused-import]
 
 from exchanges_wrapper.definitions import Interval
-from exchanges_wrapper.events import OrderUpdateWrapper
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
 from martin_binance import executor as ms, BACKTEST_PATH
@@ -141,31 +140,31 @@ class PrivateTrade:
 
 # noinspection PyRedeclaration
 class OrderUpdate(OrderUpdate):
-    def __init__(self, event: OrderUpdateWrapper) -> None:
+    def __init__(self, event: {}) -> None:
         super().__init__()
 
         class OriginalOrder:
-            def __init__(self, _event: OrderUpdateWrapper):
-                self.id = _event.order_id
+            def __init__(self, _event: {}):
+                self.id = _event['order_id']
 
         # Original order previous to this update.
         self.original_order = OriginalOrder(event)
         # Trades that belong to the order, if any exist so far.
         self.resulting_trades = []
         for trade in StrategyBase.trades:
-            if trade.order_id == event.order_id:
+            if trade.order_id == event['order_id']:
                 self.resulting_trades.append(trade)
         # Update status defining what happened to the order since the last update.
-        if event.order_status == 'FILLED':
+        if event['order_status'] == 'FILLED':
             self.status = OrderUpdate.FILLED
-        elif event.order_status == 'PARTIALLY_FILLED':
+        elif event['order_status'] == 'PARTIALLY_FILLED':
             self.status = OrderUpdate.PARTIALLY_FILLED
-        elif event.order_status == 'CANCELED':
+        elif event['order_status'] == 'CANCELED':
             self.status = OrderUpdate.CANCELED
         else:
             self.status = OrderUpdate.OTHER_CHANGE
         # Time of the change.
-        self.timestamp = int(event.transaction_time)
+        self.timestamp = event['transaction_time']
         # Newly updated order
         self.updated_order = None
 
@@ -949,7 +948,7 @@ async def on_funds_update():
                                                 quote_asset=cls.quote_asset):
                 funds = json.loads(json.loads(json_format.MessageToJson(_funds))['funds'])
                 if funds.get(cls.base_asset) or funds.get(cls.quote_asset):
-                    await on_funds_update_handler(cls, funds)
+                    on_funds_update_handler(cls, funds)
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_funds_update loop closed: {ex}")
             cls.wss_fire_up = True
@@ -958,10 +957,10 @@ async def on_funds_update():
         _funds = cls.strategy.account.funds.get()
         [funds.update({d.get('asset'): {'free': d.get('free'), 'locked': d.get('locked')}}) for d in _funds]
         # print(f"on_funds_update.funds: {funds}")
-        await on_funds_update_handler(cls, funds)
+        on_funds_update_handler(cls, funds)
 
 
-async def on_funds_update_handler(cls, funds):
+def on_funds_update_handler(cls, funds):
     cls.funds.update(funds)
     funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
              cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
@@ -985,53 +984,55 @@ async def on_order_update():
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
             # print(f"on_order_update: {event.symbol}:{event.order_id}({event.client_order_id}):{event.order_status}")
-
-            print(f"on_order_update.event: {dir(event)}")
-
-            if (cls.symbol == event.symbol
-                    and cls.order_exist(event.order_id)
-                    and event.order_status in ('FILLED', 'PARTIALLY_FILLED')):
-                if event.order_status == 'FILLED':
-                    # Remove from all_orders and orders lists
-                    remove_from_orders_lists([event.order_id])
-                if trade_not_exist(event.order_id, event.trade_id):
-                    trade = {"qty": event.last_executed_quantity,
-                             "isBuyer": bool(event.side == 'BUY'),
-                             "id": event.trade_id,
-                             "orderId": event.order_id,
-                             "price": event.last_executed_price,
-                             "time": event.transaction_time}
-                    #  Append to all_trades and trades list
-                    if len(cls.trades) > TRADES_LIST_LIMIT:
-                        del cls.trades[0]
-                    cls.trades.append(PrivateTrade(trade))
-                    if len(cls.all_trades) > ALL_TRADES_LIST_LIMIT:
-                        del cls.all_trades[0]
-                        cls.all_trades.append(PrivateTrade(trade))
-                    cumulative_quantity = Decimal(event.cumulative_filled_quantity)
-                    saved_filled_quantity = order_trades_sum(event.order_id)
-                    if event.order_status == 'FILLED' and saved_filled_quantity != cumulative_quantity:
-                        cls.strategy.message_log(f"Order: {event.order_id} was missed partially filling event",
-                                                 log_level=LogLevel.INFO)
-                        # Remove trades associated with order from list
-                        remove_from_trades_lists(event.order_id)
-                        # Update current trade
-                        price = str(Decimal(event.quote_asset_transacted) / Decimal(event.cumulative_filled_quantity))
-                        trade.update({"qty": event.cumulative_filled_quantity, "price": price})
-                        # cls.strategy.message_log(f"on_order_update.trade: {trade}",
-                        #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
-                        # Append to list
-                        cls.trades.append(PrivateTrade(trade))
-                        cls.all_trades.append(PrivateTrade(trade))
-                    cls.strategy.on_order_update(OrderUpdate(event))
+            ed = eval(json.loads(event.result))
+            on_order_update_handler(cls, ed)
     except Exception as ex:
+        print(f"Exception on WSS, on_order_update loop closed: {ex}")
         logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
         cls.wss_fire_up = True
 
 
+def on_order_update_handler(cls, ed):
+    if (cls.symbol == ed['symbol']
+            and cls.order_exist(ed['order_id'])
+            and ed['order_status'] in ('FILLED', 'PARTIALLY_FILLED')):
+        if ed['order_status'] == 'FILLED':
+            # Remove from all_orders and orders lists
+            remove_from_orders_lists([ed['order_id']])
+        if trade_not_exist(ed['order_id'], ed['trade_id']):
+            trade = {"qty": ed['last_executed_quantity'],
+                     "isBuyer": bool(ed['side'] == 'BUY'),
+                     "id": ed['trade_id'],
+                     "orderId": ed['order_id'],
+                     "price": ed['last_executed_price'],
+                     "time": ed['transaction_time']}
+            #  Append to all_trades and trades list
+            if len(cls.trades) > TRADES_LIST_LIMIT:
+                del cls.trades[0]
+            cls.trades.append(PrivateTrade(trade))
+            if len(cls.all_trades) > ALL_TRADES_LIST_LIMIT:
+                del cls.all_trades[0]
+                cls.all_trades.append(PrivateTrade(trade))
+            cumulative_quantity = Decimal(ed['cumulative_filled_quantity'])
+            saved_filled_quantity = order_trades_sum(ed['order_id'])
+            if ed['order_status'] == 'FILLED' and saved_filled_quantity != cumulative_quantity:
+                cls.strategy.message_log(f"Order: {ed['order_id']} was missed partially filling event",
+                                         log_level=LogLevel.INFO)
+                # Remove trades associated with order from list
+                remove_from_trades_lists(ed['order_id'])
+                # Update current trade
+                price = str(Decimal(ed['quote_asset_transacted']) / Decimal(ed['cumulative_filled_quantity']))
+                trade.update({"qty": ed['cumulative_filled_quantity'], "price": price})
+                # cls.strategy.message_log(f"on_order_update.trade: {trade}",
+                #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
+                # Append to list
+                cls.trades.append(PrivateTrade(trade))
+                cls.all_trades.append(PrivateTrade(trade))
+            cls.strategy.on_order_update(OrderUpdate(ed))
+
+
 async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> None:
     cls = StrategyBase
-    cls.order_id = _id
     try:
         if ms.MODE in ('T', 'TC'):
             res = await cls.send_request(cls.stub.CreateLimitOrder, api_pb2.CreateLimitOrderRequest,
@@ -1046,7 +1047,8 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                                                        client_order_id=_id,
                                                        buy=buy,
                                                        amount=amount,
-                                                       price=price)
+                                                       price=price,
+                                                       lt=cls.strategy.get_time()*1000)
 
         # print(f"create_limit_order.result: {result} ")
 
@@ -1230,6 +1232,10 @@ async def loop_ds(ds):
 
 
 async def on_ticker_update():
+    """
+    row = {'openPrice': '26923.97000000', 'lastPrice': '26882.51000000', 'closeTime': 1684572464013}
+    :return:
+    """
     cls = StrategyBase
     if ms.MODE in ('T', 'TC'):
         try:
@@ -1251,7 +1257,9 @@ async def on_ticker_update():
         async for row in loop_ds(ds):
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(row))
-            print(f"on_ticker_update.row: {row}")
+
+            cls.strategy.account.on_ticker_update(row)
+
         print("Backtest *** ticker *** timeSeries ended")
 
 
