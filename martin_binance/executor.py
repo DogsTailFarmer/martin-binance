@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-5"
+__version__ = "1.2.18-6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1526,14 +1526,14 @@ class Strategy(StrategyBase):
     def collect_assets(self) -> ():
         ff, fs, _x = self.get_free_assets(mode='free')
         tcm = self.get_trading_capability_manager()
-        if ff >= tcm.min_qty:
+        if ff >= f2d(tcm.min_qty):
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.f_currency, str(ff))
+            self.transfer_to_master(self.f_currency, f"{ff:f}")
         else:
             ff = f2d(0)
-        if fs >= tcm.min_notional:
+        if fs >= f2d(tcm.min_notional):
             self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.s_currency, str(fs))
+            self.transfer_to_master(self.s_currency, f"{fs:f}")
         else:
             fs = f2d(0)
         return ff, fs

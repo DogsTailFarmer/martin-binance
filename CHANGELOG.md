@@ -1,3 +1,7 @@
+## v1.2.18-6 2023-05-xx
+### Fix
+* collect_assets() incorrect convert small decimal.Decimal values to str
+
 ## v1.2.18-5 2023-05-xx
 ### Update
 * Add error handling for atr()
