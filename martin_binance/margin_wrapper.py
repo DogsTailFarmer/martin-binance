@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.17b5"
+__version__ = "1.2.17b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1257,9 +1257,11 @@ async def on_ticker_update():
         async for row in loop_ds(ds):
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(row))
-
-            cls.strategy.account.on_ticker_update(row)
-
+            res = cls.strategy.account.on_ticker_update(row)
+            for _res in res:
+                print(_res)
+                on_order_update_handler(cls, _res)
+                await on_funds_update()
         print("Backtest *** ticker *** timeSeries ended")
 
 

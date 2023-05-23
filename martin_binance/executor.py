@@ -106,7 +106,7 @@ STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
 MODE = 'S'  # T - Trade, TC - Trade and Collect, S - Simulate
-XTIME = 1  # Time accelerator
+XTIME = 1000  # Time accelerator
 # endregion
 
 
@@ -1340,7 +1340,8 @@ class Strategy(StrategyBase):
         ff, fs, _x = self.get_free_assets()
         # Save initial funds and cycle statistics to .db for external analytics
         if self.first_run:
-            self.start_process()
+            if MODE in ('T', 'TC'):
+                self.start_process()
             self.save_init_assets(ff, fs)
         if self.restart:
             # Check refunding before restart
