@@ -4,24 +4,25 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.17b6"
+__version__ = "1.3.0b0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import asyncio
-
-from colorama import init as color_init
 import simplejson as json
 import logging
 import math
 import os
 import time
-from decimal import Decimal
 import sqlite3
-from pathlib import Path
 import random
 import traceback
 import pandas as pd
+
+from colorama import init as color_init
+from decimal import Decimal
+from pathlib import Path
+from datetime import datetime, timedelta
 
 # noinspection PyPackageRequirements
 import grpc
@@ -381,9 +382,10 @@ class StrategyBase:
     send_request = None
     for_request = None
     wss_fire_up = False
+    backtest = {}
 
     def __init__(self):
-        self.time_operational = {'start': 0, 'ts': 0, 'new': 0}  # - See get_time()
+        self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
         self.ticker = {}
         self.order_book = {}
         self.klines = {}  # KLines snapshot
@@ -505,7 +507,7 @@ class StrategyBase:
     def transfer_to_master(cls, symbol: str, amount: float):
         loop.create_task(transfer2master(symbol, str(amount)))
 
-    def get_time(self) -> int:
+    def get_time(self) -> float:
         """
         For backtesting purpose. Calculating monotonic local time based on self.time_operational['new'] value.
         It can be set from external source as int(time.time()) getting from historical data. If can't setting
@@ -514,9 +516,9 @@ class StrategyBase:
         """
         if self.time_operational['new']:
             if self.time_operational['ts']:
-                diff = int(time.time()) - self.time_operational['ts']
+                diff = time.time() - self.time_operational['ts']
             else:
-                diff = 0
+                diff = 0.0
             if self.time_operational['start'] == self.time_operational['new']:
                 last = self.time_operational['new'] + diff
                 self.time_operational['start'] = self.time_operational['new'] = last
@@ -524,10 +526,10 @@ class StrategyBase:
                 last = self.time_operational['start'] + diff
                 self.time_operational['start'] = self.time_operational['new'] = last
             else:
-                self.time_operational['start'] = last = int(self.time_operational['new'])
-            self.time_operational['ts'] = int(time.time())
+                self.time_operational['start'] = last = self.time_operational['new']
+            self.time_operational['ts'] = time.time()
         else:
-            last = int(time.time())
+            last = time.time()
         return last
 
 async def heartbeat(_session):
@@ -1043,15 +1045,13 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                                          new_client_order_id=_id)
             result = json_format.MessageToDict(res)
         else:
+            await asyncio.sleep(0.008)
             result = cls.strategy.account.create_order(symbol=cls.symbol,
                                                        client_order_id=_id,
                                                        buy=buy,
                                                        amount=amount,
                                                        price=price,
-                                                       lt=cls.strategy.get_time()*1000)
-
-        # print(f"create_limit_order.result: {result} ")
-
+                                                       lt=int(cls.strategy.get_time()*1000))
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except grpc.RpcError as ex:
@@ -1117,10 +1117,8 @@ async def cancel_order_call(_id: int):
                                          order_id=_id)
             result = json_format.MessageToDict(res)
         else:
+            await asyncio.sleep(0.008)
             result = cls.strategy.account.cancel_order(order_id=_id)
-
-        # print(f"cancel_order_call.result: {result} ")
-
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
     except grpc.RpcError as ex:
@@ -1215,9 +1213,10 @@ def remove_from_trades_lists(_order_id) -> None:
     cls.all_trades[:] = [i for i in cls.all_trades if i.order_id != _order_id]
 
 
-async def loop_ds(ds):
+async def loop_ds(ds, tik=False):
     """
     Pandas time Series asynchronous generator with delay (real time/XTIME) multiplier
+    :param tik: True - update local time
     :param ds: pandas time Series object
     :return: next row
     """
@@ -1226,7 +1225,8 @@ async def loop_ds(ds):
     for index, row in ds.items():
         delay = (index - index_prev) if index_prev else 0
         index_prev = index
-        cls.strategy.time_operational['new'] = int(index / 1000)
+        if tik:
+            cls.strategy.time_operational['new'] = index / 1000
         await asyncio.sleep(delay / (1000 * ms.XTIME))
         yield row
 
@@ -1253,8 +1253,7 @@ async def on_ticker_update():
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
     else:
-        ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
-        async for row in loop_ds(ds):
+        async for row in loop_ds(cls.backtest['ticker'], tik=True):
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(row))
             res = cls.strategy.account.on_ticker_update(row)
@@ -1262,6 +1261,10 @@ async def on_ticker_update():
                 on_order_update_handler(cls, _res)
                 await on_funds_update()
         print("Backtest *** ticker *** timeSeries ended")
+        test_time = datetime.utcnow() - cls.strategy.cycle_time
+        original_time = (cls.backtest['ticker'].index.max() - cls.backtest['ticker'].index.min()) / 1000
+        original_time = timedelta(seconds=original_time)
+        print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
 
 
 def order_book_prepare(_order_book: {}) -> {}:
@@ -1295,8 +1298,7 @@ async def on_order_book_update():
             logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
             cls.wss_fire_up = True
     else:
-        ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
-        async for row in loop_ds(ds):
+        async for row in loop_ds(cls.backtest['order_book']):
             cls.order_book = row
             cls.strategy.on_new_order_book(OrderBook(cls.order_book))
         print("Backtest order_book timeSeries ended")
@@ -1481,11 +1483,11 @@ async def main(_symbol):
                                                 'locked': '0.0'}
             cls.strategy.account.fee_maker = ms.FEE_MAKER
             cls.strategy.account.fee_taker = ms.FEE_TAKER
-            ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
-            cls.ticker = ds.iat[0]
-            ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
-            cls.order_book = ds.iat[0]
-            del ds
+            #
+            cls.backtest['ticker'] = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
+            cls.backtest['order_book'] = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
+            cls.ticker = cls.backtest['ticker'].iat[0]
+            cls.order_book = cls.backtest['order_book'].iat[0]
         #
         await buffered_funds()
         answer = str()
@@ -1510,6 +1512,8 @@ async def main(_symbol):
             input('Press Enter for Start or Ctrl-Z for Cancel\n')
             if ms.MODE == 'S':
                 await wss_declare()
+                # Set initial local time from backtest data
+                cls.strategy.time_operational['new'] = cls.backtest['ticker'].index[0] / 1000
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))

@@ -157,8 +157,8 @@ class Account:
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def on_ticker_update(self, ticker: {}) -> [dict]:
-        # print(f"on_ticker_update.ticker: {ticker}")
-        # print(f"BUY: {self.orders_buy}")
+        print(f"on_ticker_update.ticker: {ticker}")
+        print(f"BUY: {self.orders_buy}")
         # print(f"SELL: {self.orders_sell}")
         orders_filled = []
         orders_id = []

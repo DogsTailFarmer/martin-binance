@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.17b4"
+__version__ = "1.3.0b0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -105,8 +105,8 @@ CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
-MODE = 'S'  # T - Trade, TC - Trade and Collect, S - Simulate
-XTIME = 10000  # Time accelerator
+MODE = 'T'  # T - Trade, TC - Trade and Collect, S - Simulate
+XTIME = 150  # Time accelerator
 # endregion
 
 
@@ -1913,7 +1913,11 @@ class Strategy(StrategyBase):
         color = color if STANDALONE else 0
         color_msg = color+msg+Style.RESET if color else msg
         if log_level not in LOG_LEVEL_NO_PRINT:
-            print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
+            if MODE in ('T', 'TC'):
+                local_time = datetime.now().strftime('%d/%m %H:%M:%S')
+            else:
+                local_time = datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')
+            print(f"{local_time} {color_msg}")
         write_log(log_level, msg)
         if MODE in ('T', 'TC') and tlg and self.queue_to_tlg:
             msg = self.tlg_header + msg
@@ -2743,6 +2747,7 @@ class Strategy(StrategyBase):
         return xr
 
     def debug_output(self):
+        sum_profit = self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second, base=False)
         self.message_log(f"\n"
                          f"! =======================================\n"
                          f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
@@ -2764,6 +2769,7 @@ class Strategy(StrategyBase):
                          f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
                          f"! command: {self.command}\n"
                          f"! reverse: {self.reverse}\n"
+                         f"! Profit: {sum_profit}\n"
                          f"! ======================================")
 
     def check_order_status(self):
@@ -2873,7 +2879,7 @@ class Strategy(StrategyBase):
     # public data update methods
     ##############################################################
     def on_new_ticker(self, ticker: Ticker) -> None:
-        # print(f"on_new_ticker:ticker.last_price: {ticker.last_price}")
+        # print(f"on_new_ticker:ticker: {datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
         self.last_ticker_update = int(time.time())
         if (self.shift_grid_threshold and self.last_shift_time and self.local_time() - self.last_shift_time > SHIFT_GRID_DELAY
             and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
