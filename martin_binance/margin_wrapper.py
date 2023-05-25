@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-7"
+__version__ = "1.2.18-8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -57,6 +57,10 @@ logger = logging.getLogger('logger')
 color_init()
 ms_order_id = 'ms.order_id'
 ms_orders = 'ms.orders'
+
+
+def any2str(_x) -> str:
+    return f"{_x:.8f}".rstrip('0').rstrip('.')
 
 
 def write_log(level: LogLevel, message: str) -> None:
@@ -463,12 +467,13 @@ class StrategyBase:
         return kline[:None if include_current_building_candle else -1]
 
     @classmethod
-    def place_limit_order(cls, buy: bool, amount: float, price: float) -> int:
+    def place_limit_order(cls, buy: bool, amount: Decimal, price: Decimal) -> int:
         cls.order_id += 1
         StrategyBase.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
-                                          f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
+                                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
+                                          color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
-        loop.create_task(create_limit_order(cls.order_id, buy, str(amount), str(price)))
+        loop.create_task(create_limit_order(cls.order_id, buy, any2str(amount), any2str(price)))
         if StrategyBase.exchange == 'huobi':
             time.sleep(0.02)
         elif StrategyBase.exchange == 'okx':
@@ -1020,7 +1025,8 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
             order = Order(result)
             cls.strategy.message_log(
                 f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
-                f" {order.amount} by {order.price} Remaining amount {order.remaining_amount}",
+                f" {any2str(order.amount)} by {any2str(order.price)}"
+                f" Remaining amount {any2str(order.remaining_amount)}",
                 color=ms.Style.GREEN)
             orig_qty = Decimal(result['origQty'])
             executed_qty = Decimal(result['executedQty'])

@@ -1,9 +1,10 @@
-## v1.2.18-7 2023-05-xx
+## v1.2.18-8 2023-05-xx
 ### Fix
 * collect_assets() incorrect convert small decimal.Decimal values to str
 
-## v1.2.18-5 2023-05-xx
 ### Update
+* For STANDALONE mode refactoring call environment for place_limit_order(), avoid unnecessary Decimal -> float
+conversions
 * Add error handling for atr()
 * Some minor improvements
 
