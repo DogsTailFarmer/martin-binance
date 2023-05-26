@@ -100,6 +100,10 @@ class Account:
         self.orders_sell = pd.Series()
         self.trade_id = 0
 
+        self.ds_ticker = pd.Series()
+        self.df_grid_buy = pd.DataFrame()
+        self.df_grid_sell = pd.DataFrame()
+
     def create_order(self, symbol: str, client_order_id: str, buy: bool, amount: str, price: str, lt: int) -> {}:
         order_id = len(self.orders)
         order = Order(symbol=symbol,
@@ -157,9 +161,24 @@ class Account:
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def on_ticker_update(self, ticker: {}) -> [dict]:
-        print(f"on_ticker_update.ticker: {ticker}")
-        print(f"BUY: {self.orders_buy}")
+        # print(f"on_ticker_update.ticker: {ticker['lastPrice']}")
+        # print(f"BUY: {self.orders_buy}")
         # print(f"SELL: {self.orders_sell}")
+
+        ts = int(ticker['closeTime'] / 1000)
+
+        self.ds_ticker.at[ts] = float(ticker['lastPrice'])
+
+        if self.orders_sell.values.size:
+            gs = self.orders_sell.to_frame().T.astype(float)
+            gs.set_index(pd.Index([ts]), inplace=True)
+            self.df_grid_sell = pd.concat([self.df_grid_sell, gs], ignore_index=False)
+
+        if self.orders_buy.values.size:
+            gb = self.orders_buy.to_frame().T.astype(float)
+            gb.set_index(pd.Index([ts]), inplace=True)
+            self.df_grid_buy = pd.concat([self.df_grid_buy, gb], ignore_index=False)
+
         orders_filled = []
         orders_id = []
         #
@@ -174,12 +193,12 @@ class Account:
             order = self.orders.pop(order_id)
             order.transact_time = int(ticker['closeTime'])
             order.executed_qty = order.orig_qty
-            order.cummulative_quote_qty = str(Decimal(order.orig_qty) * Decimal(ticker['lastPrice']))
+            order.cummulative_quote_qty = str(Decimal(order.orig_qty) * Decimal(order.price))
             order.status = 'FILLED'
             order.event_time = order.transact_time
             order.last_executed_quantity = order.orig_qty
             order.cumulative_filled_quantity = order.orig_qty
-            order.last_executed_price = ticker['lastPrice']
+            order.last_executed_price = order.price
             order.trade_id = self.trade_id = self.trade_id + 1
             order.quote_asset_transacted = order.cummulative_quote_qty
             order.last_quote_asset_transacted = order.cummulative_quote_qty

@@ -98,6 +98,7 @@ LOAD_LAST_STATE = int()
 # Path and files name
 LAST_STATE_FILE: Path
 VPS_NAME = str()
+PARAMS: Path
 # Telegram
 TELEGRAM_URL = str()
 TOKEN = str()
@@ -106,7 +107,7 @@ STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
 MODE = 'T'  # T - Trade, TC - Trade and Collect, S - Simulate
-XTIME = 150  # Time accelerator
+XTIME = 1000  # Time accelerator
 # endregion
 
 
@@ -1548,6 +1549,25 @@ class Strategy(StrategyBase):
             fs = f2d(0)
         return ff, fs
 
+    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg: bool = False, color=Style.WHITE) -> None:
+        if tlg and color == Style.WHITE:
+            color = Style.B_WHITE
+        if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
+            tlg = True
+            color = Style.B_RED
+        color = color if STANDALONE else 0
+        color_msg = color+msg+Style.RESET if color else msg
+        if log_level not in LOG_LEVEL_NO_PRINT:
+            if MODE in ('T', 'TC'):
+                local_time = datetime.now().strftime('%d/%m %H:%M:%S')
+            else:
+                local_time = datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')
+            print(f"{local_time} {color_msg}")
+        write_log(log_level, msg)
+        if MODE in ('T', 'TC') and tlg and self.queue_to_tlg:
+            msg = self.tlg_header + msg
+            self.status_time = time.time()
+            self.queue_to_tlg.put(msg)
 
     ##############################################################
     # strategy function
@@ -1903,26 +1923,6 @@ class Strategy(StrategyBase):
                     self.tp_order = (buy_side, _amount, _price)
                     check = (len(self.orders_grid) + len(self.orders_hold)) > 2
                     self.tp_wait_id = self.place_limit_order_check(buy_side, _amount, _price, check=check)
-
-    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg: bool = False, color=Style.WHITE) -> None:
-        if tlg and color == Style.WHITE:
-            color = Style.B_WHITE
-        if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
-            tlg = True
-            color = Style.B_RED
-        color = color if STANDALONE else 0
-        color_msg = color+msg+Style.RESET if color else msg
-        if log_level not in LOG_LEVEL_NO_PRINT:
-            if MODE in ('T', 'TC'):
-                local_time = datetime.now().strftime('%d/%m %H:%M:%S')
-            else:
-                local_time = datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')
-            print(f"{local_time} {color_msg}")
-        write_log(log_level, msg)
-        if MODE in ('T', 'TC') and tlg and self.queue_to_tlg:
-            msg = self.tlg_header + msg
-            self.status_time = time.time()
-            self.queue_to_tlg.put(msg)
 
     def bollinger_band(self, candle_size_in_minutes: int, number_of_candles: int) -> Dict[str, float]:
         # Bottom BB as sma-kb*stdev

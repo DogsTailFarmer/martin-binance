@@ -36,9 +36,16 @@ from margin_strategy_sdk import StrategyConfig  # lgtm [py/unused-import]
 from exchanges_wrapper.definitions import Interval
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
-from martin_binance import executor as ms, BACKTEST_PATH
+from martin_binance import executor as ms, BACKTEST_PATH, copy
 from martin_binance.client import Trade
-from martin_binance import exchange_simulator as backtest
+
+if ms.STANDALONE:
+    import pandas as pd
+    from martin_binance import exchange_simulator as backtest
+
+    # import matplotlib.pyplot as plt
+    # plt.ion()
+
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -451,10 +458,10 @@ class StrategyBase:
     @classmethod
     def get_buffered_funds(cls) -> Dict[str, FundsEntry]:
         # print(f"get_buffered_funds.funds: {cls.funds}")
-        if time.time() - cls.get_buffered_funds_last_time > cls.rate_limiter:
+        if cls.strategy.get_time() - cls.get_buffered_funds_last_time > cls.rate_limiter:
             # noinspection PyTypeChecker
             loop.create_task(buffered_funds(print_info=False))
-            cls.get_buffered_funds_last_time = time.time()
+            cls.get_buffered_funds_last_time = cls.strategy.get_time()
         return {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
                 cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
 
@@ -967,7 +974,7 @@ def on_funds_update_handler(cls, funds):
     funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
              cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
     cls.strategy.on_new_funds(funds)
-    cls.get_buffered_funds_last_time = time.time()
+    cls.get_buffered_funds_last_time = cls.strategy.get_time()
 
 
 async def on_balance_update():
@@ -1261,10 +1268,28 @@ async def on_ticker_update():
                 on_order_update_handler(cls, _res)
                 await on_funds_update()
         print("Backtest *** ticker *** timeSeries ended")
+
+        # Test result handler
         test_time = datetime.utcnow() - cls.strategy.cycle_time
         original_time = (cls.backtest['ticker'].index.max() - cls.backtest['ticker'].index.min()) / 1000
         original_time = timedelta(seconds=original_time)
         print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
+
+        '''
+        ax = cls.strategy.account.ds_ticker.plot(color='b', legend=None)
+        cls.strategy.account.df_grid_sell.plot(ax=ax, color='r', legend=None)
+        cls.strategy.account.df_grid_buy.plot(ax=ax, color='g', legend=None)
+        plt.pause(0.001)
+        '''
+        # Save test data
+        session_path = Path(BACKTEST_PATH, f"{ms.SYMBOL}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
+        session_path.mkdir(parents=True)
+        cls.strategy.account.ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
+        cls.strategy.account.df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
+        cls.strategy.account.df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
+        copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
+        # TODO Save session result
+        print(f"Session data saved to: {session_path}")
 
 
 def order_book_prepare(_order_book: {}) -> {}:
@@ -1474,7 +1499,7 @@ async def main(_symbol):
             loop.create_task(save_asset())
         else:
             cls.strategy.account = backtest.Account()
-
+            #
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': f"{ms.AMOUNT_FIRST}",
                                                'locked': '0.0'}
@@ -1488,7 +1513,7 @@ async def main(_symbol):
             cls.backtest['order_book'] = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
             cls.ticker = cls.backtest['ticker'].iat[0]
             cls.order_book = cls.backtest['order_book'].iat[0]
-        #
+            #
         await buffered_funds()
         answer = str()
         restored = True
@@ -1514,6 +1539,8 @@ async def main(_symbol):
                 await wss_declare()
                 # Set initial local time from backtest data
                 cls.strategy.time_operational['new'] = cls.backtest['ticker'].index[0] / 1000
+                cls.get_buffered_funds_last_time = cls.strategy.get_time()
+                cls.start_time_ms = int(cls.strategy.get_time() * 1000)
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))

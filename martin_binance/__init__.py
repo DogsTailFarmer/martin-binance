@@ -6,12 +6,12 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b0"
+__version__ = "1.3.0b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 from pathlib import Path
-import shutil
+from shutil import copy
 #
 import platform
 
@@ -41,11 +41,11 @@ else:
     if STANDALONE:
         LOG_PATH.mkdir(parents=True, exist_ok=True)
         LAST_STATE_PATH.mkdir(parents=True, exist_ok=True)
-    shutil.copy(Path(Path(__file__).parent.absolute(), "ms_cfg.toml.template"), CONFIG_FILE)
-    shutil.copy(Path(Path(__file__).parent.absolute(), "funds_rate.db.template"), DB_FILE)
-    shutil.copy(Path(Path(__file__).parent.absolute(), "cli_0_BTCUSDT.py.template"),
+    copy(Path(Path(__file__).parent.absolute(), "ms_cfg.toml.template"), CONFIG_FILE)
+    copy(Path(Path(__file__).parent.absolute(), "funds_rate.db.template"), DB_FILE)
+    copy(Path(Path(__file__).parent.absolute(), "cli_0_BTCUSDT.py.template"),
                 Path(WORK_PATH, "cli_0_BTCUSDT.py"))
-    shutil.copy(Path(Path(__file__).parent.absolute(), "cli_2_AAABBB.py.template"),
+    copy(Path(Path(__file__).parent.absolute(), "cli_2_AAABBB.py.template"),
                 Path(WORK_PATH, "cli_2_AAABBB.py"))
     print(f"Before the first run, set the parameters in {CONFIG_FILE}")
     if STANDALONE:
