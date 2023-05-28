@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b3"
+__version__ = "1.3.0b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -163,27 +163,22 @@ class Account:
         # print(f"on_ticker_update.ticker: {ticker['lastPrice']}")
         # print(f"BUY: {self.orders_buy}")
         # print(f"SELL: {self.orders_sell}")
-
-        ts = ticker['closeTime']
-
-        self.ticker[ts] = ticker['lastPrice']
-
-        if self.orders_sell.values.size:
-            self.grid_sell[ts] = self.orders_sell
-
-        if self.orders_buy.values.size:
-            self.grid_buy[ts] = self.orders_buy
-
-        orders_filled = []
         orders_id = []
-        #
         _i = self.orders_buy[self.orders_buy >= Decimal(ticker['lastPrice'])].index
         self.orders_buy = self.orders_buy.drop(_i.values)
         orders_id.extend(_i.values)
         _i = self.orders_sell[self.orders_sell <= Decimal(ticker['lastPrice'])].index
         self.orders_sell = self.orders_sell.drop(_i.values)
         orders_id.extend(_i.values)
+        # Save data for analytics
+        ts = ticker['closeTime']
+        self.ticker[ts] = ticker['lastPrice']
+        if self.orders_sell.values.size:
+            self.grid_sell[ts] = self.orders_sell
+        if self.orders_buy.values.size:
+            self.grid_buy[ts] = self.orders_buy
         #
+        orders_filled = []
         for order_id in orders_id:
             order = self.orders.pop(order_id)
             order.transact_time = int(ticker['closeTime'])

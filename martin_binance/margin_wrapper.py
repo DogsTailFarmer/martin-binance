@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b3"
+__version__ = "1.3.0b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -370,7 +370,7 @@ class StrategyBase:
     ticker = {}
     funds = {}
     order_book = {}
-    order_id = int(ms.datetime.now().strftime("%S%M")) * 1000
+    order_id = int(datetime.now().strftime("%S%M")) * 1000
     wait_order_id = []  # List of placed orders for time-out detect
     canceled_order_id = []  # List canceled orders  for time-out detect
     all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
@@ -386,6 +386,7 @@ class StrategyBase:
     for_request = None
     wss_fire_up = False
     backtest = {}
+    delay_ordering_s = 0
 
     def __init__(self):
         self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
@@ -760,7 +761,7 @@ async def ask_exit():
             print(f"ask_exit.strategy.stop: {_err}")
         await cls.channel.close()
         cls.strategy = None
-        if ms.LAST_STATE_FILE.exists():
+        if ms.MODE in ('T', 'TC') and ms.LAST_STATE_FILE.exists():
             answer = input('Save current state? y/n:\n')
             if answer.lower() != 'y':
                 ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.bak'))
@@ -1020,6 +1021,10 @@ async def on_order_update():
             # print(f"on_order_update: {event.symbol}:{event.order_id}({event.client_order_id}):{event.order_status}")
             ed = eval(json.loads(event.result))
             on_order_update_handler(cls, ed)
+            if ms.MODE == 'TC':
+                # Save snapshot for open orders lists
+                cls.strategy.grid_buy.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=True)})
+                cls.strategy.grid_sell.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=False)})
     except Exception as ex:
         print(f"Exception on WSS, on_order_update loop closed: {ex}")
         logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
@@ -1069,6 +1074,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
     cls = StrategyBase
     try:
         if ms.MODE in ('T', 'TC'):
+            ts = time.time()
             res = await cls.send_request(cls.stub.CreateLimitOrder, api_pb2.CreateLimitOrderRequest,
                                          symbol=cls.symbol,
                                          buy_side=buy,
@@ -1076,10 +1082,9 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                                          price=price,
                                          new_client_order_id=_id)
             result = json_format.MessageToDict(res)
+            cls.delay_ordering_s = time.time() - ts
         else:
-
-            await asyncio.sleep(0.008)
-
+            await asyncio.sleep(cls.delay_ordering_s / ms.XTIME)
             result = cls.strategy.account.create_order(symbol=cls.symbol,
                                                        client_order_id=_id,
                                                        buy=buy,
@@ -1129,7 +1134,11 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                 cls.orders.append(order)
                 cls.all_orders.append(order)
             cls.strategy.on_place_order_success(_id, order)
-            if ms.MODE == 'S':
+            if ms.MODE == 'TC':
+                # Save snapshot for open orders lists
+                cls.strategy.grid_buy.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=True)})
+                cls.strategy.grid_sell.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=False)})
+            elif ms.MODE == 'S':
                 await on_funds_update()
 
 
@@ -1151,7 +1160,7 @@ async def cancel_order_call(_id: int):
                                          order_id=_id)
             result = json_format.MessageToDict(res)
         else:
-            await asyncio.sleep(0.008)
+            await asyncio.sleep(cls.delay_ordering_s / ms.XTIME)
             result = cls.strategy.account.cancel_order(order_id=_id)
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
@@ -1174,7 +1183,11 @@ async def cancel_order_call(_id: int):
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
             cls.strategy.on_cancel_order_success(_id, Order(result))
             cls.canceled_order_id.append(_id)
-            if ms.MODE == 'S':
+            if ms.MODE == 'TC':
+                # Save snapshot for open orders lists
+                cls.strategy.grid_buy.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=True)})
+                cls.strategy.grid_sell.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=False)})
+            elif ms.MODE == 'S':
                 await on_funds_update()
 
 
@@ -1282,15 +1295,16 @@ async def on_ticker_update():
                 #
                 if ms.MODE == 'TC':
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
-                    cls.strategy.ticker.update({ticker.event_time: ticker_24h})
-                    # Save open orders list snapshot
-                    cls.strategy.grid_buy.update({ticker.event_time: cls.get_open_orders_ps(buy=True)})
-                    cls.strategy.grid_sell.update({ticker.event_time: cls.get_open_orders_ps(buy=False)})
+                    ticker_24h['delay'] = cls.delay_ordering_s
+                    cls.strategy.ticker.update({int(time.time() * 1000): ticker_24h})
+                    cls.strategy.grid_buy.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=True)})
+                    cls.strategy.grid_sell.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=False)})
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
     else:
         async for row in loop_ds(cls.backtest['ticker'], tik=True):
+            cls.delay_ordering_s = row.pop('delay', 0)
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(row))
             res = cls.strategy.account.on_ticker_update(row)
@@ -1320,7 +1334,6 @@ async def on_ticker_update():
         df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
         df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
         copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
-        # TODO Save session result
         print(f"Session data saved to: {session_path}")
 
 

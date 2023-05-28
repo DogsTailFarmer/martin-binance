@@ -4,14 +4,13 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b3"
+__version__ = "1.3.0b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
 import sys
 import gc
 import statistics
-from datetime import datetime
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
 from threading import Thread
 import queue
@@ -771,7 +770,6 @@ class Strategy(StrategyBase):
                         self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
                         if STANDALONE:
                             raise SystemExit(1)
-                    depo = self.deposit_second
                 else:
                     df = self.get_buffered_funds().get(self.f_currency, 0)
                     df = df.available if df else 0
@@ -781,7 +779,6 @@ class Strategy(StrategyBase):
                         self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
                         if STANDALONE:
                             raise SystemExit(1)
-                    depo = self.deposit_first
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
             if STANDALONE:
@@ -2052,7 +2049,7 @@ class Strategy(StrategyBase):
         try:
             bb = self.bollinger_band(15, 20)
         except statistics.StatisticsError:
-            self.message_log("Set profit Exception, can't calculate BollingerBand, set profit by default",
+            self.message_log("Exception on set profit, can't calculate BollingerBand, set profit by default",
                              log_level=LogLevel.WARNING)
         else:
             tbb = bb.get('tbb')
@@ -2488,7 +2485,7 @@ class Strategy(StrategyBase):
         else:
             try:
                 adx = self.adx(ADX_CANDLE_SIZE_IN_MINUTES, ADX_NUMBER_OF_CANDLES, ADX_PERIOD)
-            except ZeroDivisionError:
+            except (ZeroDivisionError, statistics.StatisticsError):
                 trend_up = True
                 trend_down = True
             else:

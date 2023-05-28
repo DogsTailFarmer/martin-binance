@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Visual compare sessions log
+Visual Comparison of Session Extended Log
 """
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b2"
+__version__ = "1.3.0b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 from dash import Dash, html, dcc, callback, Output, Input
-import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 
@@ -41,17 +40,17 @@ fig.update_layout(template = 'seaborn')
 # SOURCE data
 # noinspection PyTypeChecker
 fig.add_traces(go.Scatter(x=st_ds.index, y=st_ds.values, mode = 'lines', name='Base',
-                          line=dict(color='royalblue', width=2, dash='dot')))
+                          line=dict(color='royalblue', width=5, dash='dot')))
 
 for col in sg_sell_df.columns:
     # noinspection PyTypeChecker
     fig.add_traces(go.Scatter(x=sg_sell_df.index, y = sg_sell_df[col], mode = 'lines', showlegend=False,
-                              line=dict(color='indianred', width=2, dash='dot')))
+                              line=dict(color='indianred', width=5, dash='dot')))
 
 for col in sg_buy_df.columns:
     # noinspection PyTypeChecker
     fig.add_traces(go.Scatter(x=sg_buy_df.index, y = sg_buy_df[col], mode = 'lines', showlegend=False,
-                              line=dict(color='forestgreen', width=2, dash='dot')))
+                              line=dict(color='forestgreen', width=5, dash='dot')))
 
 # Test data
 # noinspection PyTypeChecker
