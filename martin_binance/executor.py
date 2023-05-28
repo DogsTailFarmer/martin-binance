@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b0"
+__version__ = "1.3.0b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -107,7 +107,7 @@ STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
 MODE = 'T'  # T - Trade, TC - Trade and Collect, S - Simulate
-XTIME = 1000  # Time accelerator
+XTIME = 100  # Time accelerator
 # endregion
 
 
@@ -750,7 +750,7 @@ class Strategy(StrategyBase):
                              f" placement ON",
                              color=Style.B_WHITE)
         self.message_log(f"Mode is {'Trade' if MODE == 'T' else ('Trade & Collect' if MODE == 'TC' else 'Simulate')}",
-                         color=Style.B_WHITE)
+                         color=Style.B_WHITE if MODE == 'T' else (Style.B_RED if MODE == 'TC' else Style.GREEN))
         # Calculate round float multiplier
         self.round_base = ROUND_BASE or str(tcm.round_amount(1.123456789, RoundingType.FLOOR))
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
@@ -1561,7 +1561,7 @@ class Strategy(StrategyBase):
             if MODE in ('T', 'TC'):
                 local_time = datetime.now().strftime('%d/%m %H:%M:%S')
             else:
-                local_time = datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')
+                local_time = datetime.fromtimestamp(self.local_time()).strftime('%H:%M:%S.%f')
             print(f"{local_time} {color_msg}")
         write_log(log_level, msg)
         if MODE in ('T', 'TC') and tlg and self.queue_to_tlg:

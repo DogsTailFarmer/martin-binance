@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b0"
+__version__ = "1.3.0b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -398,6 +398,8 @@ class StrategyBase:
         self.klines = {}  # KLines snapshot
         self.candles = {}  # Candles stream
         self.account = None
+        self.grid_buy = {}
+        self.grid_sell = {}
 
     def __call__(self):
         return self
@@ -458,10 +460,10 @@ class StrategyBase:
     @classmethod
     def get_buffered_funds(cls) -> Dict[str, FundsEntry]:
         # print(f"get_buffered_funds.funds: {cls.funds}")
-        if cls.strategy.get_time() - cls.get_buffered_funds_last_time > cls.rate_limiter:
+        if cls.strategy.local_time() - cls.get_buffered_funds_last_time > cls.rate_limiter:
             # noinspection PyTypeChecker
             loop.create_task(buffered_funds(print_info=False))
-            cls.get_buffered_funds_last_time = cls.strategy.get_time()
+            cls.get_buffered_funds_last_time = cls.strategy.local_time()
         return {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
                 cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
 
@@ -538,6 +540,12 @@ class StrategyBase:
         else:
             last = time.time()
         return last
+
+    @classmethod
+    def get_open_orders_ps(cls, buy: bool) -> pd.Series:
+        orders = {}
+        [orders.update({o.id: o.price}) for o in cls.orders if o.buy == buy]
+        return pd.Series(orders)
 
 async def heartbeat(_session):
     cls = StrategyBase
@@ -709,8 +717,10 @@ async def ask_exit():
     cls = StrategyBase
     if cls.strategy:
         cls.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
+        await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
 
         if ms.MODE == 'TC':
+            # Save stream data for backtesting
             # Save ticker
             ds = pd.Series(cls.strategy.ticker)
             ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
@@ -723,8 +733,27 @@ async def ask_exit():
             for k, v in cls.strategy.candles.items():
                 ds = pd.Series(v)
                 ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_candles_{k}.pkl"))
+            # Save session detail for analytics
+            session_path = Path(BACKTEST_PATH, f"{ms.SYMBOL}_SOURCE")
+            session_path.mkdir(parents=True, exist_ok=True)
+            #
+            d_ticker = {}
+            for k, v in cls.strategy.ticker.items():
+                d_ticker[k] = v['lastPrice']
+            ds_ticker = pd.Series(d_ticker).astype(float)
+            ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
+            #
+            df_grid_sell = pd.DataFrame().from_dict(cls.strategy.grid_sell, orient='index')
+            df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+            df_grid_buy = pd.DataFrame().from_dict(cls.strategy.grid_buy, orient='index')
+            df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+            #
+            ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
+            df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
+            df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
+            #
+            copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
 
-        await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
         print(f"Cancelling {len(tasks)} outstanding tasks")
@@ -974,7 +1003,7 @@ def on_funds_update_handler(cls, funds):
     funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
              cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
     cls.strategy.on_new_funds(funds)
-    cls.get_buffered_funds_last_time = cls.strategy.get_time()
+    cls.get_buffered_funds_last_time = cls.strategy.local_time()
 
 
 async def on_balance_update():
@@ -1052,13 +1081,15 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                                          new_client_order_id=_id)
             result = json_format.MessageToDict(res)
         else:
+
             await asyncio.sleep(0.008)
+
             result = cls.strategy.account.create_order(symbol=cls.symbol,
                                                        client_order_id=_id,
                                                        buy=buy,
                                                        amount=amount,
                                                        price=price,
-                                                       lt=int(cls.strategy.get_time()*1000))
+                                                       lt=int(cls.strategy.local_time()*1000))
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except grpc.RpcError as ex:
@@ -1255,7 +1286,10 @@ async def on_ticker_update():
                 #
                 if ms.MODE == 'TC':
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
-                    cls.strategy.ticker.update({int(time.time() * 1000): ticker_24h})
+                    cls.strategy.ticker.update({ticker.event_time: ticker_24h})
+                    # Save open orders list snapshot
+                    cls.strategy.grid_buy.update({ticker.event_time: cls.get_open_orders_ps(buy=True)})
+                    cls.strategy.grid_sell.update({ticker.event_time: cls.get_open_orders_ps(buy=False)})
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
@@ -1275,18 +1309,20 @@ async def on_ticker_update():
         original_time = timedelta(seconds=original_time)
         print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
 
-        '''
-        ax = cls.strategy.account.ds_ticker.plot(color='b', legend=None)
-        cls.strategy.account.df_grid_sell.plot(ax=ax, color='r', legend=None)
-        cls.strategy.account.df_grid_buy.plot(ax=ax, color='g', legend=None)
-        plt.pause(0.001)
-        '''
         # Save test data
         session_path = Path(BACKTEST_PATH, f"{ms.SYMBOL}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
         session_path.mkdir(parents=True)
-        cls.strategy.account.ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
-        cls.strategy.account.df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
-        cls.strategy.account.df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
+
+        ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
+        ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
+        df_grid_sell = pd.DataFrame().from_dict(cls.strategy.account.grid_sell, orient='index').astype(float)
+        df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+        df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
+        df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+        #
+        ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
+        df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
+        df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
         copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
         # TODO Save session result
         print(f"Session data saved to: {session_path}")
@@ -1491,7 +1527,8 @@ async def main(_symbol):
                 order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
             cls.order_book = order_book
             # endregion
-            _ticker = await send_request(cls.stub.FetchTickerPriceChangeStatistics, api_pb2.MarketRequest,
+            _ticker = await send_request(cls.stub.FetchTickerPriceChangeStatistics,
+                                         api_pb2.MarketRequest,
                                          symbol=_symbol)
             cls.ticker = json_format.MessageToDict(_ticker)
             # print(f"main.ticker: {cls.ticker}")

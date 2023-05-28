@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.17b6"
+__version__ = "1.3.0b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -99,10 +99,9 @@ class Account:
         self.orders_buy = pd.Series()
         self.orders_sell = pd.Series()
         self.trade_id = 0
-
-        self.ds_ticker = pd.Series()
-        self.df_grid_buy = pd.DataFrame()
-        self.df_grid_sell = pd.DataFrame()
+        self.ticker = {}
+        self.grid_buy = {}
+        self.grid_sell = {}
 
     def create_order(self, symbol: str, client_order_id: str, buy: bool, amount: str, price: str, lt: int) -> {}:
         order_id = len(self.orders)
@@ -165,19 +164,15 @@ class Account:
         # print(f"BUY: {self.orders_buy}")
         # print(f"SELL: {self.orders_sell}")
 
-        ts = int(ticker['closeTime'] / 1000)
+        ts = ticker['closeTime']
 
-        self.ds_ticker.at[ts] = float(ticker['lastPrice'])
+        self.ticker[ts] = ticker['lastPrice']
 
         if self.orders_sell.values.size:
-            gs = self.orders_sell.to_frame().T.astype(float)
-            gs.set_index(pd.Index([ts]), inplace=True)
-            self.df_grid_sell = pd.concat([self.df_grid_sell, gs], ignore_index=False)
+            self.grid_sell[ts] = self.orders_sell
 
         if self.orders_buy.values.size:
-            gb = self.orders_buy.to_frame().T.astype(float)
-            gb.set_index(pd.Index([ts]), inplace=True)
-            self.df_grid_buy = pd.concat([self.df_grid_buy, gb], ignore_index=False)
+            self.grid_buy[ts] = self.orders_buy
 
         orders_filled = []
         orders_id = []
