@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b2"
+__version__ = "1.3.0b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -41,11 +41,7 @@ from martin_binance.client import Trade
 
 if ms.STANDALONE:
     import pandas as pd
-    from martin_binance import exchange_simulator as backtest
-
-    # import matplotlib.pyplot as plt
-    # plt.ion()
-
+    from martin_binance.backtest import exchange_simulator as backtest
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -1532,7 +1528,6 @@ async def main(_symbol):
                                          symbol=_symbol)
             cls.ticker = json_format.MessageToDict(_ticker)
             # print(f"main.ticker: {cls.ticker}")
-            await wss_init()
             loop.create_task(save_asset())
         else:
             cls.strategy.account = backtest.Account()
@@ -1571,13 +1566,15 @@ async def main(_symbol):
             loop.create_task(buffered_orders())
         if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
             cls.strategy.init()
-            input('Press Enter for Start or Ctrl-Z for Cancel\n')
-            if ms.MODE == 'S':
+            if ms.MODE in ('T', 'TC'):
+                input('Press Enter for Start or Ctrl-Z for Cancel\n')
+                await wss_init()
+            else:
                 await wss_declare()
                 # Set initial local time from backtest data
                 cls.strategy.time_operational['new'] = cls.backtest['ticker'].index[0] / 1000
-                cls.get_buffered_funds_last_time = cls.strategy.get_time()
-                cls.start_time_ms = int(cls.strategy.get_time() * 1000)
+                cls.get_buffered_funds_last_time = cls.strategy.local_time()
+                cls.start_time_ms = int(cls.strategy.local_time() * 1000)
             cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(session))

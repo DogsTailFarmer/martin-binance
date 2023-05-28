@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b2"
+__version__ = "1.3.0b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -716,6 +716,7 @@ class Strategy(StrategyBase):
         self.last_ticker_update = 0  # -
         self.grid_only_restart = None  # -
         self.local_time = self.get_time if STANDALONE else time.time
+        self.wait_wss_refresh = {}  # -
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
@@ -737,7 +738,7 @@ class Strategy(StrategyBase):
         self.s_currency = self.get_second_currency()
         self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}. "
         self.message_log(f"{self.tlg_header}", color=Style.B_WHITE)
-        self.status_time = int(time.time())
+        self.status_time = int(self.local_time())
         self.cycle_time = datetime.utcnow()
         self.start_after_shift = True
         self.over_price = OVER_PRICE
@@ -781,8 +782,6 @@ class Strategy(StrategyBase):
                         if STANDALONE:
                             raise SystemExit(1)
                     depo = self.deposit_first
-                if MODE in ('T', 'TC') and not GRID_ONLY:
-                    self.place_grid(self.cycle_buy, depo, self.reverse_target_amount, init_calc_only=True)
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
             if STANDALONE:
@@ -864,10 +863,11 @@ class Strategy(StrategyBase):
         if self.command == 'restart':
             self.stop()
             os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
-        if MODE in ('T', 'TC') and (command or (STATUS_DELAY and (time.time() - self.status_time) / 60 > STATUS_DELAY)):
+        if (MODE in ('T', 'TC') and
+                (command or (STATUS_DELAY and (self.local_time() - self.status_time) / 60 > STATUS_DELAY))):
             # Report current status
             last_price = self.get_buffered_ticker().last_price
-            ticker_update = int(time.time()) - self.last_ticker_update
+            ticker_update = int(self.local_time()) - self.last_ticker_update
             if self.cycle_time:
                 ct = str(datetime.utcnow() - self.cycle_time).rsplit('.')[0]
             else:
@@ -882,7 +882,7 @@ class Strategy(StrategyBase):
                 fund_s = funds.get(self.s_currency, 0)
                 fund_s = fund_s.available if fund_s else 0
                 if self.grid_hold.get('timestamp'):
-                    time_diff = int(time.time() - self.grid_hold['timestamp'])
+                    time_diff = int(self.local_time() - self.grid_hold['timestamp'])
                     self.message_log(f"Exist unreleased grid orders for\n"
                                      f"{'Buy' if self.cycle_buy else 'Sell'} cycle with"
                                      f" {self.grid_hold['depo']}"
@@ -894,7 +894,7 @@ class Strategy(StrategyBase):
                                      f"From start {ct}\n"
                                      f"Delay: {time_diff} sec", tlg=True)
                 elif self.tp_order_hold['timestamp']:
-                    time_diff = int(time.time() - self.tp_order_hold['timestamp'])
+                    time_diff = int(self.local_time() - self.tp_order_hold['timestamp'])
                     if time_diff > HOLD_TP_ORDER_TIMEOUT:
                         self.message_log(f"Exist hold TP order for"
                                          f" {'Sell' if self.cycle_buy else 'Buy'} {self.tp_order_hold['amount']}"
@@ -947,6 +947,13 @@ class Strategy(StrategyBase):
                                  tlg=True)
         # endregion
         # region ProcessingEvent
+        if self.wait_wss_refresh and self.local_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
+            self.place_grid(self.wait_wss_refresh['buy_side'],
+                            self.wait_wss_refresh['depo'],
+                            self.reverse_target_amount,
+                            self.wait_wss_refresh['allow_grid_shift'],
+                            self.wait_wss_refresh['additional_grid'],
+                            self.wait_wss_refresh['grid_update'])
         self.heartbeat_counter += 1
         if self.heartbeat_counter % 5 == 0 and not STANDALONE and EXTRA_CHECK_ORDER_STATE:
             self.check_order_status()
@@ -1062,7 +1069,7 @@ class Strategy(StrategyBase):
                 self.cycle_time_reverse = None
             self.deposit_first = f2d(json.loads(strategy_state.get('deposit_first')))
             self.deposit_second = f2d(json.loads(strategy_state.get('deposit_second')))
-            self.last_shift_time = json.loads(strategy_state.get('last_shift_time')) or time.time()
+            self.last_shift_time = json.loads(strategy_state.get('last_shift_time')) or self.local_time()
             self.martin = f2d(json.loads(strategy_state.get('martin')))
             self.order_q = json.loads(strategy_state.get('order_q'))
             self.orders_grid.restore(json.loads(strategy_state.get('orders')))
@@ -1504,12 +1511,16 @@ class Strategy(StrategyBase):
                                  log_level=LogLevel.ERROR)
                 if STANDALONE:
                     raise SystemExit(1)
+                else:
+                    raise UserWarning
             _amount_first_grid = (_amount_first_grid * self.avg_rate) if self.cycle_buy else _amount_first_grid
             if _amount_first_grid > 80 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} too large for"
                                  f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
                 if STANDALONE and self.first_run:
                     raise SystemExit(1)
+                else:
+                    raise UserWarning
             elif _amount_first_grid > 20 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} it is rather"
                                  f" big for a small deposit"
@@ -1525,6 +1536,8 @@ class Strategy(StrategyBase):
                                  color=Style.B_RED)
                 if STANDALONE and self.first_run:
                     raise SystemExit(1)
+                else:
+                    raise UserWarning
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -1566,7 +1579,7 @@ class Strategy(StrategyBase):
         write_log(log_level, msg)
         if MODE in ('T', 'TC') and tlg and self.queue_to_tlg:
             msg = self.tlg_header + msg
-            self.status_time = time.time()
+            self.status_time = self.local_time()
             self.queue_to_tlg.put(msg)
 
     ##############################################################
@@ -1579,16 +1592,15 @@ class Strategy(StrategyBase):
                    reverse_target_amount: Decimal,
                    allow_grid_shift: bool = True,
                    additional_grid: bool = False,
-                   grid_update: bool = False,
-                   init_calc_only: bool = False) -> None:
-        if not init_calc_only:
-            self.message_log(f"place_grid: buy_side: {buy_side}, depo: {depo},"
-                             f" reverse_target_amount: {reverse_target_amount},"
-                             f" allow_grid_shift: {allow_grid_shift},"
-                             f" additional_grid: {additional_grid},"
-                             f" grid_update: {grid_update}", log_level=LogLevel.DEBUG)
+                   grid_update: bool = False) -> None:
+        self.message_log(f"place_grid: buy_side: {buy_side}, depo: {depo},"
+                         f" reverse_target_amount: {reverse_target_amount},"
+                         f" allow_grid_shift: {allow_grid_shift},"
+                         f" additional_grid: {additional_grid},"
+                         f" grid_update: {grid_update}", log_level=LogLevel.DEBUG)
         self.grid_hold.clear()
         self.last_shift_time = None
+        self.wait_wss_refresh = {}
         funds = self.get_buffered_funds()
         if buy_side:
             currency = self.s_currency
@@ -1630,6 +1642,18 @@ class Strategy(StrategyBase):
                                                                   amount_min_dec,
                                                                   additional_grid=additional_grid,
                                                                   grid_update=grid_update)
+                except statistics.StatisticsError as ex:
+                    self.message_log(f"Can't set trade conditions: {ex}, waiting for WSS data update",
+                                     log_level=LogLevel.WARNING)
+                    self.wait_wss_refresh = {
+                              'buy_side': buy_side,
+                              'depo': depo,
+                              'allow_grid_shift': allow_grid_shift,
+                              'additional_grid': additional_grid,
+                              'grid_update': grid_update,
+                              'timestamp': self.local_time()
+                    }
+                    return
                 except Exception as ex:
                     self.message_log(f"Can't set trade conditions: {ex}", log_level=LogLevel.ERROR)
                     self.message_log(f"Can't set trade conditions: {traceback.print_exc()}", log_level=LogLevel.DEBUG)
@@ -1640,15 +1664,14 @@ class Strategy(StrategyBase):
                 amount_first_grid = amount_min_dec
             if self.order_q > 1:
                 self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
-                                 f" cycle{' will be' if init_calc_only else ''} set {self.order_q} orders"
-                                 f" for {self.over_price:.4f}% over price", tlg=False)
+                                 f" cycle set {self.order_q} orders for {self.over_price:.4f}% over price", tlg=False)
             else:
                 self.message_log(f"For{' Reverse' if self.reverse else ''} {'Buy' if buy_side else 'Sell'}"
                                  f" cycle set {self.order_q} order{' for additional grid' if additional_grid else ''}",
                                  tlg=False)
-            if init_calc_only:
+            #
+            if self.first_run:
                 self.init_warning(amount_first_grid)
-                return
             #
             if self.order_q == 1:
                 if self.reverse:
@@ -2879,9 +2902,10 @@ class Strategy(StrategyBase):
     # public data update methods
     ##############################################################
     def on_new_ticker(self, ticker: Ticker) -> None:
-        # print(f"on_new_ticker:ticker: {datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
-        self.last_ticker_update = int(time.time())
-        if (self.shift_grid_threshold and self.last_shift_time and self.local_time() - self.last_shift_time > SHIFT_GRID_DELAY
+        # print(f"on_new_ticker:{datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
+        self.last_ticker_update = int(self.local_time())
+        if (self.shift_grid_threshold and self.last_shift_time and self.local_time() -
+                self.last_shift_time > SHIFT_GRID_DELAY
             and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
                  or
                  (not self.cycle_buy and ticker.last_price <= self.shift_grid_threshold))):
