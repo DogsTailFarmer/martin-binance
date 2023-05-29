@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b4"
+__version__ = "1.3.0b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -159,7 +159,7 @@ class Account:
                 'side': order.side,
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
-    def on_ticker_update(self, ticker: {}) -> [dict]:
+    def on_ticker_update(self, ticker: {}, ts: int) -> [dict]:
         # print(f"on_ticker_update.ticker: {ticker['lastPrice']}")
         # print(f"BUY: {self.orders_buy}")
         # print(f"SELL: {self.orders_sell}")
@@ -171,7 +171,6 @@ class Account:
         self.orders_sell = self.orders_sell.drop(_i.values)
         orders_id.extend(_i.values)
         # Save data for analytics
-        ts = ticker['closeTime']
         self.ticker[ts] = ticker['lastPrice']
         if self.orders_sell.values.size:
             self.grid_sell[ts] = self.orders_sell

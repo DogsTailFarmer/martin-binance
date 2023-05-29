@@ -6,7 +6,7 @@ Visual Comparison of Session Extended Log
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b4"
+__version__ = "1.3.0b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -23,13 +23,12 @@ clrs = {'background': '#696969',
         'text': '#7FDBFF'}
 
 source_path = askdirectory(title='Pick a folder for base strategy', initialdir=str(BACKTEST_PATH))
-st_ds: pd.Series = pd.read_pickle(Path(BACKTEST_PATH, source_path, "ticker.pkl"))
-sg_sell_df = pd.read_pickle(Path(BACKTEST_PATH, source_path, "sell.pkl"))
-sg_buy_df = pd.read_pickle(Path(BACKTEST_PATH, source_path, "buy.pkl"))
+s_ds = pd.read_pickle(Path(BACKTEST_PATH, source_path, "ticker.pkl"))
+s_sell_df: pd.DataFrame = pd.read_pickle(Path(BACKTEST_PATH, source_path, "sell.pkl"))
+s_buy_df = pd.read_pickle(Path(BACKTEST_PATH, source_path, "buy.pkl"))
 
 df_path = askdirectory(title='Pick a folder for test strategy', initialdir=str(BACKTEST_PATH))
-# df_path = Path('/home/ubuntu/.MartinBinance/back_test/BTCUSDT_SOURCE')
-ds_ticker: pd.Series = pd.read_pickle(Path(BACKTEST_PATH, df_path, "ticker.pkl"))
+ds_ticker = pd.read_pickle(Path(BACKTEST_PATH, df_path, "ticker.pkl"))
 df_grid_sell = pd.read_pickle(Path(BACKTEST_PATH, df_path, "sell.pkl"))
 df_grid_buy = pd.read_pickle(Path(BACKTEST_PATH, df_path, "buy.pkl"))
 
@@ -39,22 +38,22 @@ fig.update_layout(template = 'seaborn')
 
 # SOURCE data
 # noinspection PyTypeChecker
-fig.add_traces(go.Scatter(x=st_ds.index, y=st_ds.values, mode = 'lines', name='Base',
+fig.add_traces(go.Scatter(x=s_ds.index, y=s_ds.values, mode = 'lines', name='Base',
                           line=dict(color='royalblue', width=5, dash='dot')))
 
-for col in sg_sell_df.columns:
+for col in s_sell_df.columns:
     # noinspection PyTypeChecker
-    fig.add_traces(go.Scatter(x=sg_sell_df.index, y = sg_sell_df[col], mode = 'lines', showlegend=False,
+    fig.add_traces(go.Scatter(x=s_sell_df.index, y = s_sell_df[col], mode = 'lines', showlegend=False,
                               line=dict(color='indianred', width=5, dash='dot')))
 
-for col in sg_buy_df.columns:
+for col in s_buy_df.columns:
     # noinspection PyTypeChecker
-    fig.add_traces(go.Scatter(x=sg_buy_df.index, y = sg_buy_df[col], mode = 'lines', showlegend=False,
+    fig.add_traces(go.Scatter(x=s_buy_df.index, y = s_buy_df[col], mode = 'lines', showlegend=False,
                               line=dict(color='forestgreen', width=5, dash='dot')))
 
 # Test data
 # noinspection PyTypeChecker
-fig.add_traces(go.Scatter(x=ds_ticker.index, y=ds_ticker.values, mode = 'lines', line_color='blue', name='Test'))
+fig.add_traces(go.Scatter(x=ds_ticker.index, y=ds_ticker.values, mode = 'lines', line_color='brown', name='Test'))
 
 for col in df_grid_sell.columns:
     # noinspection PyTypeChecker

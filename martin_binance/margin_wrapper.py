@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b4"
+__version__ = "1.3.0b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -539,10 +539,16 @@ class StrategyBase:
         return last
 
     @classmethod
-    def get_open_orders_ps(cls, buy: bool) -> pd.Series:
-        orders = {}
-        [orders.update({o.id: o.price}) for o in cls.orders if o.buy == buy]
-        return pd.Series(orders)
+    def open_orders_snapshot(cls):
+        orders_buy = {}
+        orders_sell = {}
+        for order in cls.orders:
+            if order.buy:
+                orders_buy[order.id] = order.price
+            else:
+                orders_sell[order.id] = order.price
+        cls.strategy.grid_buy.update({int(time.time() * 1000): pd.Series(orders_buy)})
+        cls.strategy.grid_sell.update({int(time.time() * 1000): pd.Series(orders_sell)})
 
 async def heartbeat(_session):
     cls = StrategyBase
@@ -1018,16 +1024,12 @@ async def on_order_update():
     try:
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
-            # print(f"on_order_update: {event.symbol}:{event.order_id}({event.client_order_id}):{event.order_status}")
+            # print(f"on_order_update: {event}")
             ed = eval(json.loads(event.result))
             on_order_update_handler(cls, ed)
-            if ms.MODE == 'TC':
-                # Save snapshot for open orders lists
-                cls.strategy.grid_buy.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=True)})
-                cls.strategy.grid_sell.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=False)})
     except Exception as ex:
         print(f"Exception on WSS, on_order_update loop closed: {ex}")
-        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
+        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}\n{traceback.print_exc()}")
         cls.wss_fire_up = True
 
 
@@ -1133,13 +1135,11 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
             if executed_qty < orig_qty:
                 cls.orders.append(order)
                 cls.all_orders.append(order)
-            cls.strategy.on_place_order_success(_id, order)
             if ms.MODE == 'TC':
-                # Save snapshot for open orders lists
-                cls.strategy.grid_buy.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=True)})
-                cls.strategy.grid_sell.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=False)})
+                cls.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
+            cls.strategy.on_place_order_success(_id, order)
 
 
 async def place_limit_order_timeout(_id):
@@ -1182,13 +1182,11 @@ async def cancel_order_call(_id: int):
             remove_from_orders_lists([_id])
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
             cls.strategy.on_cancel_order_success(_id, Order(result))
-            cls.canceled_order_id.append(_id)
             if ms.MODE == 'TC':
-                # Save snapshot for open orders lists
-                cls.strategy.grid_buy.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=True)})
-                cls.strategy.grid_sell.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=False)})
+                cls.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
+            cls.canceled_order_id.append(_id)
 
 
 async def cancel_order_timeout(_id):
@@ -1297,8 +1295,7 @@ async def on_ticker_update():
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                     ticker_24h['delay'] = cls.delay_ordering_s
                     cls.strategy.ticker.update({int(time.time() * 1000): ticker_24h})
-                    cls.strategy.grid_buy.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=True)})
-                    cls.strategy.grid_sell.update({int(time.time() * 1000): cls.get_open_orders_ps(buy=False)})
+                    cls.open_orders_snapshot()
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
@@ -1307,7 +1304,7 @@ async def on_ticker_update():
             cls.delay_ordering_s = row.pop('delay', 0)
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(row))
-            res = cls.strategy.account.on_ticker_update(row)
+            res = cls.strategy.account.on_ticker_update(row, int(cls.strategy.local_time() * 1000))
             for _res in res:
                 on_order_update_handler(cls, _res)
                 await on_funds_update()
@@ -1558,7 +1555,7 @@ async def main(_symbol):
             cls.backtest['order_book'] = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
             cls.ticker = cls.backtest['ticker'].iat[0]
             cls.order_book = cls.backtest['order_book'].iat[0]
-            #
+        #
         await buffered_funds()
         answer = str()
         restored = True
