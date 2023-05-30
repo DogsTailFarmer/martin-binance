@@ -1580,6 +1580,34 @@ class Strategy(StrategyBase):
             self.status_time = self.local_time()
             self.queue_to_tlg.put(msg)
 
+    def get_sum_profit(self):
+        return self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second, base=False)
+
+    def debug_output(self):
+        self.message_log(f"\n"
+                         f"! =======================================\n"
+                         f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
+                         f"! sum_amount_first: {self.sum_amount_first}, sum_amount_second: {self.sum_amount_second}\n"
+                         f"! part_amount: {self.part_amount}\n"
+                         f"! initial_first: {self.initial_first}, initial_second: {self.initial_second}\n"
+                         f"! initial_reverse_first: {self.initial_reverse_first},"
+                         f" initial_reverse_second: {self.initial_reverse_second}\n"
+                         f"! reverse_init_amount: {self.reverse_init_amount}\n"
+                         f"! reverse_target_amount: {self.reverse_target_amount}\n"
+                         f"! correction_amount_first: {self.correction_amount_first},"
+                         f" correction_amount_second: {self.correction_amount_second}\n"
+                         f"! tp_order: {self.tp_order}\n"
+                         f"! tp_part_amount_first: {self.tp_part_amount_first},"
+                         f" tp_part_amount_second: {self.tp_part_amount_second}\n"
+                         f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
+                         f"! part_profit_first: {self.part_profit_first},"
+                         f" part_profit_second: {self.part_profit_second}\n"
+                         f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
+                         f"! command: {self.command}\n"
+                         f"! reverse: {self.reverse}\n"
+                         f"! Profit: {self.get_sum_profit()}\n"
+                         f"! ======================================")
+
     ##############################################################
     # Technical analysis
     ##############################################################
@@ -2793,32 +2821,6 @@ class Strategy(StrategyBase):
             round_pattern = self.round_base if base else self.round_quote
         xr = _x.quantize(Decimal(round_pattern), rounding=_rounding)
         return xr
-
-    def debug_output(self):
-        sum_profit = self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second, base=False)
-        self.message_log(f"\n"
-                         f"! =======================================\n"
-                         f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
-                         f"! sum_amount_first: {self.sum_amount_first}, sum_amount_second: {self.sum_amount_second}\n"
-                         f"! part_amount: {self.part_amount}\n"
-                         f"! initial_first: {self.initial_first}, initial_second: {self.initial_second}\n"
-                         f"! initial_reverse_first: {self.initial_reverse_first},"
-                         f" initial_reverse_second: {self.initial_reverse_second}\n"
-                         f"! reverse_init_amount: {self.reverse_init_amount}\n"
-                         f"! reverse_target_amount: {self.reverse_target_amount}\n"
-                         f"! correction_amount_first: {self.correction_amount_first},"
-                         f" correction_amount_second: {self.correction_amount_second}\n"
-                         f"! tp_order: {self.tp_order}\n"
-                         f"! tp_part_amount_first: {self.tp_part_amount_first},"
-                         f" tp_part_amount_second: {self.tp_part_amount_second}\n"
-                         f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
-                         f"! part_profit_first: {self.part_profit_first},"
-                         f" part_profit_second: {self.part_profit_second}\n"
-                         f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
-                         f"! command: {self.command}\n"
-                         f"! reverse: {self.reverse}\n"
-                         f"! Profit: {sum_profit}\n"
-                         f"! ======================================")
 
     def check_order_status(self):
         market_orders = self.get_buffered_open_orders()

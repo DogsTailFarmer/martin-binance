@@ -41,7 +41,7 @@ from martin_binance.client import Trade
 
 if ms.STANDALONE:
     import pandas as pd
-    from martin_binance.backtest import exchange_simulator as backtest
+    from martin_binance.backtest import exchange_simulator as bt_instance
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -62,6 +62,7 @@ logger = logging.getLogger('logger')
 color_init()
 ms_order_id = 'ms.order_id'
 ms_orders = 'ms.orders'
+session_result = {}
 
 
 def any2str(_x) -> str:
@@ -554,6 +555,7 @@ class StrategyBase:
                 orders_sell[order.id] = order.price
         cls.strategy.grid_buy.update({int(time.time() * 1000): pd.Series(orders_buy)})
         cls.strategy.grid_sell.update({int(time.time() * 1000): pd.Series(orders_sell)})
+
 
 async def heartbeat(_session):
     cls = StrategyBase
@@ -1379,6 +1381,7 @@ async def on_ticker_update():
         df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
         df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
         copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
+        session_result['profit'] = str(cls.strategy.get_sum_profit())
         print(f"Session data saved to: {session_path}")
         loop.stop()
 
@@ -1589,7 +1592,7 @@ async def main(_symbol):
             # print(f"main.ticker: {cls.ticker}")
             loop.create_task(save_asset())
         else:
-            cls.strategy.account = backtest.Account()
+            cls.strategy.account = bt_instance.Account()
             #
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': f"{ms.AMOUNT_FIRST}",
