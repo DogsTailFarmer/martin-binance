@@ -492,7 +492,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
     while 1:
         tries += 1
         err = fn(x, **kwargs) - value
-        # print(f"tries: {tries}, x: {x}, fn: {fn(x, **kwargs)}, err: {err}")
+        print(f"tries: {tries}, x: {x}, fn: {fn(x, **kwargs)}, err: {err}")
         if err >= 0 and abs(err) <= max_err:
             print(f"In {tries} attempts the best solution was found!", )
             return x

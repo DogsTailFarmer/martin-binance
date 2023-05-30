@@ -1332,6 +1332,7 @@ async def on_ticker_update():
         df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
         copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
         print(f"Session data saved to: {session_path}")
+        loop.stop()
 
 
 def order_book_prepare(_order_book: {}) -> {}:
@@ -1368,7 +1369,7 @@ async def on_order_book_update():
         async for row in loop_ds(cls.backtest['order_book']):
             cls.order_book = row
             cls.strategy.on_new_order_book(OrderBook(cls.order_book))
-        print("Backtest order_book timeSeries ended")
+        print("Backtest *** order_book *** timeSeries ended")
 
 
 def load_last_state() -> {}:
