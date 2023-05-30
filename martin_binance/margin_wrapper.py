@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b5"
+__version__ = "1.3.0b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -574,7 +574,7 @@ async def heartbeat(_session):
                     json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                 #
                 update_max_queue_size = False
-                if time.time() - last_exec_time > HEARTBEAT * 300:
+                if time.time() - last_exec_time > HEARTBEAT * 30:
                     last_exec_time = time.time()
                     try:
                         res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -887,9 +887,22 @@ async def buffered_orders():
     exch_orders_id = []
     save_orders_id = []
     restore = False
-    run = True
+    run = False
+    while not run:
+        try:
+            res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
+        except Exception as ex:
+            logger.warning(f"Exception on Check WSS: {ex}")
+        else:
+            if res.success:
+                run = True
+        await asyncio.sleep(HEARTBEAT)
     while run:
         try:
+            res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
+            if not res.success:
+                cls.wss_fire_up = True
+                raise UserWarning(f"Not active WSS for {cls.symbol} on {cls.exchange}, restart request sent")
             _orders = await cls.send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=cls.symbol)
             if _orders is None:
                 raise UserWarning("Can't fetch open orders")
@@ -916,13 +929,13 @@ async def buffered_orders():
             # print(f"buffered_orders.diff_excess_id: {diff_excess_id}")
             exch_orders_id.clear()
             save_orders_id.clear()
-            if not cls.last_state and (diff_id or part_id):
+            if not (restore or cls.last_state) and (diff_id or part_id):
                 cls.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id + part_id},"
                                          f" checking it", log_level=LogLevel.WARNING, tlg=False)
                 for _id in list(set(diff_id + part_id)):
                     await fetch_order(_id, _filled_update_call=True)
                 part_id.clear()
-            if not cls.last_state and diff_excess_id:
+            if not (restore or cls.last_state) and diff_excess_id:
                 cls.strategy.message_log(f"Find excess order(s): {diff_excess_id}, checking it",
                                          log_level=LogLevel.WARNING, tlg=False)
                 for _id in diff_excess_id:
@@ -977,26 +990,7 @@ async def buffered_orders():
                     if diff_id:
                         cls.strategy.message_log(f"Executed order(s) is: {diff_id}", log_level=LogLevel.INFO)
                         for _id in diff_id:
-                            remove_from_trades_lists(_id)
-                            for i, o in enumerate(cls.orders):
-                                if o.id == _id and trade_not_exist(_id, 1):
-                                    # Add completed trades to list
-                                    trade = {"qty": o.amount,
-                                             "isBuyer": o.buy,
-                                             "id": 1,
-                                             "orderId": o.id,
-                                             "price": o.price,
-                                             "time": o.timestamp}
-                                    # print(f"buffered_orders.trade: {trade}")
-                                    if len(cls.trades) > TRADES_LIST_LIMIT:
-                                        del cls.trades[0]
-                                    cls.trades.append(PrivateTrade(trade))
-                                    if len(cls.all_trades) > ALL_TRADES_LIST_LIMIT:
-                                        del cls.all_trades[0]
-                                    cls.all_trades.append(PrivateTrade(trade))
-                    # Delete from orders list
-                    remove_from_orders_lists(diff_id)
-                    # print(f"buffered_orders.cls.orders: {cls.orders}")
+                            await fetch_order(_id, _filled_update_call=True)
                     if not restore:
                         cls.strategy.restore_strategy_state(last_state)
                 except Exception as _ex:
@@ -1078,12 +1072,11 @@ async def on_order_update():
     try:
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
-            # print(f"on_order_update: {event}")
             ed = eval(json.loads(event.result))
+            # print(f"on_order_update.ed: {ed}")
             on_order_update_handler(cls, ed)
     except Exception as ex:
-        print(f"Exception on WSS, on_order_update loop closed: {ex}")
-        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}\n{traceback.print_exc()}")
+        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
         cls.wss_fire_up = True
 
 
@@ -1624,6 +1617,7 @@ async def main(_symbol):
             if ms.LOAD_LAST_STATE or answer.lower() == 'y':
                 cls.last_state = last_state
                 try:
+                    await wss_init()
                     cls.strategy.init(check_funds=False)
                 except Exception as ex:
                     print(f"Strategy init error: {ex}")

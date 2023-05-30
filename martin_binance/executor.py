@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b4"
+__version__ = "1.3.0b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2061,46 +2061,6 @@ class Strategy(StrategyBase):
                     self.tp_order = (buy_side, amount, price)
                     check = (len(self.orders_grid) + len(self.orders_hold)) > 2
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=check)
-
-    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg: bool = False, color=Style.WHITE) -> None:
-        if tlg and color == Style.WHITE:
-            color = Style.B_WHITE
-        if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
-            tlg = True
-            color = Style.B_RED
-        color = color if STANDALONE else 0
-        color_msg = color+msg+Style.RESET if color else msg
-        if log_level not in LOG_LEVEL_NO_PRINT:
-            print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
-        write_log(log_level, msg)
-        msg = self.tlg_header + msg
-        if tlg and self.queue_to_tlg:
-            self.status_time = time.time()
-            self.queue_to_tlg.put(msg)
-
-    def bollinger_band(self, candle_size_in_minutes: int, number_of_candles: int) -> Dict[str, float]:
-        # Bottom BB as sma-kb*stdev
-        # Top BB as sma+kt*stdev
-        # For Buy cycle over_price as 100*(Ticker.last_price - bbb) / Ticker.last_price
-        # For Sale cycle over_price as 100*(tbb - Ticker.last_price) / Ticker.last_price
-        candle_close = []
-        candle = self.get_buffered_recent_candles(candle_size_in_minutes=candle_size_in_minutes,
-                                                  number_of_candles=number_of_candles,
-                                                  include_current_building_candle=True)
-        for i in candle:
-            candle_close.append(i.close)
-        # print(f"bollinger_band.candle_close: {candle_close}")
-        sma = statistics.mean(candle_close)
-        st_dev = statistics.stdev(candle_close)
-        # print('sma={}, st_dev={}'.format(sma, st_dev))
-        tbb = sma + KBB * st_dev
-        bbb = sma - KBB * st_dev
-        min_price = self.get_trading_capability_manager().get_minimal_price_change(0.0)
-        # self.message_log(f"bollinger_band.min_price: {min_price}", log_level=LogLevel.DEBUG)
-        min_price = min_price if min_price and not math.isinf(min_price) else 0.0
-        bbb = max(bbb, min_price)
-        # self.message_log(f"bollinger_band: tbb={tbb:f}, bbb={bbb:f}", log_level=LogLevel.DEBUG)
-        return {'tbb': tbb, 'bbb': bbb}
 
     def set_trade_conditions(self,
                              buy_side: bool,
