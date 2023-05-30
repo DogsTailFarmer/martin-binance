@@ -50,10 +50,10 @@ CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
 
 loop = asyncio.get_event_loop()
 KLINES_INIT = [Interval.ONE_MINUTE, Interval.FIFTY_MINUTES, Interval.ONE_HOUR]
-KLINES_LIM = 100  # Number of candles must be <= 1000
+KLINES_LIM = 50  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and ms.LOAD_LAST_STATE = 0
-ALL_TRADES_LIST_LIMIT = 200
-TRADES_LIST_LIMIT = 100
+ALL_TRADES_LIST_LIMIT = 100
+TRADES_LIST_LIMIT = 50
 HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
@@ -62,6 +62,10 @@ logger = logging.getLogger('logger')
 color_init()
 ms_order_id = 'ms.order_id'
 ms_orders = 'ms.orders'
+
+
+def any2str(_x) -> str:
+    return f"{_x:.8f}".rstrip('0').rstrip('.')
 
 
 def write_log(level: LogLevel, message: str) -> None:
@@ -480,12 +484,13 @@ class StrategyBase:
         return kline[:None if include_current_building_candle else -1]
 
     @classmethod
-    def place_limit_order(cls, buy: bool, amount: float, price: float) -> int:
+    def place_limit_order(cls, buy: bool, amount: Decimal, price: Decimal) -> int:
         cls.order_id += 1
         StrategyBase.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
-                                          f" {amount} by {price} = {amount * price:f}", color=ms.Style.B_YELLOW)
+                                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
+                                          color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
-        loop.create_task(create_limit_order(cls.order_id, buy, str(amount), str(price)))
+        loop.create_task(create_limit_order(cls.order_id, buy, any2str(amount), any2str(price)))
         if StrategyBase.exchange == 'huobi':
             time.sleep(0.02)
         elif StrategyBase.exchange == 'okx':
@@ -510,8 +515,8 @@ class StrategyBase:
         return cls.orders
 
     @classmethod
-    def transfer_to_master(cls, symbol: str, amount: float):
-        loop.create_task(transfer2master(symbol, str(amount)))
+    def transfer_to_master(cls, symbol: str, amount: str):
+        loop.create_task(transfer2master(symbol, amount))
 
     def get_time(self) -> float:
         """
@@ -885,9 +890,6 @@ async def buffered_orders():
     run = True
     while run:
         try:
-            if restore:
-                cls.strategy.message_log("Trying restore saved state after lost connection to host",
-                                         color=ms.Style.GREEN)
             _orders = await cls.send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=cls.symbol)
             if _orders is None:
                 raise UserWarning("Can't fetch open orders")
@@ -932,26 +934,78 @@ async def buffered_orders():
                         loop.create_task(cancel_order_call(_id))
             cls.all_orders = all_orders.copy()
             all_orders.clear()
-            if restore:
-                cls.strategy.message_log("Restored successfully", color=ms.Style.GREEN)
-                restore = False
-            if cls.last_state:
-                cls.strategy.message_log("Trying restore saved state after restart", color=ms.Style.GREEN)
+            if restore or cls.last_state:
+                if restore:
+                    cls.strategy.message_log("Trying restore saved state after lost connection to host",
+                                             color=ms.Style.GREEN)
+                else:
+                    cls.strategy.message_log("Trying restore saved state after restart", color=ms.Style.GREEN)
                 try:
                     last_state = {}
-                    last_state.update(cls.last_state)
-                    cls.last_state = None
-                    # Restore StrategyBase class var
-                    cls.order_id = (json.loads(last_state.pop(ms_order_id, 0)) or
-                                    int(ms.datetime.now().strftime("%S%M")) * 1000)
-                    cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
-                    cls.trades = jsonpickle.decode(last_state.pop('ms_trades', '[]'))
-                    cls.orders = jsonpickle.decode(last_state.pop(ms_orders, '[]'))
-                    cls.strategy.restore_strategy_state(last_state)
+                    if cls.last_state:
+                        last_state.update(cls.last_state)
+                        cls.last_state = None
+                        # Restore StrategyBase class var
+                        cls.order_id = (json.loads(last_state.pop(ms_order_id, 0)) or
+                                        int(ms.datetime.now().strftime("%S%M")) * 1000)
+                        cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
+                        cls.trades = jsonpickle.decode(last_state.pop('ms_trades', '[]'))
+                        cls.orders = jsonpickle.decode(last_state.pop(ms_orders, '[]'))
+                    else:
+                        last_state.pop(ms_order_id, None)
+                        # last_state.pop('ms.trades', None)
+                        last_state.pop(ms_orders, None)
+                    # Get trades for strategy
+                    _trades = await cls.send_request(cls.stub.FetchAccountTradeList, api_pb2.AccountTradeListRequest,
+                                                     symbol=cls.symbol,
+                                                     limit=ALL_TRADES_LIST_LIMIT,
+                                                     start_time=cls.start_time_ms)
+                    trades = json_format.MessageToDict(_trades).get('items', [])
+                    # print(f"main.trades: {trades}")
+                    for trade in trades:
+                        cls.all_trades.append(PrivateTrade(trade))
+                    # Update StrategyBase class var
+                    exch_orders_id = []
+                    ms_orders_id = []
+                    for i in cls.all_orders:
+                        exch_orders_id.append(i.id)
+                    # print(f"buffered_orders.exch_orders_id: {exch_orders_id}")
+                    for i in cls.orders:
+                        ms_orders_id.append(i.id)
+                    # print(f"buffered_orders.ms_orders_id: {ms_orders_id}")
+                    diff_id = list(set(ms_orders_id).difference(exch_orders_id))
+                    if diff_id:
+                        cls.strategy.message_log(f"Executed order(s) is: {diff_id}", log_level=LogLevel.INFO)
+                        for _id in diff_id:
+                            remove_from_trades_lists(_id)
+                            for i, o in enumerate(cls.orders):
+                                if o.id == _id and trade_not_exist(_id, 1):
+                                    # Add completed trades to list
+                                    trade = {"qty": o.amount,
+                                             "isBuyer": o.buy,
+                                             "id": 1,
+                                             "orderId": o.id,
+                                             "price": o.price,
+                                             "time": o.timestamp}
+                                    # print(f"buffered_orders.trade: {trade}")
+                                    if len(cls.trades) > TRADES_LIST_LIMIT:
+                                        del cls.trades[0]
+                                    cls.trades.append(PrivateTrade(trade))
+                                    if len(cls.all_trades) > ALL_TRADES_LIST_LIMIT:
+                                        del cls.all_trades[0]
+                                    cls.all_trades.append(PrivateTrade(trade))
+                    # Delete from orders list
+                    remove_from_orders_lists(diff_id)
+                    # print(f"buffered_orders.cls.orders: {cls.orders}")
+                    if not restore:
+                        cls.strategy.restore_strategy_state(last_state)
                 except Exception as _ex:
                     cls.last_state = None
                     cls.strategy.message_log(f"Exception restore_strategy_state: {_ex}\n{traceback.format_exc()}",
                                              log_level=LogLevel.WARNING)
+                else:
+                    restore = False
+                    cls.strategy.message_log("Restored successfully", color=ms.Style.GREEN)
         except asyncio.CancelledError:
             # print("buffered_orders.Cancelled")
             run = False
@@ -1112,7 +1166,8 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
             order = Order(result)
             cls.strategy.message_log(
                 f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
-                f" {order.amount} by {order.price} Remaining amount {order.remaining_amount}",
+                f" {any2str(order.amount)} by {any2str(order.price)}"
+                f" Remaining amount {any2str(order.remaining_amount)}",
                 color=ms.Style.GREEN)
             orig_qty = Decimal(result['origQty'])
             executed_qty = Decimal(result['executedQty'])

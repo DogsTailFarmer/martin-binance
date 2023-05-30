@@ -77,7 +77,6 @@ ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()
 BB_NUMBER_OF_CANDLES = int()
 KBB = float()
-PROFIT_K = float()
 #
 LINEAR_GRID_K = int()
 #
@@ -393,7 +392,7 @@ def save_to_db(queue_to_db) -> None:
                                              LINEAR_GRID_K,
                                              ADAPTIVE_TRADE_CONDITION,
                                              KBB,
-                                             PROFIT_K,
+                                             1,
                                              data.get('cycle_time'),
                                              1))
                 connection_analytic.commit()
@@ -492,7 +491,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
     while 1:
         tries += 1
         err = fn(x, **kwargs) - value
-        print(f"tries: {tries}, x: {x}, fn: {fn(x, **kwargs)}, err: {err}")
+        # print(f"tries: {tries}, x: {x}, fn: {fn(x, **kwargs)}, err: {err}")
         if err >= 0 and abs(err) <= max_err:
             print(f"In {tries} attempts the best solution was found!", )
             return x
@@ -725,6 +724,8 @@ class Strategy(StrategyBase):
             init_params_error = 'FEE_IN_PAIR and FEE_BNB_IN_PAIR'
         elif COLLECT_ASSETS and GRID_ONLY:
             init_params_error = 'COLLECT_ASSETS and GRID_ONLY: one only allowed'
+        elif PROFIT_MAX and PROFIT_MAX < PROFIT + FEE_TAKER:
+            init_params_error = 'PROFIT_MAX'
         else:
             init_params_error = None
         if init_params_error:
@@ -1164,8 +1165,8 @@ class Strategy(StrategyBase):
             if amount_first == 0:
                 # If execution event was missed
                 _buy, _amount, _price = self.tp_order
-                amount_first = self.round_truncate(f2d(_amount), base=True)
-                amount_second = self.round_truncate(f2d(_amount * _price), base=False)
+                amount_first = self.round_truncate(_amount, base=True)
+                amount_second = self.round_truncate(_amount * _price, base=False)
             self.tp_was_filled = (amount_first, amount_second, True)
             self.tp_order_id = None
             self.tp_order = ()
@@ -1547,14 +1548,14 @@ class Strategy(StrategyBase):
     def collect_assets(self) -> ():
         ff, fs, _x = self.get_free_assets(mode='free')
         tcm = self.get_trading_capability_manager()
-        if ff >= tcm.min_qty:
+        if ff >= f2d(tcm.min_qty):
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.f_currency, float(ff))
+            self.transfer_to_master(self.f_currency, any2str(ff))
         else:
             ff = f2d(0)
-        if fs >= tcm.min_notional:
+        if fs >= f2d(tcm.min_notional):
             self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.s_currency, float(fs))
+            self.transfer_to_master(self.s_currency, any2str(fs))
         else:
             fs = f2d(0)
         return ff, fs
@@ -1578,6 +1579,119 @@ class Strategy(StrategyBase):
             msg = self.tlg_header + msg
             self.status_time = self.local_time()
             self.queue_to_tlg.put(msg)
+
+    ##############################################################
+    # Technical analysis
+    ##############################################################
+
+    def atr(self, interval: int = 14):
+        """
+        Average True Range
+        :param interval:
+        :return:
+        """
+        high = []
+        low = []
+        close = []
+        tr_arr = []
+        candle = self.get_buffered_recent_candles(candle_size_in_minutes=15,
+                                                  number_of_candles=interval + 1,
+                                                  include_current_building_candle=True)
+        for i in candle:
+            high.append(i.high)
+            low.append(i.low)
+            close.append(i.close)
+        n = 1
+        while n <= len(high) - 1:
+            tr_arr.append(max(high[n] - low[n], abs(high[n] - close[n - 1]), abs(low[n] - close[n - 1])))
+            n += 1
+        _atr = statistics.geometric_mean(tr_arr)
+        return _atr
+
+    def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
+        """
+        Average Directional Index
+        Math from https://blog.quantinsti.com/adx-indicator-python/
+        Test data
+        high = [90, 95, 105, 120, 140, 165, 195, 230, 270, 315, 365]
+        low = [82, 85, 93, 106, 124, 147, 175, 208, 246, 289, 337]
+        close = [87, 87, 97, 114, 133, 157, 186, 223, 264, 311, 350]
+        ##############################################################
+        """
+        high = []
+        low = []
+        close = []
+        candle = self.get_buffered_recent_candles(candle_size_in_minutes=adx_candle_size_in_minutes,
+                                                  number_of_candles=adx_number_of_candles,
+                                                  include_current_building_candle=True)
+        for i in candle:
+            high.append(i.high)
+            low.append(i.low)
+            close.append(i.close)
+        dm_pos = []
+        dm_neg = []
+        tr_arr = []
+        dm_pos_smooth = []
+        dm_neg_smooth = []
+        tr_smooth = []
+        di_pos = []
+        di_neg = []
+        dx = []
+        n = 1
+        n_max = len(high) - 1
+        while n <= n_max:
+            m_pos = high[n] - high[n - 1]
+            m_neg = low[n - 1] - low[n]
+            _m_pos = 0
+            _m_neg = 0
+            if m_pos and m_pos > m_neg:
+                _m_pos = m_pos
+            if m_neg and m_neg > m_pos:
+                _m_neg = m_neg
+            dm_pos.append(_m_pos)
+            dm_neg.append(_m_neg)
+            tr = max(high[n], close[n - 1]) - min(low[n], close[n - 1])
+            tr_arr.append(tr)
+            if n == adx_period:
+                dm_pos_smooth.append(sum(dm_pos))
+                dm_neg_smooth.append(sum(dm_neg))
+                tr_smooth.append(sum(tr_arr))
+            if n > adx_period:
+                dm_pos_smooth.append((dm_pos_smooth[-1] - dm_pos_smooth[-1] / adx_period) + _m_pos)
+                dm_neg_smooth.append((dm_neg_smooth[-1] - dm_neg_smooth[-1] / adx_period) + _m_neg)
+                tr_smooth.append((tr_smooth[-1] - tr_smooth[-1] / adx_period) + tr)
+            if n >= adx_period:
+                # Calculate +DI, -DI and DX
+                di_pos.append(100 * dm_pos_smooth[-1] / tr_smooth[-1])
+                di_neg.append(100 * dm_neg_smooth[-1] / tr_smooth[-1])
+                dx.append(100 * abs(di_pos[-1] - di_neg[-1]) / abs(di_pos[-1] + di_neg[-1]))
+            n += 1
+        _adx = statistics.mean(dx[len(dx) - adx_period::])
+        return {'adx': _adx, '+DI': di_pos[-1], '-DI': di_neg[-1]}
+
+    def bollinger_band(self, candle_size_in_minutes: int, number_of_candles: int) -> Dict[str, float]:
+        # Bottom BB as sma-kb*stdev
+        # Top BB as sma+kt*stdev
+        # For Buy cycle over_price as 100*(Ticker.last_price - bbb) / Ticker.last_price
+        # For Sale cycle over_price as 100*(tbb - Ticker.last_price) / Ticker.last_price
+        candle_close = []
+        candle = self.get_buffered_recent_candles(candle_size_in_minutes=candle_size_in_minutes,
+                                                  number_of_candles=number_of_candles,
+                                                  include_current_building_candle=True)
+        for i in candle:
+            candle_close.append(i.close)
+        # print(f"bollinger_band.candle_close: {candle_close}")
+        sma = statistics.mean(candle_close)
+        st_dev = statistics.stdev(candle_close)
+        # print('sma={}, st_dev={}'.format(sma, st_dev))
+        tbb = sma + KBB * st_dev
+        bbb = sma - KBB * st_dev
+        min_price = self.get_trading_capability_manager().get_minimal_price_change(0.0)
+        # self.message_log(f"bollinger_band.min_price: {min_price}", log_level=LogLevel.DEBUG)
+        min_price = min_price if min_price and not math.isinf(min_price) else 0.0
+        bbb = max(bbb, min_price)
+        # self.message_log(f"bollinger_band: tbb={tbb:f}, bbb={bbb:f}", log_level=LogLevel.DEBUG)
+        return {'tbb': tbb, 'bbb': bbb}
 
     ##############################################################
     # strategy function
@@ -1696,7 +1810,9 @@ class Strategy(StrategyBase):
                 i, amount, price = order
                 # create order for grid
                 if i < GRID_MAX_COUNT:
-                    waiting_order_id = self.place_limit_order(buy_side, float(amount), float(price))
+                    waiting_order_id = self.place_limit_order(buy_side,
+                                                              amount if STANDALONE else float(amount),
+                                                              price if STANDALONE else float(price))
                     self.orders_init.append(waiting_order_id, buy_side, amount, price)
                 else:
                     self.orders_hold.append(i, buy_side, amount, price)
@@ -1929,9 +2045,9 @@ class Strategy(StrategyBase):
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"
                                      f" vlm: {amount}, price: {price}, profit: {profit}%")
                     self.tp_target = target
-                    _amount = float(amount)
-                    _price = float(price)
                     if not STANDALONE:
+                        _amount = float(amount)
+                        _price = float(price)
                         tcm = self.get_trading_capability_manager()
                         if not tcm.is_limit_order_valid(buy_side, _amount, _price):
                             _amount = tcm.round_amount(_amount, RoundingType.FLOOR)
@@ -1939,10 +2055,28 @@ class Strategy(StrategyBase):
                                 _price = tcm.round_price(_price, RoundingType.FLOOR)
                             else:
                                 _price = tcm.round_price(_price, RoundingType.CEIL)
-                            self.message_log(f"Rounded amount: {_amount}, price: {_price}")
-                    self.tp_order = (buy_side, _amount, _price)
+                            amount = f2d(_amount)
+                            price = f2d(_price)
+                            self.message_log(f"Rounded amount: {amount}, price: {price}")
+                    self.tp_order = (buy_side, amount, price)
                     check = (len(self.orders_grid) + len(self.orders_hold)) > 2
-                    self.tp_wait_id = self.place_limit_order_check(buy_side, _amount, _price, check=check)
+                    self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=check)
+
+    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg: bool = False, color=Style.WHITE) -> None:
+        if tlg and color == Style.WHITE:
+            color = Style.B_WHITE
+        if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
+            tlg = True
+            color = Style.B_RED
+        color = color if STANDALONE else 0
+        color_msg = color+msg+Style.RESET if color else msg
+        if log_level not in LOG_LEVEL_NO_PRINT:
+            print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
+        write_log(log_level, msg)
+        msg = self.tlg_header + msg
+        if tlg and self.queue_to_tlg:
+            self.status_time = time.time()
+            self.queue_to_tlg.put(msg)
 
     def bollinger_band(self, candle_size_in_minutes: int, number_of_candles: int) -> Dict[str, float]:
         # Bottom BB as sma-kb*stdev
@@ -1984,7 +2118,13 @@ class Strategy(StrategyBase):
                          f" step_size: {step_size}, delta_min: {delta_min}", LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
         if not additional_grid and not grid_update and not GRID_ONLY and 0 < PROFIT_MAX < 100:
-            k_m = 1 - PROFIT_MAX / 100
+            try:
+                profit_max = min(PROFIT_MAX, max(PROFIT, f2d(100 * self.atr() / self.get_buffered_ticker().last_price)))
+            except statistics.StatisticsError as ex:
+                self.message_log(f"Can't get ATR value: {ex}, use default PROFIT_MAX value", LogLevel.WARNING)
+                profit_max = PROFIT_MAX
+            self.message_log(f"Profit max for first order volume is: {profit_max}", LogLevel.DEBUG)
+            k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             # For Bitfinex test accounts correction
             if amount_first_grid >= f2d(tcm.get_max_sell_amount(0)) or amount_first_grid >= depo_c:
@@ -2042,28 +2182,30 @@ class Strategy(StrategyBase):
             self.over_price = max(over_price, OVER_PRICE)
         return amount_first_grid
 
-    def set_profit(self) -> Decimal:
-        last_price = None
+    def set_profit(self, amount: Decimal, by_market: bool) -> Decimal:
+        fee = FEE_TAKER if by_market else FEE_MAKER
+        fee = fee if FEE_IN_PAIR else fee + FEE_MAKER
         tbb = None
         bbb = None
-        try:
-            bb = self.bollinger_band(15, 20)
-        except statistics.StatisticsError:
-            self.message_log("Exception on set profit, can't calculate BollingerBand, set profit by default",
-                             log_level=LogLevel.WARNING)
-        else:
-            tbb = bb.get('tbb')
-            bbb = bb.get('bbb')
-            last_price = self.get_buffered_ticker().last_price
-        if last_price and tbb and bbb:
-            if self.cycle_buy:
-                profit = PROFIT_K * 100 * (tbb - last_price) / last_price
+        n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
+        if PROFIT_MAX and (n > 1 or self.reverse):
+            try:
+                bb = self.bollinger_band(15, 20)
+            except statistics.StatisticsError:
+                self.message_log("Set profit Exception, can't calculate BollingerBand, set profit by default",
+                                 log_level=LogLevel.WARNING)
             else:
-                profit = PROFIT_K * 100 * (last_price - bbb) / last_price
-            profit = min(max(profit, PROFIT), PROFIT_MAX)
+                tbb = f2d(bb.get('tbb', 0))
+                bbb = f2d(bb.get('bbb', 0))
+        if tbb and bbb:
+            if self.cycle_buy:
+                profit = 100 * (tbb * amount - self.tp_amount) / self.tp_amount
+            else:
+                profit = 100 * (amount / bbb - self.tp_amount) / self.tp_amount
+            profit = min(max(profit, PROFIT + fee), PROFIT_MAX)
         else:
-            profit = PROFIT
-        return Decimal(profit).quantize(Decimal("1.00"), rounding=ROUND_CEILING)
+            profit = PROFIT + fee
+        return Decimal(profit).quantize(Decimal("1.0123"), rounding=ROUND_CEILING)
 
     def calc_profit_order(self, buy_side: bool, by_market: bool = False) -> Dict[str, Decimal]:
         """
@@ -2074,22 +2216,12 @@ class Strategy(StrategyBase):
         """
         self.message_log(f"calc_profit_order: buy_side: {buy_side}, by_market: {by_market}", LogLevel.DEBUG)
         tcm = self.get_trading_capability_manager()
-        # Calculate take profit order
-        n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
-        if PROFIT_MAX and (n > 1 or self.reverse):
-            profit = self.set_profit()
-        else:
-            profit = PROFIT
-        if by_market:
-            fee = FEE_TAKER
-        else:
-            fee = FEE_MAKER
-        fee = fee if FEE_IN_PAIR else fee + FEE_MAKER
         step_size_f = f2d(tcm.get_minimal_amount_change(0.0))
         if buy_side:
             # Calculate target amount for first
             self.tp_amount = self.sum_amount_first
-            target_amount_first = self.sum_amount_first + (fee + profit) * self.sum_amount_first / 100
+            profit = self.set_profit(self.sum_amount_second, by_market)
+            target_amount_first = self.sum_amount_first + profit * self.sum_amount_first / 100
             target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             if target_amount_first - self.tp_amount < step_size_f:
                 target_amount_first = self.tp_amount + step_size_f
@@ -2101,7 +2233,8 @@ class Strategy(StrategyBase):
             step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
             # Calculate target amount for second
             self.tp_amount = self.sum_amount_second
-            target_amount_second = self.sum_amount_second + (fee + profit) * self.sum_amount_second / 100
+            profit = self.set_profit(self.sum_amount_first, by_market)
+            target_amount_second = self.sum_amount_second + profit * self.sum_amount_second / 100
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             if target_amount_second - self.tp_amount < step_size_s:
                 target_amount_second = self.tp_amount + step_size_s
@@ -2166,67 +2299,6 @@ class Strategy(StrategyBase):
         else:
             over_price = over_price_coarse
         return over_price
-
-    def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
-        """
-        Average Directional Index
-        Math from https://blog.quantinsti.com/adx-indicator-python/
-        Test data
-        high = [90, 95, 105, 120, 140, 165, 195, 230, 270, 315, 365]
-        low = [82, 85, 93, 106, 124, 147, 175, 208, 246, 289, 337]
-        close = [87, 87, 97, 114, 133, 157, 186, 223, 264, 311, 350]
-        ##############################################################
-        """
-        high = []
-        low = []
-        close = []
-        candle = self.get_buffered_recent_candles(candle_size_in_minutes=adx_candle_size_in_minutes,
-                                                  number_of_candles=adx_number_of_candles,
-                                                  include_current_building_candle=True)
-        for i in candle:
-            high.append(i.high)
-            low.append(i.low)
-            close.append(i.close)
-        dm_pos = []
-        dm_neg = []
-        tr_arr = []
-        dm_pos_smooth = []
-        dm_neg_smooth = []
-        tr_smooth = []
-        di_pos = []
-        di_neg = []
-        dx = []
-        n = 1
-        n_max = len(high) - 1
-        while n <= n_max:
-            m_pos = high[n] - high[n - 1]
-            m_neg = low[n - 1] - low[n]
-            _m_pos = 0
-            _m_neg = 0
-            if m_pos and m_pos > m_neg:
-                _m_pos = m_pos
-            if m_neg and m_neg > m_pos:
-                _m_neg = m_neg
-            dm_pos.append(_m_pos)
-            dm_neg.append(_m_neg)
-            tr = max(high[n], close[n - 1]) - min(low[n], close[n - 1])
-            tr_arr.append(tr)
-            if n == adx_period:
-                dm_pos_smooth.append(sum(dm_pos))
-                dm_neg_smooth.append(sum(dm_neg))
-                tr_smooth.append(sum(tr_arr))
-            if n > adx_period:
-                dm_pos_smooth.append((dm_pos_smooth[-1] - dm_pos_smooth[-1] / adx_period) + _m_pos)
-                dm_neg_smooth.append((dm_neg_smooth[-1] - dm_neg_smooth[-1] / adx_period) + _m_neg)
-                tr_smooth.append((tr_smooth[-1] - tr_smooth[-1] / adx_period) + tr)
-            if n >= adx_period:
-                # Calculate +DI, -DI and DX
-                di_pos.append(100 * dm_pos_smooth[-1] / tr_smooth[-1])
-                di_neg.append(100 * dm_neg_smooth[-1] / tr_smooth[-1])
-                dx.append(100 * abs(di_pos[-1] - di_neg[-1]) / abs(di_pos[-1] + di_neg[-1]))
-            n += 1
-        _adx = statistics.mean(dx[len(dx) - adx_period::])
-        return {'adx': _adx, '+DI': di_pos[-1], '-DI': di_neg[-1]}
 
     def start_process(self):
         # Init analytic
@@ -2537,22 +2609,20 @@ class Strategy(StrategyBase):
             self.start(profit_f, profit_s)
 
     def place_grid_part(self) -> None:
-        self.message_log(f"Place next part of grid orders, hold {len(self.orders_hold)}", color=Style.B_WHITE)
         self.grid_place_flag = True
-        k = 0
         n = len(self.orders_grid) + len(self.orders_init)
-        for i in self.orders_hold:
-            if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
-                if k + n >= ORDER_Q:
-                    self.order_q_placed = True
-                break
-            waiting_order_id = self.place_limit_order_check(i['buy'],
-                                                            float(i['amount']),
-                                                            float(i['price']),
-                                                            check=True)
-            self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
-            k += 1
-        del self.orders_hold.orders_list[:k]
+        if n < ORDER_Q:
+            self.message_log(f"Place next part of grid orders, hold {len(self.orders_hold)}", color=Style.B_WHITE)
+            k = 0
+            for i in self.orders_hold:
+                if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
+                    if k + n >= ORDER_Q:
+                        self.order_q_placed = True
+                    break
+                waiting_order_id = self.place_limit_order_check(i['buy'], i['amount'], i['price'], check=True)
+                self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
+                k += 1
+            del self.orders_hold.orders_list[:k]
 
     def grid_only_stop(self) -> None:
         tcm = self.get_trading_capability_manager()
@@ -2573,8 +2643,7 @@ class Strategy(StrategyBase):
             self.grid_only_restart = True
             self.message_log("Waiting funding for convert", color=Style.B_WHITE)
             return
-        else:
-            self.command = 'stop'
+        self.command = 'stop'
 
     def grid_handler(self,
                      _amount_first=None,
@@ -2679,8 +2748,7 @@ class Strategy(StrategyBase):
                     self.message_log(f"Too small amount for place additional grid,"
                                      f" add grid order for {'Buy' if self.cycle_buy else 'Sell'}"
                                      f" {reverse_target_amount} by {amount / reverse_target_amount:f}")
-                    waiting_order_id = self.place_limit_order_check(self.cycle_buy, float(reverse_target_amount),
-                                                                    float(amount / reverse_target_amount))
+                    waiting_order_id = self.place_limit_order_check(self.cycle_buy, reverse_target_amount, amount / reverse_target_amount)
                     self.orders_init.append(waiting_order_id, self.cycle_buy, reverse_target_amount,
                                             amount / reverse_target_amount)
                 self.place_profit_order(by_market)
@@ -2704,7 +2772,7 @@ class Strategy(StrategyBase):
                 # PLace one hold grid order and remove it from hold list
                 _buy, _amount, _price = self.orders_hold.get_first()
                 check = (len(self.orders_grid) + len(self.orders_hold)) <= 2
-                waiting_order_id = self.place_limit_order_check(_buy, float(_amount), float(_price), check=check)
+                waiting_order_id = self.place_limit_order_check(_buy, _amount, _price, check=check)
                 self.orders_init.append(waiting_order_id, _buy, _amount, _price)
                 del self.orders_hold.orders_list[0]
             # Exist filled but non processing TP
@@ -2807,8 +2875,8 @@ class Strategy(StrategyBase):
             self.message_log(f"Orders not present on exchange: {diff_id}", tlg=True)
             if diff_id.count(self.tp_order_id):
                 diff_id.remove(self.tp_order_id)
-                amount_first = f2d(self.tp_order[1])
-                amount_second = f2d(self.tp_order[1]) * f2d(self.tp_order[2])
+                amount_first = self.tp_order[1]
+                amount_second = self.tp_order[1] * self.tp_order[2]
                 self.tp_was_filled = (amount_first, amount_second, True)
                 self.tp_order_id = None
                 self.tp_order = ()
@@ -2843,21 +2911,24 @@ class Strategy(StrategyBase):
                 res = True
         return res
 
-    def place_limit_order_check(self, buy: bool, amount: float, price: float, check=False) -> int:
+    def place_limit_order_check(self, buy: bool, amount: Decimal, price: Decimal, check=False) -> int:
         """
         Before place limit order check trade conditions and correct price
         """
-        _price = price
+        _price = float(price)
         if check:
             order_book = self.get_buffered_order_book()
             if buy and order_book.bids:
-                _price = min(price, order_book.bids[0].price)
+                price = f2d(min(_price, order_book.bids[0].price))
             elif not buy and order_book.asks:
-                _price = max(price, order_book.asks[0].price)
-        waiting_order_id = self.place_limit_order(buy, amount, _price)
-        if check and _price != price:
-            self.message_log(f"For order {waiting_order_id} price was updated, old: {price}, new: {_price}",
-                             log_level=LogLevel.DEBUG)
+                price = f2d(max(_price, order_book.asks[0].price))
+
+        waiting_order_id = self.place_limit_order(buy,
+                                                  amount if STANDALONE else float(amount),
+                                                  price if STANDALONE else float(price))
+        if check and _price != float(price):
+            self.message_log(f"For order {waiting_order_id} price was updated from {_price} to {price}",
+                             log_level=LogLevel.WARNING)
         return waiting_order_id
 
     def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total') -> ():
@@ -3277,7 +3348,7 @@ class Strategy(StrategyBase):
             order = self.orders_init.find_order(open_orders, place_order_id)
         elif place_order_id == self.tp_wait_id:
             for k, o in enumerate(open_orders):
-                if o.buy == self.tp_order[0] and o.amount == self.tp_order[1] and o.price == self.tp_order[2]:
+                if o.buy == self.tp_order[0] and o.amount == float(self.tp_order[1]) and o.price == float(self.tp_order[2]):
                     order = open_orders[k]
         if order:
             self.message_log(f"Order {place_order_id} placed", tlg=True)
@@ -3287,7 +3358,7 @@ class Strategy(StrategyBase):
             if self.orders_init.exist(place_order_id):
                 _buy, _amount, _price = self.orders_init.get_by_id(place_order_id)
                 self.orders_init.remove(place_order_id)
-                waiting_order_id = self.place_limit_order_check(_buy, float(_amount), float(_price), check=True)
+                waiting_order_id = self.place_limit_order_check(_buy, _amount, _price, check=True)
                 self.orders_init.append(waiting_order_id, _buy, _amount, _price)
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
@@ -3376,8 +3447,8 @@ class Strategy(StrategyBase):
                 self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
             elif order_id == self.cancel_order_id:
                 self.message_log("It's was take profit", LogLevel.ERROR)
-                amount_first = f2d(self.tp_order[1])
-                amount_second = f2d(self.tp_order[1]) * f2d(self.tp_order[2])
+                amount_first = self.tp_order[1]
+                amount_second = self.tp_order[1] * self.tp_order[2]
                 self.tp_was_filled = (amount_first, amount_second, True)
                 self.tp_order_id = None
                 self.tp_order = ()

@@ -1,6 +1,36 @@
-## v1.2.16-2 - 2023-04-xx
+## v1.2.18-8 2023-05-xx
+### Fix
+* collect_assets() incorrect convert small decimal.Decimal values to str
+
+### Update
+* For STANDALONE mode refactoring call environment for place_limit_order(), avoid unnecessary Decimal -> float
+conversions
+* Add error handling for atr()
+* Some minor improvements
+
+## v1.2.18-4 2023-05-18
+### Added for new features
+* Use ATR (Average True Range with 14 period x 15 min) indicator when
+[calculate first grid order volume](https://github.com/DogsTailFarmer/martin-binance/discussions/57#discussion-5167551)
+
+### Update
+* Grafana template: Consolidated asset valuation - Assets by place: group by exchange name instead of account name
+* Halved the amount of buffer data to save memory (KLINES_LIM, ALL_TRADES_LIST_LIMIT, TRADES_LIST_LIMIT)
+
+## v1.2.18-1 - 2023-05-07
+### Fix
+* [#58](https://github.com/DogsTailFarmer/martin-binance/issues/58#issue-1698914151)
+  A failed optimization of martin_binance/margin_wrapper.buffered_orders() was in version 1.2.16
+
+
+## v1.2.18 - 2023-05-06
 ### Fix
 * Correct ending GRID ONLY cycle if USE_ALL_FUND = False 
+
+### Update
+* Refactoring set_profit() for precision calculate TP order price
+* Parameter PROFIT_K excluded
+* README.md
 
 ## v1.2.16-1-HotFix - 2023-04-12
 ### Fix
