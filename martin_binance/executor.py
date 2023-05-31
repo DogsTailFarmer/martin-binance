@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b7"
+__version__ = "1.3.0b9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -105,7 +105,7 @@ STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
 MODE = 'T'  # T - Trade, TC - Trade and Collect, S - Simulate
-XTIME = 100  # Time accelerator
+XTIME = 500  # Time accelerator
 # endregion
 
 
@@ -715,6 +715,7 @@ class Strategy(StrategyBase):
         self.grid_only_restart = None  # -
         self.local_time = self.get_time if STANDALONE else time.time
         self.wait_wss_refresh = {}  # -
+        self.start_collect = False
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
@@ -1432,6 +1433,7 @@ class Strategy(StrategyBase):
         if self.command == 'end' or (self.command == 'stop' and
                                      (not self.reverse or (self.reverse and REVERSE_STOP))):
             self.command = 'stopped'
+            self.start_collect = False
             self.message_log('Stop, waiting manual action', tlg=True)
         else:
             n = gc.collect(generation=2)
@@ -1465,6 +1467,7 @@ class Strategy(StrategyBase):
                                  color=Style.B_WHITE)
             self.first_run = False
             self.debug_output()
+            self.start_collect = True
             self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
 
     def stop(self) -> None:

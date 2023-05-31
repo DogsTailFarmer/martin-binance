@@ -727,7 +727,9 @@ async def ask_exit():
     cls = StrategyBase
     if cls.strategy:
         cls.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
-        await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
+
+        if ms.MODE in ('T', 'TC'):
+            await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
 
         if ms.MODE == 'TC':
             # Save stream data for backtesting
@@ -1341,7 +1343,7 @@ async def on_ticker_update():
                 cls.ticker = ticker_24h
                 cls.strategy.on_new_ticker(Ticker(cls.ticker))
                 #
-                if ms.MODE == 'TC':
+                if ms.MODE == 'TC' and cls.strategy.start_collect:
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                     ticker_24h['delay'] = cls.delay_ordering_s
                     cls.strategy.ticker.update({int(time.time() * 1000): ticker_24h})
@@ -1358,18 +1360,15 @@ async def on_ticker_update():
             for _res in res:
                 on_order_update_handler(cls, _res)
                 await on_funds_update()
-        print("Backtest *** ticker *** timeSeries ended")
-
+        cls.strategy.message_log("Backtest *** ticker *** timeSeries ended")
         # Test result handler
         test_time = datetime.utcnow() - cls.strategy.cycle_time
         original_time = (cls.backtest['ticker'].index.max() - cls.backtest['ticker'].index.min()) / 1000
         original_time = timedelta(seconds=original_time)
         print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
-
         # Save test data
         session_path = Path(BACKTEST_PATH, f"{ms.SYMBOL}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
         session_path.mkdir(parents=True)
-
         ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
         ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
         df_grid_sell = pd.DataFrame().from_dict(cls.strategy.account.grid_sell, orient='index').astype(float)
@@ -1411,7 +1410,7 @@ async def on_order_book_update():
                 # print(f"on_order_book_update.order_book: {order_book}")
                 cls.order_book = order_book
                 cls.strategy.on_new_order_book(OrderBook(cls.order_book))
-                if ms.MODE == 'TC':
+                if ms.MODE == 'TC' and cls.strategy.start_collect:
                     cls.strategy.order_book.update({int(time.time() * 1000): order_book})
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
@@ -1501,97 +1500,117 @@ def update_class_var(_session):
 async def main(_symbol):
     cls = StrategyBase
     cls.strategy = ms.Strategy()
+    restore_state = None
+    last_state = {}
     try:
-        cls.symbol = _symbol
-        if len(ms.EXCHANGE) > ms.ID_EXCHANGE:
-            account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
-        else:
-            print(f"ID_EXCHANGE = {ms.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
-            raise SystemExit(1)
-        print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
-        session = Trade(channel_options=CHANNEL_OPTIONS,
-                        account_name=account_name,
-                        rate_limiter=StrategyBase.rate_limiter)
-        #
-        cls.session = session
-        #
-        await session.get_client()
-        update_class_var(session)
-        send_request = session.send_request
-        print(f"main.exchange: {cls.exchange}")
-        print(f"main.client_id: {cls.client_id}")
-        print(f"main.srv_version: {session.client.srv_version}")
-        #
-        restore_state = None
-        last_state = {}
-        if ms.MODE in ('T', 'TC'):
-            # Check and Cancel ALL ACTIVE ORDER
-            active_orders = None
-            try:
-                _active_orders = await send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=_symbol)
-            except Exception as ex:
-                print(f"Can't get active orders: {ex}")
+        if cls.session is None:
+            cls.symbol = _symbol
+            if len(ms.EXCHANGE) > ms.ID_EXCHANGE:
+                account_name = ms.EXCHANGE[ms.ID_EXCHANGE]
             else:
-                active_orders = json_format.MessageToDict(_active_orders).get('items', [])
-                # print(f"main.active_orders: {active_orders}")
-            # Try load last strategy state from saved files
-            last_state = load_last_state()
-            restore_state = bool(last_state)
-            print(f"main.restore_state: {restore_state}")
-            if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
-                answer = input('Are you want cancel all active order for this pair? Y:\n')
-                if answer.lower() == 'y':
-                    restore_state = False
-                    try:
-                        await send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=_symbol)
-                        cancel_orders = active_orders or []
-                        print('Before start was canceled orders:')
-                        for i in cancel_orders:
-                            print(f"Order:{i['orderId']}, side:{i['side']}, amount:{i['origQty']}, price:{i['price']}")
-                        print('================================================================')
-                    except asyncio.CancelledError:
-                        pass  # Task cancellation should not be logged as an error.
-                    except grpc.RpcError as ex:
-                        status_code = ex.code()
-                        print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
+                print(f"ID_EXCHANGE = {ms.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
+                raise SystemExit(1)
+            print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
+            session = Trade(channel_options=CHANNEL_OPTIONS,
+                            account_name=account_name,
+                            rate_limiter=StrategyBase.rate_limiter)
+            #
+            cls.session = session
+            #
+            await session.get_client()
+            update_class_var(session)
+            send_request = session.send_request
+            print(f"main.exchange: {cls.exchange}")
+            print(f"main.client_id: {cls.client_id}")
+            print(f"main.srv_version: {session.client.srv_version}")
+            #
+            if ms.MODE in ('T', 'TC'):
+                # Check and Cancel ALL ACTIVE ORDER
+                active_orders = None
+                try:
+                    _active_orders = await send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=_symbol)
+                except Exception as ex:
+                    print(f"Can't get active orders: {ex}")
+                else:
+                    active_orders = json_format.MessageToDict(_active_orders).get('items', [])
+                    # print(f"main.active_orders: {active_orders}")
+                # Try load last strategy state from saved files
+                last_state = load_last_state()
+                restore_state = bool(last_state)
+                print(f"main.restore_state: {restore_state}")
+                if CANCEL_ALL_ORDERS and active_orders and not ms.LOAD_LAST_STATE:
+                    answer = input('Are you want cancel all active order for this pair? Y:\n')
+                    if answer.lower() == 'y':
+                        restore_state = False
+                        try:
+                            await send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=_symbol)
+                            cancel_orders = active_orders or []
+                            print('Before start was canceled orders:')
+                            for i in cancel_orders:
+                                print(f"Order:{i['orderId']}, side:{i['side']},"
+                                      f" amount:{i['origQty']}, price:{i['price']}")
+                            print('================================================================')
+                        except asyncio.CancelledError:
+                            pass  # Task cancellation should not be logged as an error.
+                        except grpc.RpcError as ex:
+                            status_code = ex.code()
+                            print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
+            #
+            if ms.MODE == 'TC':
+                BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
+            # Init section
+            _exchange_info_symbol = await send_request(cls.stub.FetchExchangeInfoSymbol,
+                                                       api_pb2.MarketRequest,
+                                                       symbol=_symbol)
+            exchange_info_symbol = json_format.MessageToDict(_exchange_info_symbol)
+            # print("\n".join(f"{k}\t{v}" for k, v in exchange_info_symbol.items()))
+            filters = exchange_info_symbol.get('filters')
+            for _filter in filters:
+                print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
+            # init Strategy class var
+            cls.info_symbol = exchange_info_symbol
+            cls.tcm = TradingCapabilityManager(exchange_info_symbol)
+            cls.base_asset = exchange_info_symbol.get('baseAsset')
+            cls.quote_asset = exchange_info_symbol.get('quoteAsset')
+
+            if ms.MODE in ('T', 'TC'):
+                # region Get and processing Order book
+                _order_book = await cls.send_request(cls.stub.FetchOrderBook, api_pb2.MarketRequest, symbol=_symbol)
+                order_book = order_book_prepare(_order_book)
+                if not order_book['bids'] or not order_book['asks']:
+                    _price = await cls.send_request(cls.stub.FetchSymbolPriceTicker, api_pb2.MarketRequest,
+                                                    symbol=_symbol)
+                    price = json_format.MessageToDict(_price)
+                    print(f"Not bids or asks for pair {price.get('symbol')}, last known price is {price.get('price')}")
+                    amount = exchange_info_symbol['filters']['lotSize']['minQty']
+                    order_book['bids'] = order_book['bids'] or [[price['price'], amount]]
+                    order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
+                cls.order_book = order_book
+                # endregion
+                _ticker = await cls.send_request(cls.stub.FetchTickerPriceChangeStatistics,
+                                                 api_pb2.MarketRequest,
+                                                 symbol=_symbol)
+                cls.ticker = json_format.MessageToDict(_ticker)
+                # print(f"main.ticker: {cls.ticker}")
+                loop.create_task(save_asset())
         #
-        if ms.MODE == 'TC':
-            BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
-        # Init section
-        _exchange_info_symbol = await send_request(cls.stub.FetchExchangeInfoSymbol,
-                                                   api_pb2.MarketRequest,
-                                                   symbol=_symbol)
-        exchange_info_symbol = json_format.MessageToDict(_exchange_info_symbol)
-        # print("\n".join(f"{k}\t{v}" for k, v in exchange_info_symbol.items()))
-        filters = exchange_info_symbol.get('filters')
-        for _filter in filters:
-            print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
-        # init Strategy class var
-        cls.info_symbol = exchange_info_symbol
-        cls.tcm = TradingCapabilityManager(exchange_info_symbol)
-        cls.base_asset = exchange_info_symbol.get('baseAsset')
-        cls.quote_asset = exchange_info_symbol.get('quoteAsset')
-        #
-        if ms.MODE in ('T', 'TC'):
-            # region Get and processing Order book
-            _order_book = await send_request(cls.stub.FetchOrderBook, api_pb2.MarketRequest, symbol=_symbol)
-            order_book = order_book_prepare(_order_book)
-            if not order_book['bids'] or not order_book['asks']:
-                _price = await send_request(cls.stub.FetchSymbolPriceTicker, api_pb2.MarketRequest, symbol=_symbol)
-                price = json_format.MessageToDict(_price)
-                print(f"Not bids or asks for pair {price.get('symbol')}, last known price is {price.get('price')}")
-                amount = exchange_info_symbol['filters']['lotSize']['minQty']
-                order_book['bids'] = order_book['bids'] or [[price['price'], amount]]
-                order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
-            cls.order_book = order_book
-            # endregion
-            _ticker = await send_request(cls.stub.FetchTickerPriceChangeStatistics,
-                                         api_pb2.MarketRequest,
-                                         symbol=_symbol)
-            cls.ticker = json_format.MessageToDict(_ticker)
-            # print(f"main.ticker: {cls.ticker}")
-            loop.create_task(save_asset())
         else:
+            cls.ticker = {}
+            cls.funds = {}
+            cls.order_book = {}
+            cls.order_id = int(datetime.now().strftime("%S%M")) * 1000
+            cls.wait_order_id = []  # List of placed orders for time-out detect
+            cls.canceled_order_id = []  # List canceled orders  for time-out detect
+            cls.all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
+            cls.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
+            cls.all_orders = []  # List of all open orders for symbol
+            cls.orders = []  # List orders associated with strategy
+            cls.get_buffered_funds_last_time = time.time()
+            cls.rate_limiter = RATE_LIMITER
+            cls.start_time_ms = int(time.time() * 1000)
+            cls.backtest = {}
+
+        if ms.MODE == 'S':
             cls.strategy.account = bt_instance.Account()
             #
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
@@ -1640,7 +1659,7 @@ async def main(_symbol):
                 cls.start_time_ms = int(cls.strategy.local_time() * 1000)
             cls.strategy.start()
         if restored:
-            loop.create_task(heartbeat(session))
+            loop.create_task(heartbeat(cls.session))
     except (KeyboardInterrupt, SystemExit):
         # noinspection PyProtectedMember, PyUnresolvedReferences
         os._exit(1)

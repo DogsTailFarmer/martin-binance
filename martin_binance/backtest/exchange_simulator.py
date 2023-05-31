@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b5"
+__version__ = "1.3.0b59"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -102,6 +102,7 @@ class Account:
         self.ticker = {}
         self.grid_buy = {}
         self.grid_sell = {}
+        self.ticker_last = Decimal('0')
 
     def create_order(self, symbol: str, client_order_id: str, buy: bool, amount: str, price: str, lt: int) -> {}:
         order_id = len(self.orders)
@@ -112,12 +113,34 @@ class Account:
                       amount=amount,
                       price=price,
                       lt=lt)
-        self.orders.append(order)
-        if buy:
-            self.orders_buy.at[order_id] = Decimal(price)
+
+        if (buy and Decimal(price) >= self.ticker_last) or (not buy and Decimal(price) <= self.ticker_last):
+            # Market event
+            order.transact_time = lt
+            order.executed_qty = order.orig_qty
+            order.cummulative_quote_qty = str(Decimal(order.orig_qty) * Decimal(order.price))
+            order.status = 'FILLED'
+            order.event_time = order.transact_time
+            order.last_executed_quantity = order.orig_qty
+            order.cumulative_filled_quantity = order.orig_qty
+            order.last_executed_price = order.price
+            order.trade_id = self.trade_id = self.trade_id + 1
+            order.quote_asset_transacted = order.cummulative_quote_qty
+            order.last_quote_asset_transacted = order.cummulative_quote_qty
+            order.quote_order_quantity = order.cummulative_quote_qty
+            #
+            self.funds.on_order_created(buy=buy, amount=amount, price=price)
+            self.funds.on_order_filled(order.side, order.orig_qty, order.last_executed_price, self.fee_taker)
         else:
-            self.orders_sell.at[order_id] = Decimal(price)
-        self.funds.on_order_created(buy=buy, amount=amount, price=price)
+            if buy:
+                self.orders_buy.at[order_id] = Decimal(price)
+            else:
+                self.orders_sell.at[order_id] = Decimal(price)
+            #
+            self.funds.on_order_created(buy=buy, amount=amount, price=price)
+
+        self.orders.append(order)
+
         # print(f"create_order.order: {vars(order)}")
         return {'symbol': order.symbol,
                 'orderId': order.order_id,
@@ -136,40 +159,56 @@ class Account:
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def cancel_order(self, order_id: int):
-        order = self.orders.pop(order_id)
+        order = self.orders[order_id]
         order.status = 'CANCELED'
-        if order.side == 'BUY':
-            self.orders_buy = self.orders_buy.drop(order_id)
+        try:
+            if order.side == 'BUY':
+                self.orders_buy = self.orders_buy.drop(order_id)
+            else:
+                self.orders_sell = self.orders_sell.drop(order_id)
+        except Exception as ex:
+            raise UserWarning(f"Order {order_id} not active: {ex}")
         else:
-            self.orders_sell = self.orders_sell.drop(order_id)
-        self.orders.insert(order_id, order)
-        self.funds.on_order_canceled(order.side, order.orig_qty, order.price)
-        return {'symbol': order.symbol,
-                'origClientOrderId': order.client_order_id,
-                'orderId': order.order_id,
-                'orderListId': order.order_list_id,
-                'clientOrderId': 'qwert',
-                'price': order.price,
-                'origQty': order.orig_qty,
-                'executedQty': order.executed_qty,
-                'cummulativeQuoteQty': order.cummulative_quote_qty,
-                'status': order.status,
-                'timeInForce': order.time_in_force,
-                'type': order.type,
-                'side': order.side,
-                'selfTradePreventionMode': order.self_trade_prevention_mode}
+            self.orders[order_id] = order
+            self.funds.on_order_canceled(order.side, order.orig_qty, order.price)
+            return {'symbol': order.symbol,
+                    'origClientOrderId': order.client_order_id,
+                    'orderId': order.order_id,
+                    'orderListId': order.order_list_id,
+                    'clientOrderId': 'qwert',
+                    'price': order.price,
+                    'origQty': order.orig_qty,
+                    'executedQty': order.executed_qty,
+                    'cummulativeQuoteQty': order.cummulative_quote_qty,
+                    'status': order.status,
+                    'timeInForce': order.time_in_force,
+                    'type': order.type,
+                    'side': order.side,
+                    'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def on_ticker_update(self, ticker: {}, ts: int) -> [dict]:
         # print(f"on_ticker_update.ticker: {ticker['lastPrice']}")
         # print(f"BUY: {self.orders_buy}")
         # print(f"SELL: {self.orders_sell}")
+
+        self.ticker_last = Decimal(ticker['lastPrice'])
+
         orders_id = []
-        _i = self.orders_buy[self.orders_buy >= Decimal(ticker['lastPrice'])].index
-        self.orders_buy = self.orders_buy.drop(_i.values)
+
+        _i = self.orders_buy[self.orders_buy >= self.ticker_last].index
+        try:
+            self.orders_buy = self.orders_buy.drop(_i.values)
+        except Exception as ex:
+            print(ex)
         orders_id.extend(_i.values)
-        _i = self.orders_sell[self.orders_sell <= Decimal(ticker['lastPrice'])].index
-        self.orders_sell = self.orders_sell.drop(_i.values)
+
+        _i = self.orders_sell[self.orders_sell <= self.ticker_last].index
+        try:
+            self.orders_sell = self.orders_sell.drop(_i.values)
+        except Exception as ex:
+            print(ex)
         orders_id.extend(_i.values)
+
         # Save data for analytics
         self.ticker[ts] = ticker['lastPrice']
         if self.orders_sell.values.size:
@@ -179,55 +218,56 @@ class Account:
         #
         orders_filled = []
         for order_id in orders_id:
-            order = self.orders.pop(order_id)
-            order.transact_time = int(ticker['closeTime'])
-            order.executed_qty = order.orig_qty
-            order.cummulative_quote_qty = str(Decimal(order.orig_qty) * Decimal(order.price))
-            order.status = 'FILLED'
-            order.event_time = order.transact_time
-            order.last_executed_quantity = order.orig_qty
-            order.cumulative_filled_quantity = order.orig_qty
-            order.last_executed_price = order.price
-            order.trade_id = self.trade_id = self.trade_id + 1
-            order.quote_asset_transacted = order.cummulative_quote_qty
-            order.last_quote_asset_transacted = order.cummulative_quote_qty
-            order.quote_order_quantity = order.cummulative_quote_qty
-            #
-            self.orders.insert(order_id, order)
-            #
-            res = {'event_time': order.event_time,
-                   'symbol': order.symbol,
-                   'client_order_id': order.client_order_id,
-                   'side': order.side,
-                   'order_type': order.type,
-                   'time_in_force': order.time_in_force,
-                   'order_quantity': order.orig_qty,
-                   'order_price': order.price,
-                   'stop_price': '0.00000000',
-                   'iceberg_quantity': '0.00000000',
-                   'order_list_id': -1,
-                   'original_client_id': order.client_order_id,
-                   'execution_type': 'TRADE',
-                   'order_status': order.status,
-                   'order_reject_reason': 'NONE',
-                   'order_id': order_id,
-                   'last_executed_quantity': order.last_executed_quantity,
-                   'cumulative_filled_quantity': order.cumulative_filled_quantity,
-                   'last_executed_price': order.last_executed_price,
-                   'commission_amount': '0.00000000',
-                   'commission_asset': '',
-                   'transaction_time': order.transact_time,
-                   'trade_id': order.trade_id,
-                   'ignore_a': 12345678,
-                   'in_order_book': False,
-                   'is_maker_side': True,
-                   'ignore_b': True,
-                   'order_creation_time': order.order_creation_time,
-                   'quote_asset_transacted': order.quote_asset_transacted,
-                   'last_quote_asset_transacted': order.last_quote_asset_transacted,
-                   'quote_order_quantity': order.quote_order_quantity}
-            #
-            orders_filled.append(res)
-            self.funds.on_order_filled(order.side, order.orig_qty, order.last_executed_price, self.fee_maker)
+            order = self.orders[order_id]
+            if order.status == 'NEW':
+                order.transact_time = int(ticker['closeTime'])
+                order.executed_qty = order.orig_qty
+                order.cummulative_quote_qty = str(Decimal(order.orig_qty) * Decimal(order.price))
+                order.status = 'FILLED'
+                order.event_time = order.transact_time
+                order.last_executed_quantity = order.orig_qty
+                order.cumulative_filled_quantity = order.orig_qty
+                order.last_executed_price = order.price
+                order.trade_id = self.trade_id = self.trade_id + 1
+                order.quote_asset_transacted = order.cummulative_quote_qty
+                order.last_quote_asset_transacted = order.cummulative_quote_qty
+                order.quote_order_quantity = order.cummulative_quote_qty
+                #
+                self.orders[order_id] = order
+                #
+                res = {'event_time': order.event_time,
+                       'symbol': order.symbol,
+                       'client_order_id': order.client_order_id,
+                       'side': order.side,
+                       'order_type': order.type,
+                       'time_in_force': order.time_in_force,
+                       'order_quantity': order.orig_qty,
+                       'order_price': order.price,
+                       'stop_price': '0.00000000',
+                       'iceberg_quantity': '0.00000000',
+                       'order_list_id': -1,
+                       'original_client_id': order.client_order_id,
+                       'execution_type': 'TRADE',
+                       'order_status': order.status,
+                       'order_reject_reason': 'NONE',
+                       'order_id': order_id,
+                       'last_executed_quantity': order.last_executed_quantity,
+                       'cumulative_filled_quantity': order.cumulative_filled_quantity,
+                       'last_executed_price': order.last_executed_price,
+                       'commission_amount': '0.00000000',
+                       'commission_asset': '',
+                       'transaction_time': order.transact_time,
+                       'trade_id': order.trade_id,
+                       'ignore_a': 12345678,
+                       'in_order_book': False,
+                       'is_maker_side': True,
+                       'ignore_b': True,
+                       'order_creation_time': order.order_creation_time,
+                       'quote_asset_transacted': order.quote_asset_transacted,
+                       'last_quote_asset_transacted': order.last_quote_asset_transacted,
+                       'quote_order_quantity': order.quote_order_quantity}
+                #
+                orders_filled.append(res)
+                self.funds.on_order_filled(order.side, order.orig_qty, order.last_executed_price, self.fee_maker)
             #
         return orders_filled
