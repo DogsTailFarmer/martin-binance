@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b9"
+__version__ = "1.3.0b10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -104,7 +104,7 @@ CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
-MODE = 'T'  # T - Trade, TC - Trade and Collect, S - Simulate
+MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 500  # Time accelerator
 # endregion
 
@@ -809,7 +809,7 @@ class Strategy(StrategyBase):
                         and not self.tp_hold
                         and not self.tp_was_filled
                         and not self.orders_init)
-        if MODE == 'TC' and stable_state:
+        if MODE in ('T', 'TC') and stable_state:
             orders = self.get_buffered_open_orders()
             order_buy = len([i for i in orders if i.buy is True])
             order_sell = len([i for i in orders if i.buy is False])
@@ -920,7 +920,7 @@ class Strategy(StrategyBase):
                 if GRID_ONLY:
                     header = (f"{'Buy' if self.cycle_buy else 'Sell'} assets Grid only mode\n"
                               f"{('Waiting funding for convert'+chr(10)) if self.grid_only_restart else ''}"
-                              f"{self.get_free_assets()[2]}"
+                              f"{self.get_free_assets()[3]}"
                               )
                 else:
                     header = (f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
@@ -928,7 +928,7 @@ class Strategy(StrategyBase):
                               f"First: {self.sum_profit_first}\n"
                               f"Second: {self.sum_profit_second}\n"
                               f"Summary: {sum_profit}\n"
-                              f"{self.get_free_assets(mode='free')[2]}"
+                              f"{self.get_free_assets(mode='free')[3]}"
                               )
                 self.message_log(f"{header}\n"
                                  f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* ***  ***  *** *'}\n"
@@ -970,7 +970,7 @@ class Strategy(StrategyBase):
                 self.grid_update(frequency='hi')
         if self.heartbeat_counter > 150:
             self.heartbeat_counter = 0
-            if MODE == 'TC':
+            if MODE in ('T', 'TC'):
                 # Update t_funds.active set True
                 data_to_db = {'f_currency': self.f_currency,
                               's_currency': self.s_currency,
@@ -1344,7 +1344,7 @@ class Strategy(StrategyBase):
             # Wait tp order and cancel in on_cancel_order_success and restart
             self.tp_cancel = True
             return
-        ff, fs, _x = self.get_free_assets()
+        ff, fs, _, _ = self.get_free_assets()
         # Save initial funds and cycle statistics to .db for external analytics
         if self.first_run:
             if MODE in ('T', 'TC'):
@@ -1454,13 +1454,13 @@ class Strategy(StrategyBase):
                 if start_cycle_output:
                     self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.s_currency} depo\n"
-                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[2]}", tlg=True)
+                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
             else:
                 amount = self.deposit_first
                 if start_cycle_output:
                     self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                      f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
-                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[2]}", tlg=True)
+                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
             #
             if self.reverse:
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
@@ -1549,7 +1549,7 @@ class Strategy(StrategyBase):
             self.initial_second = fs
 
     def collect_assets(self) -> ():
-        ff, fs, _x = self.get_free_assets(mode='free')
+        ff, fs, _, _ = self.get_free_assets(mode='free')
         tcm = self.get_trading_capability_manager()
         if ff >= f2d(tcm.min_qty):
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
@@ -1582,34 +1582,6 @@ class Strategy(StrategyBase):
             msg = self.tlg_header + msg
             self.status_time = self.local_time()
             self.queue_to_tlg.put(msg)
-
-    def get_sum_profit(self):
-        return self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second, base=False)
-
-    def debug_output(self):
-        self.message_log(f"\n"
-                         f"! =======================================\n"
-                         f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
-                         f"! sum_amount_first: {self.sum_amount_first}, sum_amount_second: {self.sum_amount_second}\n"
-                         f"! part_amount: {self.part_amount}\n"
-                         f"! initial_first: {self.initial_first}, initial_second: {self.initial_second}\n"
-                         f"! initial_reverse_first: {self.initial_reverse_first},"
-                         f" initial_reverse_second: {self.initial_reverse_second}\n"
-                         f"! reverse_init_amount: {self.reverse_init_amount}\n"
-                         f"! reverse_target_amount: {self.reverse_target_amount}\n"
-                         f"! correction_amount_first: {self.correction_amount_first},"
-                         f" correction_amount_second: {self.correction_amount_second}\n"
-                         f"! tp_order: {self.tp_order}\n"
-                         f"! tp_part_amount_first: {self.tp_part_amount_first},"
-                         f" tp_part_amount_second: {self.tp_part_amount_second}\n"
-                         f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
-                         f"! part_profit_first: {self.part_profit_first},"
-                         f" part_profit_second: {self.part_profit_second}\n"
-                         f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
-                         f"! command: {self.command}\n"
-                         f"! reverse: {self.reverse}\n"
-                         f"! Profit: {self.get_sum_profit()}\n"
-                         f"! ======================================")
 
     ##############################################################
     # Technical analysis
@@ -1725,9 +1697,86 @@ class Strategy(StrategyBase):
         return {'tbb': tbb, 'bbb': bbb}
 
     ##############################################################
+    # supplementary methods
+    ##############################################################
+    def get_sum_profit(self):
+        return self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second, base=False)
+
+    def debug_output(self):
+        self.message_log(f"\n"
+                         f"! =======================================\n"
+                         f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
+                         f"! sum_amount_first: {self.sum_amount_first}, sum_amount_second: {self.sum_amount_second}\n"
+                         f"! part_amount: {self.part_amount}\n"
+                         f"! initial_first: {self.initial_first}, initial_second: {self.initial_second}\n"
+                         f"! initial_reverse_first: {self.initial_reverse_first},"
+                         f" initial_reverse_second: {self.initial_reverse_second}\n"
+                         f"! reverse_init_amount: {self.reverse_init_amount}\n"
+                         f"! reverse_target_amount: {self.reverse_target_amount}\n"
+                         f"! correction_amount_first: {self.correction_amount_first},"
+                         f" correction_amount_second: {self.correction_amount_second}\n"
+                         f"! tp_order: {self.tp_order}\n"
+                         f"! tp_part_amount_first: {self.tp_part_amount_first},"
+                         f" tp_part_amount_second: {self.tp_part_amount_second}\n"
+                         f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
+                         f"! part_profit_first: {self.part_profit_first},"
+                         f" part_profit_second: {self.part_profit_second}\n"
+                         f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
+                         f"! command: {self.command}\n"
+                         f"! reverse: {self.reverse}\n"
+                         f"! Profit: {self.get_sum_profit()}\n"
+                         f"! ======================================")
+
+    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total') -> ():
+        """
+        Get free asset for current trade pair
+        :param fs:
+        :param ff:
+        :param mode: 'total', 'free', 'reserved'
+        :return: (ff, fs, ft, free_asset: str)
+        """
+        if ff is None or fs is None:
+            funds = self.get_buffered_funds()
+            _ff = funds.get(self.f_currency, 0)
+            _fs = funds.get(self.s_currency, 0)
+            ff = Decimal('0')
+            fs = Decimal('0')
+            if _ff and _fs:
+                if mode == 'total':
+                    ff = f2d(_ff.total_for_currency)
+                    fs = f2d(_fs.total_for_currency)
+                elif mode == 'free':
+                    ff = f2d(_ff.available)
+                    fs = f2d(_fs.available)
+                elif mode == 'reserved':
+                    ff = f2d(_ff.reserved)
+                    fs = f2d(_fs.reserved)
+        #
+        if mode == 'free':
+            if self.cycle_buy:
+                fs = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
+            else:
+                ff = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
+        ft = self.round_truncate(ff * self.avg_rate + fs, base=False)
+        ff = self.round_truncate(ff, base=True)
+        fs = self.round_truncate(fs, base=False)
+        assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
+        return ff, fs, ft, assets
+
+    def round_truncate(self, _x: Decimal, base: bool, fee: bool = False, _rounding=ROUND_FLOOR) -> Decimal:
+        if fee:
+            round_pattern = "1.01234567"
+        else:
+            round_pattern = self.round_base if base else self.round_quote
+        xr = _x.quantize(Decimal(round_pattern), rounding=_rounding)
+        return xr
+
+    def round_fee(self, fee, amount, base):
+        return self.round_truncate(fee * amount / 100, base=base, fee=True, _rounding=ROUND_CEILING)
+
+    ##############################################################
     # strategy function
     ##############################################################
-
     def place_grid(self,
                    buy_side: bool,
                    depo: Decimal,
@@ -2117,9 +2166,6 @@ class Strategy(StrategyBase):
             self.message_log(f"Profit max for first order volume is: {profit_max}", LogLevel.DEBUG)
             k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
-            # For Bitfinex test accounts correction
-            if amount_first_grid >= f2d(tcm.get_max_sell_amount(0)) or amount_first_grid >= depo_c:
-                amount_first_grid /= ORDER_Q
             amount_first_grid = self.round_truncate(amount_first_grid, base=True, _rounding=ROUND_CEILING)
         else:
             amount_first_grid = amount_min
@@ -2311,9 +2357,6 @@ class Strategy(StrategyBase):
                 self.pr_tlg.start()
             except AssertionError as error:
                 self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
-
-    def round_fee(self, fee, amount, base):
-        return self.round_truncate(fee * amount / 100, base=base, fee=True, _rounding=ROUND_CEILING)
 
     def fee_for_grid(self,
                      amount_first: Decimal,
@@ -2817,14 +2860,6 @@ class Strategy(StrategyBase):
         else:
             self.grid_remove = None
 
-    def round_truncate(self, _x: Decimal, base: bool, fee: bool = False, _rounding=ROUND_FLOOR) -> Decimal:
-        if fee:
-            round_pattern = "1.01234567"
-        else:
-            round_pattern = self.round_base if base else self.round_quote
-        xr = _x.quantize(Decimal(round_pattern), rounding=_rounding)
-        return xr
-
     def check_order_status(self):
         market_orders = self.get_buffered_open_orders()
         market_orders_id = []
@@ -2895,41 +2930,6 @@ class Strategy(StrategyBase):
             self.message_log(f"For order {waiting_order_id} price was updated from {_price} to {price}",
                              log_level=LogLevel.WARNING)
         return waiting_order_id
-
-    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total') -> ():
-        """
-        Get free asset for current trade pair
-        :param fs:
-        :param ff:
-        :param mode: 'total', 'free', 'reserved'
-        :return: (ff, fs, free_asset: str)
-        """
-        if ff is None or fs is None:
-            funds = self.get_buffered_funds()
-            _ff = funds.get(self.f_currency, 0)
-            _fs = funds.get(self.s_currency, 0)
-            ff = Decimal('0')
-            fs = Decimal('0')
-            if _ff and _fs:
-                if mode == 'total':
-                    ff = f2d(_ff.total_for_currency)
-                    fs = f2d(_fs.total_for_currency)
-                elif mode == 'free':
-                    ff = f2d(_ff.available)
-                    fs = f2d(_fs.available)
-                elif mode == 'reserved':
-                    ff = f2d(_ff.reserved)
-                    fs = f2d(_fs.reserved)
-        #
-        if mode == 'free':
-            if self.cycle_buy:
-                fs = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
-            else:
-                ff = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
-        ff = self.round_truncate(ff, base=True)
-        fs = self.round_truncate(fs, base=False)
-        assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
-        return ff, fs, assets
 
     ##############################################################
     # public data update methods

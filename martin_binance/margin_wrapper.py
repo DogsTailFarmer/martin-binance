@@ -312,11 +312,11 @@ class TradingCapabilityManager:
 class Ticker:
     def __init__(self, _ticker):
         # Price of the currency pair one day ago.
-        self.last_day_price = float(_ticker.get('openPrice'))
+        self.last_day_price = float(_ticker.get('openPrice', 0))
         # Last traded price of the currency pair.
-        self.last_price = float(_ticker.get('lastPrice'))
+        self.last_price = float(_ticker.get('lastPrice', 0))
         # Timestamp of the ticker data.
-        self.timestamp = int(_ticker.get('closeTime'))
+        self.timestamp = int(_ticker.get('closeTime', 0))
         # print(f"self.last_price: {self.last_price}")
 
     def __call__(self):
@@ -1228,7 +1228,7 @@ async def cancel_order_call(_id: int):
     except Exception as _ex:
         cls.strategy.message_log(f"Exception on cancel order call for {_id}:\n{_ex}")
     else:
-        # print(f"cancel_order_call.result: {result}")
+        print(f"cancel_order_call.result: {result}")
         # Remove from all_orders and orders lists
         if result:
             remove_from_orders_lists([_id])
@@ -1380,7 +1380,8 @@ async def on_ticker_update():
         df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
         df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
         copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
-        session_result['profit'] = str(cls.strategy.get_sum_profit())
+        session_result['profit'] = f"{cls.strategy.get_sum_profit()}"
+        session_result['free'] = f"{cls.strategy.get_free_assets(mode='free')[2]}"
         print(f"Session data saved to: {session_path}")
         loop.stop()
 
@@ -1543,12 +1544,12 @@ async def main(_symbol):
                     if answer.lower() == 'y':
                         restore_state = False
                         try:
-                            await send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=_symbol)
-                            cancel_orders = active_orders or []
+                            res = await send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=_symbol)
+                            cancel_orders = eval(json.loads(res.result))
                             print('Before start was canceled orders:')
                             for i in cancel_orders:
                                 print(f"Order:{i['orderId']}, side:{i['side']},"
-                                      f" amount:{i['origQty']}, price:{i['price']}")
+                                      f" amount:{i['origQty']}, price:{i['price']}, status:{i['status']}")
                             print('================================================================')
                         except asyncio.CancelledError:
                             pass  # Task cancellation should not be logged as an error.
