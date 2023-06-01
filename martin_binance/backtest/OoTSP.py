@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b9"
+__version__ = "1.3.0b11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -32,7 +32,8 @@ def try_trade(**kwargs):
         setattr(mbs.ex, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}"))
     mbs.ex.MODE = 'S'
     mbs.trade()
-    return float(mbs.session_result.get('profit', 0))
+    result = float(mbs.session_result.get('profit', 0)) + float(mbs.session_result.get('free', 0))
+    return result
 
 def objective(trial):
     params = {
@@ -50,6 +51,6 @@ def objective(trial):
     return try_trade(**params)
 
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=100)
+study.optimize(objective, n_trials=500)
 
 print(f"Optimal parameters: {study.best_params} for get {study.best_value}")

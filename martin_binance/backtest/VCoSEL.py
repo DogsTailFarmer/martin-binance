@@ -10,7 +10,7 @@ __version__ = "1.3.0b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
-from dash import Dash, html, dcc, callback, Output, Input
+from dash import Dash, html, dcc
 import plotly.graph_objects as go
 import pandas as pd
 

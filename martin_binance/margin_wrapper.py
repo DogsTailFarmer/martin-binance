@@ -392,6 +392,7 @@ class StrategyBase:
     wss_fire_up = False
     backtest = {}
     delay_ordering_s = 0
+    bulk_orders_cancel = {}
 
     def __init__(self):
         self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
@@ -502,6 +503,11 @@ class StrategyBase:
     def cancel_order(cls, order_id: int) -> None:
         loop.create_task(cancel_order_timeout(order_id))
         loop.create_task(cancel_order_call(order_id))
+
+    @classmethod
+    def cancel_all_order(cls, order_id: int) -> None:
+        loop.create_task(cancel_order_timeout(order_id))
+        loop.create_task(cancel_all_order_call(order_id))
 
     @classmethod
     def get_buffered_completed_trades(cls, get_all_trades: bool = False) -> List[PrivateTrade]:
@@ -1212,7 +1218,7 @@ async def cancel_order_call(_id: int):
                                          order_id=_id)
             result = json_format.MessageToDict(res)
         else:
-            await asyncio.sleep(cls.delay_ordering_s / ms.XTIME)
+            # await asyncio.sleep(cls.delay_ordering_s / ms.XTIME)
             result = cls.strategy.account.cancel_order(order_id=_id)
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
@@ -1228,7 +1234,7 @@ async def cancel_order_call(_id: int):
     except Exception as _ex:
         cls.strategy.message_log(f"Exception on cancel order call for {_id}:\n{_ex}")
     else:
-        print(f"cancel_order_call.result: {result}")
+        # print(f"cancel_order_call.result: {result}")
         # Remove from all_orders and orders lists
         if result:
             remove_from_orders_lists([_id])
@@ -1238,6 +1244,30 @@ async def cancel_order_call(_id: int):
                 cls.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
+            cls.canceled_order_id.append(_id)
+
+
+async def cancel_all_order_call(_id: int):
+    cls = StrategyBase
+    try:
+        if cls.bulk_orders_cancel.get(_id) is None:
+            res = await cls.send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=cls.symbol)
+            [cls.bulk_orders_cancel.update({v['orderId']: v}) for v in eval(json.loads(res.result))]
+        result = cls.bulk_orders_cancel.pop(_id, None)
+    except asyncio.CancelledError:
+        pass  # Task cancellation should not be logged as an error.
+    except grpc.RpcError as ex:
+        status_code = ex.code()
+        cls.strategy.message_log(f"Exception on cancel all orders for {_id}: {status_code.name}, {ex.details()}")
+    except Exception as _ex:
+        cls.strategy.message_log(f"Exception on cancel all orders for {_id}:\n{_ex}")
+    else:
+        # print(f"cancel_all_order_call.result: {result}")
+        # Remove from all_orders and orders lists
+        if result and result.get('status') == 'CANCELED':
+            remove_from_orders_lists([_id])
+            cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
+            cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=True)
             cls.canceled_order_id.append(_id)
 
 
@@ -1596,6 +1626,7 @@ async def main(_symbol):
                 loop.create_task(save_asset())
         #
         else:
+            # Init class atr for reuse in next backtest cycle
             cls.ticker = {}
             cls.funds = {}
             cls.order_book = {}
@@ -1610,6 +1641,7 @@ async def main(_symbol):
             cls.rate_limiter = RATE_LIMITER
             cls.start_time_ms = int(time.time() * 1000)
             cls.backtest = {}
+            bulk_orders_cancel = {}
 
         if ms.MODE == 'S':
             cls.strategy.account = bt_instance.Account()

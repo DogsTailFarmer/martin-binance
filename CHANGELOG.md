@@ -1,16 +1,18 @@
-## v1.3.0 2023-06-xx
+## v1.3.0b11 2023-06-01
 ### Fix
-* Bitfinex: rename test pair from BTC/UST to TESTBTC/TESTUSDT, update template
+* Bitfinex: rename test pair from AAABBB to TESTBTCTESTUSDT, update template
 
 ### Update
-* protobuf dictionary for CreateLimitOrder() method. **Not compatible with earlier versions**
+* protobuf format for CreateLimitOrder() method. **Not compatible with earlier versions**
+* for some situation (shift grid, cancel grid after filled TP and so on) changed cancel order method from "one by one"
+to bulk mode
 
 ### Added for new features
 * Backtesting capabilities
 * Based on [optuna framework](https://optuna.org) search for optimal trading parameters
 * Visual comparison of the results of the initial and trial trading sessions
 
-## v1.2.18-8 2023-06-xx
+## v1.2.18-8 2023-06-xx not released
 ### Fix
 * collect_assets() incorrect convert small decimal.Decimal values to str
 
