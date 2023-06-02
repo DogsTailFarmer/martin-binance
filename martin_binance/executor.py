@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b10"
+__version__ = "1.3.0b12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -740,7 +740,7 @@ class Strategy(StrategyBase):
         self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}. "
         self.message_log(f"{self.tlg_header}", color=Style.B_WHITE)
         self.status_time = int(self.local_time())
-        self.cycle_time = datetime.utcnow()
+        # self.cycle_time = datetime.utcnow()
         self.start_after_shift = True
         self.over_price = OVER_PRICE
         self.order_q = ORDER_Q
@@ -1047,8 +1047,7 @@ class Strategy(StrategyBase):
                     'tp_target': json.dumps(self.tp_target),
                     'tp_order': json.dumps(str(self.tp_order)),
                     'tp_wait_id': json.dumps(self.tp_wait_id)}
-        else:
-            return {}
+        return {}
 
     def restore_strategy_state(self, strategy_state: Dict[str, str] = None) -> None:
         if strategy_state:
@@ -1443,7 +1442,8 @@ class Strategy(StrategyBase):
             # Init variable
             self.profit_first = Decimal('0')
             self.profit_second = Decimal('0')
-            self.cycle_time = datetime.utcnow()
+            if self.first_run or MODE in ('T', 'TC'):
+                self.cycle_time = datetime.utcnow()
             self.over_price = OVER_PRICE
             self.order_q = ORDER_Q
             self.grid_update_started = None
@@ -1512,16 +1512,14 @@ class Strategy(StrategyBase):
                                  log_level=LogLevel.ERROR)
                 if STANDALONE:
                     raise SystemExit(1)
-                else:
-                    raise UserWarning
+                raise UserWarning
             _amount_first_grid = (_amount_first_grid * self.avg_rate) if self.cycle_buy else _amount_first_grid
             if _amount_first_grid > 80 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} too large for"
                                  f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
                 if STANDALONE and self.first_run:
                     raise SystemExit(1)
-                else:
-                    raise UserWarning
+                raise UserWarning
             elif _amount_first_grid > 20 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} it is rather"
                                  f" big for a small deposit"
@@ -1537,8 +1535,7 @@ class Strategy(StrategyBase):
                                  color=Style.B_RED)
                 if STANDALONE and self.first_run:
                     raise SystemExit(1)
-                else:
-                    raise UserWarning
+                raise UserWarning
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -1757,9 +1754,9 @@ class Strategy(StrategyBase):
                 fs = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
             else:
                 ff = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
-        ft = self.round_truncate(ff * self.avg_rate + fs, base=False)
         ff = self.round_truncate(ff, base=True)
         fs = self.round_truncate(fs, base=False)
+        ft = ff * self.avg_rate + fs
         assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
         return ff, fs, ft, assets
 

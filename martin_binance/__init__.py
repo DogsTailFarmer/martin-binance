@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b11"
+__version__ = "1.3.0b12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -43,8 +43,8 @@ else:
         LAST_STATE_PATH.mkdir(parents=True, exist_ok=True)
     copy(Path(Path(__file__).parent.absolute(), "ms_cfg.toml.template"), CONFIG_FILE)
     copy(Path(Path(__file__).parent.absolute(), "funds_rate.db.template"), DB_FILE)
-    copy(Path(Path(__file__).parent.absolute(), "cli_0_BTCUSDT.py.template"),
-                Path(WORK_PATH, "cli_0_BTCUSDT.py"))
+    copy(Path(Path(__file__).parent.absolute(), "cli_0_BTCUSDT.py.template"), Path(WORK_PATH, "cli_0_BTCUSDT.py"))
+    copy(Path(Path(__file__).parent.absolute(), "cli_1_BTCUSDT.py.template"), Path(WORK_PATH, "cli_1_BTCUSDT.py"))
     copy(Path(Path(__file__).parent.absolute(), "cli_2_TESTBTCTESTUSDT.py.template"),
          Path(WORK_PATH, "cli_2_TESTBTCTESTUSDT.py"))
     print(f"Before the first run, set the parameters in {CONFIG_FILE}")

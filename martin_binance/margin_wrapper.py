@@ -4,10 +4,11 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b7"
+__version__ = "1.3.0b12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
+import ast
 import asyncio
 import simplejson as json
 import logging
@@ -41,7 +42,8 @@ from martin_binance.client import Trade
 
 if ms.STANDALONE:
     import pandas as pd
-    from martin_binance.backtest import exchange_simulator as bt_instance
+    from martin_binance.backtest.exchange_simulator import Account as backTestAccount
+
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -391,7 +393,7 @@ class StrategyBase:
     for_request = None
     wss_fire_up = False
     backtest = {}
-    delay_ordering_s = 0
+    delay_ordering_s = 0.5
     bulk_orders_cancel = {}
 
     def __init__(self):
@@ -734,9 +736,6 @@ async def ask_exit():
     if cls.strategy:
         cls.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
 
-        if ms.MODE in ('T', 'TC'):
-            await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
-
         if ms.MODE == 'TC':
             # Save stream data for backtesting
             # Save ticker
@@ -771,6 +770,9 @@ async def ask_exit():
             df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
             #
             copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
+
+        if ms.MODE in ('T', 'TC'):
+            await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
 
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
@@ -860,7 +862,7 @@ async def buffered_funds(print_info: bool = True):
             res = await cls.send_request(cls.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
             balances = json_format.MessageToDict(res).get('balances', [])
         else:
-            balances = cls.strategy.account.funds.get()
+            balances = cls.strategy.account.funds.get_funds()
     except asyncio.CancelledError:
         pass
     except Exception as _ex:
@@ -1053,7 +1055,7 @@ async def on_funds_update():
             cls.wss_fire_up = True
     else:
         funds = {}
-        _funds = cls.strategy.account.funds.get()
+        _funds = cls.strategy.account.funds.get_funds()
         [funds.update({d.get('asset'): {'free': d.get('free'), 'locked': d.get('locked')}}) for d in _funds]
         # print(f"on_funds_update.funds: {funds}")
         on_funds_update_handler(cls, funds)
@@ -1082,7 +1084,7 @@ async def on_order_update():
     try:
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
-            ed = eval(json.loads(event.result))
+            ed = ast.literal_eval(json.loads(event.result))
             # print(f"on_order_update.ed: {ed}")
             on_order_update_handler(cls, ed)
     except Exception as ex:
@@ -1218,8 +1220,7 @@ async def cancel_order_call(_id: int):
                                          order_id=_id)
             result = json_format.MessageToDict(res)
         else:
-            # await asyncio.sleep(cls.delay_ordering_s / ms.XTIME)
-            result = cls.strategy.account.cancel_order(order_id=_id)
+            result = cls.strategy.account.cancel_order(order_id=_id, ts=int(cls.strategy.local_time()*1000))
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
     except grpc.RpcError as ex:
@@ -1240,11 +1241,12 @@ async def cancel_order_call(_id: int):
             remove_from_orders_lists([_id])
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
             cls.strategy.on_cancel_order_success(_id, Order(result))
+            cls.canceled_order_id.append(_id)
             if ms.MODE == 'TC':
                 cls.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
-            cls.canceled_order_id.append(_id)
+
 
 
 async def cancel_all_order_call(_id: int):
@@ -1252,7 +1254,7 @@ async def cancel_all_order_call(_id: int):
     try:
         if cls.bulk_orders_cancel.get(_id) is None:
             res = await cls.send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=cls.symbol)
-            [cls.bulk_orders_cancel.update({v['orderId']: v}) for v in eval(json.loads(res.result))]
+            [cls.bulk_orders_cancel.update({v['orderId']: v}) for v in ast.literal_eval(json.loads(res.result))]
         result = cls.bulk_orders_cancel.pop(_id, None)
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
@@ -1391,29 +1393,35 @@ async def on_ticker_update():
                 on_order_update_handler(cls, _res)
                 await on_funds_update()
         cls.strategy.message_log("Backtest *** ticker *** timeSeries ended")
-        # Test result handler
-        test_time = datetime.utcnow() - cls.strategy.cycle_time
-        original_time = (cls.backtest['ticker'].index.max() - cls.backtest['ticker'].index.min()) / 1000
-        original_time = timedelta(seconds=original_time)
-        print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
-        # Save test data
-        session_path = Path(BACKTEST_PATH, f"{ms.SYMBOL}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
-        session_path.mkdir(parents=True)
-        ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
-        ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
-        df_grid_sell = pd.DataFrame().from_dict(cls.strategy.account.grid_sell, orient='index').astype(float)
-        df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-        df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
-        df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
-        #
-        ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
-        df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
-        df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
-        copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
-        session_result['profit'] = f"{cls.strategy.get_sum_profit()}"
-        session_result['free'] = f"{cls.strategy.get_free_assets(mode='free')[2]}"
-        print(f"Session data saved to: {session_path}")
-        loop.stop()
+        back_test_handler(cls)
+
+
+def back_test_handler(cls):
+    # Test result handler
+    test_time = datetime.utcnow() - cls.strategy.cycle_time
+    original_time = (cls.backtest['ticker'].index.max() - cls.backtest['ticker'].index.min()) / 1000
+    original_time = timedelta(seconds=original_time)
+    print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
+    # Save test data
+    session_path = Path(BACKTEST_PATH, f"{ms.SYMBOL}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
+    session_path.mkdir(parents=True)
+    ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
+    ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
+    df_grid_sell = pd.DataFrame().from_dict(cls.strategy.account.grid_sell, orient='index').astype(float)
+    df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+    df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
+    df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+    #
+    ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
+    df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
+    df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
+    copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
+    #
+    s_profit = session_result['profit'] = f"{cls.strategy.get_sum_profit()}"
+    s_free = session_result['free'] = f"{cls.strategy.get_free_assets(mode='free')[2]}"
+    print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
+    print(f"Session data saved to: {session_path}")
+    loop.stop()
 
 
 def order_book_prepare(_order_book: {}) -> {}:
@@ -1575,7 +1583,7 @@ async def main(_symbol):
                         restore_state = False
                         try:
                             res = await send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=_symbol)
-                            cancel_orders = eval(json.loads(res.result))
+                            cancel_orders = ast.literal_eval(json.loads(res.result))
                             print('Before start was canceled orders:')
                             for i in cancel_orders:
                                 print(f"Order:{i['orderId']}, side:{i['side']},"
@@ -1641,10 +1649,10 @@ async def main(_symbol):
             cls.rate_limiter = RATE_LIMITER
             cls.start_time_ms = int(time.time() * 1000)
             cls.backtest = {}
-            bulk_orders_cancel = {}
+            cls.bulk_orders_cancel = {}
 
         if ms.MODE == 'S':
-            cls.strategy.account = bt_instance.Account()
+            cls.strategy.account = backTestAccount()
             #
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': f"{ms.AMOUNT_FIRST}",

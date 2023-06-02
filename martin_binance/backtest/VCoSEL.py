@@ -38,37 +38,34 @@ fig.update_layout(template = 'seaborn')
 
 # SOURCE data
 # noinspection PyTypeChecker
-fig.add_traces(go.Scatter(x=s_ds.index, y=s_ds.values, mode = 'lines', name='Base',
+fig.add_traces(go.Scatter(x=s_ds.index, y=s_ds.values, mode='lines', name='Base',
                           line=dict(color='royalblue', width=5, dash='dot')))
 
 for col in s_sell_df.columns:
     # noinspection PyTypeChecker
-    fig.add_traces(go.Scatter(x=s_sell_df.index, y = s_sell_df[col], mode = 'lines', showlegend=False,
+    fig.add_traces(go.Scatter(x=s_sell_df.index, y=s_sell_df[col], mode='lines', showlegend=False,
                               line=dict(color='indianred', width=5, dash='dot')))
 
 for col in s_buy_df.columns:
     # noinspection PyTypeChecker
-    fig.add_traces(go.Scatter(x=s_buy_df.index, y = s_buy_df[col], mode = 'lines', showlegend=False,
+    fig.add_traces(go.Scatter(x=s_buy_df.index, y=s_buy_df[col], mode='lines', showlegend=False,
                               line=dict(color='forestgreen', width=5, dash='dot')))
 
 # Test data
 # noinspection PyTypeChecker
-fig.add_traces(go.Scatter(x=ds_ticker.index, y=ds_ticker.values, mode = 'lines', line_color='brown', name='Test'))
+fig.add_traces(go.Scatter(x=ds_ticker.index, y=ds_ticker.values, mode='lines', line_color='brown', name='Test'))
 
 for col in df_grid_sell.columns:
     # noinspection PyTypeChecker
-    fig.add_traces(go.Scatter(x=df_grid_sell.index, y = df_grid_sell[col], mode = 'lines', line_color='red',
+    fig.add_traces(go.Scatter(x=df_grid_sell.index, y=df_grid_sell[col], mode='lines', line_color='red',
                               showlegend=False))
 
 for col in df_grid_buy.columns:
     # noinspection PyTypeChecker
-    fig.add_traces(go.Scatter(x=df_grid_buy.index, y = df_grid_buy[col], mode = 'lines', line_color='green',
+    fig.add_traces(go.Scatter(x=df_grid_buy.index, y=df_grid_buy[col], mode='lines', line_color='green',
                               showlegend=False))
 
-fig.update_layout(xaxis_tickformat = "%H:%M:%S",
-                  height=700,
-                  autosize=True,
-                  )
+fig.update_layout(xaxis_tickformat="%H:%M:%S", height=700, autosize=True)
 
 app.layout = html.Div(
     [

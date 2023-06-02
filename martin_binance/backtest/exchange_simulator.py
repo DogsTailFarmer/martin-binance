@@ -20,7 +20,7 @@ class Funds:
         self.base = {}
         self.quote = {}
 
-    def get(self):
+    def get_funds(self):
         return [self.base, self.quote]
 
     def on_order_created(self, buy: bool, amount: str, price: str):
@@ -134,8 +134,10 @@ class Account:
         else:
             if buy:
                 self.orders_buy.at[order_id] = Decimal(price)
+                self.grid_buy[lt] = self.orders_buy
             else:
                 self.orders_sell.at[order_id] = Decimal(price)
+                self.grid_sell[lt] = self.orders_sell
             #
             self.funds.on_order_created(buy=buy, amount=amount, price=price)
 
@@ -158,14 +160,18 @@ class Account:
                 'workingTime': order.working_time,
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
-    def cancel_order(self, order_id: int):
+    def cancel_order(self, order_id: int, ts: int):
         order = self.orders[order_id]
         order.status = 'CANCELED'
         try:
             if order.side == 'BUY':
                 self.orders_buy = self.orders_buy.drop(order_id)
+                if self.orders_buy.values.size:
+                    self.grid_buy[ts] = self.orders_buy
             else:
                 self.orders_sell = self.orders_sell.drop(order_id)
+                if self.orders_sell.values.size:
+                    self.grid_sell[ts] = self.orders_sell
         except Exception as ex:
             raise UserWarning(f"Order {order_id} not active: {ex}")
         else:

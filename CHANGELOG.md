@@ -1,3 +1,7 @@
+## v1.3.0b12 2023-06-02
+### Fix
+* deepsource issues
+
 ## v1.3.0b11 2023-06-01
 ### Fix
 * Bitfinex: rename test pair from AAABBB to TESTBTCTESTUSDT, update template

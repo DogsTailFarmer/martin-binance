@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b11"
+__version__ = "1.3.0b12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -18,13 +18,15 @@ import optuna
 from martin_binance import BACKTEST_PATH
 
 
-spec= importlib.util.spec_from_file_location("strategy",
-                                             Path(BACKTEST_PATH,
-                                                  Path("BTCUSDT_SOURCE", "cli_7_BTCUSDT.py")))
+spec = importlib.util.spec_from_file_location(
+    "strategy", Path(BACKTEST_PATH, Path("BTCUSDT_SOURCE", "cli_7_BTCUSDT.py"))
+)
+
 mbs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mbs)
 
 PARAMS_FLOAT = ['PRICE_SHIFT', 'KBB']
+
 
 def try_trade(**kwargs):
     for key, value in kwargs.items():
@@ -34,6 +36,7 @@ def try_trade(**kwargs):
     mbs.trade()
     result = float(mbs.session_result.get('profit', 0)) + float(mbs.session_result.get('free', 0))
     return result
+
 
 def objective(trial):
     params = {
@@ -46,9 +49,10 @@ def objective(trial):
         'MARTIN': trial.suggest_float('MARTIN', 5, 15, step=1),
         'SHIFT_GRID_DELAY': trial.suggest_int('SHIFT_GRID_DELAY', 10, 60, step=5),
         'KBB': trial.suggest_float('KBB', 1, 5, step=0.5),
-        'LINEAR_GRID_K': trial.suggest_int('LINEAR_GRID_K', 10, 200, step=10),
+        'LINEAR_GRID_K': trial.suggest_int('LINEAR_GRID_K', 0, 1000, step=100),
     }
     return try_trade(**params)
+
 
 study = optuna.create_study(direction="maximize")
 study.optimize(objective, n_trials=500)
