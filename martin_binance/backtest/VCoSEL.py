@@ -6,7 +6,7 @@ Visual Comparison of Session Extended Log
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b5"
+__version__ = "1.3.0b14"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -34,7 +34,7 @@ df_grid_buy = pd.read_pickle(Path(BACKTEST_PATH, df_path, "buy.pkl"))
 
 app = Dash(__name__)
 fig = go.Figure()
-fig.update_layout(template = 'seaborn')
+fig.update_layout(template='seaborn')
 
 # SOURCE data
 # noinspection PyTypeChecker

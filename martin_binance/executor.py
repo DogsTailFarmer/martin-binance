@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b12"
+__version__ = "1.3.0b14"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1520,7 +1520,7 @@ class Strategy(StrategyBase):
                 if STANDALONE and self.first_run:
                     raise SystemExit(1)
                 raise UserWarning
-            elif _amount_first_grid > 20 * depo / 100:
+            if _amount_first_grid > 20 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} it is rather"
                                  f" big for a small deposit"
                                  f" {self.deposit_second if self.cycle_buy else self.deposit_first}",

@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b12"
+__version__ = "1.3.0b14"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -39,10 +39,7 @@ from exchanges_wrapper import api_pb2, api_pb2_grpc
 
 from martin_binance import executor as ms, BACKTEST_PATH, copy
 from martin_binance.client import Trade
-
-if ms.STANDALONE:
-    import pandas as pd
-    from martin_binance.backtest.exchange_simulator import Account as backTestAccount
+from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
@@ -1246,7 +1243,6 @@ async def cancel_order_call(_id: int):
                 cls.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
-
 
 
 async def cancel_all_order_call(_id: int):
