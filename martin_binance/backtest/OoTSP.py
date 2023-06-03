@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b12"
+__version__ = "1.3.0b16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -49,12 +49,12 @@ def objective(trial):
         'MARTIN': trial.suggest_float('MARTIN', 5, 15, step=1),
         'SHIFT_GRID_DELAY': trial.suggest_int('SHIFT_GRID_DELAY', 10, 60, step=5),
         'KBB': trial.suggest_float('KBB', 1, 5, step=0.5),
-        'LINEAR_GRID_K': trial.suggest_int('LINEAR_GRID_K', 0, 1000, step=100),
+        'LINEAR_GRID_K': trial.suggest_int('LINEAR_GRID_K', 0, 100, step=10),
     }
     return try_trade(**params)
 
 
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=500)
+study.optimize(objective, n_trials=1000)
 
 print(f"Optimal parameters: {study.best_params} for get {study.best_value}")

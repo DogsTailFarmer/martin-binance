@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b15"
+__version__ = "1.3.0b16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1428,6 +1428,8 @@ class Strategy(StrategyBase):
                              f"First: {self.sum_profit_first}\n"
                              f"Second: {self.sum_profit_second}\n"
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
+        if self.first_run or MODE in ('T', 'TC'):
+            self.cycle_time = datetime.utcnow()
         mem = psutil.virtual_memory().percent if psutil else 0
         if mem > 80:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
@@ -1448,8 +1450,6 @@ class Strategy(StrategyBase):
             # Init variable
             self.profit_first = Decimal('0')
             self.profit_second = Decimal('0')
-            if self.first_run or MODE in ('T', 'TC'):
-                self.cycle_time = datetime.utcnow()
             self.over_price = OVER_PRICE
             self.order_q = ORDER_Q
             self.grid_update_started = None
