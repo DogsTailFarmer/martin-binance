@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b14"
+__version__ = "1.3.0b15"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -859,7 +859,13 @@ class Strategy(StrategyBase):
                 except sqlite3.Error as err:
                     print(f"UPDATE t_control: {err}")
             # self.message_log(f"save_strategy_state.command: {self.command}", log_level=LogLevel.DEBUG)
-        if self.command == 'restart':
+        if self.command == 'stopped':
+            if isinstance(self.start_collect, int):
+                if self.start_collect < 5:
+                    self.start_collect += 1
+                else:
+                    self.start_collect = False
+        elif self.command == 'restart':
             self.stop()
             os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
         if (MODE in ('T', 'TC') and
@@ -1432,7 +1438,7 @@ class Strategy(StrategyBase):
         if self.command == 'end' or (self.command == 'stop' and
                                      (not self.reverse or (self.reverse and REVERSE_STOP))):
             self.command = 'stopped'
-            self.start_collect = False
+            self.start_collect = 1
             self.message_log('Stop, waiting manual action', tlg=True)
         else:
             n = gc.collect(generation=2)
