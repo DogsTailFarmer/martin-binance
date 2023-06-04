@@ -91,7 +91,8 @@ class Order:
 
 
 class Account:
-    def __init__(self):
+    def __init__(self, save_ds: bool):
+        self.save_ds = save_ds
         self.funds = Funds()
         self.fee_maker = Decimal('0')
         self.fee_taker = Decimal('0')
@@ -134,10 +135,12 @@ class Account:
         else:
             if buy:
                 self.orders_buy.at[order_id] = Decimal(price)
-                self.grid_buy[lt] = self.orders_buy
+                if self.save_ds:
+                    self.grid_buy[lt] = self.orders_buy
             else:
                 self.orders_sell.at[order_id] = Decimal(price)
-                self.grid_sell[lt] = self.orders_sell
+                if self.save_ds:
+                    self.grid_sell[lt] = self.orders_sell
             #
             self.funds.on_order_created(buy=buy, amount=amount, price=price)
 
@@ -166,11 +169,11 @@ class Account:
         try:
             if order.side == 'BUY':
                 self.orders_buy = self.orders_buy.drop(order_id)
-                if self.orders_buy.values.size:
+                if self.save_ds and self.orders_buy.values.size:
                     self.grid_buy[ts] = self.orders_buy
             else:
                 self.orders_sell = self.orders_sell.drop(order_id)
-                if self.orders_sell.values.size:
+                if self.save_ds and self.orders_sell.values.size:
                     self.grid_sell[ts] = self.orders_sell
         except Exception as ex:
             raise UserWarning(f"Order {order_id} not active: {ex}")
@@ -215,12 +218,13 @@ class Account:
             print(ex)
         orders_id.extend(_i.values)
 
-        # Save data for analytics
-        self.ticker[ts] = ticker['lastPrice']
-        if self.orders_sell.values.size:
-            self.grid_sell[ts] = self.orders_sell
-        if self.orders_buy.values.size:
-            self.grid_buy[ts] = self.orders_buy
+        if self.save_ds:
+            # Save data for analytics
+            self.ticker[ts] = ticker['lastPrice']
+            if self.orders_sell.values.size:
+                self.grid_sell[ts] = self.orders_sell
+            if self.orders_buy.values.size:
+                self.grid_buy[ts] = self.orders_buy
         #
         orders_filled = []
         for order_id in orders_id:

@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b14"
+__version__ = "1.3.0b19"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -19,6 +19,7 @@ import sqlite3
 import random
 import traceback
 import pandas as pd
+import shutil
 
 from colorama import init as color_init
 from decimal import Decimal
@@ -395,16 +396,38 @@ class StrategyBase:
 
     def __init__(self):
         self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
-        self.ticker = {}
-        self.order_book = {}
+        self.s_ticker = {}
+        self.s_order_book = {}
         self.klines = {}  # KLines snapshot
         self.candles = {}  # Candles stream
-        self.account = None
+        self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
         self.grid_buy = {}
         self.grid_sell = {}
 
     def __call__(self):
         return self
+
+    def reset(self):
+        self.__init__()
+
+    @classmethod
+    def reset_class_var(cls):
+        cls.ticker = {}
+        cls.funds = {}
+        cls.order_book = {}
+        cls.order_id = int(datetime.now().strftime("%S%M")) * 1000
+        cls.wait_order_id = []  # List of placed orders for time-out detect
+        cls.canceled_order_id = []  # List canceled orders  for time-out detect
+        cls.all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
+        cls.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
+        cls.all_orders = []  # List of all open orders for symbol
+        cls.orders = []  # List orders associated with strategy
+        cls.get_buffered_funds_last_time = time.time()
+        cls.rate_limiter = RATE_LIMITER
+        cls.start_time_ms = int(time.time() * 1000)
+        cls.backtest = {}
+        cls.bulk_orders_cancel = {}
+
 
     class Klines:
         klines_series = {}
@@ -735,38 +758,7 @@ async def ask_exit():
 
         if ms.MODE == 'TC':
             # Save stream data for backtesting
-            # Save ticker
-            ds = pd.Series(cls.strategy.ticker)
-            ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
-            # Save order_book
-            ds = pd.Series(cls.strategy.order_book)
-            ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
-            # Save klines snapshot
-            json.dump(cls.strategy.klines, open(Path(BACKTEST_PATH, f"{ms.SYMBOL}_klines.json"), 'w'))
-            # Save candles
-            for k, v in cls.strategy.candles.items():
-                ds = pd.Series(v)
-                ds.to_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_candles_{k}.pkl"))
-            # Save session detail for analytics
-            session_path = Path(BACKTEST_PATH, f"{ms.SYMBOL}_SOURCE")
-            session_path.mkdir(parents=True, exist_ok=True)
-            #
-            d_ticker = {}
-            for k, v in cls.strategy.ticker.items():
-                d_ticker[k] = v['lastPrice']
-            ds_ticker = pd.Series(d_ticker).astype(float)
-            ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
-            #
-            df_grid_sell = pd.DataFrame().from_dict(cls.strategy.grid_sell, orient='index')
-            df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-            df_grid_buy = pd.DataFrame().from_dict(cls.strategy.grid_buy, orient='index')
-            df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
-            #
-            ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
-            df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
-            df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
-            #
-            copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
+            session_data_handler(cls)
 
         if ms.MODE in ('T', 'TC'):
             await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -790,13 +782,60 @@ async def ask_exit():
                 print('OK')
 
 
+def session_data_handler(cls):
+    # session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}/{datetime.now().strftime('%m%d-%H:%M:%S')}")
+    session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
+    raw_path = Path(session_root, "raw")
+    raw_path.mkdir(parents=True, exist_ok=True)
+    # Save ticker
+    ds = pd.Series(cls.strategy.s_ticker)
+    ds.to_pickle(Path(raw_path, "ticker.pkl"))
+    # Save order_book
+    ds = pd.Series(cls.strategy.s_order_book)
+    ds.to_pickle(Path(raw_path, "order_book.pkl"))
+    # Save klines snapshot
+    json.dump(cls.strategy.klines, open(Path(raw_path, "klines.json"), 'w'))
+    # Save candles
+    for k, v in cls.strategy.candles.items():
+        ds = pd.Series(v)
+        ds.to_pickle(Path(raw_path, f"candles_{k}.pkl"))
+    # Save session detail for analytics
+    session_data = Path(session_root, "snapshot")
+    session_data.mkdir(parents=True, exist_ok=True)
+    #
+    d_ticker = {}
+    for k, v in cls.strategy.s_ticker.items():
+        d_ticker[k] = v['lastPrice']
+    ds_ticker = pd.Series(d_ticker).astype(float)
+    ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
+    #
+    df_grid_sell = pd.DataFrame().from_dict(cls.strategy.grid_sell, orient='index')
+    df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+    df_grid_buy = pd.DataFrame().from_dict(cls.strategy.grid_buy, orient='index')
+    df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+    #
+    ds_ticker.to_pickle(Path(session_data, "ticker.pkl"))
+    df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
+    df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
+    #
+    copy(ms.PARAMS, Path(session_root, Path(ms.PARAMS).name))
+
+    shutil.make_archive(str(Path(BACKTEST_PATH,f"{session_root}_{datetime.now().strftime('%m%d-%H:%M')}")),
+                        'zip',
+                        session_root)
+
+    cls.strategy.reset()
+
+    print(f"Stream data for backtesting saved to {session_root}")
+
+
 async def buffered_candle():
     cls = StrategyBase
     StrategyBase.Klines.klines_lim = KLINES_LIM
     klines = {}
     klines_from_file = {}
     if ms.MODE == 'S':
-        klines_from_file = json.load(open(Path(BACKTEST_PATH, f"{ms.SYMBOL}_klines.json")))
+        klines_from_file = json.load(open(Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}/raw/klines.json")))
     for i in KLINES_INIT:
         if ms.MODE in ('T', 'TC'):
             res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
@@ -804,7 +843,7 @@ async def buffered_candle():
                                          interval=i.value,
                                          limit=KLINES_LIM)
             kline = json_format.MessageToDict(res)
-            if ms.MODE == 'TC':
+            if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
                 cls.strategy.klines[i.value] = kline
         else:
             kline = klines_from_file.get(i.value, {})
@@ -834,7 +873,7 @@ async def on_klines_update(_klines: {str: StrategyBase.Klines}):
                                                 interval=json.dumps(_interval)):
                 # print(f"on_klines_update: {candle.symbol}, {candle.interval}, candle: {json.loads(candle.candle)}")
                 _klines.get(candle.interval).refresh(json.loads(candle.candle))
-                if ms.MODE == 'TC':
+                if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
                     new_raw = {int(time.time() * 1000): candle.candle}
                     cls.strategy.candles.setdefault(candle.interval, new_raw).update(new_raw)
         except Exception as ex:
@@ -842,7 +881,7 @@ async def on_klines_update(_klines: {str: StrategyBase.Klines}):
             cls.wss_fire_up = True
     else:
         for i in _interval:
-            ds = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_candles_{i}.pkl"))
+            ds = pd.read_pickle(Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}/raw/candles_{i}.pkl"))
             loop.create_task(aiter_candles(ds, _klines, i))
 
 
@@ -1192,7 +1231,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
             if executed_qty < orig_qty:
                 cls.orders.append(order)
                 cls.all_orders.append(order)
-            if ms.MODE == 'TC':
+            if ms.MODE == 'TC' and cls.strategy.start_collect:
                 cls.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
@@ -1239,7 +1278,7 @@ async def cancel_order_call(_id: int):
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
             cls.strategy.on_cancel_order_success(_id, Order(result))
             cls.canceled_order_id.append(_id)
-            if ms.MODE == 'TC':
+            if ms.MODE == 'TC' and cls.strategy.start_collect:
                 cls.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
@@ -1346,6 +1385,9 @@ async def loop_ds(ds, tik=False):
     :return: next row
     """
     cls = StrategyBase
+    while not cls.strategy.start_collect:
+        await asyncio.sleep(0.1)
+
     index_prev = 0
     for index, row in ds.items():
         delay = (index - index_prev) if index_prev else 0
@@ -1374,7 +1416,7 @@ async def on_ticker_update():
                 if ms.MODE == 'TC' and cls.strategy.start_collect:
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                     ticker_24h['delay'] = cls.delay_ordering_s
-                    cls.strategy.ticker.update({int(time.time() * 1000): ticker_24h})
+                    cls.strategy.s_ticker.update({int(time.time() * 1000): ticker_24h})
                     cls.open_orders_snapshot()
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
@@ -1398,25 +1440,27 @@ def back_test_handler(cls):
     original_time = (cls.backtest['ticker'].index.max() - cls.backtest['ticker'].index.min()) / 1000
     original_time = timedelta(seconds=original_time)
     print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
-    # Save test data
-    session_path = Path(BACKTEST_PATH, f"{ms.SYMBOL}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
-    session_path.mkdir(parents=True)
-    ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
-    ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
-    df_grid_sell = pd.DataFrame().from_dict(cls.strategy.account.grid_sell, orient='index').astype(float)
-    df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-    df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
-    df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
-    #
-    ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
-    df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
-    df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
-    copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
-    #
+    if ms.SAVE_DS:
+        # Save test data
+        session_path = Path(BACKTEST_PATH,
+                            f"{cls.exchange}_{cls.symbol}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
+        session_path.mkdir(parents=True)
+        ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
+        ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
+        df_grid_sell = pd.DataFrame().from_dict(cls.strategy.account.grid_sell, orient='index').astype(float)
+        df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+        df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
+        df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+        #
+        ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
+        df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
+        df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
+        copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
+        print(f"Session data saved to: {session_path}")
+        #
     s_profit = session_result['profit'] = f"{cls.strategy.get_sum_profit()}"
     s_free = session_result['free'] = f"{cls.strategy.get_free_assets(mode='free')[2]}"
     print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
-    print(f"Session data saved to: {session_path}")
     loop.stop()
 
 
@@ -1446,7 +1490,7 @@ async def on_order_book_update():
                 cls.order_book = order_book
                 cls.strategy.on_new_order_book(OrderBook(cls.order_book))
                 if ms.MODE == 'TC' and cls.strategy.start_collect:
-                    cls.strategy.order_book.update({int(time.time() * 1000): order_book})
+                    cls.strategy.s_order_book.update({int(time.time() * 1000): order_book})
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
             cls.wss_fire_up = True
@@ -1631,24 +1675,10 @@ async def main(_symbol):
         #
         else:
             # Init class atr for reuse in next backtest cycle
-            cls.ticker = {}
-            cls.funds = {}
-            cls.order_book = {}
-            cls.order_id = int(datetime.now().strftime("%S%M")) * 1000
-            cls.wait_order_id = []  # List of placed orders for time-out detect
-            cls.canceled_order_id = []  # List canceled orders  for time-out detect
-            cls.all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
-            cls.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
-            cls.all_orders = []  # List of all open orders for symbol
-            cls.orders = []  # List orders associated with strategy
-            cls.get_buffered_funds_last_time = time.time()
-            cls.rate_limiter = RATE_LIMITER
-            cls.start_time_ms = int(time.time() * 1000)
-            cls.backtest = {}
-            cls.bulk_orders_cancel = {}
+            cls.reset_class_var()
 
         if ms.MODE == 'S':
-            cls.strategy.account = backTestAccount()
+            # .strategy.account = backTestAccount(ms.SAVE_DS)
             #
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': f"{ms.AMOUNT_FIRST}",
@@ -1659,8 +1689,10 @@ async def main(_symbol):
             cls.strategy.account.fee_maker = ms.FEE_MAKER
             cls.strategy.account.fee_taker = ms.FEE_TAKER
             #
-            cls.backtest['ticker'] = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_ticker.pkl"))
-            cls.backtest['order_book'] = pd.read_pickle(Path(BACKTEST_PATH, f"{ms.SYMBOL}_order_book.pkl"))
+            cls.backtest['ticker'] = pd.read_pickle(Path(BACKTEST_PATH,
+                                                         f"{cls.exchange}_{cls.symbol}/raw/ticker.pkl"))
+            cls.backtest['order_book'] = pd.read_pickle(Path(BACKTEST_PATH,
+                                                             f"{cls.exchange}_{cls.symbol}/raw/order_book.pkl"))
             cls.ticker = cls.backtest['ticker'].iat[0]
             cls.order_book = cls.backtest['order_book'].iat[0]
         #

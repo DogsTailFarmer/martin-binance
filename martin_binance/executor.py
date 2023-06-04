@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b18"
+__version__ = "1.3.0b19"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -106,6 +106,7 @@ INLINE_BOT = True
 # Backtesting
 MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 500  # Time accelerator
+SAVE_DS = True  # Save session result data (ticker, orders) for compare
 # endregion
 
 
@@ -715,7 +716,7 @@ class Strategy(StrategyBase):
         self.grid_only_restart = None  # -
         self.local_time = self.get_time if STANDALONE else time.time
         self.wait_wss_refresh = {}  # -
-        self.start_collect = False
+        self.start_collect = None
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
@@ -2164,7 +2165,7 @@ class Strategy(StrategyBase):
             except statistics.StatisticsError as ex:
                 self.message_log(f"Can't get ATR value: {ex}, use default PROFIT_MAX value", LogLevel.WARNING)
                 profit_max = PROFIT_MAX
-            self.message_log(f"Profit max for first order volume is: {profit_max}", LogLevel.DEBUG)
+            self.message_log(f"Profit max for first order volume is set {profit_max}%", LogLevel.DEBUG)
             k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             amount_first_grid = self.round_truncate(amount_first_grid, base=True, _rounding=ROUND_CEILING)

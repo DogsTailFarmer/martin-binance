@@ -33,6 +33,7 @@ def try_trade(**kwargs):
         print(key, value)
         setattr(mbs.ex, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}"))
     mbs.ex.MODE = 'S'
+    mbs.ex.SAVE_DS = False
     mbs.trade()
     result = float(mbs.session_result.get('profit', 0)) + float(mbs.session_result.get('free', 0))
     return result

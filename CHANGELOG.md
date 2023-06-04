@@ -1,3 +1,8 @@
+## v1.3.0b19 2023-06-xx
+### Update
+* Sync record/play
+* Add SAVE_DS = True  # Save session result data (ticker, orders) for compare
+
 ## v1.3.0b18 2023-06-04
 ### Fix
 * #59
