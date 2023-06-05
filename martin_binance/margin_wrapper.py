@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b19"
+__version__ = "1.3.0b20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -375,7 +375,7 @@ class StrategyBase:
     ticker = {}
     funds = {}
     order_book = {}
-    order_id = int(datetime.now().strftime("%S%M")) * 1000
+    order_id = int(datetime.now().strftime("%S%M%H%d")) * 1000
     wait_order_id = []  # List of placed orders for time-out detect
     canceled_order_id = []  # List canceled orders  for time-out detect
     all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
@@ -395,6 +395,7 @@ class StrategyBase:
     bulk_orders_cancel = {}
 
     def __init__(self):
+        print("Init StrategyBase")
         self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
         self.s_ticker = {}
         self.s_order_book = {}
@@ -410,8 +411,9 @@ class StrategyBase:
     def reset(self):
         self.__init__()
 
-    @classmethod
-    def reset_class_var(cls):
+    @staticmethod
+    def reset_class_var():
+        cls = StrategyBase
         cls.ticker = {}
         cls.funds = {}
         cls.order_book = {}
@@ -456,96 +458,66 @@ class StrategyBase:
         def get_kline(cls, _interval) -> []:
             return cls.klines_series.get(_interval, [])
 
-    @classmethod
-    def order_exist(cls, _id) -> bool:
-        return any(i.id == _id for i in cls.orders)
 
-    @classmethod
-    def all_order_exist(cls, _id) -> bool:
-        return any(i.id == _id for i in cls.all_orders)
+    def message_log(self,*args, **kwargs):
+        pass
 
-    @classmethod
-    def get_trading_capability_manager(cls) -> TradingCapabilityManager:
-        # print(f"get_trading_capability_manager.info_symbol: {cls.info_symbol}")
-        return StrategyBase.tcm
+    def order_exist(self, _id) -> bool:
+        return any(i.id == _id for i in self.orders)
 
-    @classmethod
-    def get_first_currency(cls) -> str:
-        return cls.info_symbol.get('baseAsset')
+    def all_order_exist(self, _id) -> bool:
+        return any(i.id == _id for i in self.all_orders)
 
-    @classmethod
-    def get_second_currency(cls) -> str:
-        return cls.info_symbol.get('quoteAsset')
+    def get_trading_capability_manager(self) -> TradingCapabilityManager:
+        # print(f"get_trading_capability_manager.tcm: {vars(StrategyBase.tcm)}")
+        return self.tcm
 
-    @classmethod
-    def get_buffered_ticker(cls) -> Ticker:
-        # print(f"get_buffered_ticker.ticker: {cls.ticker}")
-        return Ticker(cls.ticker)
+    def get_first_currency(self) -> str:
+        return self.info_symbol.get('baseAsset')
 
-    @classmethod
-    def get_buffered_funds(cls) -> Dict[str, FundsEntry]:
-        # print(f"get_buffered_funds.funds: {cls.funds}")
-        if cls.strategy.local_time() - cls.get_buffered_funds_last_time > cls.rate_limiter:
+    def get_second_currency(self) -> str:
+        return self.info_symbol.get('quoteAsset')
+
+    def get_buffered_ticker(self) -> Ticker:
+        # print(f"get_buffered_ticker.ticker: {self.ticker}")
+        return Ticker(self.ticker)
+
+    def get_buffered_funds(self) -> Dict[str, FundsEntry]:
+        # print(f"get_buffered_funds.funds: {self.funds}")
+        if self.strategy.local_time() - self.get_buffered_funds_last_time > self.rate_limiter:
             # noinspection PyTypeChecker
             loop.create_task(buffered_funds(print_info=False))
-            cls.get_buffered_funds_last_time = cls.strategy.local_time()
-        return {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
-                cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
+            self.get_buffered_funds_last_time = self.strategy.local_time()
+        return {self.base_asset: FundsEntry(self.funds[self.base_asset]),
+                self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
 
-    @classmethod
-    def get_buffered_order_book(cls) -> OrderBook:
-        # print(f"get_buffered_order_book.order_book: {cls.order_book}")
-        return OrderBook(cls.order_book)
+    def get_buffered_order_book(self) -> OrderBook:
+        # print(f"get_buffered_order_book.order_book: {self.order_book}")
+        return OrderBook(self.order_book)
 
-    @classmethod
-    def get_buffered_recent_candles(cls, candle_size_in_minutes: int, number_of_candles: int = 50,
-                                    include_current_building_candle: bool = False) -> List[Candle]:
-        size = convert_from_minute(candle_size_in_minutes)
-        kline = StrategyBase.Klines.get_kline(size)
-        if len(kline) > number_of_candles+1:
-            return kline[-number_of_candles-(0 if include_current_building_candle else 1):
-                         None if include_current_building_candle else -1]
-        return kline[:None if include_current_building_candle else -1]
-
-    @classmethod
-    def place_limit_order(cls, buy: bool, amount: Decimal, price: Decimal) -> int:
+    def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal) -> int:
+        cls = StrategyBase
         cls.order_id += 1
-        StrategyBase.strategy.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
+        self.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
                                           f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
                                           color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
         loop.create_task(create_limit_order(cls.order_id, buy, any2str(amount), any2str(price)))
-        if StrategyBase.exchange == 'huobi':
+        if cls.exchange == 'huobi':
             time.sleep(0.02)
-        elif StrategyBase.exchange == 'okx':
+        elif cls.exchange == 'okx':
             time.sleep(0.035)
         return cls.order_id
 
-    @classmethod
-    def cancel_order(cls, order_id: int) -> None:
-        loop.create_task(cancel_order_timeout(order_id))
-        loop.create_task(cancel_order_call(order_id))
-
-    @classmethod
-    def cancel_all_order(cls, order_id: int) -> None:
-        loop.create_task(cancel_order_timeout(order_id))
-        loop.create_task(cancel_all_order_call(order_id))
-
-    @classmethod
-    def get_buffered_completed_trades(cls, get_all_trades: bool = False) -> List[PrivateTrade]:
+    def get_buffered_completed_trades(self, get_all_trades: bool = False) -> List[PrivateTrade]:
         if get_all_trades:
-            return StrategyBase.all_trades
-        return StrategyBase.trades
+            return self.all_trades
+        return self.trades
 
-    @classmethod
-    def get_buffered_open_orders(cls, get_all_orders: bool = False) -> List[Order]:
+    def get_buffered_open_orders(self, get_all_orders: bool = False) -> List[Order]:
         if get_all_orders:
-            return cls.all_orders
-        return cls.orders
-
-    @classmethod
-    def transfer_to_master(cls, symbol: str, amount: str):
-        loop.create_task(transfer2master(symbol, amount))
+            return self.all_orders
+        return self.orders
 
     def get_time(self) -> float:
         """
@@ -572,17 +544,40 @@ class StrategyBase:
             last = time.time()
         return last
 
-    @classmethod
-    def open_orders_snapshot(cls):
+    def open_orders_snapshot(self):
         orders_buy = {}
         orders_sell = {}
-        for order in cls.orders:
+        for order in self.orders:
             if order.buy:
                 orders_buy[order.id] = order.price
             else:
                 orders_sell[order.id] = order.price
-        cls.strategy.grid_buy.update({int(time.time() * 1000): pd.Series(orders_buy)})
-        cls.strategy.grid_sell.update({int(time.time() * 1000): pd.Series(orders_sell)})
+        self.grid_buy.update({int(time.time() * 1000): pd.Series(orders_buy)})
+        self.grid_sell.update({int(time.time() * 1000): pd.Series(orders_sell)})
+
+    @staticmethod
+    def get_buffered_recent_candles(candle_size_in_minutes: int, number_of_candles: int = 50,
+                                    include_current_building_candle: bool = False) -> List[Candle]:
+        size = convert_from_minute(candle_size_in_minutes)
+        kline = StrategyBase.Klines.get_kline(size)
+        if len(kline) > number_of_candles+1:
+            return kline[-number_of_candles-(0 if include_current_building_candle else 1):
+                         None if include_current_building_candle else -1]
+        return kline[:None if include_current_building_candle else -1]
+
+    @staticmethod
+    def cancel_order(order_id: int) -> None:
+        loop.create_task(cancel_order_timeout(order_id))
+        loop.create_task(cancel_order_call(order_id))
+
+    @staticmethod
+    def cancel_all_order(order_id: int) -> None:
+        loop.create_task(cancel_order_timeout(order_id))
+        loop.create_task(cancel_all_order_call(order_id))
+
+    @staticmethod
+    def transfer_to_master(symbol: str, amount: str):
+        loop.create_task(transfer2master(symbol, amount))
 
 
 async def heartbeat(_session):
@@ -758,7 +753,7 @@ async def ask_exit():
 
         if ms.MODE == 'TC':
             # Save stream data for backtesting
-            session_data_handler(cls)
+            session_data_handler(cls.strategy)
 
         if ms.MODE in ('T', 'TC'):
             await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -788,15 +783,15 @@ def session_data_handler(cls):
     raw_path = Path(session_root, "raw")
     raw_path.mkdir(parents=True, exist_ok=True)
     # Save ticker
-    ds = pd.Series(cls.strategy.s_ticker)
+    ds = pd.Series(cls.s_ticker)
     ds.to_pickle(Path(raw_path, "ticker.pkl"))
     # Save order_book
-    ds = pd.Series(cls.strategy.s_order_book)
+    ds = pd.Series(cls.s_order_book)
     ds.to_pickle(Path(raw_path, "order_book.pkl"))
     # Save klines snapshot
-    json.dump(cls.strategy.klines, open(Path(raw_path, "klines.json"), 'w'))
+    json.dump(cls.klines, open(Path(raw_path, "klines.json"), 'w'))
     # Save candles
-    for k, v in cls.strategy.candles.items():
+    for k, v in cls.candles.items():
         ds = pd.Series(v)
         ds.to_pickle(Path(raw_path, f"candles_{k}.pkl"))
     # Save session detail for analytics
@@ -804,14 +799,14 @@ def session_data_handler(cls):
     session_data.mkdir(parents=True, exist_ok=True)
     #
     d_ticker = {}
-    for k, v in cls.strategy.s_ticker.items():
+    for k, v in cls.s_ticker.items():
         d_ticker[k] = v['lastPrice']
     ds_ticker = pd.Series(d_ticker).astype(float)
     ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
     #
-    df_grid_sell = pd.DataFrame().from_dict(cls.strategy.grid_sell, orient='index')
+    df_grid_sell = pd.DataFrame().from_dict(cls.grid_sell, orient='index')
     df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-    df_grid_buy = pd.DataFrame().from_dict(cls.strategy.grid_buy, orient='index')
+    df_grid_buy = pd.DataFrame().from_dict(cls.grid_buy, orient='index')
     df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
     #
     ds_ticker.to_pickle(Path(session_data, "ticker.pkl"))
@@ -823,15 +818,13 @@ def session_data_handler(cls):
     shutil.make_archive(str(Path(BACKTEST_PATH,f"{session_root}_{datetime.now().strftime('%m%d-%H:%M')}")),
                         'zip',
                         session_root)
-
-    cls.strategy.reset()
-
+    cls.reset()
     print(f"Stream data for backtesting saved to {session_root}")
 
 
 async def buffered_candle():
     cls = StrategyBase
-    StrategyBase.Klines.klines_lim = KLINES_LIM
+    cls.Klines.klines_lim = KLINES_LIM
     klines = {}
     klines_from_file = {}
     if ms.MODE == 'S':
@@ -850,7 +843,7 @@ async def buffered_candle():
         # print(f"buffered_candle.kline: {kline}")
         candles = kline.get('klines', [])
         if candles:
-            kline_i = StrategyBase.Klines(i.value)
+            kline_i = cls.Klines(i.value)
             for candle in candles:
                 kline_i.refresh(json.loads(candle))
                 # print(f"buffered_candle.candle: {candle}")
@@ -948,7 +941,7 @@ async def buffered_orders():
     while run:
         try:
             res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
-            if not res.success:
+            if res is None or not res.success:
                 cls.wss_fire_up = True
                 raise UserWarning(f"Not active WSS for {cls.symbol} on {cls.exchange}, restart request sent")
             _orders = await cls.send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -1007,8 +1000,8 @@ async def buffered_orders():
                         last_state.update(cls.last_state)
                         cls.last_state = None
                         # Restore StrategyBase class var
-                        cls.order_id = (json.loads(last_state.pop(ms_order_id, 0)) or
-                                        int(ms.datetime.now().strftime("%S%M")) * 1000)
+                        cls.order_id = (json.loads(last_state.pop(ms_order_id,
+                                                                  int(ms.datetime.now().strftime("%S%M%H%d")) * 1000)))
                         cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                         cls.trades = jsonpickle.decode(last_state.pop('ms_trades', '[]'))
                         cls.orders = jsonpickle.decode(last_state.pop(ms_orders, '[]'))
@@ -1130,7 +1123,7 @@ async def on_order_update():
 
 def on_order_update_handler(cls, ed):
     if (cls.symbol == ed['symbol']
-            and cls.order_exist(ed['order_id'])
+            and cls.strategy.order_exist(ed['order_id'])
             and ed['order_status'] in ('FILLED', 'PARTIALLY_FILLED')):
         if ed['order_status'] == 'FILLED':
             # Remove from all_orders and orders lists
@@ -1232,7 +1225,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                 cls.orders.append(order)
                 cls.all_orders.append(order)
             if ms.MODE == 'TC' and cls.strategy.start_collect:
-                cls.open_orders_snapshot()
+                cls.strategy.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
             cls.strategy.on_place_order_success(_id, order)
@@ -1279,7 +1272,7 @@ async def cancel_order_call(_id: int):
             cls.strategy.on_cancel_order_success(_id, Order(result))
             cls.canceled_order_id.append(_id)
             if ms.MODE == 'TC' and cls.strategy.start_collect:
-                cls.open_orders_snapshot()
+                cls.strategy.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
 
@@ -1417,7 +1410,7 @@ async def on_ticker_update():
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                     ticker_24h['delay'] = cls.delay_ordering_s
                     cls.strategy.s_ticker.update({int(time.time() * 1000): ticker_24h})
-                    cls.open_orders_snapshot()
+                    cls.strategy.open_orders_snapshot()
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True

@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b16"
+__version__ = "1.3.0b20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -15,12 +15,15 @@ import importlib.util
 from decimal import Decimal
 import optuna
 
+from tkinter.filedialog import askopenfile
 from martin_binance import BACKTEST_PATH
 
 
-spec = importlib.util.spec_from_file_location(
-    "strategy", Path(BACKTEST_PATH, Path("BTCUSDT_SOURCE", "cli_7_BTCUSDT.py"))
-)
+strategy = askopenfile(defaultextension='py',
+                       title='Select a file with strategy parameters',
+                       initialdir=str(BACKTEST_PATH))
+
+spec = importlib.util.spec_from_file_location("strategy", Path(BACKTEST_PATH, strategy.name))
 
 mbs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mbs)
@@ -56,6 +59,6 @@ def objective(trial):
 
 
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=1000)
+study.optimize(objective, n_trials=100)
 
 print(f"Optimal parameters: {study.best_params} for get {study.best_value}")

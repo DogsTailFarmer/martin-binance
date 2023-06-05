@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b19"
+__version__ = "1.3.0b20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -741,7 +741,6 @@ class Strategy(StrategyBase):
         self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}. "
         self.message_log(f"{self.tlg_header}", color=Style.B_WHITE)
         self.status_time = int(self.local_time())
-        # self.cycle_time = datetime.utcnow()
         self.start_after_shift = True
         self.over_price = OVER_PRICE
         self.order_q = ORDER_Q
@@ -1066,9 +1065,8 @@ class Strategy(StrategyBase):
             self.cycle_buy = json.loads(strategy_state.get('cycle_buy'))
             self.cycle_buy_count = json.loads(strategy_state.get('cycle_buy_count'))
             self.cycle_sell_count = json.loads(strategy_state.get('cycle_sell_count'))
-            self.cycle_time = json.loads(strategy_state.get('cycle_time'))
-            if self.cycle_time:
-                self.cycle_time = datetime.strptime(self.cycle_time, '%Y-%m-%d %H:%M:%S.%f')
+            self.cycle_time = json.loads(strategy_state.get('cycle_time', str(datetime.utcnow())))
+            self.cycle_time = datetime.strptime(self.cycle_time, '%Y-%m-%d %H:%M:%S.%f')
             self.cycle_time_reverse = json.loads(strategy_state.get('cycle_time_reverse'))
             if self.cycle_time_reverse:
                 self.cycle_time_reverse = datetime.strptime(self.cycle_time_reverse, '%Y-%m-%d %H:%M:%S.%f')
@@ -2163,8 +2161,8 @@ class Strategy(StrategyBase):
             try:
                 profit_max = min(PROFIT_MAX, max(PROFIT, f2d(100 * self.atr() / self.get_buffered_ticker().last_price)))
             except statistics.StatisticsError as ex:
-                self.message_log(f"Can't get ATR value: {ex}, use default PROFIT_MAX value", LogLevel.WARNING)
-                profit_max = PROFIT_MAX
+                self.message_log(f"Can't get ATR value: {ex}, use default PROFIT value", LogLevel.WARNING)
+                profit_max = PROFIT
             self.message_log(f"Profit max for first order volume is set {profit_max}%", LogLevel.DEBUG)
             k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
