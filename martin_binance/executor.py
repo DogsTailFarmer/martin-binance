@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b20"
+__version__ = "1.3.0b22"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1066,8 +1066,9 @@ class Strategy(StrategyBase):
             self.cycle_buy = json.loads(strategy_state.get('cycle_buy'))
             self.cycle_buy_count = json.loads(strategy_state.get('cycle_buy_count'))
             self.cycle_sell_count = json.loads(strategy_state.get('cycle_sell_count'))
-            self.cycle_time = json.loads(strategy_state.get('cycle_time', str(datetime.utcnow())))
-            self.cycle_time = datetime.strptime(self.cycle_time, '%Y-%m-%d %H:%M:%S.%f')
+            self.cycle_time = json.loads(strategy_state.get('cycle_time'))
+            if self.cycle_time:
+                self.cycle_time = datetime.strptime(self.cycle_time, '%Y-%m-%d %H:%M:%S.%f')
             self.cycle_time_reverse = json.loads(strategy_state.get('cycle_time_reverse'))
             if self.cycle_time_reverse:
                 self.cycle_time_reverse = datetime.strptime(self.cycle_time_reverse, '%Y-%m-%d %H:%M:%S.%f')
