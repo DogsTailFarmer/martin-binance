@@ -1,12 +1,14 @@
-## v1.3.0b19 2023-06-xx
-### Update
-* Sync record/play
-* Add SAVE_DS = True  # Save session result data (ticker, orders) for compare
-
-## v1.3.0b18 2023-06-04
+## v1.3.0b18-21 2023-06-06
 ### Fix
 * #59
 
+### Update
+* Sync record/play
+* Add SAVE_DS = True  # Save session result data (ticker, orders) for compare
+* up requirements for exchanges-wrapper to 1.3.0-1
+* refactoring class StrategyBase
+* + backtest_data_control()
+ 
 ## v1.3.0b12 2023-06-02
 ### Fix
 * deepsource issues

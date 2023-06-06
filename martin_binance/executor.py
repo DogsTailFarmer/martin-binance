@@ -107,6 +107,7 @@ INLINE_BOT = True
 MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 500  # Time accelerator
 SAVE_DS = True  # Save session result data (ticker, orders) for compare
+SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
 # endregion
 
 
@@ -1430,10 +1431,10 @@ class Strategy(StrategyBase):
         if self.first_run or MODE in ('T', 'TC'):
             self.cycle_time = datetime.utcnow()
         mem = psutil.virtual_memory().percent if psutil else 0
-        if mem > 80:
+        if mem > 85:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
             self.command = 'end'
-        elif mem > 70:
+        elif mem > 75:
             self.message_log(f"For {VPS_NAME} low memory availability, stop after end of cycle", tlg=True)
             self.command = 'stop'
         if self.command == 'end' or (self.command == 'stop' and

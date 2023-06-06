@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b20"
+__version__ = "1.3.0b21"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -20,6 +20,7 @@ import random
 import traceback
 import pandas as pd
 import shutil
+import psutil
 
 from colorama import init as color_init
 from decimal import Decimal
@@ -375,7 +376,7 @@ class StrategyBase:
     ticker = {}
     funds = {}
     order_book = {}
-    order_id = int(datetime.now().strftime("%S%M%H%d")) * 1000
+    order_id = int(datetime.now().strftime("%S%M")) * 1000
     wait_order_id = []  # List of placed orders for time-out detect
     canceled_order_id = []  # List canceled orders  for time-out detect
     all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
@@ -393,42 +394,6 @@ class StrategyBase:
     backtest = {}
     delay_ordering_s = 0.5
     bulk_orders_cancel = {}
-
-    def __init__(self):
-        print("Init StrategyBase")
-        self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
-        self.s_ticker = {}
-        self.s_order_book = {}
-        self.klines = {}  # KLines snapshot
-        self.candles = {}  # Candles stream
-        self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
-        self.grid_buy = {}
-        self.grid_sell = {}
-
-    def __call__(self):
-        return self
-
-    def reset(self):
-        self.__init__()
-
-    @staticmethod
-    def reset_class_var():
-        cls = StrategyBase
-        cls.ticker = {}
-        cls.funds = {}
-        cls.order_book = {}
-        cls.order_id = int(datetime.now().strftime("%S%M")) * 1000
-        cls.wait_order_id = []  # List of placed orders for time-out detect
-        cls.canceled_order_id = []  # List canceled orders  for time-out detect
-        cls.all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
-        cls.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
-        cls.all_orders = []  # List of all open orders for symbol
-        cls.orders = []  # List orders associated with strategy
-        cls.get_buffered_funds_last_time = time.time()
-        cls.rate_limiter = RATE_LIMITER
-        cls.start_time_ms = int(time.time() * 1000)
-        cls.backtest = {}
-        cls.bulk_orders_cancel = {}
 
 
     class Klines:
@@ -458,6 +423,47 @@ class StrategyBase:
         def get_kline(cls, _interval) -> []:
             return cls.klines_series.get(_interval, [])
 
+
+    def __init__(self):
+        print("Init StrategyBase")
+        self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
+        self.s_ticker = {}
+        self.s_order_book = {}
+        self.klines = {}  # KLines snapshot
+        self.candles = {}  # Candles stream
+        self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
+        self.grid_buy = {}
+        self.grid_sell = {}
+
+    def __call__(self):
+        return self
+
+    def reset_var(self):
+        self.s_ticker = {}
+        self.s_order_book = {}
+        self.klines = {}  # KLines snapshot
+        self.candles = {}  # Candles stream
+        self.grid_buy = {}
+        self.grid_sell = {}
+
+    @staticmethod
+    def reset_class_var():
+        cls = StrategyBase
+        cls.ticker = {}
+        cls.funds = {}
+        cls.order_book = {}
+        cls.order_id = int(datetime.now().strftime("%S%M")) * 1000
+        cls.wait_order_id = []  # List of placed orders for time-out detect
+        cls.canceled_order_id = []  # List canceled orders  for time-out detect
+        cls.all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
+        cls.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
+        cls.all_orders = []  # List of all open orders for symbol
+        cls.orders = []  # List orders associated with strategy
+        cls.get_buffered_funds_last_time = time.time()
+        cls.rate_limiter = RATE_LIMITER
+        cls.start_time_ms = int(time.time() * 1000)
+        cls.backtest = {}
+        cls.bulk_orders_cancel = {}
 
     def message_log(self,*args, **kwargs):
         pass
@@ -778,7 +784,11 @@ async def ask_exit():
 
 
 def session_data_handler(cls):
-    # session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}/{datetime.now().strftime('%m%d-%H:%M:%S')}")
+    """
+    Save raw data for back testing and session snapshot for compare.
+    :param cls: StrategyBase.strategy
+    :return:
+    """
     session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
     raw_path = Path(session_root, "raw")
     raw_path.mkdir(parents=True, exist_ok=True)
@@ -818,8 +828,28 @@ def session_data_handler(cls):
     shutil.make_archive(str(Path(BACKTEST_PATH,f"{session_root}_{datetime.now().strftime('%m%d-%H:%M')}")),
                         'zip',
                         session_root)
-    cls.reset()
+
     print(f"Stream data for backtesting saved to {session_root}")
+
+
+async def backtest_data_control():
+    """
+    Control memory usage and safe saving by predefined timetable
+    """
+    cls = StrategyBase.strategy
+    delay = HEARTBEAT * 300  # 10 min
+    ts = time.time()
+    while True:
+        mem = psutil.virtual_memory().percent
+        if time.time() - ts > ms.SAVE_PERIOD or mem > 70:
+            sc = cls.start_collect
+            if sc:
+                cls.start_collect = False
+                session_data_handler(cls)
+                cls.reset_var()
+                cls.start_collect = sc
+                ts = time.time()
+        await asyncio.sleep(delay)
 
 
 async def buffered_candle():
@@ -1000,8 +1030,8 @@ async def buffered_orders():
                         last_state.update(cls.last_state)
                         cls.last_state = None
                         # Restore StrategyBase class var
-                        cls.order_id = (json.loads(last_state.pop(ms_order_id,
-                                                                  int(ms.datetime.now().strftime("%S%M%H%d")) * 1000)))
+                        cls.order_id = json.loads(last_state.pop(ms_order_id,
+                                                                 str(int(datetime.now().strftime("%S%M")) * 1000)))
                         cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                         cls.trades = jsonpickle.decode(last_state.pop('ms_trades', '[]'))
                         cls.orders = jsonpickle.decode(last_state.pop(ms_orders, '[]'))
@@ -1530,6 +1560,8 @@ async def wss_declare():
         loop.create_task(on_funds_update())
         loop.create_task(on_order_update())
         loop.create_task(on_balance_update())
+        if ms.MODE =='TC':
+            loop.create_task(backtest_data_control())
 
 
 async def wss_init(update_max_queue_size=False):
@@ -1671,8 +1703,6 @@ async def main(_symbol):
             cls.reset_class_var()
 
         if ms.MODE == 'S':
-            # .strategy.account = backTestAccount(ms.SAVE_DS)
-            #
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': f"{ms.AMOUNT_FIRST}",
                                                'locked': '0.0'}
