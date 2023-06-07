@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0b22"
+__version__ = "1.3.0b23"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1359,14 +1359,14 @@ class Strategy(StrategyBase):
         if self.restart:
             # Check refunding before restart
             if self.cycle_buy:
-                go_trade = fs >= self.initial_reverse_second if self.reverse else self.initial_second
+                go_trade = fs >= (self.initial_reverse_second if self.reverse else self.initial_second)
                 if go_trade:
                     if FEE_IN_PAIR and FEE_MAKER:
                         fs = self.initial_reverse_second if self.reverse else self.initial_second
                     _ff = ff
                     _fs = fs - profit_s
             else:
-                go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
+                go_trade = ff >= (self.initial_reverse_first if self.reverse else self.initial_first)
                 if go_trade:
                     if FEE_IN_PAIR and FEE_MAKER:
                         ff = self.initial_reverse_first if self.reverse else self.initial_first
@@ -1407,6 +1407,7 @@ class Strategy(StrategyBase):
                     ff -= _ff
                     fs -= _fs
             else:
+                self.first_run = False
                 self.wait_refunding_for_start = True
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
@@ -1420,6 +1421,7 @@ class Strategy(StrategyBase):
                     self.deposit_first = ff
                     self.message_log(f'Use all available funds: {self.deposit_first} {self.f_currency}')
             if not self.check_min_amount(for_tp=False) and self.command is None:
+                self.first_run = False
                 self.grid_only_restart = True
                 self.message_log("Waiting funding for convert", color=Style.B_WHITE)
                 return
@@ -3030,11 +3032,11 @@ class Strategy(StrategyBase):
             ff = f2d(ff.total_for_currency) if ff else Decimal('0.0')
             fs = f2d(fs.total_for_currency) if fs else Decimal('0.0')
             if self.cycle_buy:
-                go_trade = fs >= self.initial_reverse_second if self.reverse else self.initial_second
+                go_trade = fs >= (self.initial_reverse_second if self.reverse else self.initial_second)
             else:
-                go_trade = ff >= self.initial_reverse_first if self.reverse else self.initial_first
+                go_trade = ff >= (self.initial_reverse_first if self.reverse else self.initial_first)
             if go_trade:
-                self.message_log("Start after on_new_funds())")
+                self.message_log("Started after receipt of funds")
                 self.start()
                 return
         if self.tp_order_hold:

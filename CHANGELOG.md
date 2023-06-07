@@ -1,10 +1,14 @@
+## v1.3.0b22-23 2023-06-08
+### Fix
+* correct funding check in start()
+
 ## v1.3.0b18-21 2023-06-06
 ### Fix
 * #59
 
 ### Update
 * Sync record/play
-* Add SAVE_DS = True  # Save session result data (ticker, orders) for compare
+* Add SAVE_DS = True  # Save session result snapshot (ticker, orders) for compare
 * up requirements for exchanges-wrapper to 1.3.0-1
 * refactoring class StrategyBase
 * + backtest_data_control()
