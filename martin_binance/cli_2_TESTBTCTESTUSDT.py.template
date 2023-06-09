@@ -86,6 +86,7 @@ ex.REVERSE_INIT_AMOUNT = Decimal('0')
 ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 # Backtest mode parameters
 ex.MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
+ex.SAVE_DS = True  # Save session result data (ticker, orders) for compare
 ################################################################
 #                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
