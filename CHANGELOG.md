@@ -1,3 +1,12 @@
+## v1.3.0 2023-06-09
+### Added for new features
+* Backtesting capabilities
+* Based on [optuna framework](https://optuna.org) search for optimal trading parameters
+* Visual comparison of the results of the initial and trial trading sessions
+
+### Update
+* Doc migrate from readme to wiki 
+
 ## v1.3.0b22-23 2023-06-08
 ### Fix
 * correct funding check in start()
@@ -25,11 +34,6 @@
 * protobuf format for CreateLimitOrder() method. **Not compatible with earlier versions**
 * for some situation (shift grid, cancel grid after filled TP and so on) changed cancel order method from "one by one"
 to bulk mode
-
-### Added for new features
-* Backtesting capabilities
-* Based on [optuna framework](https://optuna.org) search for optimal trading parameters
-* Visual comparison of the results of the initial and trial trading sessions
 
 ## v1.2.18-8 2023-06-xx not released
 ### Fix
