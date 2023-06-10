@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0"
+__version__ = "1.3.0-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -395,7 +395,6 @@ class StrategyBase:
     delay_ordering_s = 0.5
     bulk_orders_cancel = {}
 
-
     class Klines:
         klines_series = {}
         klines_lim = int()
@@ -422,7 +421,6 @@ class StrategyBase:
         @classmethod
         def get_kline(cls, _interval) -> []:
             return cls.klines_series.get(_interval, [])
-
 
     def __init__(self):
         print("Init StrategyBase")
@@ -465,8 +463,8 @@ class StrategyBase:
         cls.backtest = {}
         cls.bulk_orders_cancel = {}
 
-    def message_log(self,*args, **kwargs):
-        pass
+    def message_log(self, *args, **kwargs):
+        pass # meant to be overridden in a subclass
 
     def order_exist(self, _id) -> bool:
         return any(i.id == _id for i in self.orders)
@@ -505,8 +503,8 @@ class StrategyBase:
         cls = StrategyBase
         cls.order_id += 1
         self.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
-                                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
-                                          color=ms.Style.B_YELLOW)
+                         f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
+                         color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
         loop.create_task(create_limit_order(cls.order_id, buy, any2str(amount), any2str(price)))
         if cls.exchange == 'huobi':
@@ -825,7 +823,7 @@ def session_data_handler(cls):
     #
     copy(ms.PARAMS, Path(session_root, Path(ms.PARAMS).name))
 
-    shutil.make_archive(str(Path(BACKTEST_PATH,f"{session_root}_{datetime.now().strftime('%m%d-%H:%M')}")),
+    shutil.make_archive(str(Path(BACKTEST_PATH, f"{session_root}_{datetime.now().strftime('%m%d-%H:%M')}")),
                         'zip',
                         session_root)
 
@@ -1560,7 +1558,7 @@ async def wss_declare():
         loop.create_task(on_funds_update())
         loop.create_task(on_order_update())
         loop.create_task(on_balance_update())
-        if ms.MODE =='TC':
+        if ms.MODE == 'TC':
             loop.create_task(backtest_data_control())
 
 

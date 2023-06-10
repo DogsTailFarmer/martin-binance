@@ -1,3 +1,7 @@
+## v1.3.0-1 2023-06-10
+### Fix
+* Some minor improvements
+
 ## v1.3.0 2023-06-09
 ### Added for new features
 * Backtesting capabilities
