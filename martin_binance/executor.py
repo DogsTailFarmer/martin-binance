@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0"
+__version__ = "1.3.0-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -108,6 +108,7 @@ MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 500  # Time accelerator
 SAVE_DS = True  # Save session result data (ticker, orders) for compare
 SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
+SAVED_STATE = False
 # endregion
 
 
@@ -1612,10 +1613,11 @@ class Strategy(StrategyBase):
             close.append(i.close)
         n = 1
         while n <= len(high) - 1:
-            tr_arr.append(max(high[n] - low[n], abs(high[n] - close[n - 1]), abs(low[n] - close[n - 1])))
+            i = max(high[n] - low[n], abs(high[n] - close[n - 1]), abs(low[n] - close[n - 1]))
+            if i:
+                tr_arr.append(i)
             n += 1
-        _atr = statistics.geometric_mean(tr_arr)
-        return _atr
+        return statistics.geometric_mean(tr_arr)
 
     def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
         """

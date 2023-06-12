@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0"
+__version__ = "1.3.0-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -105,8 +105,18 @@ class Account:
         self.grid_sell = {}
         self.ticker_last = Decimal('0')
 
-    def create_order(self, symbol: str, client_order_id: str, buy: bool, amount: str, price: str, lt: int) -> {}:
-        order_id = len(self.orders)
+    def create_order(
+            self,
+            symbol: str,
+            client_order_id: str,
+            buy: bool,
+            amount: str,
+            price: str,
+            lt: int,
+            order_id=None
+    ) -> {}:
+
+        order_id = order_id or len(self.orders)
         order = Order(symbol=symbol,
                       order_id=order_id,
                       client_order_id=client_order_id,
@@ -281,3 +291,15 @@ class Account:
                 self.funds.on_order_filled(order.side, order.orig_qty, order.last_executed_price, self.fee_maker)
             #
         return orders_filled
+
+    def restore_state(self, symbol: str, lt: int, orders: []):
+        for order in orders:
+            self.create_order(
+                symbol=symbol,
+                client_order_id='',
+                buy=order['buy'],
+                amount=order['amount'],
+                price=order['price'],
+                lt=lt,
+                order_id=order['id']
+            )

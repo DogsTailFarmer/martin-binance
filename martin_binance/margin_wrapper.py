@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-1"
+__version__ = "1.3.0-2b0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -464,7 +464,7 @@ class StrategyBase:
         cls.bulk_orders_cancel = {}
 
     def message_log(self, *args, **kwargs):
-        pass # meant to be overridden in a subclass
+        pass  # meant to be overridden in a subclass
 
     def order_exist(self, _id) -> bool:
         return any(i.id == _id for i in self.orders)
@@ -586,7 +586,7 @@ class StrategyBase:
 
 async def heartbeat(_session):
     cls = StrategyBase
-    # print(f"tik-tak ', {int(time.time() * 1000)}, _client_id: {_client_id}")
+    # print(f"tik-tak:' {int(time.time() * 1000)}")
     last_exec_time = time.time()
     while cls.strategy:
         try:
@@ -1522,20 +1522,21 @@ async def on_order_book_update():
         print("Backtest *** order_book *** timeSeries ended")
 
 
-def load_last_state() -> {}:
-    def load_file(name: Path) -> {}:
-        _res = {}
-        if name.exists():
-            try:
-                with name.open() as state_file:
-                    _last_state = json.load(state_file)
-            except json.JSONDecodeError as er:
-                print(f"Exception on decode last state file: {er}")
-            else:
-                if _last_state.get('ms_start_time_ms', None):
-                    _res = _last_state
-        return _res
+def load_file(name: Path) -> {}:
+    _res = {}
+    if name.exists():
+        try:
+            with name.open() as state_file:
+                _last_state = json.load(state_file)
+        except json.JSONDecodeError as er:
+            print(f"Exception on decode last state file: {er}")
+        else:
+            if _last_state.get('ms_start_time_ms', None):
+                _res = _last_state
+    return _res
 
+
+def load_last_state() -> {}:
     res = {}
     if ms.LAST_STATE_FILE.exists():
         res = load_file(ms.LAST_STATE_FILE)
@@ -1657,9 +1658,6 @@ async def main(_symbol):
                         except grpc.RpcError as ex:
                             status_code = ex.code()
                             print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
-            #
-            if ms.MODE == 'TC':
-                BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
             # Init section
             _exchange_info_symbol = await send_request(cls.stub.FetchExchangeInfoSymbol,
                                                        api_pb2.MarketRequest,
@@ -1699,7 +1697,18 @@ async def main(_symbol):
         else:
             # Init class atr for reuse in next backtest cycle
             cls.reset_class_var()
-
+        #
+        if ms.MODE == 'TC':
+            BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
+        #
+        if ms.MODE in ('TC', 'S') and ms.SAVED_STATE:
+            session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
+            state_file = Path(session_root, "saved_state.json")
+            #
+            if ms.MODE == 'TC' and restore_state and ms.SAVED_STATE:
+                with state_file.open(mode='w') as outfile:
+                    json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+        #
         if ms.MODE == 'S':
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': f"{ms.AMOUNT_FIRST}",
@@ -1737,17 +1746,60 @@ async def main(_symbol):
         if ms.MODE in ('T', 'TC'):
             loop.create_task(buffered_orders())
         if not restore_state or (not ms.LOAD_LAST_STATE and answer.lower() != 'y'):
-            cls.strategy.init()
             if ms.MODE in ('T', 'TC'):
+                cls.strategy.init()
                 input('Press Enter for Start or Ctrl-Z for Cancel\n')
                 await wss_init()
+                cls.strategy.start()
             else:
+                if ms.SAVED_STATE:
+                    cls.strategy.init(check_funds=False)
+                else:
+                    cls.strategy.init()
                 await wss_declare()
                 # Set initial local time from backtest data
                 cls.strategy.time_operational['new'] = cls.backtest['ticker'].index[0] / 1000
                 cls.get_buffered_funds_last_time = cls.strategy.local_time()
                 cls.start_time_ms = int(cls.strategy.local_time() * 1000)
-            cls.strategy.start()
+
+                if ms.SAVED_STATE:
+                    # noinspection PyUnboundLocalVariable
+                    saved_state = load_file(state_file)
+                    cls.order_id = json.loads(saved_state.pop(ms_order_id, "0"))
+                    cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
+                    cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '[]'))
+                    orders = json.loads(saved_state.get('orders'))
+                    cls.strategy.account.restore_state(cls.symbol, cls.start_time_ms, orders)
+                    # Restore initial state
+                    cls.strategy.cycle_buy = json.loads(saved_state.get('cycle_buy'))
+                    cls.strategy.deposit_first = ms.f2d(json.loads(saved_state.get('deposit_first')))
+                    cls.strategy.deposit_second = ms.f2d(json.loads(saved_state.get('deposit_second')))
+                    cls.strategy.last_shift_time = json.loads(saved_state.get('last_shift_time')) or cls.strategy.local_time()
+                    cls.strategy.order_q = json.loads(saved_state.get('order_q'))
+                    cls.strategy.orders_grid.restore(json.loads(saved_state.get('orders')))
+                    cls.strategy.orders_hold.restore(json.loads(saved_state.get('orders_hold')))
+                    cls.strategy.orders_save.restore(json.loads(saved_state.get('orders_save')))
+                    cls.strategy.over_price = json.loads(saved_state.get('over_price'))
+                    cls.strategy.part_amount = eval(json.loads(saved_state.get('part_amount')))
+                    cls.strategy.reverse = json.loads(saved_state.get('reverse'))
+                    cls.strategy.reverse_hold = json.loads(saved_state.get('reverse_hold'))
+                    cls.strategy.reverse_init_amount = ms.f2d(json.loads(saved_state.get('reverse_init_amount')))
+                    cls.strategy.reverse_price = json.loads(saved_state.get('reverse_price'))
+                    cls.strategy.reverse_target_amount = ms.f2d(json.loads(saved_state.get('reverse_target_amount')))
+                    cls.strategy.shift_grid_threshold = json.loads(saved_state.get('shift_grid_threshold'))
+                    cls.strategy.sum_amount_first = ms.f2d(json.loads(saved_state.get('sum_amount_first')))
+                    cls.strategy.sum_amount_second = ms.f2d(json.loads(saved_state.get('sum_amount_second')))
+                    cls.strategy.tp_amount = ms.f2d(json.loads(saved_state.get('tp_amount')))
+                    cls.strategy.tp_init = eval(json.loads(saved_state.get('tp_init')))
+                    cls.strategy.tp_order_id = json.loads(saved_state.get('tp_order_id'))
+                    cls.strategy.tp_part_amount_first = ms.f2d(json.loads(saved_state.get('tp_part_amount_first')))
+                    cls.strategy.tp_part_amount_second = ms.f2d(json.loads(saved_state.get('tp_part_amount_second')))
+                    cls.strategy.tp_target = ms.f2d(json.loads(saved_state.get('tp_target')))
+                    cls.strategy.tp_order = eval(json.loads(saved_state.get('tp_order')))
+                    cls.strategy.tp_wait_id = json.loads(saved_state.get('tp_wait_id'))
+                else:
+                    cls.strategy.start()
+
         if restored:
             loop.create_task(heartbeat(cls.session))
     except (KeyboardInterrupt, SystemExit):
