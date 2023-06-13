@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b2"
+__version__ = "1.3.0-2b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -113,6 +113,8 @@ SAVED_STATE = False  # Use saved state for backtesing
 
 
 class Style:
+    __slots__ = ()
+
     BLACK: str = '\033[30m'
     RED: str = '\033[31m'
     B_RED: str = '\033[1;31m'
@@ -524,6 +526,8 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
 
 
 class Orders:
+    __slots__ = ("orders_list",)
+
     def __init__(self):
         self.orders_list = []
 
@@ -625,6 +629,100 @@ class Strategy(StrategyBase):
     ##############################################################
     # strategy control methods
     ##############################################################
+    __slots__ = (
+        "cycle_buy",
+        "orders_grid",
+        "orders_init",
+        "orders_hold",
+        # Take profit variables
+        "tp_order_id",
+        "tp_wait_id",
+        "tp_order",
+        "tp_error",
+        "tp_order_hold",
+        "tp_hold",
+        "tp_cancel",
+        "tp_cancel_from_grid_handler",
+        "tp_hold_additional",
+        "tp_target",
+        "tp_amount",
+        "part_profit_first",
+        "part_profit_second",
+        "tp_was_filled",
+        "tp_part_amount_first",
+        "tp_part_amount_second",
+        "tp_init",
+        #
+        "sum_amount_first",
+        "sum_amount_second",
+        #
+        "correction_amount_first",
+        "correction_amount_second",
+        #
+        "deposit_first",
+        "deposit_second",
+        "sum_profit_first",
+        "sum_profit_second",
+        "cycle_buy_count",
+        "cycle_sell_count",
+        "shift_grid_threshold",
+        "f_currency",
+        "s_currency",
+        "connection_analytic",
+        "tlg_header",
+        "last_shift_time",
+        "avg_rate",
+        #
+        "grid_hold",
+        "start_hold",
+        "initial_first",
+        "initial_second",
+        "initial_reverse_first",
+        "initial_reverse_second",
+        "wait_refunding_for_start",
+        #
+        "cancel_order_id",
+        "over_price",
+        "grid_place_flag",
+        "part_amount",
+        "command",
+        "start_after_shift",
+        "queue_to_db",
+        "pr_db",
+        "queue_to_tlg",
+        "pr_tlg",
+        "pr_tlg_control",
+        "restart",
+        "profit_first",
+        "profit_second",
+        "status_time",
+        "cycle_time",
+        "cycle_time_reverse",
+        "reverse",
+        "reverse_target_amount",
+        "reverse_init_amount",
+        "reverse_hold",
+        "reverse_price",
+        "round_base",
+        "round_quote",
+        "order_q",
+        "order_q_placed",
+        "martin",
+        "orders_save",
+        "first_run",
+        "grid_remove",
+        "heartbeat_counter",
+        "grid_order_canceled",
+        "cycle_status",
+        "grid_update_started",
+        "start_reverse_time",
+        "last_ticker_update",
+        "grid_only_restart",
+        "local_time",
+        "wait_wss_refresh",
+        "start_collect",
+    )
+
     def __init__(self):
         super().__init__()
         print(f"Init Strategy, ver: {HEAD_VERSION} + {__version__} + {msb_ver}")

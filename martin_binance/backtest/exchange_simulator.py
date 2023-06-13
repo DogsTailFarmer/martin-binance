@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b2"
+__version__ = "1.3.0-2b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -15,6 +15,8 @@ import pandas as pd
 
 
 class Funds:
+    __slots__ = ("base", "quote")
+
     def __init__(self):
         # {'asset': 'BTC', 'free': '0.0', 'locked': '0.0'}
         self.base = {}
@@ -62,6 +64,33 @@ class Funds:
 
 
 class Order:
+    __slots__ = (
+        "symbol",
+        "order_id",
+        "order_list_id",
+        "client_order_id",
+        "transact_time",
+        "price",
+        "orig_qty",
+        "executed_qty",
+        "cummulative_quote_qty",
+        "status",
+        "time_in_force",
+        "type",
+        "side",
+        "working_time",
+        "self_trade_prevention_mode",
+        "event_time",
+        "last_executed_quantity",
+        "cumulative_filled_quantity",
+        "last_executed_price",
+        "trade_id",
+        "order_creation_time",
+        "quote_asset_transacted",
+        "last_quote_asset_transacted",
+        "quote_order_quantity",
+    )
+
     def __init__(self, symbol: str, order_id: int, client_order_id: str, buy: bool, amount: str, price: str, lt: int):
         self.symbol = symbol
         self.order_id = order_id
@@ -91,6 +120,21 @@ class Order:
 
 
 class Account:
+    __slots__ = (
+        "save_ds",
+        "funds",
+        "fee_maker",
+        "fee_taker",
+        "orders",
+        "orders_buy",
+        "orders_sell",
+        "trade_id",
+        "ticker",
+        "grid_buy",
+        "grid_sell",
+        "ticker_last",
+    )
+
     def __init__(self, save_ds: bool):
         self.save_ds = save_ds
         self.funds = Funds()

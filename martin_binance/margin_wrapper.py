@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b2"
+__version__ = "1.3.0-2b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -130,6 +130,8 @@ def order_trades_sum(_order_id: int) -> Decimal:
 
 
 class PrivateTrade:
+    __slots__ = ("amount", "buy", "id", "order_id", "price", "timestamp")
+
     def __init__(self, _trade: {}) -> None:
         # Amount of the trade.
         self.amount = float(_trade["qty"])
@@ -150,10 +152,14 @@ class PrivateTrade:
 
 # noinspection PyRedeclaration
 class OrderUpdate(OrderUpdate):
+    __slots__ = ("original_order", "resulting_trades", "status", "timestamp", "updated_order")
+
     def __init__(self, event: {}) -> None:
         super().__init__()
 
         class OriginalOrder:
+            __slots__ = ("id",)
+
             def __init__(self, _event: {}):
                 self.id = _event['order_id']
 
@@ -183,6 +189,8 @@ class OrderUpdate(OrderUpdate):
 
 
 class Order:
+    __slots__ = ("amount", "buy", "id", "order_type", "price", "received_amount", "remaining_amount", "timestamp")
+
     def __init__(self, order: {}) -> None:
         # Overall amount of the order.
         self.amount = float(order['origQty'])
@@ -206,6 +214,8 @@ class Order:
 
 
 class Candle:
+    __slots__ = ("min_time", "open", "high", "low", "close", "volume", "max_time", "trade_number", "vwap")
+
     def __init__(self, _candle: []) -> None:
         # Start time of the candle.
         self.min_time = int(_candle[0])
@@ -231,6 +241,16 @@ class Candle:
 
 
 class TradingCapabilityManager:
+    __slots__ = ("base_asset_precision",
+                 "quote_asset_precision",
+                 "min_qty",
+                 "max_qty",
+                 "step_size",
+                 "min_notional",
+                 "tick_size",
+                 "multiplier_up",
+                 "multiplier_down")
+
     def __init__(self, _exchange_info_symbol):
         self.base_asset_precision = int(_exchange_info_symbol.get('baseAssetPrecision'))
         self.quote_asset_precision = int(_exchange_info_symbol.get('quoteAssetPrecision'))
@@ -311,6 +331,8 @@ class TradingCapabilityManager:
 
 
 class Ticker:
+    __slots__ = ("last_day_price", "last_price", "timestamp")
+
     def __init__(self, _ticker):
         # Price of the currency pair one day ago.
         self.last_day_price = float(_ticker.get('openPrice', 0))
@@ -325,6 +347,8 @@ class Ticker:
 
 
 class FundsEntry:
+    __slots__ = ("available", "reserved", "total_for_currency")
+
     def __init__(self, _funds):
         # The available amount for a currency.
         self.available = float(_funds.get('free'))
@@ -339,15 +363,21 @@ class FundsEntry:
 
 
 class OrderBook:
+    __slots__ = ("asks", "bids")
+
     """
     order_book.bids[0].price
     order_book.asks[0].amount
     """
     def __init__(self, _order_book) -> None:
+
         class _OrderBookRow:
+            __slots__ = ("price", "amount")
+
             def __init__(self, _order) -> None:
                 self.price = float(_order[0])
                 self.amount = float(_order[1])
+
         self.asks = []
         # List of asks ordered by price in ascending order.
         self.bids = []
@@ -362,6 +392,18 @@ class OrderBook:
 
 
 class StrategyBase:
+    __slots__ = (
+        "time_operational",
+        "s_ticker",
+        "s_order_book",
+        "klines",
+        "candles",
+        "account",
+        "grid_buy",
+        "grid_sell",
+        "get_buffered_funds_last_time",
+    )
+
     session = None
     client: api_pb2.OpenClientConnectionId = None
     exchange = str()
@@ -385,7 +427,6 @@ class StrategyBase:
     orders = []  # List orders associated with strategy
     tcm = None  # TradingCapabilityManager
     last_state = None
-    get_buffered_funds_last_time = time.time()
     rate_limiter = RATE_LIMITER
     start_time_ms = int(time.time() * 1000)
     send_request = None
@@ -396,6 +437,21 @@ class StrategyBase:
     bulk_orders_cancel = {}
     session_root: Path
     state_file: Path
+
+    def __init__(self):
+        print("Init StrategyBase")
+        self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
+        self.s_ticker = {}
+        self.s_order_book = {}
+        self.klines = {}  # KLines snapshot
+        self.candles = {}  # Candles stream
+        self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
+        self.grid_buy = {}
+        self.grid_sell = {}
+        self.get_buffered_funds_last_time = time.time()
+
+    def __call__(self):
+        return self
 
     class Klines:
         klines_series = {}
@@ -423,20 +479,6 @@ class StrategyBase:
         @classmethod
         def get_kline(cls, _interval) -> []:
             return cls.klines_series.get(_interval, [])
-
-    def __init__(self):
-        print("Init StrategyBase")
-        self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
-        self.s_ticker = {}
-        self.s_order_book = {}
-        self.klines = {}  # KLines snapshot
-        self.candles = {}  # Candles stream
-        self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
-        self.grid_buy = {}
-        self.grid_sell = {}
-
-    def __call__(self):
-        return self
 
     def reset_var(self):
         self.s_ticker = {}
@@ -475,7 +517,6 @@ class StrategyBase:
         return any(i.id == _id for i in self.all_orders)
 
     def get_trading_capability_manager(self) -> TradingCapabilityManager:
-        # print(f"get_trading_capability_manager.tcm: {vars(StrategyBase.tcm)}")
         return self.tcm
 
     def get_first_currency(self) -> str:
@@ -491,7 +532,6 @@ class StrategyBase:
     def get_buffered_funds(self) -> Dict[str, FundsEntry]:
         # print(f"get_buffered_funds.funds: {self.funds}")
         if self.strategy.local_time() - self.get_buffered_funds_last_time > self.rate_limiter:
-            # noinspection PyTypeChecker
             loop.create_task(buffered_funds(print_info=False))
             self.get_buffered_funds_last_time = self.strategy.local_time()
         return {self.base_asset: FundsEntry(self.funds[self.base_asset]),
@@ -1134,7 +1174,7 @@ def on_funds_update_handler(cls, funds):
     funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
              cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
     cls.strategy.on_new_funds(funds)
-    cls.get_buffered_funds_last_time = cls.strategy.local_time()
+    cls.strategy.get_buffered_funds_last_time = cls.strategy.local_time()
 
 
 async def on_balance_update():
@@ -1156,7 +1196,7 @@ async def on_order_update():
             # print(f"on_order_update.ed: {ed}")
             on_order_update_handler(cls, ed)
     except Exception as ex:
-        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
+        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}\n{traceback.format_exc()}")
         cls.wss_fire_up = True
 
 
