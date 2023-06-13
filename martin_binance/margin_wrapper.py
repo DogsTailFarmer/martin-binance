@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b1"
+__version__ = "1.3.0-2b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -394,6 +394,8 @@ class StrategyBase:
     backtest = {}
     delay_ordering_s = 0.5
     bulk_orders_cancel = {}
+    session_root: Path
+    state_file: Path
 
     class Klines:
         klines_series = {}
@@ -592,10 +594,7 @@ async def heartbeat(_session):
         try:
             last_state = cls.strategy.save_strategy_state()
             if ms.MODE in ('T', 'TC'):
-                last_state[ms_order_id] = json.dumps(cls.order_id)
-                last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
-                last_state[ms_orders] = jsonpickle.encode(cls.orders)
-                last_state['ms_trades'] = jsonpickle.encode(cls.trades)
+                last_state_update(cls, last_state)
                 # print(f"heartbeat.last_state: {last_state}")
                 if ms.LAST_STATE_FILE.exists():
                     ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.prev'))
@@ -628,6 +627,13 @@ async def heartbeat(_session):
             await asyncio.sleep(HEARTBEAT)
         except (KeyboardInterrupt, asyncio.CancelledError):
             break
+
+
+def last_state_update(cls, last_state):
+    last_state[ms_order_id] = json.dumps(cls.order_id)
+    last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
+    last_state[ms_orders] = jsonpickle.encode(cls.orders)
+    last_state['ms_trades'] = jsonpickle.encode(cls.trades)
 
 
 async def save_asset():
@@ -1060,9 +1066,13 @@ async def buffered_orders():
                         for _id in diff_id:
                             await fetch_order(_id, _filled_update_call=True)
                     if not restore:
-                        if ms.MODE == 'TC':
-                            cls.strategy.start_collect = True
                         cls.strategy.restore_strategy_state(last_state)
+                        if ms.MODE == 'TC':
+                            last_state = cls.strategy.save_strategy_state(return_only=True)
+                            last_state_update(cls, last_state)
+                            with cls.state_file.open(mode='w') as outfile:
+                                json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                            cls.strategy.start_collect = True
                 except Exception as _ex:
                     cls.last_state = None
                     cls.strategy.message_log(f"Exception restore_strategy_state: {_ex}\n{traceback.format_exc()}",
@@ -1601,8 +1611,8 @@ def update_class_var(_session):
     cls.for_request = _session.for_request
 
 
-def restore_state_before_backtesting(cls, state_file: Path):
-    saved_state = load_file(state_file)
+def restore_state_before_backtesting(cls):
+    saved_state = load_file(cls.state_file)
     cls.order_id = json.loads(saved_state.pop(ms_order_id, "0"))
     cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
     cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '[]'))
@@ -1612,6 +1622,17 @@ def restore_state_before_backtesting(cls, state_file: Path):
     cls.strategy.cycle_buy = json.loads(saved_state.get('cycle_buy'))
     cls.strategy.deposit_first = ms.f2d(json.loads(saved_state.get('deposit_first')))
     cls.strategy.deposit_second = ms.f2d(json.loads(saved_state.get('deposit_second')))
+    cls.strategy.reverse = json.loads(saved_state.get('reverse'))
+    if cls.strategy.cycle_buy:
+        if cls.strategy.reverse:
+            cls.strategy.initial_reverse_second = cls.strategy.deposit_second
+        else:
+            cls.strategy.initial_second = cls.strategy.deposit_second
+    else:
+        if cls.strategy.reverse:
+            cls.strategy.initial_reverse_first = cls.strategy.deposit_first
+        else:
+            cls.strategy.initial_first = cls.strategy.deposit_first
     cls.strategy.last_shift_time = json.loads(saved_state.get('last_shift_time')) or cls.strategy.local_time()
     cls.strategy.order_q = json.loads(saved_state.get('order_q'))
     cls.strategy.orders_grid.restore(json.loads(saved_state.get('orders')))
@@ -1619,7 +1640,6 @@ def restore_state_before_backtesting(cls, state_file: Path):
     cls.strategy.orders_save.restore(json.loads(saved_state.get('orders_save')))
     cls.strategy.over_price = json.loads(saved_state.get('over_price'))
     cls.strategy.part_amount = eval(json.loads(saved_state.get('part_amount')))
-    cls.strategy.reverse = json.loads(saved_state.get('reverse'))
     cls.strategy.reverse_hold = json.loads(saved_state.get('reverse_hold'))
     cls.strategy.reverse_init_amount = ms.f2d(json.loads(saved_state.get('reverse_init_amount')))
     cls.strategy.reverse_price = json.loads(saved_state.get('reverse_price'))
@@ -1731,20 +1751,22 @@ async def main(_symbol):
                 cls.ticker = json_format.MessageToDict(_ticker)
                 # print(f"main.ticker: {cls.ticker}")
                 loop.create_task(save_asset())
+
+            #
+            if ms.MODE == 'TC':
+                BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
+            #
+            if ms.MODE in ('TC', 'S') and ms.SAVED_STATE:
+                cls.session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
+                cls.state_file = Path(cls.session_root, "saved_state.json")
+                #
+                if ms.MODE == 'TC':
+                    cls.session_root.mkdir(parents=True, exist_ok=True)
+
         #
         else:
             # Init class atr for reuse in next backtest cycle
             cls.reset_class_var()
-        #
-        if ms.MODE == 'TC':
-            BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
-        #
-        if ms.MODE in ('TC', 'S') and ms.SAVED_STATE:
-            session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
-            state_file = Path(session_root, "saved_state.json")
-            #
-            if ms.MODE == 'TC':
-                session_root.mkdir(parents=True, exist_ok=True)
         #
         if ms.MODE == 'S':
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
@@ -1774,10 +1796,6 @@ async def main(_symbol):
                 answer = input('Restore saved state after restart? Y:\n')
             if ms.LOAD_LAST_STATE or answer.lower() == 'y':
                 cls.last_state = last_state
-                if ms.MODE == 'TC' and ms.SAVED_STATE:
-                    # noinspection PyUnboundLocalVariable
-                    with state_file.open(mode='w') as outfile:
-                        json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                 try:
                     await wss_init()
                     cls.strategy.init(check_funds=False)
@@ -1793,7 +1811,7 @@ async def main(_symbol):
                 await wss_init()
                 cls.strategy.start()
             else:
-                if ms.SAVED_STATE and state_file.exists():
+                if ms.SAVED_STATE and cls.state_file.exists():
                     cls.strategy.init(check_funds=False)
                 else:
                     cls.strategy.init()
@@ -1804,10 +1822,12 @@ async def main(_symbol):
                 cls.start_time_ms = int(cls.strategy.local_time() * 1000)
                 cls.strategy.cycle_time = datetime.utcnow()
 
-                if ms.SAVED_STATE and state_file.exists():
-                    restore_state_before_backtesting(cls, state_file)
-                else:
+                if ms.SAVED_STATE and cls.state_file.exists():
+                    restore_state_before_backtesting(cls)
+                elif not ms.SAVED_STATE:
                     cls.strategy.start()
+                else:
+                    print(f"Can't load saved state")
 
         if restored:
             loop.create_task(heartbeat(cls.session))

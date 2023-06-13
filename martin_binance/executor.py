@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b1"
+__version__ = "1.3.0-2b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -799,220 +799,221 @@ class Strategy(StrategyBase):
         s.normalize_exchange_buy_amounts = True
         return s
 
-    def save_strategy_state(self) -> Dict[str, str]:
-        # region SaveOperationalStatus
-        # Skip when transition processes or GRID_ONLY mode
-        stable_state = (self.shift_grid_threshold is None
-                        and self.grid_remove is None
-                        and not self.reverse_hold
-                        and not GRID_ONLY
-                        and not self.grid_update_started
-                        and not self.start_after_shift
-                        and not self.tp_hold
-                        and not self.tp_was_filled
-                        and not self.orders_init)
-        if MODE in ('T', 'TC') and stable_state:
-            orders = self.get_buffered_open_orders()
-            order_buy = len([i for i in orders if i.buy is True])
-            order_sell = len([i for i in orders if i.buy is False])
-            order_hold = len(self.orders_hold)
-            cycle_status = (self.cycle_buy, order_buy, order_sell, order_hold)
-            if self.cycle_status != cycle_status:
-                self.cycle_status = cycle_status
-                data_to_db = {'f_currency': self.f_currency,
-                              's_currency': self.s_currency,
-                              'cycle_buy': self.cycle_buy,
-                              'order_buy': order_buy,
-                              'order_sell': order_sell,
-                              'order_hold': order_hold,
-                              'destination': 't_orders'}
-                if self.queue_to_db:
-                    # print('Send data to t_orders')
-                    self.queue_to_db.put(data_to_db)
-        else:
-            self.cycle_status = ()
-        # endregion
-        # region ReportStatus
-        # Get command from Telegram
-        command = None
-        if MODE in ('T', 'TC') and self.connection_analytic and self.heartbeat_counter % 5 == 0:
-            cursor_analytic = self.connection_analytic.cursor()
-            bot_id = self.tlg_header.split('.')[0]
-            try:
-                cursor_analytic.execute('SELECT max(message_id), text_in, bot_id\
-                                        FROM t_control WHERE bot_id=:bot_id', {'bot_id': bot_id})
-                row = cursor_analytic.fetchone()
-                cursor_analytic.close()
-            except sqlite3.Error as err:
-                cursor_analytic.close()
-                row = None
-                print(f"SELECT from t_control: {err}")
-            if row and row[0]:
-                # Analyse and execute received command
-                command = row[1]
-                if command != 'status':
-                    self.command = command
-                    command = None
-                # Remove applied command from .db
-                try:
-                    self.connection_analytic.execute('UPDATE t_control SET apply = 1 WHERE message_id=:message_id',
-                                                     {'message_id': row[0]})
-                    self.connection_analytic.commit()
-                except sqlite3.Error as err:
-                    print(f"UPDATE t_control: {err}")
-            # self.message_log(f"save_strategy_state.command: {self.command}", log_level=LogLevel.DEBUG)
-        if self.command == 'stopped':
-            if isinstance(self.start_collect, int):
-                if self.start_collect < 5:
-                    self.start_collect += 1
-                else:
-                    self.start_collect = False
-        elif self.command == 'restart':
-            self.stop()
-            os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
-        if (MODE in ('T', 'TC') and
-                (command or (STATUS_DELAY and (self.local_time() - self.status_time) / 60 > STATUS_DELAY))):
-            # Report current status
-            last_price = self.get_buffered_ticker().last_price
-            ticker_update = int(self.local_time()) - self.last_ticker_update
-            if self.cycle_time:
-                ct = str(datetime.utcnow() - self.cycle_time).rsplit('.')[0]
+    def save_strategy_state(self, return_only=False) -> Dict[str, str]:
+        if not return_only:
+            # region SaveOperationalStatus
+            # Skip when transition processes or GRID_ONLY mode
+            stable_state = (self.shift_grid_threshold is None
+                            and self.grid_remove is None
+                            and not self.reverse_hold
+                            and not GRID_ONLY
+                            and not self.grid_update_started
+                            and not self.start_after_shift
+                            and not self.tp_hold
+                            and not self.tp_was_filled
+                            and not self.orders_init)
+            if MODE in ('T', 'TC') and stable_state:
+                orders = self.get_buffered_open_orders()
+                order_buy = len([i for i in orders if i.buy is True])
+                order_sell = len([i for i in orders if i.buy is False])
+                order_hold = len(self.orders_hold)
+                cycle_status = (self.cycle_buy, order_buy, order_sell, order_hold)
+                if self.cycle_status != cycle_status:
+                    self.cycle_status = cycle_status
+                    data_to_db = {'f_currency': self.f_currency,
+                                  's_currency': self.s_currency,
+                                  'cycle_buy': self.cycle_buy,
+                                  'order_buy': order_buy,
+                                  'order_sell': order_sell,
+                                  'order_hold': order_hold,
+                                  'destination': 't_orders'}
+                    if self.queue_to_db:
+                        # print('Send data to t_orders')
+                        self.queue_to_db.put(data_to_db)
             else:
-                self.message_log("save_strategy_state: cycle_time is None!", log_level=LogLevel.DEBUG)
-                ct = str(datetime.utcnow()).rsplit('.')[0]
+                self.cycle_status = ()
+            # endregion
+            # region ReportStatus
+            # Get command from Telegram
+            command = None
+            if MODE in ('T', 'TC') and self.connection_analytic and self.heartbeat_counter % 5 == 0:
+                cursor_analytic = self.connection_analytic.cursor()
+                bot_id = self.tlg_header.split('.')[0]
+                try:
+                    cursor_analytic.execute('SELECT max(message_id), text_in, bot_id\
+                                            FROM t_control WHERE bot_id=:bot_id', {'bot_id': bot_id})
+                    row = cursor_analytic.fetchone()
+                    cursor_analytic.close()
+                except sqlite3.Error as err:
+                    cursor_analytic.close()
+                    row = None
+                    print(f"SELECT from t_control: {err}")
+                if row and row[0]:
+                    # Analyse and execute received command
+                    command = row[1]
+                    if command != 'status':
+                        self.command = command
+                        command = None
+                    # Remove applied command from .db
+                    try:
+                        self.connection_analytic.execute('UPDATE t_control SET apply = 1 WHERE message_id=:message_id',
+                                                         {'message_id': row[0]})
+                        self.connection_analytic.commit()
+                    except sqlite3.Error as err:
+                        print(f"UPDATE t_control: {err}")
+                # self.message_log(f"save_strategy_state.command: {self.command}", log_level=LogLevel.DEBUG)
             if self.command == 'stopped':
-                self.message_log("Strategy stopped. Need manual action", tlg=True)
-            elif self.grid_hold or self.tp_order_hold:
-                funds = self.get_buffered_funds()
-                fund_f = funds.get(self.f_currency, 0)
-                fund_f = fund_f.available if fund_f else 0
-                fund_s = funds.get(self.s_currency, 0)
-                fund_s = fund_s.available if fund_s else 0
-                if self.grid_hold.get('timestamp'):
-                    time_diff = int(self.local_time() - self.grid_hold['timestamp'])
-                    self.message_log(f"Exist unreleased grid orders for\n"
-                                     f"{'Buy' if self.cycle_buy else 'Sell'} cycle with"
-                                     f" {self.grid_hold['depo']}"
-                                     f" {self.s_currency if self.cycle_buy else self.f_currency} depo.\n"
-                                     f"Available first: {fund_f} {self.f_currency}\n"
-                                     f"Available second: {fund_s} {self.s_currency}\n"
-                                     f"Last ticker price: {last_price}\n"
-                                     f"WSS status: {ticker_update}s\n"
-                                     f"From start {ct}\n"
-                                     f"Delay: {time_diff} sec", tlg=True)
-                elif self.tp_order_hold['timestamp']:
-                    time_diff = int(self.local_time() - self.tp_order_hold['timestamp'])
-                    if time_diff > HOLD_TP_ORDER_TIMEOUT:
-                        self.message_log(f"Exist hold TP order for"
-                                         f" {'Sell' if self.cycle_buy else 'Buy'} {self.tp_order_hold['amount']}"
-                                         f" {self.f_currency if self.cycle_buy else self.s_currency}\n"
-                                         f"Available first:{fund_f} {self.f_currency}\n"
-                                         f"Available second:{fund_s} {self.s_currency}\n"
+                if isinstance(self.start_collect, int):
+                    if self.start_collect < 5:
+                        self.start_collect += 1
+                    else:
+                        self.start_collect = False
+            elif self.command == 'restart':
+                self.stop()
+                os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
+            if (MODE in ('T', 'TC') and
+                    (command or (STATUS_DELAY and (self.local_time() - self.status_time) / 60 > STATUS_DELAY))):
+                # Report current status
+                last_price = self.get_buffered_ticker().last_price
+                ticker_update = int(self.local_time()) - self.last_ticker_update
+                if self.cycle_time:
+                    ct = str(datetime.utcnow() - self.cycle_time).rsplit('.')[0]
+                else:
+                    self.message_log("save_strategy_state: cycle_time is None!", log_level=LogLevel.DEBUG)
+                    ct = str(datetime.utcnow()).rsplit('.')[0]
+                if self.command == 'stopped':
+                    self.message_log("Strategy stopped. Need manual action", tlg=True)
+                elif self.grid_hold or self.tp_order_hold:
+                    funds = self.get_buffered_funds()
+                    fund_f = funds.get(self.f_currency, 0)
+                    fund_f = fund_f.available if fund_f else 0
+                    fund_s = funds.get(self.s_currency, 0)
+                    fund_s = fund_s.available if fund_s else 0
+                    if self.grid_hold.get('timestamp'):
+                        time_diff = int(self.local_time() - self.grid_hold['timestamp'])
+                        self.message_log(f"Exist unreleased grid orders for\n"
+                                         f"{'Buy' if self.cycle_buy else 'Sell'} cycle with"
+                                         f" {self.grid_hold['depo']}"
+                                         f" {self.s_currency if self.cycle_buy else self.f_currency} depo.\n"
+                                         f"Available first: {fund_f} {self.f_currency}\n"
+                                         f"Available second: {fund_s} {self.s_currency}\n"
                                          f"Last ticker price: {last_price}\n"
                                          f"WSS status: {ticker_update}s\n"
                                          f"From start {ct}\n"
                                          f"Delay: {time_diff} sec", tlg=True)
-            else:
-                if self.cycle_status:
-                    order_buy = self.cycle_status[1]
-                    order_sell = self.cycle_status[2]
-                    order_hold = self.cycle_status[3]
+                    elif self.tp_order_hold['timestamp']:
+                        time_diff = int(self.local_time() - self.tp_order_hold['timestamp'])
+                        if time_diff > HOLD_TP_ORDER_TIMEOUT:
+                            self.message_log(f"Exist hold TP order for"
+                                             f" {'Sell' if self.cycle_buy else 'Buy'} {self.tp_order_hold['amount']}"
+                                             f" {self.f_currency if self.cycle_buy else self.s_currency}\n"
+                                             f"Available first:{fund_f} {self.f_currency}\n"
+                                             f"Available second:{fund_s} {self.s_currency}\n"
+                                             f"Last ticker price: {last_price}\n"
+                                             f"WSS status: {ticker_update}s\n"
+                                             f"From start {ct}\n"
+                                             f"Delay: {time_diff} sec", tlg=True)
                 else:
-                    orders = self.get_buffered_open_orders()
-                    order_buy = len([i for i in orders if i.buy is True])
-                    order_sell = len([i for i in orders if i.buy is False])
-                    order_hold = len(self.orders_hold)
-                sum_profit = self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second,
-                                                 base=False)
-                command = bool(self.command in ('end', 'stop'))
-                if GRID_ONLY:
-                    header = (f"{'Buy' if self.cycle_buy else 'Sell'} assets Grid only mode\n"
-                              f"{('Waiting funding for convert'+chr(10)) if self.grid_only_restart else ''}"
-                              f"{self.get_free_assets()[3]}"
-                              )
-                else:
-                    header = (f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
-                              f"For all cycles profit:\n"
-                              f"First: {self.sum_profit_first}\n"
-                              f"Second: {self.sum_profit_second}\n"
-                              f"Summary: {sum_profit}\n"
-                              f"{self.get_free_assets(mode='free')[3]}"
-                              )
-                self.message_log(f"{header}\n"
-                                 f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* ***  ***  *** *'}\n"
-                                 f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
-                                 f"{' Hold reverse' if self.reverse_hold else ''} cycle with"
-                                 f" {order_buy} buy and {order_sell} sell active orders.\n"
-                                 f"{order_hold if order_hold else 'No'} hold grid orders\n"
-                                 f"Over price: {self.over_price:.2f}%\n"
-                                 f"Last ticker price: {last_price}\n"
-                                 f"ver: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
-                                 f"From start {ct}\n"
-                                 f"WSS status: {ticker_update}s\n"
-                                 f"{'-   ***   ***   ***   -' if self.command == 'stop' else ''}\n"
-                                 f"{'Waiting for end of cycle for manual action' if command else ''}",
-                                 tlg=True)
-        # endregion
-        # region ProcessingEvent
-        if self.wait_wss_refresh and self.local_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
-            self.place_grid(self.wait_wss_refresh['buy_side'],
-                            self.wait_wss_refresh['depo'],
-                            self.reverse_target_amount,
-                            self.wait_wss_refresh['allow_grid_shift'],
-                            self.wait_wss_refresh['additional_grid'],
-                            self.wait_wss_refresh['grid_update'])
-        self.heartbeat_counter += 1
-        if self.heartbeat_counter % 5 == 0 and not STANDALONE and EXTRA_CHECK_ORDER_STATE:
-            self.check_order_status()
-        if (stable_state
-                and ADAPTIVE_TRADE_CONDITION
-                and not self.reverse
-                and not self.part_amount
-                and self.command not in ('stopped', 'stop', 'end')
-                and (self.orders_grid or self.orders_hold)):
-            if self.heartbeat_counter % 150 == 0:
-                self.grid_update(frequency='low')
-            elif self.heartbeat_counter % 30 == 0:
-                self.grid_update(frequency='mid')
-            else:
-                self.grid_update(frequency='hi')
-        if self.heartbeat_counter > 150:
-            self.heartbeat_counter = 0
-            if MODE in ('T', 'TC') and not GRID_ONLY:
-                # Update t_funds.active set True
-                data_to_db = {'f_currency': self.f_currency,
-                              's_currency': self.s_currency,
-                              'destination': 't_funds.active update'}
-                if self.queue_to_db:
-                    self.queue_to_db.put(data_to_db)
-        if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
-            self.get_buffered_funds()
-        if self.tp_error:
-            self.tp_error = False
-            self.place_profit_order()
-        if self.reverse_hold:
-            if self.start_reverse_time:
-                if self.local_time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
-                    last_price = self.get_buffered_ticker().last_price
-                    if self.cycle_buy:
-                        price_diff = 100 * (self.reverse_price - last_price) / self.reverse_price
+                    if self.cycle_status:
+                        order_buy = self.cycle_status[1]
+                        order_sell = self.cycle_status[2]
+                        order_hold = self.cycle_status[3]
                     else:
-                        price_diff = 100 * (last_price - self.reverse_price) / self.reverse_price
-                    if price_diff > ADX_PRICE_THRESHOLD:
-                        # Reverse
-                        self.cycle_buy = not self.cycle_buy
-                        self.command = 'stop' if REVERSE_STOP else None
-                        self.reverse = True
-                        self.reverse_hold = False
-                        self.sum_amount_first = self.tp_part_amount_first
-                        self.sum_amount_second = self.tp_part_amount_second
-                        self.tp_part_amount_first = Decimal('0')
-                        self.tp_part_amount_second = Decimal('0')
-                        self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
-                        self.start()
-            else:
-                self.start_reverse_time = self.local_time()
-        # endregion
+                        orders = self.get_buffered_open_orders()
+                        order_buy = len([i for i in orders if i.buy is True])
+                        order_sell = len([i for i in orders if i.buy is False])
+                        order_hold = len(self.orders_hold)
+                    sum_profit = self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second,
+                                                     base=False)
+                    command = bool(self.command in ('end', 'stop'))
+                    if GRID_ONLY:
+                        header = (f"{'Buy' if self.cycle_buy else 'Sell'} assets Grid only mode\n"
+                                  f"{('Waiting funding for convert'+chr(10)) if self.grid_only_restart else ''}"
+                                  f"{self.get_free_assets()[3]}"
+                                  )
+                    else:
+                        header = (f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
+                                  f"For all cycles profit:\n"
+                                  f"First: {self.sum_profit_first}\n"
+                                  f"Second: {self.sum_profit_second}\n"
+                                  f"Summary: {sum_profit}\n"
+                                  f"{self.get_free_assets(mode='free')[3]}"
+                                  )
+                    self.message_log(f"{header}\n"
+                                     f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* **  **  ** *'}\n"
+                                     f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
+                                     f"{' Hold reverse' if self.reverse_hold else ''} cycle with"
+                                     f" {order_buy} buy and {order_sell} sell active orders.\n"
+                                     f"{order_hold if order_hold else 'No'} hold grid orders\n"
+                                     f"Over price: {self.over_price:.2f}%\n"
+                                     f"Last ticker price: {last_price}\n"
+                                     f"ver: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
+                                     f"From start {ct}\n"
+                                     f"WSS status: {ticker_update}s\n"
+                                     f"{'-   ***   ***   ***   -' if self.command == 'stop' else ''}\n"
+                                     f"{'Waiting for end of cycle for manual action' if command else ''}",
+                                     tlg=True)
+            # endregion
+            # region ProcessingEvent
+            if self.wait_wss_refresh and self.local_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
+                self.place_grid(self.wait_wss_refresh['buy_side'],
+                                self.wait_wss_refresh['depo'],
+                                self.reverse_target_amount,
+                                self.wait_wss_refresh['allow_grid_shift'],
+                                self.wait_wss_refresh['additional_grid'],
+                                self.wait_wss_refresh['grid_update'])
+            self.heartbeat_counter += 1
+            if self.heartbeat_counter % 5 == 0 and not STANDALONE and EXTRA_CHECK_ORDER_STATE:
+                self.check_order_status()
+            if (stable_state
+                    and ADAPTIVE_TRADE_CONDITION
+                    and not self.reverse
+                    and not self.part_amount
+                    and self.command not in ('stopped', 'stop', 'end')
+                    and (self.orders_grid or self.orders_hold)):
+                if self.heartbeat_counter % 150 == 0:
+                    self.grid_update(frequency='low')
+                elif self.heartbeat_counter % 30 == 0:
+                    self.grid_update(frequency='mid')
+                else:
+                    self.grid_update(frequency='hi')
+            if self.heartbeat_counter > 150:
+                self.heartbeat_counter = 0
+                if MODE in ('T', 'TC') and not GRID_ONLY:
+                    # Update t_funds.active set True
+                    data_to_db = {'f_currency': self.f_currency,
+                                  's_currency': self.s_currency,
+                                  'destination': 't_funds.active update'}
+                    if self.queue_to_db:
+                        self.queue_to_db.put(data_to_db)
+            if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
+                self.get_buffered_funds()
+            if self.tp_error:
+                self.tp_error = False
+                self.place_profit_order()
+            if self.reverse_hold:
+                if self.start_reverse_time:
+                    if self.local_time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
+                        last_price = self.get_buffered_ticker().last_price
+                        if self.cycle_buy:
+                            price_diff = 100 * (self.reverse_price - last_price) / self.reverse_price
+                        else:
+                            price_diff = 100 * (last_price - self.reverse_price) / self.reverse_price
+                        if price_diff > ADX_PRICE_THRESHOLD:
+                            # Reverse
+                            self.cycle_buy = not self.cycle_buy
+                            self.command = 'stop' if REVERSE_STOP else None
+                            self.reverse = True
+                            self.reverse_hold = False
+                            self.sum_amount_first = self.tp_part_amount_first
+                            self.sum_amount_second = self.tp_part_amount_second
+                            self.tp_part_amount_first = Decimal('0')
+                            self.tp_part_amount_second = Decimal('0')
+                            self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
+                            self.start()
+                else:
+                    self.start_reverse_time = self.local_time()
+            # endregion
         if MODE in ('T', 'TC'):
             return {'command': json.dumps(self.command),
                     'cycle_buy': json.dumps(self.cycle_buy),

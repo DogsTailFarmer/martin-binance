@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2"
+__version__ = "1.3.0-2b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -113,8 +113,7 @@ class Account:
             amount: str,
             price: str,
             lt: int,
-            order_id=None
-    ) -> {}:
+            order_id=None) -> {}:
 
         order_id = order_id or len(self.orders)
         order = Order(symbol=symbol,
@@ -125,7 +124,8 @@ class Account:
                       price=price,
                       lt=lt)
 
-        if (buy and Decimal(price) >= self.ticker_last) or (not buy and Decimal(price) <= self.ticker_last):
+        if self.ticker_last and ((buy and Decimal(price) >= self.ticker_last) or
+                                 (not buy and Decimal(price) <= self.ticker_last)):
             # Market event
             order.transact_time = lt
             order.executed_qty = order.orig_qty
@@ -174,7 +174,8 @@ class Account:
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def cancel_order(self, order_id: int, ts: int):
-        order = self.orders[order_id]
+        order = next(x for x in self.orders if x.order_id == order_id)
+        _order_id = self.orders.index(order)
         order.status = 'CANCELED'
         try:
             if order.side == 'BUY':
@@ -188,7 +189,9 @@ class Account:
         except Exception as ex:
             raise UserWarning(f"Order {order_id} not active: {ex}")
         else:
-            self.orders[order_id] = order
+
+            self.orders[_order_id] = order
+
             self.funds.on_order_canceled(order.side, order.orig_qty, order.price)
             return {'symbol': order.symbol,
                     'origClientOrderId': order.client_order_id,
