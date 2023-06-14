@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b3"
+__version__ = "1.3.0-2b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -851,7 +851,8 @@ class Strategy(StrategyBase):
             self.message_log(f"Mode for {'buy' if self.cycle_buy else 'sell'} {self.f_currency} by grid orders"
                              f" placement ON",
                              color=Style.B_WHITE)
-        self.message_log(f"Mode is {'Trade' if MODE == 'T' else ('Trade & Collect' if MODE == 'TC' else 'Simulate')}",
+        self.message_log(f"This is {'Trade' if MODE == 'T' else ('Trade & Collect' if MODE == 'TC' else 'Simulate')}"
+                         f" mode",
                          color=Style.B_WHITE if MODE == 'T' else (Style.B_RED if MODE == 'TC' else Style.GREEN))
         # Calculate round float multiplier
         self.round_base = ROUND_BASE or str(tcm.round_amount(1.123456789, RoundingType.FLOOR))
