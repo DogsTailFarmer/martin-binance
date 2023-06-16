@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b3"
+__version__ = "1.3.0-2b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -448,7 +448,7 @@ class StrategyBase:
         self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
         self.grid_buy = {}
         self.grid_sell = {}
-        self.get_buffered_funds_last_time = time.time()
+        self.get_buffered_funds_last_time = self.get_time()
 
     def __call__(self):
         return self
@@ -501,7 +501,7 @@ class StrategyBase:
         cls.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
         cls.all_orders = []  # List of all open orders for symbol
         cls.orders = []  # List orders associated with strategy
-        cls.get_buffered_funds_last_time = time.time()
+        cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
         cls.rate_limiter = RATE_LIMITER
         cls.start_time_ms = int(time.time() * 1000)
         cls.backtest = {}
@@ -533,7 +533,7 @@ class StrategyBase:
         # print(f"get_buffered_funds.funds: {self.funds}")
         if self.strategy.local_time() - self.get_buffered_funds_last_time > self.rate_limiter:
             loop.create_task(buffered_funds(print_info=False))
-            self.get_buffered_funds_last_time = self.strategy.local_time()
+            self.get_buffered_funds_last_time = self.get_time()
         return {self.base_asset: FundsEntry(self.funds[self.base_asset]),
                 self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
 
@@ -1174,7 +1174,7 @@ def on_funds_update_handler(cls, funds):
     funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
              cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
     cls.strategy.on_new_funds(funds)
-    cls.strategy.get_buffered_funds_last_time = cls.strategy.local_time()
+    cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
 
 
 async def on_balance_update():
@@ -1858,7 +1858,7 @@ async def main(_symbol):
                 await wss_declare()
                 # Set initial local time from backtest data
                 cls.strategy.time_operational['new'] = cls.backtest['ticker'].index[0] / 1000
-                cls.get_buffered_funds_last_time = cls.strategy.local_time()
+                cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
                 cls.start_time_ms = int(cls.strategy.local_time() * 1000)
                 cls.strategy.cycle_time = datetime.utcnow()
 
