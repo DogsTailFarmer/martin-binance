@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b5"
+__version__ = "1.3.0-2b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1657,22 +1657,35 @@ def restore_state_before_backtesting(cls):
     cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
     cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '[]'))
     orders = json.loads(saved_state.get('orders'))
-    cls.strategy.account.restore_state(cls.symbol, cls.start_time_ms, orders)
+
     # Restore initial state
     cls.strategy.cycle_buy = json.loads(saved_state.get('cycle_buy'))
+    cls.strategy.reverse = json.loads(saved_state.get('reverse'))
+
     cls.strategy.deposit_first = ms.f2d(json.loads(saved_state.get('deposit_first')))
     cls.strategy.deposit_second = ms.f2d(json.loads(saved_state.get('deposit_second')))
-    cls.strategy.reverse = json.loads(saved_state.get('reverse'))
-    if cls.strategy.cycle_buy:
-        if cls.strategy.reverse:
-            cls.strategy.initial_reverse_second = cls.strategy.deposit_second
+
+    if cls.strategy.reverse:
+        cls.strategy.initial_reverse_first = ms.f2d(json.loads(saved_state.get('initial_reverse_first')))
+        cls.strategy.initial_reverse_second = ms.f2d(json.loads(saved_state.get('initial_reverse_second')))
+
+        if cls.strategy.cycle_buy:
+            cls.strategy.account.funds.base = {'asset': cls.base_asset,
+                                               'free': cls.strategy.initial_reverse_first,
+                                               'locked': '0.0'}
+
+            cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
+                                                'free': cls.strategy.deposit_second,
+                                                'locked': '0.0'}
         else:
-            cls.strategy.initial_second = cls.strategy.deposit_second
-    else:
-        if cls.strategy.reverse:
-            cls.strategy.initial_reverse_first = cls.strategy.deposit_first
-        else:
-            cls.strategy.initial_first = cls.strategy.deposit_first
+            cls.strategy.account.funds.base = {'asset': cls.base_asset,
+                                               'free': cls.strategy.deposit_first,
+                                               'locked': '0.0'}
+
+            cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
+                                                'free': cls.strategy.initial_reverse_second,
+                                                'locked': '0.0'}
+    cls.strategy.account.restore_state(cls.symbol, cls.start_time_ms, orders)
     cls.strategy.last_shift_time = json.loads(saved_state.get('last_shift_time')) or cls.strategy.local_time()
     cls.strategy.order_q = json.loads(saved_state.get('order_q'))
     cls.strategy.orders_grid.restore(json.loads(saved_state.get('orders')))
