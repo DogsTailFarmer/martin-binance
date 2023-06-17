@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.2.18-4"
+__version__ = "1.3.0-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -357,5 +357,10 @@ if __name__ == '__main__':
         except sqlite3.Error as error:
             print("DB operational error:", error)
         VPS_CPU.labels(VPS_NAME).set(psutil.getloadavg()[1])
-        VPS_MEMORY.labels(VPS_NAME).set(psutil.virtual_memory()[2])
+        #
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
+        VPS_MEMORY.labels(VPS_NAME).set(total_used_percent)
+        #
         time.sleep(SLEEP_TIME_S)

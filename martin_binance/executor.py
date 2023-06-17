@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b4"
+__version__ = "1.3.0-2b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1534,11 +1534,16 @@ class Strategy(StrategyBase):
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
         if self.first_run or MODE in ('T', 'TC'):
             self.cycle_time = datetime.utcnow()
-        mem = psutil.virtual_memory().percent if psutil else 0
-        if mem > 85:
+        if psutil:
+            memory = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+            total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
+        else:
+            total_used_percent = 0
+        if total_used_percent > 85:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
             self.command = 'end'
-        elif mem > 75:
+        elif total_used_percent > 75:
             self.message_log(f"For {VPS_NAME} low memory availability, stop after end of cycle", tlg=True)
             self.command = 'stop'
         if self.command == 'end' or (self.command == 'stop' and

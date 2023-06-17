@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b6"
+__version__ = "1.3.0-2b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -882,9 +882,11 @@ async def backtest_data_control():
     cls = StrategyBase.strategy
     delay = HEARTBEAT * 300  # 10 min
     ts = time.time()
-    while True:
-        mem = psutil.virtual_memory().percent
-        if time.time() - ts > ms.SAVE_PERIOD or mem > 70:
+    while 1:
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
+        if time.time() - ts > ms.SAVE_PERIOD or total_used_percent > 70:
             sc = cls.start_collect
             if sc:
                 cls.start_collect = False
@@ -1657,19 +1659,14 @@ def restore_state_before_backtesting(cls):
     cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
     cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '[]'))
     orders = json.loads(saved_state.get('orders'))
-
     # Restore initial state
     cls.strategy.cycle_buy = json.loads(saved_state.get('cycle_buy'))
     cls.strategy.reverse = json.loads(saved_state.get('reverse'))
-
     cls.strategy.deposit_first = ms.f2d(json.loads(saved_state.get('deposit_first')))
     cls.strategy.deposit_second = ms.f2d(json.loads(saved_state.get('deposit_second')))
-
     if cls.strategy.reverse:
-        cls.strategy.initial_reverse_first = ms.f2d(json.loads(saved_state.get('initial_reverse_first')))
-        cls.strategy.initial_reverse_second = ms.f2d(json.loads(saved_state.get('initial_reverse_second')))
-
         if cls.strategy.cycle_buy:
+            cls.strategy.initial_reverse_second = ms.f2d(json.loads(saved_state.get('initial_reverse_second')))
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': cls.strategy.initial_reverse_first,
                                                'locked': '0.0'}
@@ -1678,6 +1675,7 @@ def restore_state_before_backtesting(cls):
                                                 'free': cls.strategy.deposit_second,
                                                 'locked': '0.0'}
         else:
+            cls.strategy.initial_reverse_first = ms.f2d(json.loads(saved_state.get('initial_reverse_first')))
             cls.strategy.account.funds.base = {'asset': cls.base_asset,
                                                'free': cls.strategy.deposit_first,
                                                'locked': '0.0'}
@@ -1685,6 +1683,11 @@ def restore_state_before_backtesting(cls):
             cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
                                                 'free': cls.strategy.initial_reverse_second,
                                                 'locked': '0.0'}
+    else:
+        if cls.strategy.cycle_buy:
+            cls.strategy.initial_second = cls.strategy.deposit_second
+        else:
+            cls.strategy.initial_first = cls.strategy.deposit_first
     cls.strategy.account.restore_state(cls.symbol, cls.start_time_ms, orders)
     cls.strategy.last_shift_time = json.loads(saved_state.get('last_shift_time')) or cls.strategy.local_time()
     cls.strategy.order_q = json.loads(saved_state.get('order_q'))

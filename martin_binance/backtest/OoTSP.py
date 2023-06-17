@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0"
+__version__ = "1.3.0-2b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -14,16 +14,25 @@ from pathlib import Path
 import importlib.util
 from decimal import Decimal
 import optuna
+import inquirer
 
-from tkinter.filedialog import askopenfile
 from martin_binance import BACKTEST_PATH
 
+choices = [f.name for f in BACKTEST_PATH.iterdir() if f.is_dir() and f.name.count('_') == 1]
 
-strategy = askopenfile(defaultextension='py',
-                       title='Select a file with strategy parameters',
-                       initialdir=str(BACKTEST_PATH))
+questions = [
+    inquirer.List(
+        "path",
+        message="Select the directory with the strategy you want to optimize",
+        choices=choices,
+    ),
+]
 
-spec = importlib.util.spec_from_file_location("strategy", Path(BACKTEST_PATH, strategy.name))
+answers = inquirer.prompt(questions)
+
+strategy = next(Path(BACKTEST_PATH, answers.get('path')).glob("cli*.py"))
+
+spec = importlib.util.spec_from_file_location("strategy", strategy)
 
 mbs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mbs)
@@ -51,14 +60,14 @@ def objective(trial):
         'OVER_PRICE': trial.suggest_float('OVER_PRICE', 0.1, 1, step=0.1),
         'ORDER_Q': trial.suggest_int('ORDER_Q', 6, 12),
         'MARTIN': trial.suggest_float('MARTIN', 5, 15, step=1),
-        'SHIFT_GRID_DELAY': trial.suggest_int('SHIFT_GRID_DELAY', 10, 60, step=5),
+        'SHIFT_GRID_DELAY': trial.suggest_int('SHIFT_GRID_DELAY', 10, 60, step=10),
         'KBB': trial.suggest_float('KBB', 1, 5, step=0.5),
-        'LINEAR_GRID_K': trial.suggest_int('LINEAR_GRID_K', 0, 100, step=10),
+        'LINEAR_GRID_K': trial.suggest_int('LINEAR_GRID_K', 0, 100, step=20),
     }
     return try_trade(**params)
 
 
 study = optuna.create_study(direction="maximize")
-study.optimize(objective, n_trials=100)
+study.optimize(objective, n_trials=500)
 
 print(f"Optimal parameters: {study.best_params} for get {study.best_value}")
