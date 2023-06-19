@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b8"
+__version__ = "1.3.0-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1685,7 +1685,7 @@ def restore_state_before_backtesting(cls):
     cls.strategy.orders_hold.restore(json.loads(saved_state.get('orders_hold')))
     cls.strategy.orders_save.restore(json.loads(saved_state.get('orders_save')))
     cls.strategy.over_price = json.loads(saved_state.get('over_price'))
-    cls.strategy.part_amount = eval(json.loads(saved_state.get('part_amount')))
+    cls.strategy.part_amount = ast.literal_eval(json.loads(saved_state.get('part_amount')))
     cls.strategy.reverse_hold = json.loads(saved_state.get('reverse_hold'))
     cls.strategy.reverse_init_amount = ms.f2d(json.loads(saved_state.get('reverse_init_amount')))
     cls.strategy.reverse_price = json.loads(saved_state.get('reverse_price'))
@@ -1694,12 +1694,12 @@ def restore_state_before_backtesting(cls):
     cls.strategy.sum_amount_first = ms.f2d(json.loads(saved_state.get('sum_amount_first')))
     cls.strategy.sum_amount_second = ms.f2d(json.loads(saved_state.get('sum_amount_second')))
     cls.strategy.tp_amount = ms.f2d(json.loads(saved_state.get('tp_amount')))
-    cls.strategy.tp_init = eval(json.loads(saved_state.get('tp_init')))
+    cls.strategy.tp_init = ast.literal_eval(json.loads(saved_state.get('tp_init')))
     cls.strategy.tp_order_id = json.loads(saved_state.get('tp_order_id'))
     cls.strategy.tp_part_amount_first = ms.f2d(json.loads(saved_state.get('tp_part_amount_first')))
     cls.strategy.tp_part_amount_second = ms.f2d(json.loads(saved_state.get('tp_part_amount_second')))
     cls.strategy.tp_target = ms.f2d(json.loads(saved_state.get('tp_target')))
-    cls.strategy.tp_order = eval(json.loads(saved_state.get('tp_order')))
+    cls.strategy.tp_order = ast.literal_eval(json.loads(saved_state.get('tp_order')))
     cls.strategy.tp_wait_id = json.loads(saved_state.get('tp_wait_id'))
     cls.strategy.start_collect = True
 
@@ -1776,7 +1776,6 @@ async def main(_symbol):
             cls.tcm = TradingCapabilityManager(exchange_info_symbol)
             cls.base_asset = exchange_info_symbol.get('baseAsset')
             cls.quote_asset = exchange_info_symbol.get('quoteAsset')
-
             if ms.MODE in ('T', 'TC'):
                 # region Get and processing Order book
                 _order_book = await cls.send_request(cls.stub.FetchOrderBook, api_pb2.MarketRequest, symbol=_symbol)
@@ -1797,7 +1796,6 @@ async def main(_symbol):
                 cls.ticker = json_format.MessageToDict(_ticker)
                 # print(f"main.ticker: {cls.ticker}")
                 loop.create_task(save_asset())
-
             #
             if ms.MODE == 'TC':
                 BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
@@ -1808,7 +1806,6 @@ async def main(_symbol):
                 #
                 if ms.MODE == 'TC':
                     cls.session_root.mkdir(parents=True, exist_ok=True)
-
         #
         else:
             # Init class atr for reuse in next backtest cycle
@@ -1873,13 +1870,9 @@ async def main(_symbol):
                 elif not ms.SAVED_STATE:
                     cls.strategy.start()
                 else:
-                    print(f"Can't load saved state")
-
+                    print("Can't load saved state")
         if restored:
             loop.create_task(heartbeat(cls.session))
     except (KeyboardInterrupt, SystemExit):
         # noinspection PyProtectedMember, PyUnresolvedReferences
         os._exit(1)
-
-
-

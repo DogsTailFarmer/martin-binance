@@ -1,9 +1,10 @@
-## v1.3.0-2 2023-06-xx
+## v1.3.0-2 2023-06-19
 ### Added for new features
 * Ability to start backtesting from saved state, including in Reverse mode
 
 ### Update
 * Monitoring memory usage including swap
+* up requirements for exchanges-wrapper to 1.3.0-2
 
 ## v1.3.0-1 2023-06-10
 ### Fix

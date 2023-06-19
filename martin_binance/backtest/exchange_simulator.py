@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b6"
+__version__ = "1.3.0-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -218,7 +218,10 @@ class Account:
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def cancel_order(self, order_id: int, ts: int):
-        order = next(x for x in self.orders if x.order_id == order_id)
+        try:
+            order = next(x for x in self.orders if x.order_id == order_id)
+        except StopIteration:
+            raise UserWarning(f"Error on Cancel order, can't find {order_id} anymore")
         _order_id = self.orders.index(order)
         order.status = 'CANCELED'
         try:

@@ -28,7 +28,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* From 1.3.0 was updated ```cli_X_AAABBB.py```, use ```martin_binance/cli_0_BTCUSDT.py.template``` for compare and update
+* From 1.3.0-2 was updated ```cli_X_AAABBB.py```, use ```martin_binance/cli_0_BTCUSDT.py.template``` for compare and update
 * You cannot run multiple pairs with overlapping currencies on the same account!
 
 >Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)

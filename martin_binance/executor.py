@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b8"
+__version__ = "1.3.0-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -34,6 +34,7 @@ else:
     import time
     import math
     import simplejson as json
+    import ast
     msb_ver = str()
     psutil = None
 
@@ -1182,7 +1183,7 @@ class Strategy(StrategyBase):
             self.orders_hold.restore(json.loads(strategy_state.get('orders_hold')))
             self.orders_save.restore(json.loads(strategy_state.get('orders_save')))
             self.over_price = json.loads(strategy_state.get('over_price'))
-            self.part_amount = eval(json.loads(strategy_state.get('part_amount')))
+            self.part_amount = ast.literal_eval(json.loads(strategy_state.get('part_amount')))
             self.initial_first = f2d(json.loads(strategy_state.get('initial_first')))
             self.initial_second = f2d(json.loads(strategy_state.get('initial_second')))
             self.initial_reverse_first = f2d(json.loads(strategy_state.get('initial_reverse_first')))
@@ -1201,12 +1202,12 @@ class Strategy(StrategyBase):
             self.sum_profit_first = f2d(json.loads(strategy_state.get('sum_profit_first')))
             self.sum_profit_second = f2d(json.loads(strategy_state.get('sum_profit_second')))
             self.tp_amount = f2d(json.loads(strategy_state.get('tp_amount')))
-            self.tp_init = eval(json.loads(strategy_state.get('tp_init')))
+            self.tp_init = ast.literal_eval(json.loads(strategy_state.get('tp_init')))
             self.tp_order_id = json.loads(strategy_state.get('tp_order_id'))
             self.tp_part_amount_first = f2d(json.loads(strategy_state.get('tp_part_amount_first')))
             self.tp_part_amount_second = f2d(json.loads(strategy_state.get('tp_part_amount_second')))
             self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
-            self.tp_order = eval(json.loads(strategy_state.get('tp_order')))
+            self.tp_order = ast.literal_eval(json.loads(strategy_state.get('tp_order')))
             self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id'))
             self.first_run = False
             self.start_after_shift = False if GRID_ONLY and USE_ALL_FUND else self.start_after_shift

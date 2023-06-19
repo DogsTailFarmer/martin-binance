@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b8"
+__version__ = "1.3.0-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -33,7 +33,7 @@ questions = [
         "n_trials",
         message="Enter number of cycles, from 50 to 500",
         ignore=lambda x: x["mode"] == "Plot from saved",
-        default = '150',
+        default='150',
         validate=lambda _, c: 50 <= int(c) < 500,
     ),
 ]
@@ -45,7 +45,10 @@ storage_name = f"sqlite:///{Path(BACKTEST_PATH, study_name, f'{study_name}.db')}
 
 if answers.get('mode') == 'New':
     Path(BACKTEST_PATH, study_name, f'{study_name}.db').unlink(missing_ok=True)
-    strategy = next(Path(BACKTEST_PATH, answers.get('path')).glob("cli*.py"))
+    try:
+        strategy = next(Path(BACKTEST_PATH, answers.get('path')).glob("cli_*.py"))
+    except StopIteration:
+        raise UserWarning(f"Can't find cli_*.py in {Path(BACKTEST_PATH, answers.get('path'))}")
     spec = importlib.util.spec_from_file_location("strategy", strategy)
     mbs = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mbs)
@@ -92,5 +95,5 @@ else:
 try:
     fig = optuna.visualization.plot_optimization_history(study)
     fig.show()
-except (ModuleNotFoundError, ImportError) as ex:
+except ImportError:
     print(f"Study instance saved to {storage_name} for later use")
