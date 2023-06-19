@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2"
+__version__ = "1.3.0-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1685,7 +1685,7 @@ def restore_state_before_backtesting(cls):
     cls.strategy.orders_hold.restore(json.loads(saved_state.get('orders_hold')))
     cls.strategy.orders_save.restore(json.loads(saved_state.get('orders_save')))
     cls.strategy.over_price = json.loads(saved_state.get('over_price'))
-    cls.strategy.part_amount = ast.literal_eval(json.loads(saved_state.get('part_amount')))
+    cls.strategy.part_amount = eval(json.loads(saved_state.get('part_amount')))
     cls.strategy.reverse_hold = json.loads(saved_state.get('reverse_hold'))
     cls.strategy.reverse_init_amount = ms.f2d(json.loads(saved_state.get('reverse_init_amount')))
     cls.strategy.reverse_price = json.loads(saved_state.get('reverse_price'))
@@ -1694,12 +1694,12 @@ def restore_state_before_backtesting(cls):
     cls.strategy.sum_amount_first = ms.f2d(json.loads(saved_state.get('sum_amount_first')))
     cls.strategy.sum_amount_second = ms.f2d(json.loads(saved_state.get('sum_amount_second')))
     cls.strategy.tp_amount = ms.f2d(json.loads(saved_state.get('tp_amount')))
-    cls.strategy.tp_init = ast.literal_eval(json.loads(saved_state.get('tp_init')))
+    cls.strategy.tp_init = eval(json.loads(saved_state.get('tp_init')))
     cls.strategy.tp_order_id = json.loads(saved_state.get('tp_order_id'))
     cls.strategy.tp_part_amount_first = ms.f2d(json.loads(saved_state.get('tp_part_amount_first')))
     cls.strategy.tp_part_amount_second = ms.f2d(json.loads(saved_state.get('tp_part_amount_second')))
     cls.strategy.tp_target = ms.f2d(json.loads(saved_state.get('tp_target')))
-    cls.strategy.tp_order = ast.literal_eval(json.loads(saved_state.get('tp_order')))
+    cls.strategy.tp_order = eval(json.loads(saved_state.get('tp_order')))
     cls.strategy.tp_wait_id = json.loads(saved_state.get('tp_wait_id'))
     cls.strategy.start_collect = True
 

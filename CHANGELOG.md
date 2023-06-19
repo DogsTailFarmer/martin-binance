@@ -1,3 +1,7 @@
+## v1.3.0-3 2023-06-10
+### Fix
+* Change ast.literal_eval() to eval() for trusted source
+
 ## v1.3.0-2 2023-06-19
 ### Added for new features
 * Ability to start backtesting from saved state, including in Reverse mode
