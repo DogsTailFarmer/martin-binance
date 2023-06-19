@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b7"
+__version__ = "1.3.0-2b8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1533,7 +1533,7 @@ def back_test_handler(cls):
         print(f"Session data saved to: {session_path}")
         #
     s_profit = session_result['profit'] = f"{cls.strategy.get_sum_profit()}"
-    s_free = session_result['free'] = f"{cls.strategy.get_free_assets(mode='free')[2]}"
+    s_free = session_result['free'] = f"{cls.strategy.get_free_assets(mode='free', backtest=True)[2]}"
     print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
     loop.stop()
 
@@ -1665,24 +1665,14 @@ def restore_state_before_backtesting(cls):
     cls.strategy.deposit_first = ms.f2d(json.loads(saved_state.get('deposit_first')))
     cls.strategy.deposit_second = ms.f2d(json.loads(saved_state.get('deposit_second')))
     if cls.strategy.reverse:
-        if cls.strategy.cycle_buy:
-            cls.strategy.initial_reverse_second = ms.f2d(json.loads(saved_state.get('initial_reverse_second')))
-            cls.strategy.account.funds.base = {'asset': cls.base_asset,
-                                               'free': cls.strategy.initial_reverse_first,
-                                               'locked': '0.0'}
-
-            cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
-                                                'free': cls.strategy.deposit_second,
-                                                'locked': '0.0'}
-        else:
-            cls.strategy.initial_reverse_first = ms.f2d(json.loads(saved_state.get('initial_reverse_first')))
-            cls.strategy.account.funds.base = {'asset': cls.base_asset,
-                                               'free': cls.strategy.deposit_first,
-                                               'locked': '0.0'}
-
-            cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
-                                                'free': cls.strategy.initial_reverse_second,
-                                                'locked': '0.0'}
+        cls.strategy.initial_reverse_first = ms.f2d(json.loads(saved_state.get('initial_reverse_first')))
+        cls.strategy.initial_reverse_second = ms.f2d(json.loads(saved_state.get('initial_reverse_second')))
+        cls.strategy.account.funds.base = {'asset': cls.base_asset,
+                                           'free': cls.strategy.initial_reverse_first,
+                                           'locked': '0.0'}
+        cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
+                                            'free': cls.strategy.initial_reverse_second,
+                                            'locked': '0.0'}
     else:
         if cls.strategy.cycle_buy:
             cls.strategy.initial_second = cls.strategy.deposit_second

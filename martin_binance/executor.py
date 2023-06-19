@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2b7"
+__version__ = "1.3.0-2b8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1840,12 +1840,13 @@ class Strategy(StrategyBase):
                          f"! Profit: {self.get_sum_profit()}\n"
                          f"! ======================================")
 
-    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total') -> ():
+    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total', backtest=False) -> ():
         """
         Get free asset for current trade pair
         :param fs:
         :param ff:
         :param mode: 'total', 'free', 'reserved'
+        :param backtest: bool
         :return: (ff, fs, ft, free_asset: str)
         """
         if ff is None or fs is None:
@@ -1867,9 +1868,13 @@ class Strategy(StrategyBase):
         #
         if mode == 'free':
             if self.cycle_buy:
+                if backtest:
+                    ff = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
                 fs = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
             else:
                 ff = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
+                if backtest:
+                    fs = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
         ff = self.round_truncate(ff, base=True)
         fs = self.round_truncate(fs, base=False)
         ft = ff * self.avg_rate + fs
