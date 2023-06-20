@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-3"
+__version__ = "1.3.0-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1869,12 +1869,12 @@ class Strategy(StrategyBase):
         if mode == 'free':
             if self.cycle_buy:
                 if backtest:
-                    ff = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
+                    ff = self.initial_reverse_first if self.reverse else self.initial_first
                 fs = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
             else:
                 ff = (self.initial_reverse_first if self.reverse else self.initial_first) - self.deposit_first
                 if backtest:
-                    fs = (self.initial_reverse_second if self.reverse else self.initial_second) - self.deposit_second
+                    fs = self.initial_reverse_second if self.reverse else self.initial_second
         ff = self.round_truncate(ff, base=True)
         fs = self.round_truncate(fs, base=False)
         ft = ff * self.avg_rate + fs

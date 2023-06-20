@@ -1,3 +1,19 @@
+## v1.3.0-4 2023-06-xx
+### Fix
+* ```get_free_assets(mode='free', backtest=True)``` return incorrect value for backtest Reverse cycle 
+
+### Update
+* Sometimes Tmux terminal after reboot not restore work path to ```/exch_srv.py```
+For working case: in relaunch.py was changed './exch_srv.py' to 'exch_srv.py' and
+path ```~/.local/lib/python3.10/site-packages/exchanges_wrapper``` must be added to system PATH
+
+For Ubuntu at end of ```~/.bashrc``` add the string
+
+```
+export PATH=$PATH:~/.local/lib/python3.10/site-packages/exchanges_wrapper
+```
+and refresh bash ```source ~/.bashrc```
+
 ## v1.3.0-3 2023-06-10
 ### Fix
 * Change ast.literal_eval() to eval() for trusted source
