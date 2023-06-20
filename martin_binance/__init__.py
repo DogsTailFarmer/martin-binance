@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-3"
+__version__ = "1.3.0-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -34,7 +34,7 @@ else:
     LAST_STATE_PATH = None
     BACKTEST_PATH = None
 if CONFIG_FILE.exists():
-    print(f"Config found at {CONFIG_FILE}")
+    print(f"Client config found at {CONFIG_FILE}")
 else:
     print("Can't find config file! Creating it...")
     CONFIG_PATH.mkdir(parents=True, exist_ok=True)
