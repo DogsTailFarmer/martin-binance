@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-4"
+__version__ = "1.3.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -26,7 +26,7 @@ if session:
         window_name = window.get('window_name')
         pane = window.attached_pane
         if window_name == 'srv':
-            pane.send_keys('exch_srv.py', enter=True)
+            pane.send_keys('exchanges-wrapper-srv', enter=True)
         else:
             last_state = Path(LAST_STATE_PATH, f"{window_name.replace('-', '_').replace('/', '')}.json")
             pair = Path(WORK_PATH, f"cli_{window_name.replace('-', '_').replace('/', '')}.py")

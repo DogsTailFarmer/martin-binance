@@ -1,3 +1,8 @@
+## v1.3.1 2023-06-xx
+### Update
+* Up requirements for exchanges-wrapper to 1.3.1
+* Refactoring the deployment process
+
 ## v1.3.0-4 2023-06-20
 ### Fix
 * ```get_free_assets(mode='free', backtest=True)``` return incorrect value for backtest Reverse cycle 
