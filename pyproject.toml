@@ -35,7 +35,8 @@ dependencies = [
     "pandas==2.0.2",
     "dash==2.10.2",
     "future==0.18.3",
-    "inquirer==3.1.3"
+    "inquirer==3.1.3",
+    "scikit-learn==1.2.2",
 ]
 
 [tool.flit.module]

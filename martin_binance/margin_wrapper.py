@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-3"
+__version__ = "1.3.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -842,7 +842,8 @@ def session_data_handler(cls):
     ds = pd.Series(cls.s_order_book)
     ds.to_pickle(Path(raw_path, "order_book.pkl"))
     # Save klines snapshot
-    json.dump(cls.klines, open(Path(raw_path, "klines.json"), 'w'))
+    with open(Path(raw_path, "klines.json"), 'w') as f:
+        json.dump(cls.klines, f)
     # Save candles
     for k, v in cls.candles.items():
         ds = pd.Series(v)

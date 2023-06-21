@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-4"
+__version__ = "1.3.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1675,7 +1675,7 @@ class Strategy(StrategyBase):
             fs = f2d(0)
         return ff, fs
 
-    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg: bool = False, color=Style.WHITE) -> None:
+    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg=False, color=Style.WHITE) -> None:
         if tlg and color == Style.WHITE:
             color = Style.B_WHITE
         if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
