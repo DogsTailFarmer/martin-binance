@@ -39,6 +39,7 @@ Strongly recommended that you test the strategy in the demo mode before using re
 
 ## References
 * Detailed information about use this strategy placed to [wiki](https://github.com/DogsTailFarmer/martin-binance/wiki)
+* [Trade idea](https://github.com/DogsTailFarmer/martin-binance/wiki/Trade-idea)
 * [Quick start](https://github.com/DogsTailFarmer/martin-binance/wiki/Quick-start)
 * [Back testing and parameters optimization](https://github.com/DogsTailFarmer/martin-binance/wiki/Back-testing-and-parameters-optimization)
 

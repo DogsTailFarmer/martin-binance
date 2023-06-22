@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1"
+__version__ = "1.3.1-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -623,7 +623,8 @@ class StrategyBase:
 
     @staticmethod
     def transfer_to_master(symbol: str, amount: str):
-        loop.create_task(transfer2master(symbol, amount))
+        if ms.MODE in ('T', 'TC'):
+            loop.create_task(transfer2master(symbol, amount))
 
 
 async def heartbeat(_session):
@@ -1679,7 +1680,13 @@ def restore_state_before_backtesting(cls):
             cls.strategy.initial_second = cls.strategy.deposit_second
         else:
             cls.strategy.initial_first = cls.strategy.deposit_first
+
+    print(f"MW: init {cls.strategy.account.funds.get_funds()}")
+
     cls.strategy.account.restore_state(cls.symbol, cls.start_time_ms, orders)
+
+    print(f"MW: restore grid {cls.strategy.account.funds.get_funds()}")
+
     cls.strategy.last_shift_time = json.loads(saved_state.get('last_shift_time')) or cls.strategy.local_time()
     cls.strategy.order_q = json.loads(saved_state.get('order_q'))
     cls.strategy.orders_grid.restore(json.loads(saved_state.get('orders')))
@@ -1702,6 +1709,22 @@ def restore_state_before_backtesting(cls):
     cls.strategy.tp_target = ms.f2d(json.loads(saved_state.get('tp_target')))
     cls.strategy.tp_order = eval(json.loads(saved_state.get('tp_order')))
     cls.strategy.tp_wait_id = json.loads(saved_state.get('tp_wait_id'))
+    # Restore TP order
+    tp_order = [
+        {"id": cls.strategy.tp_order_id,
+         "buy": cls.strategy.tp_order[0],
+         "amount": cls.strategy.tp_order[1],
+         "price": cls.strategy.tp_order[2]}
+    ]
+    cls.strategy.account.restore_state(
+        cls.symbol,
+        cls.start_time_ms,
+        tp_order,
+        tp=(cls.strategy.sum_amount_first, cls.strategy.sum_amount_second)
+    )
+
+    print(f"MW restore TP: {cls.strategy.account.funds.get_funds()}")
+
     cls.strategy.start_collect = True
 
 

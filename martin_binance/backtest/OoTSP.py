@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1"
+__version__ = "1.3.1-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -65,7 +65,7 @@ def main():
             message="Enter number of cycles, from 50 to 500",
             ignore=lambda x: x["mode"] == "Plot from saved",
             default='150',
-            validate=lambda _, c: 10 <= int(c) < 500,
+            validate=lambda _, c: 10 <= int(c) <= 500,
         ),
     ]
 

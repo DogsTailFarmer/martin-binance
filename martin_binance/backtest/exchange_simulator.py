@@ -6,12 +6,16 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2"
+__version__ = "1.3.1-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 from decimal import Decimal
 import pandas as pd
+
+
+def any2str(_x) -> str:
+    return f"{_x:.8f}".rstrip('0').rstrip('.')
 
 
 class Funds:
@@ -140,7 +144,7 @@ class Account:
         self.funds = Funds()
         self.fee_maker = Decimal('0')
         self.fee_taker = Decimal('0')
-        self.orders = []
+        self.orders = {}
         self.orders_buy = pd.Series()
         self.orders_sell = pd.Series()
         self.trade_id = 0
@@ -159,7 +163,7 @@ class Account:
             lt: int,
             order_id=None) -> {}:
 
-        order_id = order_id or len(self.orders)
+        order_id = order_id or ((max(self.orders.keys()) + 1) if self.orders else 1)
         order = Order(symbol=symbol,
                       order_id=order_id,
                       client_order_id=client_order_id,
@@ -198,7 +202,7 @@ class Account:
             #
             self.funds.on_order_created(buy=buy, amount=amount, price=price)
 
-        self.orders.append(order)
+        self.orders[order_id] = order
 
         # print(f"create_order.order: {vars(order)}")
         return {'symbol': order.symbol,
@@ -218,11 +222,9 @@ class Account:
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def cancel_order(self, order_id: int, ts: int):
-        try:
-            order = next(x for x in self.orders if x.order_id == order_id)
-        except StopIteration:
+        order = self.orders.get(order_id)
+        if order is None:
             raise UserWarning(f"Error on Cancel order, can't find {order_id} anymore")
-        _order_id = self.orders.index(order)
         order.status = 'CANCELED'
         try:
             if order.side == 'BUY':
@@ -236,9 +238,7 @@ class Account:
         except Exception as ex:
             raise UserWarning(f"Order {order_id} not active: {ex}")
         else:
-
-            self.orders[_order_id] = order
-
+            self.orders[order_id] = order
             self.funds.on_order_canceled(order.side, order.orig_qty, order.price)
             return {'symbol': order.symbol,
                     'origClientOrderId': order.client_order_id,
@@ -288,8 +288,8 @@ class Account:
         #
         orders_filled = []
         for order_id in orders_id:
-            order = self.orders[order_id]
-            if order.status == 'NEW':
+            order = self.orders.get(order_id)
+            if order and order.status == 'NEW':
                 order.transact_time = int(ticker['closeTime'])
                 order.executed_qty = order.orig_qty
                 order.cummulative_quote_qty = str(Decimal(order.orig_qty) * Decimal(order.price))
@@ -342,14 +342,23 @@ class Account:
             #
         return orders_filled
 
-    def restore_state(self, symbol: str, lt: int, orders: []):
+    def restore_state(self, symbol: str, lt: int, orders: [], tp=()):
         for order in orders:
             self.create_order(
                 symbol=symbol,
                 client_order_id='',
                 buy=order['buy'],
-                amount=order['amount'],
-                price=order['price'],
+                amount=any2str(order['amount']),
+                price=any2str(order['price']),
                 lt=lt,
                 order_id=order['id']
             )
+
+            if tp:
+                funds = self.funds
+                if order['buy']:
+                    funds.base['free'] = str(Decimal(funds.base.get('free', 0)) - tp[0])
+                    funds.quote['free'] = str(Decimal(funds.quote.get('free', 0)) + tp[1])
+                else:
+                    funds.base['free'] = str(Decimal(funds.base.get('free', 0)) + tp[0])
+                    funds.quote['free'] = str(Decimal(funds.quote.get('free', 0)) - tp[1])

@@ -1,4 +1,8 @@
-## v1.3.1 2023-06-xx
+## v1.3.1-1 2023-06-xx
+### Fix
+* BACKTEST "S" mode: Restore an TP from a saved state, was missing
+
+## v1.3.1 2023-06-21
 ### Update
 * Up requirements for exchanges-wrapper to 1.3.1
 * Refactoring the deployment process

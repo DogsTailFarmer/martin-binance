@@ -1432,6 +1432,9 @@ class Strategy(StrategyBase):
 
     def start(self, profit_f: Decimal = f2d(0), profit_s: Decimal = f2d(0)) -> None:
         self.message_log('Start')
+
+        print(self.account.funds.get_funds())
+
         if self.command == 'stopped':
             self.message_log('Strategy stopped, waiting manual action')
             return
@@ -2937,6 +2940,9 @@ class Strategy(StrategyBase):
         """
         if self.grid_remove is None:
             self.message_log("cancel_grid: Started", log_level=LogLevel.DEBUG)
+
+            print(self.account.funds.get_funds())
+
             self.grid_remove = True
         if self.grid_remove:
             # Temporary save and clear hold orders avoid placing them
@@ -2958,6 +2964,9 @@ class Strategy(StrategyBase):
                     self.cancel_order(_id)
             elif self.grid_remove:
                 self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
+
+                print(self.account.funds.get_funds())
+
                 self.grid_remove = None
                 self.order_q_placed = None
                 sum_amount = self.orders_save.sum_amount(self.cycle_buy) if self.grid_update_started else Decimal('0.0')
