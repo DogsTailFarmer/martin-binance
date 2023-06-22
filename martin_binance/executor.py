@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1"
+__version__ = "1.3.1-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -473,7 +473,7 @@ def f2d(_f: float) -> Decimal:
     return Decimal(str(_f))
 
 
-def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwargs) -> Decimal:
+def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwargs) -> ():
     """
     Numerical solution of the equation, value = fn(x)
     :param fn: Function
@@ -498,8 +498,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         err = fn(x, **kwargs) - value
         # print(f"tries: {tries}, x: {x}, fn: {fn(x, **kwargs)}, err: {err}")
         if err >= 0 and abs(err) <= max_err:
-            print(f"In {tries} attempts the best solution was found!", )
-            return x
+            return x, f"In {tries} attempts the best solution was found!"
         correction = (delta * tries) if err < 0 and _err.count(err) else 0
         if err >= 0:
             solves.append((err, x))
@@ -514,15 +513,12 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         # print(f"tries: {tries}, delta: {delta}, correction: {correction}, slope: {slope}")
         if (_err.count(err) or tries > max_tries) and len(solves) > 5:
             solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
-            print('Solve return the best of the right value ;-)')
             # print("\n".join(f"delta: {k}\t result: {v}" for k, v in solves))
-            return solves[0][1]
+            return solves[0][1], 'Solve return the best of the right value ;-)'
         if tries > max_tries * 2:
             break
         _err.append(err)
-    print('Oops. No solution found')
-    print("\n".join(f"delta: {k}\tresult: {v}" for k, v in solves))
-    return f2d(0)
+    return f2d(0), "\n".join(f"delta: {k}\tresult: {v}" for k, v in solves)
 
 
 class Orders:
@@ -890,7 +886,6 @@ class Strategy(StrategyBase):
 
     @staticmethod
     def get_strategy_config() -> StrategyConfig:
-        print('Get config')
         s = StrategyConfig()
         s.required_data_updates = {StrategyConfig.ORDER_BOOK,
                                    StrategyConfig.FUNDS,
@@ -1432,9 +1427,6 @@ class Strategy(StrategyBase):
 
     def start(self, profit_f: Decimal = f2d(0), profit_s: Decimal = f2d(0)) -> None:
         self.message_log('Start')
-
-        print(self.account.funds.get_funds())
-
         if self.command == 'stopped':
             self.message_log('Strategy stopped, waiting manual action')
             return
@@ -1555,8 +1547,7 @@ class Strategy(StrategyBase):
             self.start_collect = 1
             self.message_log('Stop, waiting manual action', tlg=True)
         else:
-            n = gc.collect(generation=2)
-            print('Number of unreachable objects collected by GC:', n)
+            self.message_log(f"Number of unreachable objects collected by GC: {gc.collect(generation=2)}")
             self.message_log(f"Initial first: {ff}, second: {fs}", color=Style.B_WHITE)
             self.restart = None
             # Init variable
@@ -1603,12 +1594,12 @@ class Strategy(StrategyBase):
                                                   's_currency': self.s_currency})
                 self.connection_analytic.commit()
             except sqlite3.Error as err:
-                print(f"DELETE from t_order: {err}")
+                self.message_log(f"DELETE from t_order: {err}")
             self.connection_analytic.close()
         self.connection_analytic = None
 
     def suspend(self) -> None:
-        print('Suspend')
+        self.message_log('Suspend')
         self.queue_to_db.put({'stop_signal': True})
         self.queue_to_tlg.put(STOP_TLG)
         self.connection_analytic.commit()
@@ -1616,7 +1607,7 @@ class Strategy(StrategyBase):
         self.connection_analytic = None
 
     def unsuspend(self) -> None:
-        print('Unsuspend')
+        self.message_log('Unsuspend')
         self.start_process()
 
     def init_warning(self, _amount_first_grid: Decimal):
@@ -1688,15 +1679,15 @@ class Strategy(StrategyBase):
         color_msg = color+msg+Style.RESET if color else msg
         if log_level not in LOG_LEVEL_NO_PRINT:
             if MODE in ('T', 'TC'):
-                local_time = datetime.now().strftime('%d/%m %H:%M:%S')
+                print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
             else:
-                local_time = datetime.fromtimestamp(self.local_time()).strftime('%H:%M:%S.%f')
-            print(f"{local_time} {color_msg}")
-        write_log(log_level, msg)
-        if MODE in ('T', 'TC') and tlg and self.queue_to_tlg:
-            msg = self.tlg_header + msg
-            self.status_time = self.local_time()
-            self.queue_to_tlg.put(msg)
+                tqdm.write(f"{datetime.fromtimestamp(self.local_time()).strftime('%H:%M:%S.%f')} {color_msg}")
+        if MODE in ('T', 'TC'):
+            write_log(log_level, msg)
+            if tlg and self.queue_to_tlg:
+                msg = self.tlg_header + msg
+                self.status_time = self.local_time()
+                self.queue_to_tlg.put(msg)
 
     ##############################################################
     # Technical analysis
@@ -2447,7 +2438,8 @@ class Strategy(StrategyBase):
                       'amount_first_grid': amount_first_grid,
                       'min_delta': min_delta,
                       'amount_min': amount_min}
-            over_price = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
+            over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
+            self.message_log(msg)
             if over_price == 0:
                 self.message_log("Can't calculate over price for reverse cycle,"
                                  " use previous or over_price_coarse * 3", log_level=LogLevel.ERROR)
@@ -2465,13 +2457,13 @@ class Strategy(StrategyBase):
         self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,))
         self.pr_tlg = Thread(target=telegram, args=(self.queue_to_tlg, self.tlg_header.split('.')[0],))
         if not self.pr_db.is_alive():
-            print('Start process for .db save')
+            self.message_log('Start process for .db save')
             try:
                 self.pr_db.start()
             except AssertionError as error:
                 self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
         if not self.pr_tlg.is_alive():
-            print('Start process for Telegram')
+            self.message_log('Start process for Telegram')
             try:
                 self.pr_tlg.start()
             except AssertionError as error:
@@ -2940,9 +2932,6 @@ class Strategy(StrategyBase):
         """
         if self.grid_remove is None:
             self.message_log("cancel_grid: Started", log_level=LogLevel.DEBUG)
-
-            print(self.account.funds.get_funds())
-
             self.grid_remove = True
         if self.grid_remove:
             # Temporary save and clear hold orders avoid placing them
@@ -2964,9 +2953,6 @@ class Strategy(StrategyBase):
                     self.cancel_order(_id)
             elif self.grid_remove:
                 self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
-
-                print(self.account.funds.get_funds())
-
                 self.grid_remove = None
                 self.order_q_placed = None
                 sum_amount = self.orders_save.sum_amount(self.cycle_buy) if self.grid_update_started else Decimal('0.0')

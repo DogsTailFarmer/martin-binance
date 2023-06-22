@@ -26,6 +26,7 @@ from colorama import init as color_init
 from decimal import Decimal
 from pathlib import Path
 from datetime import datetime, timedelta
+from tqdm import tqdm
 
 # noinspection PyPackageRequirements
 import grpc
@@ -958,7 +959,7 @@ async def on_klines_update(_klines: {str: StrategyBase.Klines}):
 async def aiter_candles(ds: pd.Series, _klines: {str: StrategyBase.Klines}, _i: str):
     async for row in loop_ds(ds):
         _klines.get(_i).refresh(json.loads(row))
-    print(f"Backtest candles *** {_i} *** timeSeries ended")
+    StrategyBase.strategy.message_log(f"Backtest candles *** {_i} *** timeSeries ended")
 
 
 async def buffered_funds(print_info: bool = True):
@@ -1498,6 +1499,7 @@ async def on_ticker_update():
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
     else:
+        pbar = tqdm(total=cls.backtest['ticker'].count())
         async for row in loop_ds(cls.backtest['ticker'], tik=True):
             cls.delay_ordering_s = row.pop('delay', 0)
             cls.ticker = row
@@ -1506,6 +1508,8 @@ async def on_ticker_update():
             for _res in res:
                 on_order_update_handler(cls, _res)
                 await on_funds_update()
+            pbar.update()
+        pbar.close()
         cls.strategy.message_log("Backtest *** ticker *** timeSeries ended")
         back_test_handler(cls)
 
@@ -1574,7 +1578,7 @@ async def on_order_book_update():
         async for row in loop_ds(cls.backtest['order_book']):
             cls.order_book = row
             cls.strategy.on_new_order_book(OrderBook(cls.order_book))
-        print("Backtest *** order_book *** timeSeries ended")
+        cls.strategy.message_log("Backtest *** order_book *** timeSeries ended")
 
 
 def load_file(name: Path) -> {}:
@@ -1680,13 +1684,7 @@ def restore_state_before_backtesting(cls):
             cls.strategy.initial_second = cls.strategy.deposit_second
         else:
             cls.strategy.initial_first = cls.strategy.deposit_first
-
-    print(f"MW: init {cls.strategy.account.funds.get_funds()}")
-
     cls.strategy.account.restore_state(cls.symbol, cls.start_time_ms, orders)
-
-    print(f"MW: restore grid {cls.strategy.account.funds.get_funds()}")
-
     cls.strategy.last_shift_time = json.loads(saved_state.get('last_shift_time')) or cls.strategy.local_time()
     cls.strategy.order_q = json.loads(saved_state.get('order_q'))
     cls.strategy.orders_grid.restore(json.loads(saved_state.get('orders')))
@@ -1722,9 +1720,6 @@ def restore_state_before_backtesting(cls):
         tp_order,
         tp=(cls.strategy.sum_amount_first, cls.strategy.sum_amount_second)
     )
-
-    print(f"MW restore TP: {cls.strategy.account.funds.get_funds()}")
-
     cls.strategy.start_collect = True
 
 

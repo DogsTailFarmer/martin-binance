@@ -1,6 +1,10 @@
-## v1.3.1-1 2023-06-xx
+## v1.3.1-1 2023-06-22
 ### Fix
 * BACKTEST "S" mode: Restore an TP from a saved state, was missing
+
+### Added for new features
+* BACKTEST "S" mode: add progress bar
+* BACKTEST "S" mode: supress logging
 
 ## v1.3.1 2023-06-21
 ### Update
