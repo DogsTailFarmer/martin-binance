@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2"
+__version__ = "1.3.1-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -172,19 +172,19 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
     time_for_refresh = time.time() - currency_rate_last_time > 86400
     if None in _currency_rate.values() or time_for_refresh:
         get_rate(_currency_rate)
-        if time_for_refresh:
-            F_BALANCE.clear()
-            S_BALANCE.clear()
-            TOTAL_BALANCE.clear()
-            BALANCE_USD.clear()
-            CYCLE_BUY.clear()
-            F_DEPO.clear()
-            S_DEPO.clear()
-            OVER_PRICE.clear()
         currency_rate_last_time = int(time.time())
         REQUEST_DELAY_G.labels(VPS_NAME).set(request_delay)
         if request_delay > 60:
             request_delay = 60 / config.get('rate_limit')
+    #
+    F_BALANCE.clear()
+    S_BALANCE.clear()
+    TOTAL_BALANCE.clear()
+    BALANCE_USD.clear()
+    CYCLE_BUY.clear()
+    F_DEPO.clear()
+    S_DEPO.clear()
+    OVER_PRICE.clear()
     #
     for row in records:
         # print(f"row: {row}")

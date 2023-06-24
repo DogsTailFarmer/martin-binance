@@ -6,9 +6,10 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1-1"
+__version__ = "1.3.1-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
+
 
 from pathlib import Path
 import importlib.util
@@ -18,6 +19,9 @@ import inquirer
 from inquirer.themes import GreenPassion
 from martin_binance import BACKTEST_PATH
 
+
+vis = optuna.visualization
+ii_params = []
 
 PARAMS_FLOAT = ['PRICE_SHIFT', 'KBB']
 
@@ -85,21 +89,37 @@ def main():
         spec.loader.exec_module(mbs)
         study = optuna.create_study(study_name=study_name, storage=storage_name, direction="maximize")
         study.optimize(objective, n_trials=int(answers.get('n_trials', '0')))
-        print(f"Optimal parameters: {study.best_params} for get {study.best_value}")
-        importance_params = optuna.importance.get_param_importances(study)
-        print("Evaluate parameter importance based on completed trials in the given study:")
-        for p in importance_params.items():
-            print(p)
+        print_study_result(study)
         print(f"Study instance saved to {storage_name} for later use")
     else:
         study = optuna.load_study(study_name=study_name, storage=storage_name)
     #
+    i_params = print_study_result(study)
+    for index, p in enumerate(i_params.items()):
+        ii_params.append(p[0])
+        if index == 2:
+            break
+    #
     try:
-        fig = optuna.visualization.plot_optimization_history(study)
+        fig = vis.plot_optimization_history(study)
         fig.show()
+
+        contour_plot = vis.plot_contour(study, params=ii_params)
+        contour_plot.show()
+
+        slice_plot = vis.plot_slice(study, params=ii_params)
+        slice_plot.show()
     except ImportError:
         print("Can't find GUI, you can copy study instance to another environment for analyze it")
 
+
+def print_study_result(study):
+    print(f"Optimal parameters: {study.best_params} for get {study.best_value}")
+    importance_params = optuna.importance.get_param_importances(study)
+    print("Evaluate parameter importance based on completed trials in the given study:")
+    for p in importance_params.items():
+        print(p)
+    return importance_params
 
 if __name__ == '__main__':
     main()

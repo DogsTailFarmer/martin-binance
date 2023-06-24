@@ -1,3 +1,18 @@
+## v1.3.1-3 2023-06-xx
+### Fix
+* buffered_orders() was try fetch orders and generate event on stopped strategy, refactoring restore
+
+### Update
+* remove all_trades and all_orders class variables from StrategyBase
+
+## v1.3.1-2 2023-06-28
+### Update
+* funds_rate_exporter: optimized response rate to free balance change
+* client session id changed from uuid to shortuuid
+
+### Added for new features
+* optuna: add visualization contour_plot and slice_plot
+
 ## v1.3.1-1 2023-06-22
 ### Fix
 * BACKTEST "S" mode: Restore an TP from a saved state, was missing

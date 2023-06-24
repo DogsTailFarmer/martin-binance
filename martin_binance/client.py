@@ -13,15 +13,15 @@ import asyncio
 import grpc
 import random
 import logging
-import uuid
+import shortuuid
 
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
 logger = logging.getLogger('logger.client')
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-# stream_handler.setLevel(logging.INFO)
-stream_handler.setLevel(logging.DEBUG)
+stream_handler.setLevel(logging.INFO)
+# stream_handler.setLevel(logging.DEBUG)
 logger.addHandler(stream_handler)
 
 
@@ -33,7 +33,7 @@ class Trade:
         self.rate_limiter = rate_limiter
         self.client: api_pb2.OpenClientConnectionId = None
         self.wait_connection = False
-        self.trade_id = str(uuid.uuid4().hex)
+        self.trade_id = shortuuid.uuid()
 
     async def get_client(self):
         if not self.wait_connection:
@@ -90,7 +90,7 @@ class Trade:
                     raise UserWarning("Connection to gRPC server failed, wait connection...")
                 if status_code == grpc.StatusCode.RESOURCE_EXHAUSTED:
                     raise
-                logger.error(f"Exception on send request {_request}: {status_code.name}, {ex.details()}")
+                logger.debug(f"Exception on send request {_request}: {status_code.name}, {ex.details()}")
                 raise
             else:
                 # logger.info(f"send_request.res: {res}")
