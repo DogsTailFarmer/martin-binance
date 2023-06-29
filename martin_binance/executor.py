@@ -1427,7 +1427,6 @@ class Strategy(StrategyBase):
             else:
                 self.message_log('Restored, unknown state. Investigation needed', tlg=True)
 
-
     def start(self, profit_f: Decimal = f2d(0), profit_s: Decimal = f2d(0)) -> None:
         self.message_log('Start')
         if self.command == 'stopped':

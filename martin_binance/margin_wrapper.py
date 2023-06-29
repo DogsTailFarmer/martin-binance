@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1-3"
+__version__ = "1.3.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -44,6 +44,8 @@ from martin_binance import executor as ms, BACKTEST_PATH, copy
 from martin_binance.client import Trade
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 
+ORDER_BOOK_PKL = "order_book.pkl"
+TICKER_PKL = "ticker.pkl"
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
@@ -829,10 +831,10 @@ def session_data_handler(cls):
     raw_path.mkdir(parents=True, exist_ok=True)
     # Save ticker
     ds = pd.Series(cls.s_ticker)
-    ds.to_pickle(Path(raw_path, "ticker.pkl"))
+    ds.to_pickle(Path(raw_path, TICKER_PKL))
     # Save order_book
     ds = pd.Series(cls.s_order_book)
-    ds.to_pickle(Path(raw_path, "order_book.pkl"))
+    ds.to_pickle(Path(raw_path, ORDER_BOOK_PKL))
     # Save klines snapshot
     with open(Path(raw_path, "klines.json"), 'w') as f:
         json.dump(cls.klines, f)
@@ -855,7 +857,7 @@ def session_data_handler(cls):
     df_grid_buy = pd.DataFrame().from_dict(cls.grid_buy, orient='index')
     df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
     #
-    ds_ticker.to_pickle(Path(session_data, "ticker.pkl"))
+    ds_ticker.to_pickle(Path(session_data, TICKER_PKL))
     df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
     df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
     #
@@ -1359,9 +1361,9 @@ async def fetch_order(_id: int, _filled_update_call: bool = False):
                                  log_level=LogLevel.INFO)
         if _filled_update_call and result and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
-            cls.strategy.message_log(f"Cancel order {_id} OK", color=ms.Style.GREEN)
-            cls.strategy.on_cancel_order_success(_id, Order(result))
             cls.canceled_order_id.append(_id)
+            cls.strategy.message_log(f"Order {_id} has already been deleted", color=ms.Style.GREEN)
+            cls.strategy.on_cancel_order_success(_id, Order(result))
         return result
 
 
@@ -1477,7 +1479,7 @@ def back_test_handler(cls):
         df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
         df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
         #
-        ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
+        ds_ticker.to_pickle(Path(session_path, TICKER_PKL))
         df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
         df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
         copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
@@ -1786,9 +1788,9 @@ async def main(_symbol):
             cls.strategy.account.fee_taker = ms.FEE_TAKER
             #
             cls.backtest['ticker'] = pd.read_pickle(Path(BACKTEST_PATH,
-                                                         f"{cls.exchange}_{cls.symbol}/raw/ticker.pkl"))
+                                                         f"{cls.exchange}_{cls.symbol}/raw/{TICKER_PKL}"))
             cls.backtest['order_book'] = pd.read_pickle(Path(BACKTEST_PATH,
-                                                             f"{cls.exchange}_{cls.symbol}/raw/order_book.pkl"))
+                                                             f"{cls.exchange}_{cls.symbol}/raw/{ORDER_BOOK_PKL}"))
             cls.ticker = cls.backtest['ticker'].iat[0]
             cls.order_book = cls.backtest['order_book'].iat[0]
         #

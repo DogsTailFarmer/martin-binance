@@ -1,9 +1,11 @@
-## v1.3.1-3 2023-06-xx
+## v1.3.2 2023-06-29
 ### Fix
-* buffered_orders() was try fetch orders and generate event on stopped strategy, refactoring restore
+* buffered_orders() was try fetch orders and generate event on stopped strategy, full refactoring restore
+from saved state
 
 ### Update
-* remove all_trades and all_orders class variables from StrategyBase
+* remove all_trades and all_orders class variables from StrategyBase as redundant
+* Up requirements for exchanges-wrapper to 1.3.2
 
 ## v1.3.1-2 2023-06-28
 ### Update
