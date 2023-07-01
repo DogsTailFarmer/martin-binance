@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1-3"
+__version__ = "1.3.2-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1241,7 +1241,7 @@ class Strategy(StrategyBase):
                 part_amount_first += v[0]
                 part_amount_second += v[1]
         #
-        if grid_no_change and tp_no_change:
+        if STANDALONE or (grid_no_change and tp_no_change):
             if grid_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                 self.place_grid_part()
@@ -1425,7 +1425,7 @@ class Strategy(StrategyBase):
                 self.message_log('Restored, take profit order(s) was placed', tlg=True)
 
             else:
-                self.message_log('Restored, unknown state. Investigation needed', tlg=True)
+                self.message_log('Restored', tlg=True)
 
     def start(self, profit_f: Decimal = f2d(0), profit_s: Decimal = f2d(0)) -> None:
         self.message_log('Start')

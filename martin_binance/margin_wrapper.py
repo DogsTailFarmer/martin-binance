@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.2"
+__version__ = "1.3.2-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -424,7 +424,7 @@ class StrategyBase:
     wait_order_id = []  # List of placed orders for time-out detect
     canceled_order_id = []  # List canceled orders  for time-out detect
     trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
-    orders = []  # List orders associated with strategy
+    orders = {}  # {int(id): Order(), } of orders associated with strategy
     tcm = None  # TradingCapabilityManager
     last_state = None
     rate_limiter = RATE_LIMITER
@@ -500,7 +500,7 @@ class StrategyBase:
         cls.all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
         cls.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
         cls.all_orders = []  # List of all open orders for symbol
-        cls.orders = []  # List orders associated with strategy
+        cls.orders = {}  # Set of orders associated with strategy
         cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
         cls.rate_limiter = RATE_LIMITER
         cls.start_time_ms = int(time.time() * 1000)
@@ -511,7 +511,7 @@ class StrategyBase:
         pass  # meant to be overridden in a subclass
 
     def order_exist(self, _id) -> bool:
-        return any(i.id == _id for i in self.orders)
+        return bool(self.orders.get(_id))
 
     def get_trading_capability_manager(self) -> TradingCapabilityManager:
         return self.tcm
@@ -556,7 +556,7 @@ class StrategyBase:
         return self.trades
 
     def get_buffered_open_orders(self) -> List[Order]:
-        return self.orders
+        return list(self.orders.values())
 
     def get_time(self) -> float:
         """
@@ -586,11 +586,11 @@ class StrategyBase:
     def open_orders_snapshot(self):
         orders_buy = {}
         orders_sell = {}
-        for order in self.orders:
+        for k, order in self.orders.items():
             if order.buy:
-                orders_buy[order.id] = order.price
+                orders_buy[k] = order.price
             else:
-                orders_sell[order.id] = order.price
+                orders_sell[k] = order.price
         self.grid_buy.update({int(time.time() * 1000): pd.Series(orders_buy)})
         self.grid_sell.update({int(time.time() * 1000): pd.Series(orders_sell)})
 
@@ -666,7 +666,7 @@ async def heartbeat(_session):
 def last_state_update(cls, last_state):
     last_state[ms_order_id] = json.dumps(cls.order_id)
     last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
-    last_state[ms_orders] = jsonpickle.encode(cls.orders)
+    last_state[ms_orders] = jsonpickle.encode(cls.orders, keys=True)
     last_state['ms_trades'] = jsonpickle.encode(cls.trades)
 
 
@@ -994,7 +994,7 @@ async def buffered_funds(print_info: bool = True):
 
 async def buffered_orders():
     cls = StrategyBase
-    exch_orders_id = []
+    exch_orders = {}
     save_orders_id = []
     restore = False
     run = False
@@ -1021,7 +1021,14 @@ async def buffered_orders():
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.trades = jsonpickle.decode(cls.last_state.pop('ms_trades', '[]'))
-                cls.orders = jsonpickle.decode(cls.last_state.pop(ms_orders, '[]'))
+                # TODO change after update and restart
+                # cls.orders = jsonpickle.decode(cls.last_state.pop(ms_orders, '{}'), keys=True)
+                _orders_from_save = jsonpickle.decode(cls.last_state.pop(ms_orders, '{}'), keys=True)
+                if isinstance(_orders_from_save, list):
+                    for _o in _orders_from_save:
+                        cls.orders[_o.id] = _o
+                else:
+                    cls.orders = _orders_from_save
                 #
                 cls.strategy.restore_strategy_state(cls.last_state)
 
@@ -1038,22 +1045,24 @@ async def buffered_orders():
             part_id = []
             for order in orders:
                 _id = int(order['orderId'])
-                exch_orders_id.append(_id)
+                exch_orders[_id] = Order(order)
                 if (order.get('status', None) == 'PARTIALLY_FILLED'
                         and order_trades_sum(_id) < Decimal(order['executedQty'])):
                     part_id.append(_id)
-            for i in cls.orders:
-                save_orders_id.append(i.id)
+            # Add TP id
+            if cls.strategy.tp_order_id:
+                save_orders_id.append(cls.strategy.tp_order_id)
+            # Add grid id's
+            save_orders_id.extend(list(cls.orders))
             # Missed fill event list
-            diff_id = list(set(save_orders_id).difference(exch_orders_id))
+            diff_id = list(set(save_orders_id).difference(set(exch_orders)))
             # print(f"buffered_orders.diff_id: {diff_id}")
             # Erroneously not deleted order
-            diff_excess_id = list(set(exch_orders_id).
+            diff_excess_id = list(set(exch_orders).
                                   difference(save_orders_id).
                                   intersection(cls.canceled_order_id))
             # print(f"buffered_orders.diff_excess_id: {diff_excess_id}")
-            exch_orders_id.clear()
-            save_orders_id.clear()
+
             if diff_id or part_id:
                 cls.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id + part_id},"
                                          f" checking it", log_level=LogLevel.WARNING, tlg=False)
@@ -1077,7 +1086,9 @@ async def buffered_orders():
                 with cls.state_file.open(mode='w') as outfile:
                     json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                 cls.strategy.start_collect = True
-
+            cls.orders.update(exch_orders)
+            exch_orders.clear()
+            save_orders_id.clear()
             cls.last_state = None
             restore = False
 
@@ -1154,7 +1165,6 @@ async def on_order_update():
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
             ed = ast.literal_eval(json.loads(event.result))
-            # print(f"on_order_update.ed: {ed}")
             on_order_update_handler(cls, ed)
     except Exception as ex:
         logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}\n{traceback.format_exc()}")
@@ -1163,7 +1173,7 @@ async def on_order_update():
 
 def on_order_update_handler(cls, ed):
     if (cls.symbol == ed['symbol']
-            and cls.strategy.order_exist(ed['order_id'])
+            and (cls.strategy.order_exist(ed['order_id']) or cls.strategy.tp_order_id == ed['order_id'])
             and ed['order_status'] in ('FILLED', 'PARTIALLY_FILLED')):
         if ed['order_status'] == 'FILLED':
             # Remove from all_orders and orders lists
@@ -1256,7 +1266,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                     del cls.trades[0]
                 cls.trades.append(PrivateTrade(trade))
             if executed_qty < orig_qty:
-                cls.orders.append(order)
+                cls.orders[order.id] =  order
             if ms.MODE == 'TC' and cls.strategy.start_collect:
                 cls.strategy.open_orders_snapshot()
             elif ms.MODE == 'S':
@@ -1330,8 +1340,8 @@ async def cancel_all_order_call(_id: int):
         if result and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
-            cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=True)
             cls.canceled_order_id.append(_id)
+            cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=True)
 
 
 async def cancel_order_timeout(_id):
@@ -1392,7 +1402,7 @@ async def transfer2master(symbol: str, amount: str):
 def remove_from_orders_lists(_order_id_list: []) -> None:
     cls = StrategyBase
     # print(f"remove_from_orders_lists._order_id: {_order_id}")
-    cls.orders[:] = [i for i in cls.orders if i.id not in _order_id_list]
+    [cls.orders.pop(i, None) for i in _order_id_list]
 
 
 def remove_from_trades_lists(_order_id) -> None:
@@ -1610,7 +1620,7 @@ def restore_state_before_backtesting(cls):
     saved_state = load_file(cls.state_file)
     cls.order_id = json.loads(saved_state.pop(ms_order_id, "0"))
     cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
-    cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '[]'))
+    cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '{}'))
     orders = json.loads(saved_state.get('orders'))
     # Restore initial state
     cls.strategy.cycle_buy = json.loads(saved_state.get('cycle_buy'))

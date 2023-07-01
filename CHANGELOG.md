@@ -1,3 +1,9 @@
+## v1.3.2-2 2023-07-01
+### Fix
+* Incorrect internal accounting of active orders
+* Changed StrategyBase.orders from list to dict
+* Some improvements in save/restore
+
 ## v1.3.2 2023-06-29
 ### Fix
 * buffered_orders() was try fetch orders and generate event on stopped strategy, full refactoring restore
