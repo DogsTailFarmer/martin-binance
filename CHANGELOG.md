@@ -1,3 +1,10 @@
+## v1.3.2-3 2023-07-02
+### Fix
+* fetch_order(): fixed status for archived order (remove it from StrategyBase.orders)
+
+### Update
+* get_free_assets() added 'available' mode for initial funds check
+
 ## v1.3.2-2 2023-07-01
 ### Fix
 * Incorrect internal accounting of active orders

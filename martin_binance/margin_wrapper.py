@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.2-2"
+__version__ = "1.3.2-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -48,9 +48,11 @@ ORDER_BOOK_PKL = "order_book.pkl"
 TICKER_PKL = "ticker.pkl"
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
-CHANNEL_OPTIONS = [('grpc.lb_policy_name', 'pick_first'),
-                   ('grpc.enable_retries', 0),
-                   ('grpc.keepalive_timeout_ms', 10000)]
+CHANNEL_OPTIONS = [
+    ('grpc.lb_policy_name', 'pick_first'),
+    ('grpc.enable_retries', 0),
+    ('grpc.keepalive_timeout_ms', 10000)
+]
 
 loop = asyncio.get_event_loop()
 KLINES_INIT = [Interval.ONE_MINUTE, Interval.FIFTY_MINUTES, Interval.ONE_HOUR]
@@ -497,9 +499,7 @@ class StrategyBase:
         cls.order_id = int(datetime.now().strftime("%S%M")) * 1000
         cls.wait_order_id = []  # List of placed orders for time-out detect
         cls.canceled_order_id = []  # List canceled orders  for time-out detect
-        cls.all_trades = []  # List of all (limit = ALL_TRADES_LIST_LIMIT) trades for a specific account and symbol
         cls.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
-        cls.all_orders = []  # List of all open orders for symbol
         cls.orders = {}  # Set of orders associated with strategy
         cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
         cls.rate_limiter = RATE_LIMITER
@@ -1041,7 +1041,6 @@ async def buffered_orders():
                 raise UserWarning("Can't fetch open orders")
             StrategyBase.rate_limiter = max(StrategyBase.rate_limiter, _orders.rate_limiter)
             orders = json_format.MessageToDict(_orders).get('items', [])
-            # print(f"buffered_orders.orders: {orders}")
             part_id = []
             for order in orders:
                 _id = int(order['orderId'])
@@ -1056,7 +1055,6 @@ async def buffered_orders():
             save_orders_id.extend(list(cls.orders))
             # Missed fill event list
             diff_id = list(set(save_orders_id).difference(set(exch_orders)))
-            # print(f"buffered_orders.diff_id: {diff_id}")
             # Erroneously not deleted order
             diff_excess_id = list(set(exch_orders).
                                   difference(save_orders_id).
@@ -1176,7 +1174,7 @@ def on_order_update_handler(cls, ed):
             and (cls.strategy.order_exist(ed['order_id']) or cls.strategy.tp_order_id == ed['order_id'])
             and ed['order_status'] in ('FILLED', 'PARTIALLY_FILLED')):
         if ed['order_status'] == 'FILLED':
-            # Remove from all_orders and orders lists
+            # Remove from orders dict
             remove_from_orders_lists([ed['order_id']])
         if trade_not_exist(ed['order_id'], ed['trade_id']):
             trade = {"qty": ed['last_executed_quantity'],
@@ -1185,10 +1183,10 @@ def on_order_update_handler(cls, ed):
                      "orderId": ed['order_id'],
                      "price": ed['last_executed_price'],
                      "time": ed['transaction_time']}
-            #  Append to all_trades and trades list
-            if len(cls.trades) > TRADES_LIST_LIMIT:
-                del cls.trades[0]
+            #  Append to trades list
             cls.trades.append(PrivateTrade(trade))
+            # noinspection PyStatementEffect
+            cls.trades[-TRADES_LIST_LIMIT:]
             cumulative_quantity = Decimal(ed['cumulative_filled_quantity'])
             saved_filled_quantity = order_trades_sum(ed['order_id'])
             if ed['order_status'] == 'FILLED' and saved_filled_quantity != cumulative_quantity:
@@ -1203,7 +1201,6 @@ def on_order_update_handler(cls, ed):
                 #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
                 # Append to list
                 cls.trades.append(PrivateTrade(trade))
-                cls.all_trades.append(PrivateTrade(trade))
             cls.strategy.on_order_update(OrderUpdate(ed))
 
 
@@ -1266,7 +1263,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                     del cls.trades[0]
                 cls.trades.append(PrivateTrade(trade))
             if executed_qty < orig_qty:
-                cls.orders[order.id] =  order
+                cls.orders[order.id] = order
             if ms.MODE == 'TC' and cls.strategy.start_collect:
                 cls.strategy.open_orders_snapshot()
             elif ms.MODE == 'S':
@@ -1308,7 +1305,7 @@ async def cancel_order_call(_id: int):
         cls.strategy.message_log(f"Exception on cancel order call for {_id}:\n{_ex}")
     else:
         # print(f"cancel_order_call.result: {result}")
-        # Remove from all_orders and orders lists
+        # Remove from orders lists
         if result:
             remove_from_orders_lists([_id])
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
@@ -1336,7 +1333,7 @@ async def cancel_all_order_call(_id: int):
         cls.strategy.message_log(f"Exception on cancel all orders for {_id}:\n{_ex}")
     else:
         # print(f"cancel_all_order_call.result: {result}")
-        # Remove from all_orders and orders lists
+        # Remove from orders lists
         if result and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
@@ -1369,11 +1366,14 @@ async def fetch_order(_id: int, _filled_update_call: bool = False):
     else:
         cls.strategy.message_log(f"For order {_id} fetched status is {result.get('status')}",
                                  log_level=LogLevel.INFO)
-        if _filled_update_call and result and result.get('status') == 'CANCELED':
+        if _filled_update_call and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
             cls.canceled_order_id.append(_id)
             cls.strategy.message_log(f"Order {_id} has already been deleted", color=ms.Style.GREEN)
             cls.strategy.on_cancel_order_success(_id, Order(result))
+        elif not result:
+            remove_from_orders_lists([_id])
+            cls.strategy.message_log(f"Order {_id} status fixed", color=ms.Style.GREEN)
         return result
 
 

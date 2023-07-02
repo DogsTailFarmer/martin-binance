@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.2-2"
+__version__ = "1.3.2-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1448,7 +1448,7 @@ class Strategy(StrategyBase):
             # Wait tp order and cancel in on_cancel_order_success and restart
             self.tp_cancel = True
             return
-        ff, fs, _, _ = self.get_free_assets()
+        ff, fs, _, _ = self.get_free_assets(mode='available')
         # Save initial funds and cycle statistics to .db for external analytics
         if self.first_run:
             if MODE in ('T', 'TC'):
@@ -1718,6 +1718,7 @@ class Strategy(StrategyBase):
             if i:
                 tr_arr.append(i)
             n += 1
+        # noinspection PyTypeChecker
         return statistics.geometric_mean(tr_arr)
 
     def adx(self, adx_candle_size_in_minutes: int, adx_number_of_candles: int, adx_period: int) -> Dict[str, float]:
@@ -1841,7 +1842,7 @@ class Strategy(StrategyBase):
         Get free asset for current trade pair
         :param fs:
         :param ff:
-        :param mode: 'total', 'free', 'reserved'
+        :param mode: 'total', 'available', 'reserved', 'free'
         :param backtest: bool
         :return: (ff, fs, ft, free_asset: str)
         """
@@ -1855,7 +1856,7 @@ class Strategy(StrategyBase):
                 if mode == 'total':
                     ff = f2d(_ff.total_for_currency)
                     fs = f2d(_fs.total_for_currency)
-                elif mode == 'free':
+                elif mode == 'available':
                     ff = f2d(_ff.available)
                     fs = f2d(_fs.available)
                 elif mode == 'reserved':
