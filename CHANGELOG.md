@@ -1,7 +1,7 @@
 ## v1.3.3 2023-07-04
 ### Added for new features
 * Send alarm (to db) if exist unreleased grid orders or hold TP
-* Up requirements for exchanges-wrapper to 1.3.2
+* Up requirements for exchanges-wrapper to 1.3.3
 
 ## v1.3.2-3 2023-07-02
 ### Fix
