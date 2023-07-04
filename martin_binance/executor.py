@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.2-3"
+__version__ = "1.3.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -906,7 +906,19 @@ class Strategy(StrategyBase):
                             and not self.tp_hold
                             and not self.tp_was_filled
                             and not self.orders_init)
-            if MODE in ('T', 'TC') and stable_state:
+            if (MODE in ('T', 'TC')
+                    and (
+                    stable_state
+                    or (
+                    self.grid_hold.get('timestamp')
+                    and int(self.local_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+                    )
+                    or (
+                    self.tp_order_hold.get('timestamp')
+                    and int(self.local_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+                    )
+                )
+            ):
                 orders = self.get_buffered_open_orders()
                 order_buy = len([i for i in orders if i.buy is True])
                 order_sell = len([i for i in orders if i.buy is False])
@@ -995,7 +1007,7 @@ class Strategy(StrategyBase):
                                          f"WSS status: {ticker_update}s\n"
                                          f"From start {ct}\n"
                                          f"Delay: {time_diff} sec", tlg=True)
-                    elif self.tp_order_hold['timestamp']:
+                    elif self.tp_order_hold.get('timestamp'):
                         time_diff = int(self.local_time() - self.tp_order_hold['timestamp'])
                         if time_diff > HOLD_TP_ORDER_TIMEOUT:
                             self.message_log(f"Exist hold TP order for"
