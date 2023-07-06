@@ -1,4 +1,4 @@
-<p align="center"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="250"></p>
+<p align="center"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="200"></p>
 <h3 align="center">Profitable, fault-tolerant, adaptable to the market</h3>
 
 ***
@@ -11,7 +11,7 @@
 <h4 align="center">Other crypto exchanges available through multi-exchange terminal MARGIN https://margin.de</h4>
 
 ***
-<h4 align="center" vertical-align="top">martin-binance <a href="https://badge.fury.io/py/martin-binance"><img style="vertical-align:middle" src="https://badge.fury.io/py/martin-binance.svg" alt="PyPI version" height="20"></a> <--> exchanges-wrapper <a href="https://badge.fury.io/py/exchanges-wrapper"><img style="vertical-align:middle" src="https://badge.fury.io/py/exchanges-wrapper.svg" alt="PyPI version" height="20"></a></h4>
+<h4 align="center" vertical-align="top">`martin-binance` <a href="https://pypi.org/project/martin-binance/"><img align="center" src="https://img.shields.io/pypi/v/martin-binance" height="23" alt="PyPI version"></a> <--> `exchanges-wrapper` <a href="https://pypi.org/project/exchanges-wrapper/"><img align="center" src="https://img.shields.io/pypi/v/exchanges-wrapper" height="23" alt="PyPI version"></a>
 
 ***
 <h1 align="center"><a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability"><img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>

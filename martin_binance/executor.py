@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3"
+__version__ = "1.3.3-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -908,16 +908,16 @@ class Strategy(StrategyBase):
                             and not self.orders_init)
             if (MODE in ('T', 'TC')
                     and (
-                    stable_state
-                    or (
-                    self.grid_hold.get('timestamp')
-                    and int(self.local_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+                        stable_state
+                        or (
+                        self.grid_hold.get('timestamp')
+                        and int(self.local_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+                        )
+                        or (
+                        self.tp_order_hold.get('timestamp')
+                        and int(self.local_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+                        )
                     )
-                    or (
-                    self.tp_order_hold.get('timestamp')
-                    and int(self.local_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
-                    )
-                )
             ):
                 orders = self.get_buffered_open_orders()
                 order_buy = len([i for i in orders if i.buy is True])
@@ -1868,7 +1868,7 @@ class Strategy(StrategyBase):
                 if mode == 'total':
                     ff = f2d(_ff.total_for_currency)
                     fs = f2d(_fs.total_for_currency)
-                elif mode == 'available':
+                elif mode in ('available', 'free'):
                     ff = f2d(_ff.available)
                     fs = f2d(_fs.available)
                 elif mode == 'reserved':

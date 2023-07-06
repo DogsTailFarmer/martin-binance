@@ -1,3 +1,12 @@
+## v1.3.3-1 2023-07-06
+### Fix
+* `executor.get_free_assets(mode='free')`: incorrect balance for opposite asset (always 0)
+* `executor.save_strategy_state()`: try fix `Closing bracket does not match visual indentation FLK-E124`
+* `margin_wrapper.restore_state_before_backtesting()`: tmp upgrade issue - convert cls.orders to dict
+
+### Update
+* `README.md`: some design correction
+
 ## v1.3.3 2023-07-04
 ### Added for new features
 * Send alarm (to db) if exist unreleased grid orders or hold TP

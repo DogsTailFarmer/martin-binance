@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3"
+__version__ = "1.3.3-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1620,7 +1620,17 @@ def restore_state_before_backtesting(cls):
     saved_state = load_file(cls.state_file)
     cls.order_id = json.loads(saved_state.pop(ms_order_id, "0"))
     cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
-    cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '{}'))
+
+    # TODO change after update and restart
+    # cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '{}'))
+    #
+    _orders_from_save = jsonpickle.decode(saved_state.pop(ms_orders, '{}'), keys=True)
+    if isinstance(_orders_from_save, list):
+        for _o in _orders_from_save:
+            cls.orders[_o.id] = _o
+    else:
+        cls.orders = _orders_from_save
+    #
     orders = json.loads(saved_state.get('orders'))
     # Restore initial state
     cls.strategy.cycle_buy = json.loads(saved_state.get('cycle_buy'))
