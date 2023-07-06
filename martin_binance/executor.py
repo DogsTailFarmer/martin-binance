@@ -906,19 +906,18 @@ class Strategy(StrategyBase):
                             and not self.tp_hold
                             and not self.tp_was_filled
                             and not self.orders_init)
-            if (MODE in ('T', 'TC')
-                    and (
-                        stable_state
-                        or (
-                        self.grid_hold.get('timestamp')
-                        and int(self.local_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+            if (MODE in ('T', 'TC') and
+                   (stable_state or
+                        (
+                        self.grid_hold.get('timestamp') and
+                        int(self.local_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+                        ) or
+                        (
+                        self.tp_order_hold.get('timestamp') and
+                        int(self.local_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
                         )
-                        or (
-                        self.tp_order_hold.get('timestamp')
-                        and int(self.local_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
-                        )
-                    )
-            ):
+                   )
+               ):
                 orders = self.get_buffered_open_orders()
                 order_buy = len([i for i in orders if i.buy is True])
                 order_sell = len([i for i in orders if i.buy is False])
