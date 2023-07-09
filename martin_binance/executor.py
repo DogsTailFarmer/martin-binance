@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-1"
+__version__ = "1.3.3-2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -630,6 +630,8 @@ class Strategy(StrategyBase):
         "orders_grid",
         "orders_init",
         "orders_hold",
+        "orders_save",
+        "orders_save_bulk",
         # Take profit variables
         "tp_order_id",
         "tp_wait_id",
@@ -704,7 +706,6 @@ class Strategy(StrategyBase):
         "order_q",
         "order_q_placed",
         "martin",
-        "orders_save",
         "first_run",
         "grid_remove",
         "heartbeat_counter",
@@ -726,6 +727,8 @@ class Strategy(StrategyBase):
         self.orders_grid = Orders()  # + List of grid orders
         self.orders_init = Orders()  # - List of initial grid orders
         self.orders_hold = Orders()  # + List of grid orders for later place
+        self.orders_save = Orders()  # + Save for the time of cancellation
+        self.orders_save_bulk = set()  # - Save for the time of bulk cancellation
         # Take profit variables
         self.tp_order_id = None  # + Take profit order id
         self.tp_wait_id = None  # -
@@ -800,7 +803,6 @@ class Strategy(StrategyBase):
         self.order_q = None  # + Adaptive order quantity
         self.order_q_placed = False  # - Flag initial number of orders placed
         self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
-        self.orders_save = Orders()  # + Save for cancel time
         self.first_run = True  # -
         self.grid_remove = None  # - Flag when starting cancel grid orders
         self.heartbeat_counter = 0  # -
@@ -2939,6 +2941,8 @@ class Strategy(StrategyBase):
         if self.grid_remove is None:
             self.message_log("cancel_grid: Started", log_level=LogLevel.DEBUG)
             self.grid_remove = True
+            if cancel_all and STANDALONE and MODE in ('T', 'TC') and not self.tp_order_id:
+                self.orders_save_bulk.update(self.orders_grid.get_id_list())
         if self.grid_remove:
             # Temporary save and clear hold orders avoid placing them
             if self.orders_hold:
@@ -2953,16 +2957,16 @@ class Strategy(StrategyBase):
                 _id = self.orders_grid.orders_list[0]['id']
                 self.message_log(f"cancel_grid order: {_id}", log_level=LogLevel.DEBUG)
                 self.grid_order_canceled = _id
-                if cancel_all and STANDALONE and MODE in ('T', 'TC'):
+                if cancel_all and STANDALONE and MODE in ('T', 'TC') and not self.tp_order_id:
                     self.cancel_all_order(_id)
                 else:
                     self.cancel_order(_id)
             elif self.grid_remove:
                 self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
-                self.grid_remove = None
-                self.order_q_placed = None
                 sum_amount = self.orders_save.sum_amount(self.cycle_buy) if self.grid_update_started else Decimal('0.0')
                 self.orders_save.orders_list.clear()
+                self.grid_remove = None
+                self.order_q_placed = None
                 if self.tp_was_filled:
                     self.grid_update_started = None
                     self.after_filled_tp(one_else_grid=False)
@@ -3454,23 +3458,45 @@ class Strategy(StrategyBase):
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
 
-    def on_cancel_order_success(self, order_id: int, canceled_order: Order, cancel_all=False) -> None:
+    def on_cancel_order_success(
+            self,
+            order_id: int,
+            canceled_order: Order,
+            cancel_all=False,
+            call_next=True,
+            restore=False
+    ) -> None:
         if self.orders_grid.exist(order_id):
             self.message_log(f"Processing canceled grid order {order_id}", log_level=LogLevel.INFO)
             self.part_amount.pop(order_id, None)
             self.grid_order_canceled = None
             self.orders_grid.remove(order_id)
-            save = True
-            for o in self.get_buffered_completed_trades():
-                if o.order_id == order_id:
-                    save = False
-                    break
-            if save:
-                self.orders_save.append(canceled_order.id,
-                                        canceled_order.buy,
-                                        f2d(canceled_order.amount),
-                                        f2d(canceled_order.price))
-            self.cancel_grid(cancel_all=cancel_all)
+            self.orders_save_bulk.discard(order_id)
+            if restore:
+                self.message_log(f"Bulk canceled grid order {order_id} restored", log_level=LogLevel.INFO)
+
+                self.orders_hold.append(
+                    canceled_order.id,
+                    canceled_order.buy,
+                    f2d(canceled_order.amount),
+                    f2d(canceled_order.price)
+                )
+
+                self.orders_hold.sort(self.cycle_buy)
+                self.order_q_placed = False
+            else:
+                save = True
+                for o in self.get_buffered_completed_trades():
+                    if o.order_id == order_id:
+                        save = False
+                        break
+                if save:
+                    self.orders_save.append(canceled_order.id,
+                                            canceled_order.buy,
+                                            f2d(canceled_order.amount),
+                                            f2d(canceled_order.price))
+            if call_next:
+                self.cancel_grid(cancel_all=cancel_all)
         elif order_id == self.cancel_order_id:
             self.message_log(f"Processing canceled TP order {order_id}", log_level=LogLevel.INFO)
             self.cancel_order_id = None
