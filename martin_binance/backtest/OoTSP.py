@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1-2"
+__version__ = "1.3.3-6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -61,13 +61,13 @@ def main():
         ),
         inquirer.List(
             "mode",
-            message="New study session or optimization history plot from saved one",
-            choices=["New", "Plot from saved"],
+            message="New study session or analise from saved one",
+            choices=["New", "Analise saved study session"],
         ),
         inquirer.Text(
             "n_trials",
             message="Enter number of cycles, from 50 to 500",
-            ignore=lambda x: x["mode"] == "Plot from saved",
+            ignore=lambda x: x["mode"] == "Analise saved study session",
             default='150',
             validate=lambda _, c: 10 <= int(c) <= 500,
         ),
@@ -91,27 +91,49 @@ def main():
         study.optimize(objective, n_trials=int(answers.get('n_trials', '0')))
         print_study_result(study)
         print(f"Study instance saved to {storage_name} for later use")
-    else:
+    elif answers.get('mode') == 'Analise saved study session':
         study = optuna.load_study(study_name=study_name, storage=storage_name)
-    #
-    i_params = print_study_result(study)
-    for index, p in enumerate(i_params.items()):
-        ii_params.append(p[0])
-        if index == 2:
-            break
-    #
-    try:
-        fig = vis.plot_optimization_history(study)
-        fig.show()
 
-        contour_plot = vis.plot_contour(study, params=ii_params)
-        contour_plot.show()
+        while 1:
 
-        slice_plot = vis.plot_slice(study, params=ii_params)
-        slice_plot.show()
-    except ImportError:
-        print("Can't find GUI, you can copy study instance to another environment for analyze it")
+            questions = [
+                inquirer.List(
+                    "mode",
+                    message="Make a choice",
+                    choices=["Plot from saved", "Get parameters for specific trial", "Exit"],
+                ),
+                inquirer.Text(
+                    "n_trial",
+                    message="Enter the trial number",
+                    ignore=lambda x: x["mode"] in ("Plot from saved", "Exit"),
+                ),
+            ]
 
+            answers = inquirer.prompt(questions, theme=GreenPassion())
+            if answers.get('mode') == 'Plot from saved':
+                i_params = print_study_result(study)
+                for index, p in enumerate(i_params.items()):
+                    ii_params.append(p[0])
+                    if index == 2:
+                        break
+                #
+                try:
+                    fig = vis.plot_optimization_history(study)
+                    fig.show()
+                    contour_plot = vis.plot_contour(study, params=ii_params)
+                    contour_plot.show()
+                    slice_plot = vis.plot_slice(study, params=ii_params)
+                    slice_plot.show()
+                except ImportError:
+                    print("Can't find GUI, you can copy study instance to another environment for analyze it")
+            elif answers.get('mode') == 'Get parameters for specific trial':
+                trial = study.get_trials()[int(answers.get('n_trial', '0'))]
+                print(trial.number)
+                print(trial.state)
+                print(trial.value)
+                print(trial.params)
+            else:
+                break
 
 def print_study_result(study):
     print(f"Optimal parameters: {study.best_params} for get {study.best_value}")

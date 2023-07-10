@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-2"
+__version__ = "1.3.3-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -3247,7 +3247,6 @@ class Strategy(StrategyBase):
                         self.tp_cancel_from_grid_handler = False
                         self.grid_handler()
                     else:
-                        self.grid_remove = True
                         self.cancel_grid(cancel_all=True)
                 else:
                     self.message_log('Wild order, do not know it', tlg=True)
@@ -3412,8 +3411,7 @@ class Strategy(StrategyBase):
                         if self.start_hold:
                             self.message_log('Release hold Start, continue remove grid orders', color=Style.B_WHITE)
                             self.start_hold = False
-                            self.grid_remove = True
-                            self.cancel_grid()
+                            self.cancel_grid(cancel_all=True)
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
                 self.tp_order_id = order.id
@@ -3471,30 +3469,23 @@ class Strategy(StrategyBase):
             self.part_amount.pop(order_id, None)
             self.grid_order_canceled = None
             self.orders_grid.remove(order_id)
-            self.orders_save_bulk.discard(order_id)
             if restore:
-                self.message_log(f"Bulk canceled grid order {order_id} restored", log_level=LogLevel.INFO)
-
                 self.orders_hold.append(
                     canceled_order.id,
                     canceled_order.buy,
                     f2d(canceled_order.amount),
                     f2d(canceled_order.price)
                 )
-
                 self.orders_hold.sort(self.cycle_buy)
                 self.order_q_placed = False
+                self.message_log(f"Bulk canceled grid order {order_id} restored", log_level=LogLevel.INFO)
             else:
-                save = True
-                for o in self.get_buffered_completed_trades():
-                    if o.order_id == order_id:
-                        save = False
-                        break
-                if save:
-                    self.orders_save.append(canceled_order.id,
-                                            canceled_order.buy,
-                                            f2d(canceled_order.amount),
-                                            f2d(canceled_order.price))
+                self.orders_save.append(canceled_order.id,
+                                        canceled_order.buy,
+                                        f2d(canceled_order.amount),
+                                        f2d(canceled_order.price))
+                if cancel_all:
+                    self.orders_save_bulk.discard(order_id)
             if call_next:
                 self.cancel_grid(cancel_all=cancel_all)
         elif order_id == self.cancel_order_id:

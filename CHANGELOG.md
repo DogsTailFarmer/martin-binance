@@ -1,3 +1,7 @@
+## v1.3.3-6 2023-07-xx
+### Added for new features
+* `OoTSP.py`: add interactive option *Get parameters for specific trial*
+
 ## v1.3.3-2 2023-07-xx
 ### Fix
 Processing of the situation when at bulk cancel of the grid orders and one or more of orders is FILLED.

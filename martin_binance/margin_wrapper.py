@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-2"
+__version__ = "1.3.3-3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1069,8 +1069,8 @@ async def buffered_orders():
                 cls.strategy.message_log(f"Check bulk canceled order(s): {cls.strategy.orders_save_bulk}",
                                          log_level=LogLevel.WARNING, tlg=False)
                 for _id in cls.strategy.orders_save_bulk:
-                    cls.strategy.orders_save_bulk.discard(_id)
                     await fetch_order(_id, _filled_update_call=False, _restore=True)
+                cls.strategy.orders_save_bulk.clear()
                 cls.bulk_orders_cancel.clear()
 
             if diff_id or part_id:
