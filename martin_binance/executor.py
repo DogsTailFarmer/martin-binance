@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-5"
+__version__ = "1.3.3-7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -3531,7 +3531,10 @@ class Strategy(StrategyBase):
         open_orders = self.get_buffered_open_orders()
         if any(i.id == order_id for i in open_orders):
             self.message_log(f"On cancel order {order_id} {error}, retry", LogLevel.ERROR)
-            self.cancel_order(order_id)
+            if self.grid_remove and not self.tp_order_id:
+                self.cancel_grid(cancel_all=True)
+            else:
+                self.cancel_order(order_id)
         elif not STANDALONE:
             self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
             if self.orders_grid.exist(order_id):
