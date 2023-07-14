@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-12"
+__version__ = "1.3.3-14"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -996,7 +996,7 @@ async def buffered_orders():
     cls = StrategyBase
     exch_orders = {}
     save_orders_id = []
-    part_id = []
+    diff_id = set()
     restore = False
     run = False
     while not run:
@@ -1031,7 +1031,7 @@ async def buffered_orders():
                 else:
                     cls.orders = _orders_from_save
                 #
-                cls.strategy.restore_strategy_state(cls.last_state)
+                cls.strategy.restore_strategy_state(cls.last_state, restore=False)
 
             if restore:
                 cls.strategy.message_log("Trying restore saved state after lost connection to host",
@@ -1048,7 +1048,7 @@ async def buffered_orders():
                 exch_orders[_id] = Order(order)
                 if (order.get('status', None) == 'PARTIALLY_FILLED'
                         and order_trades_sum(_id) < Decimal(order['executedQty'])):
-                    part_id.append(_id)
+                    diff_id.add(_id)
             # Add saved orders id's
             save_orders_id.extend(list(cls.orders))
             # Add TP id
@@ -1057,7 +1057,7 @@ async def buffered_orders():
             # print(f"buffered_orders.save_orders_id: {save_orders_id}")
 
             # Missed fill event list
-            diff_id = list(set(save_orders_id).difference(set(exch_orders)))
+            diff_id.update(set(save_orders_id).difference(set(exch_orders)))
             # print(f"buffered_orders.diff_id: {diff_id}")
 
             if not cls.strategy.grid_remove and cls.strategy.orders_save_bulk:
@@ -1065,14 +1065,18 @@ async def buffered_orders():
                                          log_level=LogLevel.WARNING, tlg=False)
                 for _id in cls.strategy.orders_save_bulk:
                     await fetch_order(_id, _filled_update_call=False, _restore=True)
+                    diff_id.discard(_id)
                 cls.strategy.orders_save_bulk.clear()
                 cls.bulk_orders_cancel.clear()
 
-            if diff_id or part_id:
-                cls.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id + part_id},"
+            if diff_id:
+                cls.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id},"
                                          f" checking it", log_level=LogLevel.WARNING, tlg=False)
-                for _id in set(diff_id + part_id):
+                for _id in diff_id:
                     await fetch_order(_id, _filled_update_call=True)
+
+            if cls.last_state:
+                cls.strategy.restore_strategy_state(restore=True)
 
             if ms.MODE == 'TC' and cls.last_state:
                 last_state = cls.strategy.save_strategy_state(return_only=True)
@@ -1084,7 +1088,6 @@ async def buffered_orders():
             exch_orders.clear()
             save_orders_id.clear()
             diff_id.clear()
-            part_id .clear()
             cls.last_state = None
             restore = False
 

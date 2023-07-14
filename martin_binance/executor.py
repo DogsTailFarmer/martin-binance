@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-12"
+__version__ = "1.3.3-14"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1157,7 +1157,7 @@ class Strategy(StrategyBase):
                     'tp_wait_id': json.dumps(self.tp_wait_id)}
         return {}
 
-    def restore_strategy_state(self, strategy_state: Dict[str, str] = None) -> None:
+    def restore_strategy_state(self, strategy_state: Dict[str, str] = None, restore=True) -> None:
         if strategy_state:
             # Restore from file if lose state only
             self.message_log("restore_strategy_state from saved state:", log_level=LogLevel.DEBUG)
@@ -1211,225 +1211,232 @@ class Strategy(StrategyBase):
             self.first_run = False
             self.start_after_shift = False if GRID_ONLY and USE_ALL_FUND else self.start_after_shift
         #
-        self.start_process()
-        if self.command == 'stopped':
-            self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
-            return
-        self.avg_rate = f2d(self.get_buffered_ticker().last_price)
-        #
-        open_orders = self.get_buffered_open_orders()
-        tp_order = None
-        # Separate TP order
-        if self.tp_order_id:
-            for i, o in enumerate(open_orders):
-                if o.id == self.tp_order_id:
-                    tp_order = open_orders[i]
-                    del open_orders[i]  # skipcq: PYL-E1138
-                    break
-        # Possible strategy states in compare with saved one
-        grid_orders_len = len(self.orders_grid)
-        open_orders_len = len(open_orders)
-        grid_no_change = grid_orders_len == open_orders_len  # Grid No change
-        grid_less = grid_orders_len > open_orders_len > 0
-        grid_hold = open_orders_len == 0 and self.orders_hold
-        grid_more = grid_orders_len < open_orders_len  # Grid more, some order(s) was placed
-        grid_filled = grid_orders_len > 0 and open_orders_len == 0 and not self.orders_hold and not self.orders_save
-        tp_no_change = (tp_order and self.tp_order_id) or (not tp_order and not self.tp_order_id)
-        tp_placed = tp_order and not self.tp_order_id
-        tp_filled = not tp_order and self.tp_order_id
-        no_orders = grid_orders_len == 0 and not self.tp_order_id
-        #
-        part_amount_first = Decimal('0')
-        part_amount_second = Decimal('0')
-        if grid_filled:
-            for v in self.part_amount.values():
-                part_amount_first += v[0]
-                part_amount_second += v[1]
-        #
-        if STANDALONE or (grid_no_change and tp_no_change):
-            if grid_hold:
-                self.message_log("Restore, no grid orders, place from hold now", tlg=True)
-                self.place_grid_part()
-            elif no_orders:
-                self.restart = True
-                self.message_log("Restore, no orders, restart", tlg=True)
-                self.start()
-            elif not GRID_ONLY and not self.tp_order_id and self.check_min_amount():
-                self.message_log("Restore, replace TP", tlg=True)
-                self.place_profit_order()
-            else:
-                self.message_log("Restore, No difference, go work", tlg=True)
-        elif not STANDALONE:
-            # For MARGINE mode compatibility
-            # Variants are processed when the actual order is equal to or less than it should be
-            # Exotic when dropped during grid placement or unconfirmed TP, left for later
-            if grid_filled and tp_filled:
-                self.message_log("Restore, all grid orders and TP was filled", tlg=True)
-                # Get actual parameter of filled tp order
-                market_order = self.get_buffered_completed_trades(True)
-                amount_first = Decimal('0')
-                amount_second = Decimal('0')
-                for o in market_order:
-                    if o.order_id == self.tp_order_id:
-                        amount_first += f2d(o.amount)
-                        amount_second += f2d(o.amount) * f2d(o.price)
-                if amount_first == 0:
-                    # If execution event was missed
-                    _buy, _amount, _price = self.tp_order
-                    amount_first = self.round_truncate(_amount, base=True)
-                    amount_second = self.round_truncate(_amount * _price, base=False)
-                self.tp_was_filled = (amount_first, amount_second, True)
-                self.tp_order_id = None
-                self.tp_order = ()
-                self.message_log(f"restore_strategy_state.was_filled_tp: {self.tp_was_filled}", log_level=LogLevel.DEBUG)
-                # Calculate sum trade amount for both currency
-                amount_first = Decimal('0')
-                amount_second = Decimal('0')
-                for i in self.orders_grid:
-                    amount_first += i['amount']
-                    amount_second += i['amount'] * i['price']
-                    print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
-                amount_first += part_amount_first
-                amount_second += part_amount_second
-                self.part_amount.clear()
-                print(f"Total grid amount first: {amount_first}, second: {amount_second}")
-                # Clear list of grid order
-                self.orders_grid.orders_list.clear()
-                self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
-
-            elif grid_filled and tp_no_change:
-                self.message_log('Restore, No grid orders -> Reverse', tlg=True)
-                self.shift_grid_threshold = None
-                # Admit that missing orders were executed on conditions no worse than those saved
-                # Calculate sum trade amount for both currency
-                amount_first = Decimal('0')
-                amount_second = Decimal('0')
-                for i in self.orders_grid:
-                    amount_first += i['amount']
-                    amount_second += i['amount'] * i['price']
-                    print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
-                amount_first += part_amount_first
-                amount_second += part_amount_second
-                self.part_amount.clear()
-                print(f"Total amount first: {amount_first}, second: {amount_second}")
-                # Clear list of grid order
-                self.orders_grid.orders_list.clear()
-                self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
-
-            elif grid_less and tp_filled:
-                self.message_log("Restore, some grid orders and TP was filled", tlg=True)
-                # Get actual parameter of filled tp order
-                market_order = self.get_buffered_completed_trades(True)
-                amount_first = Decimal('0')
-                amount_second = Decimal('0')
-                for o in market_order:
-                    if o.order_id == self.tp_order_id:
-                        amount_first += f2d(o.amount)
-                        amount_second += f2d(o.amount) * f2d(o.price)
-                        print(f"order_id={o.order_id}, first: {o.amount}, price: {o.price}")
-                if amount_first == 0:
-                    # If execution event was missed
-                    _buy, _amount, _price = self.tp_order
-                    amount_first = self.round_truncate(f2d(_amount), base=True)
-                    amount_second = self.round_truncate(f2d(_amount * _price), base=False)
-                self.tp_was_filled = (amount_first, amount_second, True)
-                self.tp_order_id = None
-                self.tp_order = ()
-                self.message_log(f"restore_strategy_state.was_filled_tp: {self.tp_was_filled}", log_level=LogLevel.DEBUG)
-                # Calculate sum trade amount for both currency
-                exch_orders_id = []
-                save_orders_id = []
-                for i in open_orders:
-                    exch_orders_id.append(i.id)
-                for i in self.orders_grid:
-                    save_orders_id.append(i.get('id'))
-                print(f"restore_strategy_state.exch_orders_id: {exch_orders_id}")
-                print(f"restore_strategy_state.save_orders_id: {save_orders_id}")
-                diff_id = list(set(save_orders_id).difference(exch_orders_id))
-                print(f"Executed order id is: {diff_id}")
-                # Calculate sum trade amount for both currency
-                amount_first = Decimal('0')
-                amount_second = Decimal('0')
-                for i in self.orders_grid:
-                    if i['id'] in diff_id:
-                        amount_first += i['amount']
-                        amount_second += i['amount'] * i['price']
-                        print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
-                        part_amount_first, part_amount_second = self.part_amount.pop(i['id'], (Decimal('0'), Decimal('0')))
-                amount_first += part_amount_first
-                amount_second += part_amount_second
-                self.message_log(f"Total amount first: {amount_first:f}, second: {amount_second:f}", color=Style.B_WHITE)
-                # Remove from list of grid order
-                for i in diff_id:
-                    self.orders_grid.remove(i)
-                # Calculate trade amount with Fee
-                amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
-                # Calculate cycle sum trading for both currency
-                self.sum_amount_first += amount_first_fee
-                self.sum_amount_second += amount_second_fee
-                if open_orders_len == 0 and self.orders_hold:
+        if restore:
+            self.start_process()
+            if self.command == 'stopped':
+                self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
+                return
+            self.avg_rate = f2d(self.get_buffered_ticker().last_price)
+            #
+            open_orders = self.get_buffered_open_orders()
+            tp_order = None
+            # Separate TP order
+            if self.tp_order_id:
+                for i, o in enumerate(open_orders):
+                    if o.id == self.tp_order_id:
+                        tp_order = open_orders[i]
+                        del open_orders[i]  # skipcq: PYL-E1138
+                        break
+            # Possible strategy states in compare with saved one
+            grid_orders_len = len(self.orders_grid)
+            open_orders_len = len(open_orders)
+            grid_no_change = grid_orders_len == open_orders_len  # Grid No change
+            grid_less = grid_orders_len > open_orders_len > 0
+            grid_hold = open_orders_len == 0 and self.orders_hold
+            grid_more = grid_orders_len < open_orders_len  # Grid more, some order(s) was placed
+            grid_filled = grid_orders_len > 0 and open_orders_len == 0 and not self.orders_hold and not self.orders_save
+            tp_no_change = (tp_order and self.tp_order_id) or (not tp_order and not self.tp_order_id)
+            tp_placed = tp_order and not self.tp_order_id
+            tp_filled = not tp_order and self.tp_order_id
+            no_orders = grid_orders_len == 0 and not self.tp_order_id
+            #
+            part_amount_first = Decimal('0')
+            part_amount_second = Decimal('0')
+            if grid_filled:
+                for v in self.part_amount.values():
+                    part_amount_first += v[0]
+                    part_amount_second += v[1]
+            #
+            if STANDALONE or (grid_no_change and tp_no_change):
+                if grid_hold:
+                    self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                     self.place_grid_part()
-                self.after_filled_tp(one_else_grid=True)
-
-            elif grid_less:
-                self.message_log("Restore, Less grid orders -> replace tp order", tlg=True)
-                self.shift_grid_threshold = None
-                exch_orders_id = []
-                save_orders_id = []
-                for i in open_orders:
-                    exch_orders_id.append(i.id)
-                for i in self.orders_grid:
-                    save_orders_id.append(i.get('id'))
-                print(f"restore_strategy_state.exch_orders_id: {exch_orders_id}")
-                print(f"restore_strategy_state.save_orders_id: {save_orders_id}")
-                diff_id = list(set(save_orders_id).difference(exch_orders_id))
-                print(f"Executed order id is: {diff_id}")
-                # Calculate sum trade amount for both currency
-                amount_first = Decimal('0')
-                amount_second = Decimal('0')
-                for i in self.orders_grid:
-                    if i['id'] in diff_id:
+                elif no_orders:
+                    self.restart = True
+                    self.message_log("Restore, no orders, restart", tlg=True)
+                    self.start()
+                elif not GRID_ONLY and not self.tp_order_id and self.check_min_amount():
+                    self.message_log("Restore, replace TP", tlg=True)
+                    self.place_profit_order()
+                else:
+                    self.message_log("Restore, No difference, go work", tlg=True)
+            elif not STANDALONE:
+                # For MARGINE mode compatibility
+                # Variants are processed when the actual order is equal to or less than it should be
+                # Exotic when dropped during grid placement or unconfirmed TP, left for later
+                if grid_filled and tp_filled:
+                    self.message_log("Restore, all grid orders and TP was filled", tlg=True)
+                    # Get actual parameter of filled tp order
+                    market_order = self.get_buffered_completed_trades(True)
+                    amount_first = Decimal('0')
+                    amount_second = Decimal('0')
+                    for o in market_order:
+                        if o.order_id == self.tp_order_id:
+                            amount_first += f2d(o.amount)
+                            amount_second += f2d(o.amount) * f2d(o.price)
+                    if amount_first == 0:
+                        # If execution event was missed
+                        _buy, _amount, _price = self.tp_order
+                        amount_first = self.round_truncate(_amount, base=True)
+                        amount_second = self.round_truncate(_amount * _price, base=False)
+                    self.tp_was_filled = (amount_first, amount_second, True)
+                    self.tp_order_id = None
+                    self.tp_order = ()
+                    self.message_log(f"restore_strategy_state.was_filled_tp: {self.tp_was_filled}",
+                                     log_level=LogLevel.DEBUG)
+                    # Calculate sum trade amount for both currency
+                    amount_first = Decimal('0')
+                    amount_second = Decimal('0')
+                    for i in self.orders_grid:
                         amount_first += i['amount']
                         amount_second += i['amount'] * i['price']
                         print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
-                        part_amount_first, part_amount_second = self.part_amount.pop(i['id'], (Decimal('0'), Decimal('0')))
-                amount_first += part_amount_first
-                amount_second += part_amount_second
-                self.message_log(f"Total amount first: {amount_first:f}, second: {amount_second:f}", color=Style.B_WHITE)
-                # Remove from list of grid order
-                for i in diff_id:
-                    self.orders_grid.remove(i)
-                self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
+                    amount_first += part_amount_first
+                    amount_second += part_amount_second
+                    self.part_amount.clear()
+                    print(f"Total grid amount first: {amount_first}, second: {amount_second}")
+                    # Clear list of grid order
+                    self.orders_grid.orders_list.clear()
+                    self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
 
-            elif tp_filled:
-                self.message_log('Restore, TP order was filled -> Restart', tlg=True)
-                # Get actual parameter of filled tp order
-                market_order = self.get_buffered_completed_trades(True)
-                amount_first = Decimal('0')
-                amount_second = Decimal('0')
-                for o in market_order:
-                    if o.order_id == self.tp_order_id:
-                        amount_first += f2d(o.amount)
-                        amount_second += f2d(o.amount) * f2d(o.price)
-                        print(f"order_id={o.order_id}, first: {o.amount}, price: {o.price}")
-                if amount_first == 0:
-                    # If execution event was missed
-                    _buy, _amount, _price = self.tp_order
-                    amount_first = self.round_truncate(f2d(_amount), base=True)
-                    amount_second = self.round_truncate(f2d(_amount * _price), base=False)
-                self.tp_was_filled = (amount_first, amount_second, True)
-                self.tp_order_id = None
-                self.tp_order = ()
-                self.cancel_grid(cancel_all=True)
+                elif grid_filled and tp_no_change:
+                    self.message_log('Restore, No grid orders -> Reverse', tlg=True)
+                    self.shift_grid_threshold = None
+                    # Admit that missing orders were executed on conditions no worse than those saved
+                    # Calculate sum trade amount for both currency
+                    amount_first = Decimal('0')
+                    amount_second = Decimal('0')
+                    for i in self.orders_grid:
+                        amount_first += i['amount']
+                        amount_second += i['amount'] * i['price']
+                        print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
+                    amount_first += part_amount_first
+                    amount_second += part_amount_second
+                    self.part_amount.clear()
+                    print(f"Total amount first: {amount_first}, second: {amount_second}")
+                    # Clear list of grid order
+                    self.orders_grid.orders_list.clear()
+                    self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
 
-            elif grid_more and self.orders_init:
-                self.message_log('Restored, some grid order(s) was placed', tlg=True)
+                elif grid_less and tp_filled:
+                    self.message_log("Restore, some grid orders and TP was filled", tlg=True)
+                    # Get actual parameter of filled tp order
+                    market_order = self.get_buffered_completed_trades(True)
+                    amount_first = Decimal('0')
+                    amount_second = Decimal('0')
+                    for o in market_order:
+                        if o.order_id == self.tp_order_id:
+                            amount_first += f2d(o.amount)
+                            amount_second += f2d(o.amount) * f2d(o.price)
+                            print(f"order_id={o.order_id}, first: {o.amount}, price: {o.price}")
+                    if amount_first == 0:
+                        # If execution event was missed
+                        _buy, _amount, _price = self.tp_order
+                        amount_first = self.round_truncate(f2d(_amount), base=True)
+                        amount_second = self.round_truncate(f2d(_amount * _price), base=False)
+                    self.tp_was_filled = (amount_first, amount_second, True)
+                    self.tp_order_id = None
+                    self.tp_order = ()
+                    self.message_log(f"restore_strategy_state.was_filled_tp: {self.tp_was_filled}",
+                                     log_level=LogLevel.DEBUG)
+                    # Calculate sum trade amount for both currency
+                    exch_orders_id = []
+                    save_orders_id = []
+                    for i in open_orders:
+                        exch_orders_id.append(i.id)
+                    for i in self.orders_grid:
+                        save_orders_id.append(i.get('id'))
+                    print(f"restore_strategy_state.exch_orders_id: {exch_orders_id}")
+                    print(f"restore_strategy_state.save_orders_id: {save_orders_id}")
+                    diff_id = list(set(save_orders_id).difference(exch_orders_id))
+                    print(f"Executed order id is: {diff_id}")
+                    # Calculate sum trade amount for both currency
+                    amount_first = Decimal('0')
+                    amount_second = Decimal('0')
+                    for i in self.orders_grid:
+                        if i['id'] in diff_id:
+                            amount_first += i['amount']
+                            amount_second += i['amount'] * i['price']
+                            print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
+                            part_amount_first, part_amount_second = self.part_amount.pop(i['id'],
+                                                                                         (Decimal('0'), Decimal('0')))
+                    amount_first += part_amount_first
+                    amount_second += part_amount_second
+                    self.message_log(f"Total amount first: {amount_first:f}, second: {amount_second:f}",
+                                     color=Style.B_WHITE)
+                    # Remove from list of grid order
+                    for i in diff_id:
+                        self.orders_grid.remove(i)
+                    # Calculate trade amount with Fee
+                    amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
+                    # Calculate cycle sum trading for both currency
+                    self.sum_amount_first += amount_first_fee
+                    self.sum_amount_second += amount_second_fee
+                    if open_orders_len == 0 and self.orders_hold:
+                        self.place_grid_part()
+                    self.after_filled_tp(one_else_grid=True)
 
-            elif tp_placed:
-                self.message_log('Restored, take profit order(s) was placed', tlg=True)
+                elif grid_less:
+                    self.message_log("Restore, Less grid orders -> replace tp order", tlg=True)
+                    self.shift_grid_threshold = None
+                    exch_orders_id = []
+                    save_orders_id = []
+                    for i in open_orders:
+                        exch_orders_id.append(i.id)
+                    for i in self.orders_grid:
+                        save_orders_id.append(i.get('id'))
+                    print(f"restore_strategy_state.exch_orders_id: {exch_orders_id}")
+                    print(f"restore_strategy_state.save_orders_id: {save_orders_id}")
+                    diff_id = list(set(save_orders_id).difference(exch_orders_id))
+                    print(f"Executed order id is: {diff_id}")
+                    # Calculate sum trade amount for both currency
+                    amount_first = Decimal('0')
+                    amount_second = Decimal('0')
+                    for i in self.orders_grid:
+                        if i['id'] in diff_id:
+                            amount_first += i['amount']
+                            amount_second += i['amount'] * i['price']
+                            print(f"id={i['id']}, first: {i['amount']}, price: {i['price']}")
+                            part_amount_first, part_amount_second = self.part_amount.pop(i['id'],
+                                                                                         (Decimal('0'), Decimal('0')))
+                    amount_first += part_amount_first
+                    amount_second += part_amount_second
+                    self.message_log(f"Total amount first: {amount_first:f}, second: {amount_second:f}",
+                                     color=Style.B_WHITE)
+                    # Remove from list of grid order
+                    for i in diff_id:
+                        self.orders_grid.remove(i)
+                    self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
 
-            else:
-                self.message_log('Restored', tlg=True)
+                elif tp_filled:
+                    self.message_log('Restore, TP order was filled -> Restart', tlg=True)
+                    # Get actual parameter of filled tp order
+                    market_order = self.get_buffered_completed_trades(True)
+                    amount_first = Decimal('0')
+                    amount_second = Decimal('0')
+                    for o in market_order:
+                        if o.order_id == self.tp_order_id:
+                            amount_first += f2d(o.amount)
+                            amount_second += f2d(o.amount) * f2d(o.price)
+                            print(f"order_id={o.order_id}, first: {o.amount}, price: {o.price}")
+                    if amount_first == 0:
+                        # If execution event was missed
+                        _buy, _amount, _price = self.tp_order
+                        amount_first = self.round_truncate(f2d(_amount), base=True)
+                        amount_second = self.round_truncate(f2d(_amount * _price), base=False)
+                    self.tp_was_filled = (amount_first, amount_second, True)
+                    self.tp_order_id = None
+                    self.tp_order = ()
+                    self.cancel_grid(cancel_all=True)
+
+                elif grid_more and self.orders_init:
+                    self.message_log('Restored, some grid order(s) was placed', tlg=True)
+
+                elif tp_placed:
+                    self.message_log('Restored, take profit order(s) was placed', tlg=True)
+
+                else:
+                    self.message_log('Restored', tlg=True)
 
     def start(self, profit_f: Decimal = f2d(0), profit_s: Decimal = f2d(0)) -> None:
         self.message_log('Start')
@@ -1694,6 +1701,27 @@ class Strategy(StrategyBase):
                 msg = self.tlg_header + msg
                 self.status_time = self.local_time()
                 self.queue_to_tlg.put(msg)
+
+    def start_process(self):
+        # Init analytic
+        self.connection_analytic = self.connection_analytic or sqlite3.connect(DB_FILE,
+                                                                               check_same_thread=False,
+                                                                               timeout=10)
+        # Create processes for save to .db and send Telegram message
+        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,))
+        self.pr_tlg = Thread(target=telegram, args=(self.queue_to_tlg, self.tlg_header.split('.')[0],))
+        if not self.pr_db.is_alive():
+            self.message_log('Start process for .db save')
+            try:
+                self.pr_db.start()
+            except AssertionError as error:
+                self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
+        if not self.pr_tlg.is_alive():
+            self.message_log('Start process for Telegram')
+            try:
+                self.pr_tlg.start()
+            except AssertionError as error:
+                self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
 
     ##############################################################
     # Technical analysis
@@ -2454,27 +2482,6 @@ class Strategy(StrategyBase):
         else:
             over_price = over_price_coarse
         return over_price
-
-    def start_process(self):
-        # Init analytic
-        self.connection_analytic = self.connection_analytic or sqlite3.connect(DB_FILE,
-                                                                               check_same_thread=False,
-                                                                               timeout=10)
-        # Create processes for save to .db and send Telegram message
-        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,))
-        self.pr_tlg = Thread(target=telegram, args=(self.queue_to_tlg, self.tlg_header.split('.')[0],))
-        if not self.pr_db.is_alive():
-            self.message_log('Start process for .db save')
-            try:
-                self.pr_db.start()
-            except AssertionError as error:
-                self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
-        if not self.pr_tlg.is_alive():
-            self.message_log('Start process for Telegram')
-            try:
-                self.pr_tlg.start()
-            except AssertionError as error:
-                self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
 
     def fee_for_grid(self,
                      amount_first: Decimal,
