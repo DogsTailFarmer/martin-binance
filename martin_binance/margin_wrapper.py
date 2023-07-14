@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-3"
+__version__ = "1.3.3-12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -996,9 +996,7 @@ async def buffered_orders():
     cls = StrategyBase
     exch_orders = {}
     save_orders_id = []
-    diff_id = []
     part_id = []
-    diff_excess_id = []
     restore = False
     run = False
     while not run:
@@ -1044,26 +1042,23 @@ async def buffered_orders():
                 raise UserWarning("Can't fetch open orders")
             StrategyBase.rate_limiter = max(StrategyBase.rate_limiter, _orders.rate_limiter)
 
-            if cls.last_state or restore or not cls.strategy.grid_remove:
-                orders = json_format.MessageToDict(_orders).get('items', [])
-                for order in orders:
-                    _id = int(order['orderId'])
-                    exch_orders[_id] = Order(order)
-                    if (order.get('status', None) == 'PARTIALLY_FILLED'
-                            and order_trades_sum(_id) < Decimal(order['executedQty'])):
-                        part_id.append(_id)
-                # Add TP id
-                if cls.strategy.tp_order_id:
-                    save_orders_id.append(cls.strategy.tp_order_id)
-                # Add grid id's
-                save_orders_id.extend(list(cls.orders))
-                # Missed fill event list
-                diff_id = list(set(save_orders_id).difference(set(exch_orders)))
-                # Erroneously not deleted order
-                diff_excess_id = list(set(exch_orders).
-                                      difference(save_orders_id).
-                                      intersection(cls.canceled_order_id))
-                # print(f"buffered_orders.diff_excess_id: {diff_excess_id}")
+            orders = json_format.MessageToDict(_orders).get('items', [])
+            for order in orders:
+                _id = int(order['orderId'])
+                exch_orders[_id] = Order(order)
+                if (order.get('status', None) == 'PARTIALLY_FILLED'
+                        and order_trades_sum(_id) < Decimal(order['executedQty'])):
+                    part_id.append(_id)
+            # Add saved orders id's
+            save_orders_id.extend(list(cls.orders))
+            # Add TP id
+            if cls.strategy.tp_order_id and cls.strategy.tp_order_id not in save_orders_id:
+                save_orders_id.append(cls.strategy.tp_order_id)
+            # print(f"buffered_orders.save_orders_id: {save_orders_id}")
+
+            # Missed fill event list
+            diff_id = list(set(save_orders_id).difference(set(exch_orders)))
+            # print(f"buffered_orders.diff_id: {diff_id}")
 
             if not cls.strategy.grid_remove and cls.strategy.orders_save_bulk:
                 cls.strategy.message_log(f"Check bulk canceled order(s): {cls.strategy.orders_save_bulk}",
@@ -1076,19 +1071,8 @@ async def buffered_orders():
             if diff_id or part_id:
                 cls.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id + part_id},"
                                          f" checking it", log_level=LogLevel.WARNING, tlg=False)
-                for _id in list(set(diff_id + part_id)):
+                for _id in set(diff_id + part_id):
                     await fetch_order(_id, _filled_update_call=True)
-
-            if diff_excess_id:
-                cls.strategy.message_log(f"Find excess order(s): {diff_excess_id}, checking it",
-                                         log_level=LogLevel.WARNING, tlg=False)
-                for _id in diff_excess_id:
-                    check_status = await fetch_order(_id, _filled_update_call=False)
-                    if check_status and check_status.get('status') not in ('FILLED', 'CANCELED'):
-                        cls.strategy.message_log(f"buffered_orders.create_task: cancel_order: {_id}",
-                                                 log_level=LogLevel.INFO)
-                        loop.create_task(cancel_order_timeout(_id))
-                        loop.create_task(cancel_order_call(_id))
 
             if ms.MODE == 'TC' and cls.last_state:
                 last_state = cls.strategy.save_strategy_state(return_only=True)
@@ -1101,7 +1085,6 @@ async def buffered_orders():
             save_orders_id.clear()
             diff_id.clear()
             part_id .clear()
-            diff_excess_id.clear()
             cls.last_state = None
             restore = False
 
@@ -1221,6 +1204,7 @@ def on_order_update_handler(cls, ed):
 
 async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> None:
     cls = StrategyBase
+    cls.wait_order_id.append(_id)
     try:
         if ms.MODE in ('T', 'TC'):
             ts = time.time()
@@ -1247,7 +1231,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
         cls.strategy.message_log(f"Exception creating order {_id}: {status_code.name}, {ex.details()}")
         if status_code == grpc.StatusCode.FAILED_PRECONDITION:
             # Supress order timeout message
-            cls.wait_order_id.append(_id)
+            cls.wait_order_id.remove(_id)
             cls.strategy.on_place_order_error_string(_id, error=f"FAILED_PRECONDITION: {ex.details()}")
     except Exception as _ex:
         cls.strategy.message_log(f"Exception creating order {_id}: {_ex}")
@@ -1255,7 +1239,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
         # cls.strategy.message_log(f"Create_limit_order.result: {result}",
         #                          log_level=LogLevel.DEBUG, color=ms.Style.UNDERLINE)
         if result:
-            cls.wait_order_id.append(_id)
+            cls.wait_order_id.remove(_id)
             order = Order(result)
             cls.strategy.message_log(
                 f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
@@ -1291,12 +1275,12 @@ async def place_limit_order_timeout(_id):
     await asyncio.sleep(ORDER_TIMEOUT)
     if _id in cls.wait_order_id:
         cls.wait_order_id.remove(_id)
-    else:
         cls.strategy.on_place_order_error_string(_id, 'Place order timeout')
 
 
 async def cancel_order_call(_id: int):
     cls = StrategyBase
+    cls.canceled_order_id.append(_id)
     try:
         if ms.MODE in ('T', 'TC'):
             res = await cls.send_request(cls.stub.CancelOrder, api_pb2.CancelOrderRequest,
@@ -1315,7 +1299,7 @@ async def cancel_order_call(_id: int):
             check_status = await fetch_order(_id, _filled_update_call=True)
             if check_status.get('status') == 'CANCELED':
                 # For stop timeout firing
-                cls.canceled_order_id.append(_id)
+                cls.canceled_order_id.remove(_id)
     except Exception as _ex:
         cls.strategy.message_log(f"Exception on cancel order call for {_id}:\n{_ex}")
     else:
@@ -1324,8 +1308,8 @@ async def cancel_order_call(_id: int):
         if result:
             remove_from_orders_lists([_id])
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
+            cls.canceled_order_id.remove(_id)
             cls.strategy.on_cancel_order_success(_id, Order(result))
-            cls.canceled_order_id.append(_id)
             if ms.MODE == 'TC' and cls.strategy.start_collect:
                 cls.strategy.open_orders_snapshot()
             elif ms.MODE == 'S':
@@ -1334,6 +1318,7 @@ async def cancel_order_call(_id: int):
 
 async def cancel_all_order_call(_id: int):
     cls = StrategyBase
+    cls.canceled_order_id.append(_id)
     try:
         if cls.bulk_orders_cancel.get(_id) is None:
             res = await cls.send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -1351,8 +1336,8 @@ async def cancel_all_order_call(_id: int):
         # Remove from orders lists
         if result and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
+            cls.canceled_order_id.remove(_id)
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
-            cls.canceled_order_id.append(_id)
             cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=True)
 
 
@@ -1361,7 +1346,6 @@ async def cancel_order_timeout(_id):
     await asyncio.sleep(ORDER_TIMEOUT)
     if _id in cls.canceled_order_id:
         cls.canceled_order_id.remove(_id)
-    else:
         cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
 
 
@@ -1383,10 +1367,9 @@ async def fetch_order(_id: int, _filled_update_call=False, _restore=False):
                                  log_level=LogLevel.INFO, color=ms.Style.GREEN)
         if (_filled_update_call or _restore) and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
-            cls.strategy.on_cancel_order_success(_id, Order(result), call_next=False, restore=_restore)
+            cls.strategy.on_cancel_order_success(_id, Order(result), restore=_restore)
         elif not result:
-            remove_from_orders_lists([_id])
-            cls.strategy.message_log(f"Order {_id} status fixed", color=ms.Style.GREEN)
+            raise UserWarning(f"For order {_id} can't get status")
         return result
 
 

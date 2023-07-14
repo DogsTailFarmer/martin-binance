@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-7"
+__version__ = "1.3.3-12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1420,7 +1420,6 @@ class Strategy(StrategyBase):
                 self.tp_was_filled = (amount_first, amount_second, True)
                 self.tp_order_id = None
                 self.tp_order = ()
-                self.grid_remove = True
                 self.cancel_grid(cancel_all=True)
 
             elif grid_more and self.orders_init:
@@ -1883,7 +1882,7 @@ class Strategy(StrategyBase):
         assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
         return ff, fs, ft, assets
 
-    def round_truncate(self, _x: Decimal, base: bool, fee: bool = False, _rounding=ROUND_FLOOR) -> Decimal:
+    def round_truncate(self, _x: Decimal, base: bool = None, fee=False, _rounding=ROUND_FLOOR) -> Decimal:
         if fee:
             round_pattern = "1.01234567"
         else:
@@ -2508,7 +2507,7 @@ class Strategy(StrategyBase):
                     message = f"For grid order Second - fee: {amount_second}"
         if print_info and message:
             self.message_log(message, log_level=LogLevel.DEBUG)
-        return self.round_truncate(amount_first, base=True), self.round_truncate(amount_second, base=False)
+        return self.round_truncate(amount_first, fee=True), self.round_truncate(amount_second, fee=True)
 
     def fee_for_tp(self,
                    amount_first: Decimal,
@@ -2540,7 +2539,7 @@ class Strategy(StrategyBase):
                         log_text = f"Take profit order First - fee: {amount_first}"
             if log_output:
                 self.message_log(log_text, log_level=LogLevel.DEBUG)
-        return self.round_truncate(amount_first, base=True), self.round_truncate(amount_second, base=False)
+        return self.round_truncate(amount_first, fee=True), self.round_truncate(amount_second, fee=True)
 
     def after_filled_tp(self, one_else_grid: bool = False):
         """
@@ -3377,7 +3376,6 @@ class Strategy(StrategyBase):
                     # After place but before accept TP was filled some grid
                     self.after_filled_tp(one_else_grid=True)
                 else:
-                    self.grid_remove = True
                     self.cancel_grid(cancel_all=True)
             else:
                 self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR,
@@ -3456,14 +3454,7 @@ class Strategy(StrategyBase):
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
 
-    def on_cancel_order_success(
-            self,
-            order_id: int,
-            canceled_order: Order,
-            cancel_all=False,
-            call_next=True,
-            restore=False
-    ) -> None:
+    def on_cancel_order_success(self, order_id: int, canceled_order: Order, cancel_all=False, restore=False) -> None:
         if self.orders_grid.exist(order_id):
             self.message_log(f"Processing canceled grid order {order_id}", log_level=LogLevel.INFO)
             self.part_amount.pop(order_id, None)
@@ -3486,7 +3477,7 @@ class Strategy(StrategyBase):
                                         f2d(canceled_order.price))
                 if cancel_all:
                     self.orders_save_bulk.discard(order_id)
-            if call_next:
+            if self.grid_remove:
                 self.cancel_grid(cancel_all=cancel_all)
         elif order_id == self.cancel_order_id:
             self.message_log(f"Processing canceled TP order {order_id}", log_level=LogLevel.INFO)
@@ -3527,38 +3518,4 @@ class Strategy(StrategyBase):
                 self.start()
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
-        # Check all orders on exchange if not exists required
-        open_orders = self.get_buffered_open_orders()
-        if any(i.id == order_id for i in open_orders):
-            self.message_log(f"On cancel order {order_id} {error}, retry", LogLevel.ERROR)
-            if self.grid_remove and not self.tp_order_id:
-                self.cancel_grid(cancel_all=True)
-            else:
-                self.cancel_order(order_id)
-        elif not STANDALONE:
-            self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
-            if self.orders_grid.exist(order_id):
-                self.message_log("It's was grid order, probably filled", LogLevel.WARNING)
-                self.grid_order_canceled = None
-                _buy, _amount, _price = self.orders_grid.get_by_id(order_id)
-                amount_first = _amount
-                amount_second = _amount * _price
-                self.avg_rate = amount_second / amount_first
-                self.message_log(f"Executed amount: First: {amount_first}, Second: {amount_second},"
-                                 f" price: {self.avg_rate}")
-                # Remove grid order with =id from order list
-                self.orders_grid.remove(order_id)
-                self.grid_handler(_amount_first=amount_first, _amount_second=amount_second, after_full_fill=True)
-            elif order_id == self.cancel_order_id:
-                self.message_log("It's was take profit", LogLevel.ERROR)
-                amount_first = self.tp_order[1]
-                amount_second = self.tp_order[1] * self.tp_order[2]
-                self.tp_was_filled = (amount_first, amount_second, True)
-                self.tp_order_id = None
-                self.tp_order = ()
-                self.message_log(f"Was filled TP: {self.tp_was_filled}", log_level=LogLevel.DEBUG)
-                self.cancel_grid()
-            else:
-                self.message_log("It's unknown", LogLevel.ERROR)
-        else:
-            self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
+        self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
