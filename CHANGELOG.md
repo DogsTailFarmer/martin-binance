@@ -2,6 +2,14 @@
 ### Added for new features
 * `OoTSP.py`: add interactive option *Get parameters for specific trial*
 
+### Update
+* Backtesting: 100% repeatability of test and initial sessions at the same parameters is achieved.
+Ticker history includes fulfillment events that may not be in the original stream. I.e. the order was executed
+at price P, and there was no such price in the stream at a given time period. This led to a divergence of the test
+session against the original (reference).
+
+<img height="350" src="https://user-images.githubusercontent.com/77513676/253804148-ed92bf13-ca04-46bf-8714-28380d0c2e52.png" width="350"/>
+
 ## v1.3.3-2 2023-07-xx
 ### Fix
 Processing of the situation when at bulk cancel of the grid orders and one or more of orders is FILLED.
@@ -12,7 +20,8 @@ Processing of the situation when at bulk cancel of the grid orders and one or mo
 
 ## v1.3.3-1 2023-07-06
 ### Fix
-* `executor.get_free_assets(mode='free')`: incorrect balance for opposite asset (always 0)
+* `executor.get_free_assets(mode='free')`: incorrect balance for opposite asset (always 0),
+as a result - a negative value of free funds
 * `executor.save_strategy_state()`: try fix `Closing bracket does not match visual indentation FLK-E124`
 * `margin_wrapper.restore_state_before_backtesting()`: tmp upgrade issue - convert cls.orders to dict
 

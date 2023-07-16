@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-16"
+__version__ = "1.3.3-18"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1189,6 +1189,9 @@ def on_order_update_handler(cls, ed):
                 # Append to list
                 cls.trades.append(PrivateTrade(trade))
             cls.strategy.on_order_update(OrderUpdate(ed))
+            if ms.MODE == 'TC' and cls.strategy.start_collect:
+                cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update({'lastPrice': ed['last_executed_price']})
+                cls.strategy.open_orders_snapshot()
 
 
 async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> None:
@@ -1250,6 +1253,10 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                 if len(cls.trades) > TRADES_LIST_LIMIT:
                     del cls.trades[0]
                 cls.trades.append(PrivateTrade(trade))
+
+                if ms.MODE == 'TC' and cls.strategy.start_collect:
+                    cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update({'lastPrice': str(price)})
+
             if executed_qty < orig_qty:
                 cls.orders[order.id] = order
             if ms.MODE == 'TC' and cls.strategy.start_collect:
