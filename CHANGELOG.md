@@ -1,4 +1,15 @@
-## v1.3.3-6 2023-07-xx
+## v1.3.4b0 2023-07-16
+### Fix
+* Processing of the situation when at bulk cancel of the grid orders and one or more of orders is FILLED.
+  - cancel loop is interrupted
+  - orders with received CANCELED status are restored
+  - status is requested for unconfirmed orders and processing is performed: recovery if status is CANCELED,
+  - normal processing in case of filling in
+
+* `executor.get_free_assets(mode='free')`: incorrect balance for opposite asset (always 0),
+as a result - a negative value of free funds
+* `margin_wrapper.restore_state_before_backtesting()`: tmp upgrade issue - convert cls.orders to dict
+
 ### Added for new features
 * `OoTSP.py`: add interactive option *Get parameters for specific trial*
 
@@ -10,23 +21,9 @@ session against the original (reference).
 
 <img height="350" src="https://user-images.githubusercontent.com/77513676/253804148-ed92bf13-ca04-46bf-8714-28380d0c2e52.png" width="350"/>
 
-## v1.3.3-2 2023-07-xx
-### Fix
-Processing of the situation when at bulk cancel of the grid orders and one or more of orders is FILLED.
-- cancel loop is interrupted
-- orders with received CANCELED status are restored
-- status is requested for unconfirmed orders and processing is performed: recovery if status is CANCELED,
-- normal processing in case of filling in
-
-## v1.3.3-1 2023-07-06
-### Fix
-* `executor.get_free_assets(mode='free')`: incorrect balance for opposite asset (always 0),
-as a result - a negative value of free funds
-* `executor.save_strategy_state()`: try fix `Closing bracket does not match visual indentation FLK-E124`
-* `margin_wrapper.restore_state_before_backtesting()`: tmp upgrade issue - convert cls.orders to dict
-
-### Update
 * `README.md`: some design correction
+* Remove parameter `ex.EXTRA_CHECK_ORDER_STATE` and the corresponding function
+* Some minor improvements
 
 ## v1.3.3 2023-07-04
 ### Added for new features

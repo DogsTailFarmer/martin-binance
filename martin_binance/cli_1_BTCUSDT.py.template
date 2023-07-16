@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0-2"
+__version__ = "1.3.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -42,7 +42,6 @@ ex.FEE_TAKER = Decimal('0.1')  # standard exchange Fee for taker
 ex.FEE_SECOND = False  # On KRAKEN fee always in second coin
 ex.FEE_BNB_IN_PAIR = False  # Binance fee in BNB and BNB is base asset
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
-ex.EXTRA_CHECK_ORDER_STATE = False  # Additional check for filled order(s), for (OKEX, )
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
 ex.AMOUNT_FIRST = Decimal('0.05')  # Deposit for Sale cycle in first currency
