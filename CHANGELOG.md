@@ -8,7 +8,7 @@ Processing of the situation when at bulk cancel of the grid orders and one or mo
 - cancel loop is interrupted
 - orders with received CANCELED status are restored
 - status is requested for unconfirmed orders and processing is performed: recovery if status is CANCELED,
-normal processing in case of filling in
+- normal processing in case of filling in
 
 ## v1.3.3-1 2023-07-06
 ### Fix

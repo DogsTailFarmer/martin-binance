@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.3-14"
+__version__ = "1.3.3-16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -605,14 +605,9 @@ class StrategyBase:
         return kline[:None if include_current_building_candle else -1]
 
     @staticmethod
-    def cancel_order(order_id: int) -> None:
+    def cancel_order(order_id: int, cancel_all=False) -> None:
         loop.create_task(cancel_order_timeout(order_id))
-        loop.create_task(cancel_order_call(order_id))
-
-    @staticmethod
-    def cancel_all_order(order_id: int) -> None:
-        loop.create_task(cancel_order_timeout(order_id))
-        loop.create_task(cancel_all_order_call(order_id))
+        loop.create_task(cancel_order_call(order_id, cancel_all))
 
     @staticmethod
     def transfer_to_master(symbol: str, amount: str):
@@ -1060,15 +1055,6 @@ async def buffered_orders():
             diff_id.update(set(save_orders_id).difference(set(exch_orders)))
             # print(f"buffered_orders.diff_id: {diff_id}")
 
-            if not cls.strategy.grid_remove and cls.strategy.orders_save_bulk:
-                cls.strategy.message_log(f"Check bulk canceled order(s): {cls.strategy.orders_save_bulk}",
-                                         log_level=LogLevel.WARNING, tlg=False)
-                for _id in cls.strategy.orders_save_bulk:
-                    await fetch_order(_id, _filled_update_call=False, _restore=True)
-                    diff_id.discard(_id)
-                cls.strategy.orders_save_bulk.clear()
-                cls.bulk_orders_cancel.clear()
-
             if diff_id:
                 cls.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id},"
                                          f" checking it", log_level=LogLevel.WARNING, tlg=False)
@@ -1281,15 +1267,21 @@ async def place_limit_order_timeout(_id):
         cls.strategy.on_place_order_error_string(_id, 'Place order timeout')
 
 
-async def cancel_order_call(_id: int):
+async def cancel_order_call(_id: int, cancel_all: bool):
     cls = StrategyBase
     cls.canceled_order_id.append(_id)
     try:
         if ms.MODE in ('T', 'TC'):
-            res = await cls.send_request(cls.stub.CancelOrder, api_pb2.CancelOrderRequest,
-                                         symbol=cls.symbol,
-                                         order_id=_id)
-            result = json_format.MessageToDict(res)
+            if cancel_all:
+                if cls.bulk_orders_cancel.get(_id) is None:
+                    res = await cls.send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=cls.symbol)
+                    [cls.bulk_orders_cancel.update({v['orderId']: v}) for v in ast.literal_eval(json.loads(res.result))]
+                result = cls.bulk_orders_cancel.pop(_id, None)
+            else:
+                res = await cls.send_request(cls.stub.CancelOrder, api_pb2.CancelOrderRequest,
+                                             symbol=cls.symbol,
+                                             order_id=_id)
+                result = json_format.MessageToDict(res)
         else:
             result = cls.strategy.account.cancel_order(order_id=_id, ts=int(cls.strategy.local_time()*1000))
     except asyncio.CancelledError:
@@ -1308,40 +1300,17 @@ async def cancel_order_call(_id: int):
     else:
         # print(f"cancel_order_call.result: {result}")
         # Remove from orders lists
-        if result:
+        cls.canceled_order_id.remove(_id)
+        if result and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
-            cls.canceled_order_id.remove(_id)
-            cls.strategy.on_cancel_order_success(_id, Order(result))
+            cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=cancel_all)
             if ms.MODE == 'TC' and cls.strategy.start_collect:
                 cls.strategy.open_orders_snapshot()
             elif ms.MODE == 'S':
                 await on_funds_update()
-
-
-async def cancel_all_order_call(_id: int):
-    cls = StrategyBase
-    cls.canceled_order_id.append(_id)
-    try:
-        if cls.bulk_orders_cancel.get(_id) is None:
-            res = await cls.send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=cls.symbol)
-            [cls.bulk_orders_cancel.update({v['orderId']: v}) for v in ast.literal_eval(json.loads(res.result))]
-        result = cls.bulk_orders_cancel.pop(_id, None)
-    except asyncio.CancelledError:
-        pass  # Task cancellation should not be logged as an error.
-    except grpc.RpcError as ex:
-        status_code = ex.code()
-        cls.strategy.message_log(f"Exception on cancel all orders for {_id}: {status_code.name}, {ex.details()}")
-    except Exception as _ex:
-        cls.strategy.message_log(f"Exception on cancel all orders for {_id}:\n{_ex}")
-    else:
-        # print(f"cancel_all_order_call.result: {result}")
-        # Remove from orders lists
-        if result and result.get('status') == 'CANCELED':
-            remove_from_orders_lists([_id])
-            cls.canceled_order_id.remove(_id)
-            cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
-            cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=True)
+        else:
+            cls.strategy.on_cancel_order_error_string(_id, 'Cancel order warning', cancel_all=cancel_all)
 
 
 async def cancel_order_timeout(_id):
@@ -1352,7 +1321,7 @@ async def cancel_order_timeout(_id):
         cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
 
 
-async def fetch_order(_id: int, _filled_update_call=False, _restore=False):
+async def fetch_order(_id: int, _filled_update_call=False):
     cls = StrategyBase
     try:
         res = await cls.send_request(cls.stub.FetchOrder, api_pb2.FetchOrderRequest,
@@ -1368,9 +1337,9 @@ async def fetch_order(_id: int, _filled_update_call=False, _restore=False):
     else:
         cls.strategy.message_log(f"For order {_id} fetched status is {result.get('status')}",
                                  log_level=LogLevel.INFO, color=ms.Style.GREEN)
-        if (_filled_update_call or _restore) and result.get('status') == 'CANCELED':
+        if _filled_update_call and result.get('status') == 'CANCELED':
             remove_from_orders_lists([_id])
-            cls.strategy.on_cancel_order_success(_id, Order(result), restore=_restore)
+            cls.strategy.on_cancel_order_success(_id, Order(result))
         elif not result:
             raise UserWarning(f"For order {_id} can't get status")
         return result
