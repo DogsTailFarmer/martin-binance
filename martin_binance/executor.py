@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b0"
+__version__ = "1.3.4b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -107,7 +107,7 @@ MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 500  # Time accelerator
 SAVE_DS = True  # Save session result data (ticker, orders) for compare
 SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
-SAVED_STATE = False  # Use saved state for backtesing
+SAVED_STATE = False  # Use saved state for backtesting
 # endregion
 
 
@@ -1254,7 +1254,7 @@ class Strategy(StrategyBase):
                 else:
                     self.message_log("Restore, No difference, go work", tlg=True)
             elif not STANDALONE:
-                # For MARGINE mode compatibility
+                # For MARGIN mode compatibility
                 # Variants are processed when the actual order is equal to or less than it should be
                 # Exotic when dropped during grid placement or unconfirmed TP, left for later
                 if grid_filled and tp_filled:
@@ -2906,7 +2906,11 @@ class Strategy(StrategyBase):
                     self.message_log(f"Too small amount for place additional grid,"
                                      f" add grid order for {'Buy' if self.cycle_buy else 'Sell'}"
                                      f" {reverse_target_amount} by {amount / reverse_target_amount:f}")
-                    waiting_order_id = self.place_limit_order_check(self.cycle_buy, reverse_target_amount, amount / reverse_target_amount)
+                    waiting_order_id = self.place_limit_order_check(
+                        self.cycle_buy,
+                        reverse_target_amount,
+                        amount / reverse_target_amount
+                    )
                     self.orders_init.append(waiting_order_id, self.cycle_buy, reverse_target_amount,
                                             amount / reverse_target_amount)
                 self.place_profit_order(by_market)
@@ -3396,7 +3400,9 @@ class Strategy(StrategyBase):
             order = self.orders_init.find_order(open_orders, place_order_id)
         elif place_order_id == self.tp_wait_id:
             for k, o in enumerate(open_orders):
-                if o.buy == self.tp_order[0] and o.amount == float(self.tp_order[1]) and o.price == float(self.tp_order[2]):
+                if (o.buy == self.tp_order[0] and
+                        o.amount == float(self.tp_order[1]) and
+                        o.price == float(self.tp_order[2])):
                     order = open_orders[k]
         if order:
             self.message_log(f"Order {place_order_id} placed", tlg=True)

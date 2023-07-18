@@ -1,6 +1,6 @@
 ## v1.3.4b0 2023-07-16
 ### Fix
-* Processing of the situation when at bulk cancel of the grid orders and one or more of orders is FILLED.
+* Processing of the situation when at bulk cancel of the grid orders and one or more of orders are FILLED.
   - cancel loop is interrupted
   - orders with received CANCELED status are restored
   - status is requested for unconfirmed orders and processing is performed: recovery if status is CANCELED,
@@ -23,7 +23,8 @@ session against the original (reference).
 
 * `README.md`: some design correction
 * Remove parameter `ex.EXTRA_CHECK_ORDER_STATE` and the corresponding function
-* Some minor improvements
+* Up requirements for grpcio to 1.56.0
+* Up requirements for exchanges-wrapper to 1.3.4
 
 ## v1.3.3 2023-07-04
 ### Added for new features

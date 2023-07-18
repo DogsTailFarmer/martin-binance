@@ -38,18 +38,18 @@ def try_trade(mbs, **kwargs):
 
 
 def main():
-    def objective(trial):
+    def objective(_trial):
         params = {
-            'GRID_MAX_COUNT': trial.suggest_int('GRID_MAX_COUNT', 3, 5),
-            'PRICE_SHIFT': trial.suggest_float('PRICE_SHIFT', 0, 0.05, step=0.01),
-            'PROFIT': trial.suggest_float('PROFIT', 0.05, 0.15, step=0.05),
-            'PROFIT_MAX': trial.suggest_float('PROFIT_MAX', 0.25, 1.0, step=0.05),
-            'OVER_PRICE': trial.suggest_float('OVER_PRICE', 0.1, 1, step=0.1),
-            'ORDER_Q': trial.suggest_int('ORDER_Q', 6, 12),
-            'MARTIN': trial.suggest_float('MARTIN', 5, 15, step=1),
-            'SHIFT_GRID_DELAY': trial.suggest_int('SHIFT_GRID_DELAY', 10, 60, step=10),
-            'KBB': trial.suggest_float('KBB', 1, 5, step=0.5),
-            'LINEAR_GRID_K': trial.suggest_int('LINEAR_GRID_K', 0, 100, step=20),
+            'GRID_MAX_COUNT': _trial.suggest_int('GRID_MAX_COUNT', 3, 5),
+            'PRICE_SHIFT': _trial.suggest_float('PRICE_SHIFT', 0, 0.05, step=0.01),
+            'PROFIT': _trial.suggest_float('PROFIT', 0.05, 0.15, step=0.05),
+            'PROFIT_MAX': _trial.suggest_float('PROFIT_MAX', 0.25, 1.0, step=0.05),
+            'OVER_PRICE': _trial.suggest_float('OVER_PRICE', 0.1, 1, step=0.1),
+            'ORDER_Q': _trial.suggest_int('ORDER_Q', 6, 12),
+            'MARTIN': _trial.suggest_float('MARTIN', 5, 15, step=1),
+            'SHIFT_GRID_DELAY': _trial.suggest_int('SHIFT_GRID_DELAY', 10, 60, step=10),
+            'KBB': _trial.suggest_float('KBB', 1, 5, step=0.5),
+            'LINEAR_GRID_K': _trial.suggest_int('LINEAR_GRID_K', 0, 100, step=20),
         }
         return try_trade(mbs, **params)
 
@@ -95,7 +95,6 @@ def main():
         study = optuna.load_study(study_name=study_name, storage=storage_name)
 
         while 1:
-
             questions = [
                 inquirer.List(
                     "mode",
@@ -134,6 +133,7 @@ def main():
                 print(trial.params)
             else:
                 break
+
 
 def print_study_result(study):
     print(f"Optimal parameters: {study.best_params} for get {study.best_value}")

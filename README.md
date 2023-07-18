@@ -11,7 +11,7 @@
 <h4 align="center">Other crypto exchanges available through multi-exchange terminal MARGIN https://margin.de</h4>
 
 ***
-<h4 align="center">martin-binance <a href="https://pypi.org/project/martin-binance/"><img align="top" src="https://img.shields.io/pypi/v/martin-binance" alt="PyPI version"></a> <--> exchanges-wrapper <a href="https://pypi.org/project/exchanges-wrapper/"><img align="top" src="https://img.shields.io/pypi/v/exchanges-wrapper" alt="PyPI version"></a></h4>
+<h4 align="center">martin-binance <a href="https://pypi.org/project/martin-binance/"><img align="center" src="https://img.shields.io/pypi/v/martin-binance" alt="PyPI version"></a> <--> exchanges-wrapper <a href="https://pypi.org/project/exchanges-wrapper/"><img align="center" src="https://img.shields.io/pypi/v/exchanges-wrapper" alt="PyPI version"></a></h4>
 
 ***
 <h1 align="center"><a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability"><img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
@@ -28,7 +28,6 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* From 1.3.0-2 was updated ```cli_X_AAABBB.py```, use ```martin_binance/cli_0_BTCUSDT.py.template``` for compare and update
 * You cannot run multiple pairs with overlapping currencies on the same account!
 
 >Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)

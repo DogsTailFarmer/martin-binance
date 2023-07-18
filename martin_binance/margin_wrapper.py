@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b0"
+__version__ = "1.3.4b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -44,8 +44,6 @@ from martin_binance import executor as ms, BACKTEST_PATH, copy
 from martin_binance.client import Trade
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 
-ORDER_BOOK_PKL = "order_book.pkl"
-TICKER_PKL = "ticker.pkl"
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [
@@ -62,11 +60,15 @@ TRADES_LIST_LIMIT = 100
 HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
-# Set logger
+
 logger = logging.getLogger('logger')
 color_init()
-ms_order_id = 'ms.order_id'
-ms_orders = 'ms.orders'
+
+ORDER_BOOK_PKL = "order_book.pkl"
+TICKER_PKL = "ticker.pkl"
+MS_ORDER_ID = 'ms.order_id'
+MS_ORDERS = 'ms.orders'
+
 session_result = {}
 
 
@@ -510,8 +512,9 @@ class StrategyBase:
     def message_log(self, *args, **kwargs):
         pass  # meant to be overridden in a subclass
 
-    def order_exist(self, _id) -> bool:
-        return bool(self.orders.get(_id))
+    @classmethod
+    def order_exist(cls, _id) -> bool:
+        return bool(cls.orders.get(_id))
 
     def get_trading_capability_manager(self) -> TradingCapabilityManager:
         return self.tcm
@@ -659,9 +662,9 @@ async def heartbeat(_session):
 
 
 def last_state_update(cls, last_state):
-    last_state[ms_order_id] = json.dumps(cls.order_id)
+    last_state[MS_ORDER_ID] = json.dumps(cls.order_id)
     last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
-    last_state[ms_orders] = jsonpickle.encode(cls.orders, keys=True)
+    last_state[MS_ORDERS] = jsonpickle.encode(cls.orders, keys=True)
     last_state['ms_trades'] = jsonpickle.encode(cls.trades)
 
 
@@ -1013,13 +1016,13 @@ async def buffered_orders():
             if cls.last_state:
                 cls.strategy.message_log("Trying restore saved state after restart", color=ms.Style.GREEN)
                 # Restore StrategyBase class var
-                cls.order_id = json.loads(cls.last_state.pop(ms_order_id,
+                cls.order_id = json.loads(cls.last_state.pop(MS_ORDER_ID,
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.trades = jsonpickle.decode(cls.last_state.pop('ms_trades', '[]'))
                 # TODO change after update and restart
                 # cls.orders = jsonpickle.decode(cls.last_state.pop(ms_orders, '{}'), keys=True)
-                _orders_from_save = jsonpickle.decode(cls.last_state.pop(ms_orders, '{}'), keys=True)
+                _orders_from_save = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
                 if isinstance(_orders_from_save, list):
                     for _o in _orders_from_save:
                         cls.orders[_o.id] = _o
@@ -1157,9 +1160,9 @@ async def on_order_update():
 
 
 def on_order_update_handler(cls, ed):
-    if (cls.symbol == ed['symbol']
-            and (cls.strategy.order_exist(ed['order_id']) or cls.strategy.tp_order_id == ed['order_id'])
-            and ed['order_status'] in ('FILLED', 'PARTIALLY_FILLED')):
+    if (cls.symbol == ed['symbol'] and
+            cls.order_exist(ed['order_id']) and
+            ed['order_status'] in ('FILLED', 'PARTIALLY_FILLED')):
         if ed['order_status'] == 'FILLED':
             # Remove from orders dict
             remove_from_orders_lists([ed['order_id']])
@@ -1296,12 +1299,9 @@ async def cancel_order_call(_id: int, cancel_all: bool):
     except grpc.RpcError as ex:
         status_code = ex.code()
         cls.strategy.message_log(f"Exception on cancel order for {_id}: {status_code.name}, {ex.details()}")
-        await asyncio.sleep(HEARTBEAT)
         if status_code == grpc.StatusCode.UNKNOWN:
-            check_status = await fetch_order(_id, _filled_update_call=True)
-            if check_status.get('status') == 'CANCELED':
-                # For stop timeout firing
-                cls.canceled_order_id.remove(_id)
+            cls.canceled_order_id.remove(_id)
+            cls.strategy.on_cancel_order_error_string(_id, "The order has not been canceled", cancel_all=cancel_all)
     except Exception as _ex:
         cls.strategy.message_log(f"Exception on cancel order call for {_id}:\n{_ex}")
     else:
@@ -1317,7 +1317,11 @@ async def cancel_order_call(_id: int, cancel_all: bool):
             elif ms.MODE == 'S':
                 await on_funds_update()
         else:
-            cls.strategy.on_cancel_order_error_string(_id, 'Cancel order warning', cancel_all=cancel_all)
+            cls.strategy.on_cancel_order_error_string(
+                _id,
+                f"Cancel order warning, result: {result}",
+                cancel_all=cancel_all
+            )
 
 
 async def cancel_order_timeout(_id):
@@ -1376,7 +1380,6 @@ async def transfer2master(symbol: str, amount: str):
 
 def remove_from_orders_lists(_order_id_list: []) -> None:
     cls = StrategyBase
-    # print(f"remove_from_orders_lists._order_id: {_order_id}")
     [cls.orders.pop(i, None) for i in _order_id_list]
 
 
@@ -1593,13 +1596,13 @@ def update_class_var(_session):
 
 def restore_state_before_backtesting(cls):
     saved_state = load_file(cls.state_file)
-    cls.order_id = json.loads(saved_state.pop(ms_order_id, "0"))
+    cls.order_id = json.loads(saved_state.pop(MS_ORDER_ID, "0"))
     cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
 
     # TODO change after update and restart
     # cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '{}'))
     #
-    _orders_from_save = jsonpickle.decode(saved_state.pop(ms_orders, '{}'), keys=True)
+    _orders_from_save = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
     if isinstance(_orders_from_save, list):
         for _o in _orders_from_save:
             cls.orders[_o.id] = _o
