@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b1"
+__version__ = "1.3.4b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -992,11 +992,11 @@ async def buffered_funds(print_info: bool = True):
 
 async def buffered_orders():
     cls = StrategyBase
-    exch_orders = {}
-    save_orders_id = []
+    exch_orders = []
     diff_id = set()
     restore = False
     run = False
+    _ordrs = None
     while not run:
         try:
             res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -1043,20 +1043,17 @@ async def buffered_orders():
             orders = json_format.MessageToDict(_orders).get('items', [])
             for order in orders:
                 _id = int(order['orderId'])
-                exch_orders[_id] = Order(order)
+                exch_orders.append(_id)
                 if (order.get('status', None) == 'PARTIALLY_FILLED'
                         and order_trades_sum(_id) < Decimal(order['executedQty'])):
                     diff_id.add(_id)
-            # Add saved orders id's
-            save_orders_id.extend(list(cls.orders))
-            # Add TP id
-            if cls.strategy.tp_order_id and cls.strategy.tp_order_id not in save_orders_id:
-                save_orders_id.append(cls.strategy.tp_order_id)
-            # print(f"buffered_orders.save_orders_id: {save_orders_id}")
+
+            if _ordrs != list(cls.orders.keys()):
+                print(f"buffered_orders: cls.orders: {cls.orders.keys()}")
+                _ordrs = list(cls.orders.keys()).copy()
 
             # Missed fill event list
-            diff_id.update(set(save_orders_id).difference(set(exch_orders)))
-            # print(f"buffered_orders.diff_id: {diff_id}")
+            diff_id.update(set(cls.orders).difference(set(exch_orders)))
 
             if diff_id:
                 cls.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id},"
@@ -1073,9 +1070,7 @@ async def buffered_orders():
                 with cls.state_file.open(mode='w') as outfile:
                     json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                 cls.strategy.start_collect = True
-            cls.orders.update(exch_orders)
             exch_orders.clear()
-            save_orders_id.clear()
             diff_id.clear()
             cls.last_state = None
             restore = False
