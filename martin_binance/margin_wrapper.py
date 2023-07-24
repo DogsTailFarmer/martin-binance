@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b3"
+__version__ = "1.3.4b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -996,7 +996,6 @@ async def buffered_orders():
     diff_id = set()
     restore = False
     run = False
-    _ordrs = None
     while not run:
         try:
             res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -1047,10 +1046,6 @@ async def buffered_orders():
                 if (order.get('status', None) == 'PARTIALLY_FILLED'
                         and order_trades_sum(_id) < Decimal(order['executedQty'])):
                     diff_id.add(_id)
-
-            if _ordrs != list(cls.orders.keys()):
-                print(f"buffered_orders: cls.orders: {cls.orders.keys()}")
-                _ordrs = list(cls.orders.keys()).copy()
 
             # Missed fill event list
             diff_id.update(set(cls.orders).difference(set(exch_orders)))
