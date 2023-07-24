@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b4"
+__version__ = "1.3.4b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1164,7 +1164,10 @@ class Strategy(StrategyBase):
                 self.cycle_time = datetime.strptime(self.cycle_time, '%Y-%m-%d %H:%M:%S.%f')
             self.cycle_time_reverse = json.loads(strategy_state.get('cycle_time_reverse'))
             if self.cycle_time_reverse:
-                self.cycle_time_reverse = datetime.strptime(self.cycle_time_reverse, '%Y-%m-%d %H:%M:%S.%f')
+                self.cycle_time_reverse = datetime.strptime(
+                    self.cycle_time_reverse,
+                    '%Y-%m-%d %H:%M:%S.%f'
+                )
             self.deposit_first = f2d(json.loads(strategy_state.get('deposit_first')))
             self.deposit_second = f2d(json.loads(strategy_state.get('deposit_second')))
             self.last_shift_time = json.loads(strategy_state.get('last_shift_time')) or self.local_time()
@@ -3426,7 +3429,12 @@ class Strategy(StrategyBase):
             if self.orders_init.exist(place_order_id):
                 _order = self.orders_init.get_by_id(place_order_id)
                 self.orders_init.remove(place_order_id)
-                waiting_order_id = self.place_limit_order_check(_order['buy'], _order['amount'], _order['price'], check=True)
+                waiting_order_id = self.place_limit_order_check(
+                    _order['buy'],
+                    _order['amount'],
+                    _order['price'],
+                    check=True
+                )
                 _order['_id'] = waiting_order_id
                 self.orders_init.orders_list.extend(_order)
             elif place_order_id == self.tp_wait_id:
@@ -3439,7 +3447,7 @@ class Strategy(StrategyBase):
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
 
-    def on_cancel_order_success(self, order_id: int, canceled_order: Order, cancel_all=False) -> None:
+    def on_cancel_order_success(self, order_id: int, canceled_order: Order, cancel_all=False) -> None:  # noqa
         if self.orders_grid.exist(order_id):
             self.message_log(f"Processing canceled grid order {order_id}", log_level=LogLevel.INFO)
             self.part_amount.pop(order_id, None)
@@ -3483,6 +3491,5 @@ class Strategy(StrategyBase):
                 self.tp_cancel = False
                 self.start()
 
-    def on_cancel_order_error_string(self, order_id: int, error: str, cancel_all=False) -> None:
+    def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
-        # TODO Hold event for later check

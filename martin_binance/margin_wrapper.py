@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b4"
+__version__ = "1.3.4b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1291,7 +1291,7 @@ async def cancel_order_call(_id: int, cancel_all: bool):
         cls.strategy.message_log(f"Exception on cancel order for {_id}: {status_code.name}, {ex.details()}")
         if status_code == grpc.StatusCode.UNKNOWN:
             cls.canceled_order_id.remove(_id)
-            cls.strategy.on_cancel_order_error_string(_id, "The order has not been canceled", cancel_all=cancel_all)
+            cls.strategy.on_cancel_order_error_string(_id, "The order has not been canceled")
     except Exception as _ex:
         cls.strategy.message_log(f"Exception on cancel order call for {_id}:\n{_ex}")
     else:
@@ -1307,11 +1307,7 @@ async def cancel_order_call(_id: int, cancel_all: bool):
             elif ms.MODE == 'S':
                 await on_funds_update()
         else:
-            cls.strategy.on_cancel_order_error_string(
-                _id,
-                f"Cancel order warning, result: {result}",
-                cancel_all=cancel_all
-            )
+            cls.strategy.on_cancel_order_error_string(_id, f"Cancel order warning, result: {result}")
 
 
 async def cancel_order_timeout(_id):
