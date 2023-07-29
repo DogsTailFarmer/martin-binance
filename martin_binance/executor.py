@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b5"
+__version__ = "1.3.4b8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -555,7 +555,7 @@ class Orders:
                 break
         return order
 
-    def get_by_id(self, _id: int) -> ():
+    def get_by_id(self, _id: int) -> {}:
         for i in self.orders_list:
             if i['id'] == _id:
                 return i
@@ -568,10 +568,7 @@ class Orders:
         Get List of Dict for orders
         :return: []
         """
-        orders = []
-        for i in self.orders_list:
-            orders.append({'id': i['id'], 'buy': i['buy'], 'amount': i['amount'], 'price': i['price']})
-        return orders
+        return self.orders_list
 
     def get_id_list(self) -> []:
         """
@@ -714,6 +711,7 @@ class Strategy(StrategyBase):
         "local_time",
         "wait_wss_refresh",
         "start_collect",
+        "restore_orders",
     )
 
     def __init__(self):
@@ -809,6 +807,7 @@ class Strategy(StrategyBase):
         self.local_time = self.get_time if STANDALONE else time.time
         self.wait_wss_refresh = {}  # -
         self.start_collect = None
+        self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
@@ -1146,7 +1145,8 @@ class Strategy(StrategyBase):
                     'tp_part_amount_second': json.dumps(self.tp_part_amount_second),
                     'tp_target': json.dumps(self.tp_target),
                     'tp_order': json.dumps(str(self.tp_order)),
-                    'tp_wait_id': json.dumps(self.tp_wait_id)}
+                    'tp_wait_id': json.dumps(self.tp_wait_id),
+                    'restore_orders': json.dumps(self.restore_orders)}
         return {}
 
     def restore_strategy_state(self, strategy_state: Dict[str, str] = None, restore=True) -> None:
@@ -1203,6 +1203,7 @@ class Strategy(StrategyBase):
             self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
             self.tp_order = eval(json.loads(strategy_state.get('tp_order')))
             self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id'))
+            self.restore_orders = json.loads(strategy_state.get('restore_orders', 'false'))
             self.first_run = False
             self.start_after_shift = False if GRID_ONLY and USE_ALL_FUND else self.start_after_shift
         #
@@ -2924,24 +2925,15 @@ class Strategy(StrategyBase):
                 # Ended grid order, calculate depo and Reverse
                 self.reverse_after_grid_ending()
         else:
-            if self.orders_save:
+            if self.orders_save and not self.restore_orders:
                 self.start_hold = False
-                self.message_log("grid_handler: Restore deleted and unplaced grid orders")
-                orders_for_restore = []
-                orders_trade_id = set()
-                [orders_trade_id.add(i.order_id) for i in self.get_buffered_completed_trades()]
-                [orders_for_restore.append(_o) for _o in self.orders_save if _o["id"] not in orders_trade_id]
-                self.orders_hold.orders_list.extend(orders_for_restore)
-                orders_for_restore.clear()
-                self.orders_save.orders_list.clear()
-                orders_trade_id.clear()
+                self.restore_orders = True
+                self.message_log("Restore deleted and unplaced grid orders")
                 try:
                     Strategy.bulk_orders_cancel.clear()
                 except AttributeError:
                     self.message_log("grid_handler: AttributeError raised", LogLevel.WARNING)
-                # Sort restored hold orders
-                self.orders_hold.sort(self.cycle_buy)
-                self.order_q_placed = False
+
             if after_full_fill and self.orders_hold and self.order_q_placed:
                 # PLace one hold grid order and remove it from hold list
                 _, _buy, _amount, _price = self.orders_hold.get_first()
@@ -2977,7 +2969,7 @@ class Strategy(StrategyBase):
                 # - on_cancel_order_success: save canceled order to orders_save
                 _id, _, _, _ = self.orders_grid.get_first()
                 if not cancel_all:
-                    self.orders_save.orders_list.extend(self.orders_grid.get_by_id(_id))
+                    self.orders_save.orders_list.append(self.orders_grid.get_by_id(_id))
                 self.message_log(f"cancel_grid order: {_id}", log_level=LogLevel.DEBUG)
                 self.cancel_order_exp(_id, cancel_all=cancel_all)
             elif self.grid_remove:
@@ -3204,6 +3196,10 @@ class Strategy(StrategyBase):
                 if self.orders_grid.exist(update.original_order.id):
                     # Remove grid order with =id from order list
                     self.orders_grid.remove(update.original_order.id)
+                    if self.orders_save:
+                        self.orders_save.remove(update.original_order.id)
+                        if not self.orders_save:
+                            self.restore_orders = False
                     self.grid_handler(_amount_first=amount_first,
                                       _amount_second=amount_second,
                                       after_full_fill=True,
@@ -3284,6 +3280,12 @@ class Strategy(StrategyBase):
                 else:
                     self.message_log("Grid order partially filled", color=Style.B_WHITE)
                     amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
+                    # Correction amount for saved order, if exists
+                    _order = self.orders_save.get_by_id(update.original_order.id)
+                    if _order:
+                        self.orders_save.remove(update.original_order.id)
+                        _order['amount'] -= amount_first
+                        self.orders_save.orders_list.append(_order)
                     # Increase trade result and if next fill order is grid decrease trade result
                     self.sum_amount_first += amount_first_fee
                     self.sum_amount_second += amount_second_fee
@@ -3436,7 +3438,7 @@ class Strategy(StrategyBase):
                     check=True
                 )
                 _order['_id'] = waiting_order_id
-                self.orders_init.orders_list.extend(_order)
+                self.orders_init.orders_list.append(_order)
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
                 self.tp_error = True
@@ -3452,7 +3454,19 @@ class Strategy(StrategyBase):
             self.message_log(f"Processing canceled grid order {order_id}", log_level=LogLevel.INFO)
             self.part_amount.pop(order_id, None)
             self.orders_grid.remove(order_id)
-            self.cancel_grid(cancel_all=cancel_all)
+
+            if self.restore_orders:
+                _order = self.orders_save.get_by_id(order_id)
+                self.orders_save.remove(order_id)
+                self.orders_hold.orders_list.append(_order)
+                if not self.orders_save:
+                    self.restore_orders = False
+                    self.orders_hold.sort(self.cycle_buy)
+                    self.order_q_placed = False
+                    self.place_profit_order()
+            else:
+                self.cancel_grid(cancel_all=cancel_all)
+
         elif order_id == self.cancel_order_id:
             self.message_log(f"Processing canceled TP order {order_id}", log_level=LogLevel.INFO)
             self.cancel_order_id = None
