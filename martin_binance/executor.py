@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b8"
+__version__ = "1.3.4b9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -18,6 +18,7 @@ import requests
 from requests.adapters import HTTPAdapter, Retry
 # noinspection PyUnresolvedReferences
 import traceback  # lgtm [py/unused-import]
+import contextlib
 
 from martin_binance import Path, STANDALONE, DB_FILE
 # noinspection PyUnresolvedReferences
@@ -139,7 +140,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
     token = TOKEN
     channel_id = CHANNEL_ID
     url += token
-    method = url + '/sendMessage'
+    method = f'{url}/sendMessage'
     s = requests.Session()
     retries = Retry(total=5, backoff_factor=1, status_forcelist=[101, 111, 502, 503, 504])
     s.mount('https://', HTTPAdapter(max_retries=retries))
@@ -192,7 +193,11 @@ def telegram(queue_to_tlg, _bot_id) -> None:
         elif query_data == 'restart_callback':
             command = 'restart'
 
-        requests_post(url + '/answerCallbackQuery', {'callback_query_id': query.get('id')}, s)
+        requests_post(
+            f'{url}/answerCallbackQuery',
+            {'callback_query_id': query.get('id')},
+            s,
+        )
 
         return {
             'update_id': update_id,
@@ -228,7 +233,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
 
     def telegram_get(offset=None) -> []:
         command_list = []
-        _method = url + '/getUpdates'
+        _method = f'{url}/getUpdates'
         _res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
         if not _res or _res.status_code != 200:
             return command_list
@@ -270,7 +275,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
             requests_post(method, _data={'chat_id': channel_id, 'text': post_text}, session=s)
 
     # Set command for Telegram bot
-    _command = requests_post(url + '/getMyCommands', _data=None, session=s)
+    _command = requests_post(f'{url}/getMyCommands', _data=None, session=s)
     if _command and _command.status_code == 200 and (not _command.json().get('result') or
                                                      len(_command.json().get('result')) < 4):
         _commands = {
@@ -285,7 +290,7 @@ def telegram(queue_to_tlg, _bot_id) -> None:
                  "description": "Restart current pair with recovery"}
             ])
         }
-        res = requests_post(url + '/setMyCommands', _data=_commands, session=s)
+        res = requests_post(f'{url}/setMyCommands', _data=_commands, session=s)
         print(f"Set or update command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
               f"restart Telegram bot by /start command for update it")
     #
@@ -363,11 +368,9 @@ def save_to_db(queue_to_db) -> None:
     data = None
     result = True
     while True:
-        try:
+        with contextlib.suppress(KeyboardInterrupt):
             if result:
                 data = queue_to_db.get()
-        except KeyboardInterrupt:
-            pass
         if data is None or data.get('stop_signal'):
             break
         if data.get('destination') == 't_funds':
@@ -527,8 +530,7 @@ class Orders:
         self.orders_list = []
 
     def __iter__(self):
-        for i in self.orders_list:
-            yield i
+        yield from self.orders_list
 
     def __len__(self):
         return len(self.orders_list)
@@ -575,10 +577,7 @@ class Orders:
         Get List of orders id
         :return: []
         """
-        orders = []
-        for i in self.orders_list:
-            orders.append(i['id'])
-        return orders
+        return [i['id'] for i in self.orders_list]
 
     def get_first(self) -> ():
         """
@@ -850,8 +849,7 @@ class Strategy(StrategyBase):
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
                                               Decimal(str(tcm.round_price(1.123456789, RoundingType.FLOOR))))
         self.message_log(f"Round pattern, for base: {self.round_base}, quote: {self.round_quote}")
-        last_price = self.get_buffered_ticker().last_price
-        if last_price:
+        if last_price := self.get_buffered_ticker().last_price:
             self.message_log(f"Last ticker price: {last_price}")
             self.avg_rate = f2d(last_price)
             if self.first_run and check_funds:
@@ -1036,7 +1034,7 @@ class Strategy(StrategyBase):
                                      f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
                                      f"{' Hold reverse' if self.reverse_hold else ''} cycle with"
                                      f" {order_buy} buy and {order_sell} sell active orders.\n"
-                                     f"{order_hold if order_hold else 'No'} hold grid orders\n"
+                                     f"{order_hold or 'No'} hold grid orders\n"
                                      f"Over price: {self.over_price:.2f}%\n"
                                      f"Last ticker price: {last_price}\n"
                                      f"ver: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
@@ -1516,6 +1514,9 @@ class Strategy(StrategyBase):
                 self.wait_refunding_for_start = True
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
+        #
+        self.init_assets_check()
+        #
         self.avg_rate = f2d(self.get_buffered_ticker().last_price)
         if GRID_ONLY:
             if USE_ALL_FUND and not self.start_after_shift:
@@ -2769,6 +2770,25 @@ class Strategy(StrategyBase):
             self.tp_part_amount_first = Decimal('0')
             self.tp_part_amount_second = Decimal('0')
             self.start(profit_f, profit_s)
+
+    def init_assets_check(self):
+        msg = None
+        if self.reverse:
+            if self.cycle_buy:
+                if self.initial_reverse_second < self.deposit_second:
+                    msg = f"Negative second free asset: {self.initial_second - self.deposit_second}, check it"
+            else:
+                if self.initial_reverse_first < self.deposit_first:
+                    msg = f"Negative first free asset: {self.initial_first - self.deposit_first}, check it"
+        else:
+            if self.cycle_buy:
+                if self.initial_second < self.deposit_second:
+                    msg = f"Negative second free asset: {self.initial_second - self.deposit_second}, check it"
+            else:
+                if self.initial_first < self.deposit_first:
+                    msg = f"Negative first free asset: {self.initial_first - self.deposit_first}, check it"
+        if msg:
+            self.message_log(msg, log_level=LogLevel.ERROR)
 
     def place_grid_part(self) -> None:
         self.grid_place_flag = True
