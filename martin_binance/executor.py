@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b9"
+__version__ = "1.3.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -647,9 +647,6 @@ class Strategy(StrategyBase):
         "sum_amount_first",
         "sum_amount_second",
         #
-        "correction_amount_first",
-        "correction_amount_second",
-        #
         "deposit_first",
         "deposit_second",
         "sum_profit_first",
@@ -673,6 +670,7 @@ class Strategy(StrategyBase):
         "wait_refunding_for_start",
         #
         "cancel_order_id",
+        "cancel_grid_order_id",
         "over_price",
         "grid_place_flag",
         "part_amount",
@@ -743,9 +741,6 @@ class Strategy(StrategyBase):
         self.sum_amount_first = Decimal('0')  # Sum buy/sell in first currency for current cycle
         self.sum_amount_second = Decimal('0')  # Sum buy/sell in second currency for current cycle
         #
-        self.correction_amount_first = Decimal('0')  # +
-        self.correction_amount_second = Decimal('0')  # +
-        #
         self.deposit_first = AMOUNT_FIRST  # + Calculated operational deposit
         self.deposit_second = AMOUNT_SECOND  # + Calculated operational deposit
         self.sum_profit_first = Decimal('0')  # + Sum profit from start to now()
@@ -769,6 +764,7 @@ class Strategy(StrategyBase):
         self.wait_refunding_for_start = False  # -
         #
         self.cancel_order_id = None  # - Exist canceled not confirmed order
+        self.cancel_grid_order_id = None  # - id individual canceled grid order
         self.over_price = None  # + Adaptive over price
         self.grid_place_flag = False  # - Flag when placed next part of grid orders
         self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
@@ -1858,8 +1854,6 @@ class Strategy(StrategyBase):
                          f" initial_reverse_second: {self.initial_reverse_second}\n"
                          f"! reverse_init_amount: {self.reverse_init_amount}\n"
                          f"! reverse_target_amount: {self.reverse_target_amount}\n"
-                         f"! correction_amount_first: {self.correction_amount_first},"
-                         f" correction_amount_second: {self.correction_amount_second}\n"
                          f"! tp_order: {self.tp_order}\n"
                          f"! tp_part_amount_first: {self.tp_part_amount_first},"
                          f" tp_part_amount_second: {self.tp_part_amount_second}\n"
@@ -2582,45 +2576,10 @@ class Strategy(StrategyBase):
         transfer_sum_amount_second = Decimal('0')
         if one_else_grid:
             self.message_log("Some grid orders was execute after TP was filled", tlg=True)
-            # Correction sum_amount
-            self.message_log(f"Before Correction: Sum_amount_first: {self.sum_amount_first},"
-                             f" Sum_amount_second: {self.sum_amount_second}",
-                             log_level=LogLevel.INFO, color=Style.MAGENTA)
-            self.sum_amount_first -= self.tp_init[0]
-            self.sum_amount_second -= self.tp_init[1]
-            self.message_log(f"Sum_amount_first: {self.sum_amount_first}, Sum_amount_second: {self.sum_amount_second}",
-                             log_level=LogLevel.INFO, color=Style.MAGENTA)
             self.tp_was_filled = ()
-            # Return depo in turnover without loss
-            tcm = self.get_trading_capability_manager()
-            if self.cycle_buy:
-                min_trade_amount = tcm.get_min_buy_amount(float(self.avg_rate))
-                amount = self.tp_init[1]
-                if self.reverse:
-                    reverse_target_amount = self.reverse_target_amount * self.tp_init[0] / self.reverse_init_amount
-                else:
-                    reverse_target_amount = self.tp_init[0] + (FEE_MAKER * 2 + PROFIT) * self.tp_init[0] / 100
-            else:
-                min_trade_amount = tcm.get_min_sell_amount(float(self.avg_rate))
-                amount = self.tp_init[0]
-                if self.reverse:
-                    reverse_target_amount = self.reverse_target_amount * self.tp_init[1] / self.reverse_init_amount
-                else:
-                    reverse_target_amount = self.tp_init[1] + (FEE_MAKER * 2 + PROFIT) * self.tp_init[1] / 100
-            self.message_log(f"Min trade amount is: {min_trade_amount}")
-            self.debug_output()
-            self.message_log(f"For additional grid amount: {amount}, reverse_target_amount: {reverse_target_amount}",
-                             tlg=True)
-            if float(amount) > min_trade_amount:
-                self.message_log("Place additional grid orders and replace TP", tlg=True)
-                self.tp_hold_additional = True
-                self.place_grid(self.cycle_buy,
-                                amount,
-                                reverse_target_amount,
-                                allow_grid_shift=False,
-                                additional_grid=True)
+            if self.convert_tp(self.tp_init[0], self.tp_init[1]):
                 return
-            self.message_log("Too small for trade, transfer filled TP amount to the next cycle", tlg=True)
+            self.message_log("Transfer filled TP amount to the next cycle", tlg=True)
             transfer_sum_amount_first = self.sum_amount_first
             transfer_sum_amount_second = self.sum_amount_second
         if self.cycle_buy:
@@ -2673,8 +2632,6 @@ class Strategy(StrategyBase):
         self.sum_amount_first = transfer_sum_amount_first
         self.sum_amount_second = transfer_sum_amount_second
         self.part_amount.clear()
-        self.correction_amount_first = Decimal('0')
-        self.correction_amount_second = Decimal('0')
         self.tp_part_amount_first = Decimal('0')
         self.tp_part_amount_second = Decimal('0')
         self.start(profit_f, profit_s)
@@ -2791,20 +2748,21 @@ class Strategy(StrategyBase):
             self.message_log(msg, log_level=LogLevel.ERROR)
 
     def place_grid_part(self) -> None:
-        self.grid_place_flag = True
-        n = len(self.orders_grid) + len(self.orders_init)
-        if n < ORDER_Q:
-            self.message_log(f"Place next part of grid orders, hold {len(self.orders_hold)}", color=Style.B_WHITE)
-            k = 0
-            for i in self.orders_hold:
-                if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
-                    if k + n >= ORDER_Q:
-                        self.order_q_placed = True
-                    break
-                waiting_order_id = self.place_limit_order_check(i['buy'], i['amount'], i['price'], check=True)
-                self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
-                k += 1
-            del self.orders_hold.orders_list[:k]
+        if not self.grid_remove:
+            self.grid_place_flag = True
+            n = len(self.orders_grid) + len(self.orders_init)
+            if n < ORDER_Q:
+                self.message_log(f"Place next part of grid orders, hold {len(self.orders_hold)}", color=Style.B_WHITE)
+                k = 0
+                for i in self.orders_hold:
+                    if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
+                        if k + n >= ORDER_Q:
+                            self.order_q_placed = True
+                        break
+                    waiting_order_id = self.place_limit_order_check(i['buy'], i['amount'], i['price'], check=True)
+                    self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
+                    k += 1
+                del self.orders_hold.orders_list[:k]
 
     def grid_only_stop(self) -> None:
         tcm = self.get_trading_capability_manager()
@@ -2879,67 +2837,11 @@ class Strategy(StrategyBase):
             if GRID_ONLY:
                 self.shift_grid_threshold = None
                 self.grid_only_stop()
-            elif self.tp_part_amount_first or self.correction_amount_first:
-                self.message_log("grid_handler: No grid orders after part filled TP, converse TP to grid", tlg=True)
-                if self.tp_part_amount_first:
-                    # Correction sum_amount
-                    self.message_log(f"Before Correction: Sum_amount_first: {self.sum_amount_first},"
-                                     f" Sum_amount_second: {self.sum_amount_second}",
-                                     log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-                    self.sum_amount_first -= self.tp_part_amount_first
-                    self.sum_amount_second -= self.tp_part_amount_second
-                    self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
-                                     f" Sum_amount_second: {self.sum_amount_second}",
-                                     log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-                _amount_f = self.tp_part_amount_first + self.correction_amount_first
-                _amount_s = self.tp_part_amount_second + self.correction_amount_second
-                self.correction_amount_first = Decimal('0')
-                self.correction_amount_second = Decimal('0')
-                self.tp_part_amount_first = Decimal('0')
-                self.tp_part_amount_second = Decimal('0')
-                self.message_log(f"Saved TP part amount was: first: {_amount_f}, second: {_amount_s}",
-                                 log_level=LogLevel.DEBUG)
-                tcm = self.get_trading_capability_manager()
-                # Return depo in turnover without loss
-                if self.cycle_buy:
-                    min_trade_amount = tcm.get_min_buy_amount(float(self.avg_rate))
-                    amount = _amount_s
-                    if self.reverse:
-                        reverse_target_amount = self.reverse_target_amount * _amount_f / self.reverse_init_amount
-                    else:
-                        reverse_target_amount = _amount_f + (FEE_MAKER * 2 + PROFIT) * _amount_f / 100
-                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin**GRID_MAX_COUNT)
-                    first_order_vlm /= self.avg_rate
-                else:
-                    min_trade_amount = tcm.get_min_sell_amount(float(self.avg_rate))
-                    amount = _amount_f
-                    if self.reverse:
-                        reverse_target_amount = self.reverse_target_amount * _amount_s / self.reverse_init_amount
-                    else:
-                        reverse_target_amount = _amount_s + (FEE_MAKER * 2 + PROFIT) * _amount_s / 100
-                    first_order_vlm = amount * 1 * (1 - self.martin) / (1 - self.martin**GRID_MAX_COUNT)
-                self.message_log(f"Min trade amount is: {min_trade_amount}")
-                self.debug_output()
-                self.message_log(f"For additional grid amount: {amount},"
-                                 f" reverse_target_amount: {reverse_target_amount}", tlg=True)
-                if float(first_order_vlm) > min_trade_amount:
-                    self.message_log("Place additional grid orders", tlg=True)
-                    self.place_grid(self.cycle_buy, amount, reverse_target_amount, allow_grid_shift=False)
-                    return
-                if float(amount) > min_trade_amount:
-                    self.message_log(f"Too small amount for place additional grid,"
-                                     f" add grid order for {'Buy' if self.cycle_buy else 'Sell'}"
-                                     f" {reverse_target_amount} by {amount / reverse_target_amount:f}")
-                    waiting_order_id = self.place_limit_order_check(
-                        self.cycle_buy,
-                        reverse_target_amount,
-                        amount / reverse_target_amount
-                    )
-                    self.orders_init.append(waiting_order_id, self.cycle_buy, reverse_target_amount,
-                                            amount / reverse_target_amount)
-                self.place_profit_order(by_market)
+            elif self.tp_part_amount_first and self.convert_tp(self.tp_part_amount_first, self.tp_part_amount_second):
+                self.message_log("No grid orders after part filled TP, converted TP to grid", tlg=True)
+                self.tp_part_amount_first = self.tp_part_amount_second = Decimal('0')
             elif self.tp_was_filled:
-                self.message_log("grid_handler: Was filled TP and all grid orders, converse TP to grid", tlg=True)
+                self.message_log("Was filled TP and all grid orders, converse TP to grid", tlg=True)
                 self.after_filled_tp(one_else_grid=True)
             else:
                 # Ended grid order, calculate depo and Reverse
@@ -2967,20 +2869,78 @@ class Strategy(StrategyBase):
             else:
                 self.place_profit_order(by_market)
 
+    def convert_tp(self, _amount_f: Decimal, _amount_s: Decimal) -> bool:
+        # Correction sum_amount
+        self.message_log(f"Converted TP amount to grid: first: {_amount_f}, second: {_amount_s}")
+        self.message_log(f"Before Correction: Sum_amount_first: {self.sum_amount_first},"
+                         f" Sum_amount_second: {self.sum_amount_second}",
+                         log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+        self.sum_amount_first -= _amount_f
+        self.sum_amount_second -= _amount_s
+        self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
+                         f" Sum_amount_second: {self.sum_amount_second}",
+                         log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+
+        # Return depo in turnover without loss
+        tcm = self.get_trading_capability_manager()
+        if self.cycle_buy:
+            min_trade_amount = tcm.get_min_buy_amount(float(self.avg_rate))
+            amount = _amount_s
+            if self.reverse:
+                reverse_target_amount = self.reverse_target_amount * _amount_f / self.reverse_init_amount
+            else:
+                reverse_target_amount = _amount_f + (FEE_MAKER * 2 + PROFIT) * _amount_f / 100
+        else:
+            min_trade_amount = tcm.get_min_sell_amount(float(self.avg_rate))
+            amount = _amount_f
+            if self.reverse:
+                reverse_target_amount = self.reverse_target_amount * _amount_s / self.reverse_init_amount
+            else:
+                reverse_target_amount = _amount_s + (FEE_MAKER * 2 + PROFIT) * _amount_s / 100
+        self.message_log(f"For additional {'Buy' if self.cycle_buy else 'Sell'}"
+                         f"{' Reverse' if self.reverse else ''} grid amount: {amount},"
+                         f" reverse_target_amount: {reverse_target_amount}",
+                         tlg=True)
+        if float(amount) > min_trade_amount:
+            self.message_log("Place additional grid orders and replace TP", tlg=True)
+            self.tp_hold_additional = True
+            self.place_grid(self.cycle_buy,
+                            amount,
+                            reverse_target_amount,
+                            allow_grid_shift=False,
+                            additional_grid=True)
+            return True
+        if self.orders_hold:
+            self.message_log("Small amount was added to last held grid order", tlg=True)
+            _order = list(self.orders_hold.get_last())
+            _order[2] += amount / _order[3] if self.cycle_buy else amount
+            self.orders_hold.remove(_order[0])
+            self.orders_hold.append(*_order)
+            return True
+
+        if self.orders_grid:
+            self.message_log("Small amount was added to last grid order", tlg=True)
+            _order = list(self.orders_grid.get_last())
+            _order_updated = self.get_buffered_open_order(_order[0])
+            _order[2] = f2d(_order_updated.remaining_amount) + (amount / _order[3] if self.cycle_buy else amount)
+            self.cancel_grid_order_id = _order[0]
+            self.cancel_order(_order[0])
+            self.orders_hold.append(*_order)
+            return True
+
+        self.message_log("Too small for trade and not grid for update", tlg=True)
+        return False
+
     def cancel_grid(self, cancel_all=False):
         """
         Atomic cancel grid orders. Before start() all grid orders must be confirmed canceled
         """
         if self.grid_remove is None:
-            self.message_log("cancel_grid: Started", log_level=LogLevel.DEBUG)
+            self.grid_remove = True
             if cancel_all:
                 self.orders_save.orders_list.extend(self.orders_grid)
-            self.grid_remove = True
+            self.message_log("cancel_grid: Started", log_level=LogLevel.DEBUG)
         if self.grid_remove:
-            # Temporary save and clear hold orders avoid placing them
-            if self.orders_hold:
-                self.orders_save.orders_list.extend(self.orders_hold)
-                self.orders_hold.orders_list.clear()
             if self.orders_init:
                 # Exist not accepted grid order(s), wait msg from exchange
                 self.start_hold = True
@@ -2996,6 +2956,7 @@ class Strategy(StrategyBase):
                 self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
                 sum_amount = self.orders_save.sum_amount(self.cycle_buy) if self.grid_update_started else Decimal('0.0')
                 self.orders_save.orders_list.clear()
+                self.orders_hold.orders_list.clear()
                 self.grid_remove = None
                 self.order_q_placed = None
                 if self.tp_was_filled:
@@ -3258,13 +3219,13 @@ class Strategy(StrategyBase):
                     _profit_first = Decimal('0')
                     _profit_second = Decimal('0')
                     if self.cycle_buy:
-                        _x, target_fee = self.fee_for_tp(Decimal('0'), self.tp_target, log_output=False)
+                        _, target_fee = self.fee_for_tp(Decimal('0'), self.tp_target, log_output=False)
                         _profit_second = self.round_truncate(((target_fee - self.tp_amount) * amount_second_fee /
                                                               target_fee), base=False)
                         self.part_profit_second += _profit_second
                         self.message_log(f"Part profit second {self.part_profit_second}", log_level=LogLevel.DEBUG)
                     else:
-                        target_fee, _x = self.fee_for_tp(self.tp_target, Decimal('0'), log_output=False)
+                        target_fee, _ = self.fee_for_tp(self.tp_target, Decimal('0'), log_output=False)
                         _profit_first = self.round_truncate(((target_fee - self.tp_amount) * amount_first_fee /
                                                              target_fee), base=True)
                         self.part_profit_first += _profit_first
@@ -3470,11 +3431,14 @@ class Strategy(StrategyBase):
                 self.tp_wait_id = None
 
     def on_cancel_order_success(self, order_id: int, canceled_order: Order, cancel_all=False) -> None:  # noqa
-        if self.orders_grid.exist(order_id):
+        if order_id == self.cancel_grid_order_id:
+            self.cancel_grid_order_id = None
+            self.message_log(f"Processing updated grid order {order_id}", log_level=LogLevel.INFO)
+            self.orders_grid.remove(order_id)
+        elif self.orders_grid.exist(order_id):
             self.message_log(f"Processing canceled grid order {order_id}", log_level=LogLevel.INFO)
             self.part_amount.pop(order_id, None)
             self.orders_grid.remove(order_id)
-
             if self.restore_orders:
                 _order = self.orders_save.get_by_id(order_id)
                 self.orders_save.remove(order_id)
@@ -3482,13 +3446,13 @@ class Strategy(StrategyBase):
                 if not self.orders_save:
                     self.restore_orders = False
                     self.orders_hold.sort(self.cycle_buy)
+                    self.grid_remove = None
                     self.order_q_placed = False
                     self.place_profit_order()
             else:
                 self.cancel_grid(cancel_all=cancel_all)
-
         elif order_id == self.cancel_order_id:
-            self.message_log(f"Processing canceled TP order {order_id}", log_level=LogLevel.INFO)
+            self.message_log(f"Processing canceled TP order {order_id}")
             self.cancel_order_id = None
             self.tp_order_id = None
             self.tp_order = ()
@@ -3496,26 +3460,14 @@ class Strategy(StrategyBase):
                 self.tp_cancel_from_grid_handler = False
                 self.grid_handler()
                 return
-            if self.tp_part_amount_first or self.tp_part_amount_second:
-                # Correct sum_amount
-                self.sum_amount_first -= self.tp_part_amount_first
-                self.sum_amount_second -= self.tp_part_amount_second
-                self.message_log(f"Canceled TP part amount: first: {self.tp_part_amount_first},"
-                                 f" second: {self.tp_part_amount_second}",
-                                 log_level=LogLevel.DEBUG)
-                self.message_log(f"Corrected Sum_amount_first: {self.sum_amount_first},"
-                                 f" Sum_amount_second: {self.sum_amount_second}",
-                                 log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-                # Save correct amount
-                self.correction_amount_first += self.tp_part_amount_first
-                self.correction_amount_second += self.tp_part_amount_second
-                self.tp_part_amount_first = Decimal('0')
-                self.tp_part_amount_second = Decimal('0')
+            if self.tp_part_amount_first:
+                self.message_log(f"Partially filled TP order {order_id} was canceled")
+                self.convert_tp(self.tp_part_amount_first, self.tp_part_amount_second)
+                self.tp_part_amount_first = self.tp_part_amount_second =  Decimal('0')
                 # Save part profit
                 self.profit_first += self.part_profit_first
-                self.part_profit_first = Decimal('0')
                 self.profit_second += self.part_profit_second
-                self.part_profit_second = Decimal('0')
+                self.part_profit_first = self.part_profit_second = Decimal('0')
             if self.tp_hold:
                 self.tp_hold = False
                 self.place_profit_order()
@@ -3527,3 +3479,7 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
+        if order_id == self.cancel_grid_order_id:
+            self.cancel_grid_order_id = None
+            self.message_log(f"It was updated grid order {order_id}", log_level=LogLevel.INFO)
+            self.orders_hold.remove(order_id)

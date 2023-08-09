@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4b5"
+__version__ = "1.3.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -91,40 +91,42 @@ def write_log(level: LogLevel, message: str) -> None:
 
 def convert_from_minute(m: int) -> str:
     if 1 <= m < 3:
-        s = '1m'
+        return '1m'
     elif 3 <= m < 5:
-        s = '3m'
+        return '3m'
     elif 5 <= m < 15:
-        s = '5m'
+        return '5m'
     elif 15 <= m < 30:
-        s = '15m'
+        return '15m'
     elif 30 <= m < 60:
-        s = '30m'
+        return '30m'
     elif 60 <= m < 120:
-        s = '1h'
+        return '1h'
     elif 120 <= m < 240:
-        s = '2h'
+        return '2h'
     elif 240 <= m < 360:
-        s = '4h'
+        return '4h'
     elif 360 <= m < 480:
-        s = '6h'
+        return '6h'
     elif 480 <= m < 720:
-        s = '8h'
+        return '8h'
     elif 720 <= m < 1440:
-        s = '12h'
+        return '12h'
     elif 1440 <= m < 4320:
-        s = '1d'
+        return '1d'
     elif 4320 <= m < 10080:
-        s = '3d'
+        return '3d'
     elif 10080 <= m < 44640:
-        s = '1w'
+        return '1w'
     else:
-        s = '1m'
-    return s
+        return '1m'
 
 
 def trade_not_exist(_order_id: int, _trade_id: int) -> bool:
-    return all(not(trade.order_id == _order_id and trade.id == _trade_id) for trade in StrategyBase.trades)
+    return all(
+        trade.order_id != _order_id or trade.id != _trade_id
+        for trade in StrategyBase.trades
+    )
 
 
 def order_trades_sum(_order_id: int) -> Decimal:
@@ -201,7 +203,7 @@ class Order:
         # Overall amount of the order.
         self.amount = float(order['origQty'])
         # True if the order is a buy order.
-        self.buy = bool(order['side'] == 'BUY')
+        self.buy = order['side'] == 'BUY'
         # id of the order.
         self.id = int(order['orderId'])
         # Type of the order.
@@ -263,9 +265,8 @@ class TradingCapabilityManager:
         self.min_qty = float(_exchange_info_symbol['filters']['lotSize']['minQty'])
         self.max_qty = float(_exchange_info_symbol['filters']['lotSize']['maxQty'])
         self.step_size = float(_exchange_info_symbol['filters']['lotSize']['stepSize'])
-        self.min_notional = float(_exchange_info_symbol['filters'].get('notional', {}).get('minNotional', 0))
-        if not self.min_notional:
-            self.min_notional = float(_exchange_info_symbol['filters'].get('minNotional', {}).get('minNotional', 0))
+        self.min_notional = (float(_exchange_info_symbol['filters'].get('notional', {}).get('minNotional', 0))
+                             or float(_exchange_info_symbol['filters'].get('minNotional', {}).get('minNotional', 0)))
         self.tick_size = float(_exchange_info_symbol['filters']['priceFilter']['tickSize'])
         self.multiplier_up = float(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
         self.multiplier_down = float(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
@@ -290,7 +291,7 @@ class TradingCapabilityManager:
 
     def round_price(self, unrounded_price: float, rounding_type: RoundingType) -> float:
         k = f"{self.tick_size:.8f}".replace('5', '1').find('1') - 1
-        k = k if k > 0 else 0
+        k = max(k, 0)
         n = 10 ** k
         if rounding_type == RoundingType.CEIL:
             rounded_price = math.ceil(unrounded_price * n) / n if k else math.ceil(unrounded_price)
@@ -377,6 +378,8 @@ class OrderBook:
     """
     def __init__(self, _order_book) -> None:
 
+
+
         class _OrderBookRow:
             __slots__ = ("price", "amount")
 
@@ -388,10 +391,8 @@ class OrderBook:
         # List of asks ordered by price in ascending order.
         self.bids = []
         # List of bids ordered by price in descending order.
-        for _, v in enumerate(_order_book['asks']):
-            self.asks.append(_OrderBookRow(v))
-        for _, v in enumerate(_order_book['bids']):
-            self.bids.append(_OrderBookRow(v))
+        self.asks.extend(_OrderBookRow(v) for v in _order_book['asks'])
+        self.bids.extend(_OrderBookRow(v) for v in _order_book['bids'])
 
     def __call__(self):
         return self
@@ -560,6 +561,10 @@ class StrategyBase:
 
     def get_buffered_open_orders(self) -> List[Order]:
         return list(self.orders.values())
+
+    @classmethod
+    def get_buffered_open_order(cls, _id) -> Order:
+        return cls.orders.get(_id)
 
     def get_time(self) -> float:
         """
@@ -843,10 +848,7 @@ def session_data_handler(cls):
     # Save session detail for analytics
     session_data = Path(session_root, "snapshot")
     session_data.mkdir(parents=True, exist_ok=True)
-    #
-    d_ticker = {}
-    for k, v in cls.s_ticker.items():
-        d_ticker[k] = v['lastPrice']
+    d_ticker = {k: v['lastPrice'] for k, v in cls.s_ticker.items()}
     ds_ticker = pd.Series(d_ticker).astype(float)
     ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
     #
@@ -880,8 +882,7 @@ async def backtest_data_control():
         swap = psutil.swap_memory()
         total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
         if time.time() - ts > ms.SAVE_PERIOD or total_used_percent > 70:
-            sc = cls.start_collect
-            if sc:
+            if sc := cls.start_collect:
                 cls.start_collect = False
                 session_data_handler(cls)
                 cls.reset_var()
@@ -908,9 +909,7 @@ async def buffered_candle():
                 cls.strategy.klines[i.value] = kline
         else:
             kline = klines_from_file.get(i.value, {})
-        # print(f"buffered_candle.kline: {kline}")
-        candles = kline.get('klines', [])
-        if candles:
+        if candles := kline.get('klines', []):
             kline_i = cls.Klines(i.value)
             for candle in candles:
                 kline_i.refresh(json.loads(candle))
@@ -1150,41 +1149,63 @@ async def on_order_update():
 
 
 def on_order_update_handler(cls, ed):
-    if (cls.symbol == ed['symbol'] and
-            cls.order_exist(ed['order_id']) and
-            ed['order_status'] in ('FILLED', 'PARTIALLY_FILLED')):
-        if ed['order_status'] == 'FILLED':
-            # Remove from orders dict
-            remove_from_orders_lists([ed['order_id']])
-        if trade_not_exist(ed['order_id'], ed['trade_id']):
-            trade = {"qty": ed['last_executed_quantity'],
-                     "isBuyer": bool(ed['side'] == 'BUY'),
-                     "id": ed['trade_id'],
-                     "orderId": ed['order_id'],
-                     "price": ed['last_executed_price'],
-                     "time": ed['transaction_time']}
-            #  Append to trades list
-            cls.trades.append(PrivateTrade(trade))
-            # noinspection PyStatementEffect
-            cls.trades[-TRADES_LIST_LIMIT:]
-            cumulative_quantity = Decimal(ed['cumulative_filled_quantity'])
-            saved_filled_quantity = order_trades_sum(ed['order_id'])
-            if ed['order_status'] == 'FILLED' and saved_filled_quantity != cumulative_quantity:
-                cls.strategy.message_log(f"Order: {ed['order_id']} was missed partially filling event",
-                                         log_level=LogLevel.INFO)
-                # Remove trades associated with order from list
-                remove_from_trades_lists(ed['order_id'])
-                # Update current trade
-                price = str(Decimal(ed['quote_asset_transacted']) / Decimal(ed['cumulative_filled_quantity']))
-                trade.update({"qty": ed['cumulative_filled_quantity'], "price": price})
-                # cls.strategy.message_log(f"on_order_update.trade: {trade}",
-                #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
-                # Append to list
-                cls.trades.append(PrivateTrade(trade))
-            cls.strategy.on_order_update(OrderUpdate(ed))
-            if ms.MODE == 'TC' and cls.strategy.start_collect:
-                cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update({'lastPrice': ed['last_executed_price']})
-                cls.strategy.open_orders_snapshot()
+    if (
+        cls.symbol != ed['symbol']
+        or not cls.order_exist(ed['order_id'])
+        or ed['order_status'] not in ('FILLED', 'PARTIALLY_FILLED')
+    ):
+        return
+    if ed['order_status'] == 'FILLED':
+        # Remove from orders dict
+        remove_from_orders_lists([ed['order_id']])
+    elif ed['order_status'] == 'PARTIALLY_FILLED':
+        # Update order in orders dict
+        _order = {
+            "orderId": ed['order_id'],
+            "price": ed['order_price'],
+            "origQty": ed['order_quantity'],
+            "executedQty": ed['cumulative_filled_quantity'],
+            "type": ed['order_type'],
+            "side": ed['side'],
+            "transactTime": ed['transaction_time'],
+        }
+        cls.orders |= {ed['order_id']: Order(_order)}
+
+    if trade_not_exist(ed['order_id'], ed['trade_id']):
+        _on_order_update_handler_ext(ed, cls)
+
+
+def _on_order_update_handler_ext(ed, cls):
+    trade = {
+        "qty": ed['last_executed_quantity'],
+        "isBuyer": ed['side'] == 'BUY',
+        "id": ed['trade_id'],
+        "orderId": ed['order_id'],
+        "price": ed['last_executed_price'],
+        "time": ed['transaction_time'],
+    }
+    #  Append to trades list
+    cls.trades.append(PrivateTrade(trade))
+    # noinspection PyStatementEffect
+    cls.trades[-TRADES_LIST_LIMIT:]
+    cumulative_quantity = Decimal(ed['cumulative_filled_quantity'])
+    saved_filled_quantity = order_trades_sum(ed['order_id'])
+    if ed['order_status'] == 'FILLED' and saved_filled_quantity != cumulative_quantity:
+        cls.strategy.message_log(f"Order: {ed['order_id']} was missed partially filling event",
+                                 log_level=LogLevel.INFO)
+        # Remove trades associated with order from list
+        remove_from_trades_lists(ed['order_id'])
+        # Update current trade
+        price = str(Decimal(ed['quote_asset_transacted']) / cumulative_quantity)
+        trade |= {"qty": ed['cumulative_filled_quantity'], "price": price}
+        # cls.strategy.message_log(f"on_order_update.trade: {trade}",
+        #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
+        # Append to list
+        cls.trades.append(PrivateTrade(trade))
+    cls.strategy.on_order_update(OrderUpdate(ed))
+    if ms.MODE == 'TC' and cls.strategy.start_collect:
+        cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update({'lastPrice': ed['last_executed_price']})
+        cls.strategy.open_orders_snapshot()
 
 
 async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> None:
@@ -1442,39 +1463,38 @@ def back_test_handler(cls):
     original_time = timedelta(seconds=original_time)
     print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
     if ms.SAVE_DS:
-        # Save test data
-        session_path = Path(BACKTEST_PATH,
-                            f"{cls.exchange}_{cls.symbol}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
-        session_path.mkdir(parents=True)
-        ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
-        ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
-        df_grid_sell = pd.DataFrame().from_dict(cls.strategy.account.grid_sell, orient='index').astype(float)
-        df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-        df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
-        df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
-        #
-        ds_ticker.to_pickle(Path(session_path, TICKER_PKL))
-        df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
-        df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
-        copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
-        print(f"Session data saved to: {session_path}")
-        #
+        _back_test_handler_ext(cls)
     s_profit = session_result['profit'] = f"{cls.strategy.get_sum_profit()}"
     s_free = session_result['free'] = f"{cls.strategy.get_free_assets(mode='free', backtest=True)[2]}"
     print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
     loop.stop()
 
 
+def _back_test_handler_ext(cls):
+    # Save test data
+    session_path = Path(BACKTEST_PATH,
+                        f"{cls.exchange}_{cls.symbol}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
+    session_path.mkdir(parents=True)
+    ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
+    ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
+    df_grid_sell = pd.DataFrame().from_dict(cls.strategy.account.grid_sell, orient='index').astype(float)
+    df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+    df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
+    df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+    #
+    ds_ticker.to_pickle(Path(session_path, TICKER_PKL))
+    df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
+    df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
+    copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
+    print(f"Session data saved to: {session_path}")
+
+
 def order_book_prepare(_order_book: {}) -> {}:
     order_book = json_format.MessageToDict(_order_book)
     order_book_bids = order_book.pop('bids', [])
     order_book_asks = order_book.pop('asks', [])
-    _bids = []
-    for bid in order_book_bids:
-        _bids.append(json.loads(bid))
-    _asks = []
-    for ask in order_book_asks:
-        _asks.append(json.loads(ask))
+    _bids = [json.loads(bid) for bid in order_book_bids]
+    _asks = [json.loads(ask) for ask in order_book_asks]
     order_book.update({'bids': _bids})
     order_book.update({'asks': _asks})
     return order_book
@@ -1584,17 +1604,7 @@ def restore_state_before_backtesting(cls):
     saved_state = load_file(cls.state_file)
     cls.order_id = json.loads(saved_state.pop(MS_ORDER_ID, "0"))
     cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
-
-    # TODO change after update and restart
-    # cls.orders = jsonpickle.decode(saved_state.pop(ms_orders, '{}'))
-    #
-    _orders_from_save = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
-    if isinstance(_orders_from_save, list):
-        for _o in _orders_from_save:
-            cls.orders[_o.id] = _o
-    else:
-        cls.orders = _orders_from_save
-    #
+    cls.orders = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'))
     orders = json.loads(saved_state.get('orders'))
     # Restore initial state
     cls.strategy.cycle_buy = json.loads(saved_state.get('cycle_buy'))
@@ -1610,11 +1620,10 @@ def restore_state_before_backtesting(cls):
         cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
                                             'free': cls.strategy.initial_reverse_second,
                                             'locked': '0.0'}
+    elif cls.strategy.cycle_buy:
+        cls.strategy.initial_second = cls.strategy.deposit_second
     else:
-        if cls.strategy.cycle_buy:
-            cls.strategy.initial_second = cls.strategy.deposit_second
-        else:
-            cls.strategy.initial_first = cls.strategy.deposit_first
+        cls.strategy.initial_first = cls.strategy.deposit_first
     cls.strategy.account.restore_state(cls.symbol, cls.start_time_ms, orders)
     cls.strategy.last_shift_time = json.loads(saved_state.get('last_shift_time')) or cls.strategy.local_time()
     cls.strategy.order_q = json.loads(saved_state.get('order_q'))

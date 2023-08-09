@@ -33,8 +33,9 @@ def try_trade(mbs, **kwargs):
     mbs.ex.MODE = 'S'
     mbs.ex.SAVE_DS = False
     mbs.trade()
-    result = float(mbs.session_result.get('profit', 0)) + float(mbs.session_result.get('free', 0))
-    return result
+    return float(mbs.session_result.get('profit', 0)) + float(
+        mbs.session_result.get('free', 0)
+    )
 
 
 def main():

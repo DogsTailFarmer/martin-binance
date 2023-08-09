@@ -87,14 +87,12 @@ ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 ex.MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 ex.SAVE_DS = True  # Save session result data (ticker, orders) for compare
 ex.SAVE_PERIOD = 24 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
-ex.SAVED_STATE = True  # Use saved state for backtesing
+ex.SAVED_STATE = False  # Use saved state for backtesting
 ################################################################
 #                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
-config = None
 ex.PARAMS = Path(__file__).absolute()
-if ex.CONFIG_FILE.exists():
-    config = toml.load(str(ex.CONFIG_FILE))
+config = toml.load(str(ex.CONFIG_FILE)) if ex.CONFIG_FILE.exists() else None
 ex.HEAD_VERSION = __version__
 ex.EXCHANGE = config.get('exchange')
 ex.VPS_NAME = config.get('Exporter').get('vps_name')
@@ -108,6 +106,7 @@ for tlg in telegram:
         ex.INLINE_BOT = tlg.get('inline')
         break
 
+
 def trade():
     import logging.handlers
     # For autoload last state
@@ -116,12 +115,13 @@ def trade():
     log_file = Path(ex.LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
     ex.LAST_STATE_FILE = Path(ex.LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
     #
-    logger = logging.getLogger('logger')
-    logger.setLevel(logging.DEBUG)
+    _logger = logging.getLogger('logger')
+    _logger.setLevel(logging.DEBUG)
     handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
     handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-    logger.addHandler(handler)
-    logger.propagate = False
+    _logger.addHandler(handler)
+    _logger.propagate = False
+    #
     try:
         loop.create_task(main(ex.SYMBOL))
         loop.run_forever()

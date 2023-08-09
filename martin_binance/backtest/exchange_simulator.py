@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1-1"
+__version__ = "1.3.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -236,7 +236,7 @@ class Account:
                 if self.save_ds and self.orders_sell.values.size:
                     self.grid_sell[ts] = self.orders_sell
         except Exception as ex:
-            raise UserWarning(f"Order {order_id} not active: {ex}")
+            raise UserWarning(f"Order {order_id} not active: {ex}") from ex
         else:
             self.orders[order_id] = order
             self.funds.on_order_canceled(order.side, order.orig_qty, order.price)

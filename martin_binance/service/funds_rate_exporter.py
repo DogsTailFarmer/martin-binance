@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.1-2"
+__version__ = "1.3.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -39,10 +39,7 @@ if not CONFIG_FILE.exists():
 config = toml.load(str(CONFIG_FILE)).get('Exporter')
 accounts = toml.load(str(SRV_CONFIG_FILE)).get('accounts')
 
-names = {}
-for acc in accounts:
-    names[acc['name']] = acc['exchange']
-
+names = {acc['name']: acc['exchange'] for acc in accounts}
 # external port for prometheus
 PORT = config.get('port')
 
@@ -193,7 +190,7 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
         id_exchange = int(row[1])
         f_currency = str(row[2])
         s_currency = str(row[3])
-        pair = f_currency + "/" + s_currency
+        pair = f"{f_currency}/{s_currency}"
         cycle_count = int(row[4])
         CYCLE_COUNT.labels(exchange, pair, VPS_NAME).set(cycle_count)
         sum_f_profit = float(row[5])
@@ -222,8 +219,7 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
                         AND s_currency=:s_currency\
                         ORDER BY id DESC LIMIT 1',
                        {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
-        last_rate_row = cursor.fetchone()
-        if last_rate_row:
+        if last_rate_row := cursor.fetchone():
             last_rate = float(last_rate_row[0])
             LAST_RATE.labels(exchange, pair, VPS_NAME).set(last_rate)
         else:
@@ -284,9 +280,7 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
                         AND active=1\
                         ORDER BY id DESC LIMIT 1',
                        {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
-        balance_row = cursor.fetchone()
-        # print(f"balance_row: {balance_row}")
-        if balance_row:
+        if balance_row := cursor.fetchone():
             f_balance = balance_row[0]
             s_balance = balance_row[1]
             balance = f_balance * last_rate + s_balance

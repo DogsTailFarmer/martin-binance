@@ -1,10 +1,12 @@
-## v1.3.4b0 2023-07-16
+## v1.3.4rc1 2023-08-09
 ### Fix
 * Processing of the situation when at bulk cancel of the grid orders and one or more of orders are FILLED.
   - cancel loop is interrupted
   - orders with received CANCELED status are restored
   - status is requested for unconfirmed orders and processing is performed: recovery if status is CANCELED,
   - normal processing in case of filling in
+
+* Processing of the situation when after partially filled TP one or some or all grids are filled
 
 * `executor.get_free_assets(mode='free')`: incorrect balance for opposite asset (always 0),
 as a result - a negative value of free funds
