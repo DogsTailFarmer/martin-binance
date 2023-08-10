@@ -375,7 +375,6 @@ class OrderBook:
     """
     def __init__(self, _order_book) -> None:
 
-
         class _OrderBookRow:
             __slots__ = ("price", "amount")
 
