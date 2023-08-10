@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "1.3.4rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -535,7 +535,7 @@ class Orders:
     def __len__(self):
         return len(self.orders_list)
 
-    def append(self, _id: int, buy: bool, amount: Decimal, price: Decimal):
+    def append_order(self, _id: int, buy: bool, amount: Decimal, price: Decimal):
         self.orders_list.append({'id': _id, 'buy': buy, 'amount': amount, 'price': price})
 
     def remove(self, _id: int):
@@ -558,9 +558,7 @@ class Orders:
         return order
 
     def get_by_id(self, _id: int) -> {}:
-        for i in self.orders_list:
-            if i['id'] == _id:
-                return i
+        return next((i for i in self.orders_list if i['id'] == _id), None)
 
     def exist(self, _id: int) -> bool:
         return any(i['id'] == _id for i in self.orders_list)
@@ -2037,9 +2035,9 @@ class Strategy(StrategyBase):
                     waiting_order_id = self.place_limit_order(buy_side,
                                                               amount if STANDALONE else float(amount),
                                                               price if STANDALONE else float(price))
-                    self.orders_init.append(waiting_order_id, buy_side, amount, price)
+                    self.orders_init.append_order(waiting_order_id, buy_side, amount, price)
                 else:
-                    self.orders_hold.append(i, buy_side, amount, price)
+                    self.orders_hold.append_order(i, buy_side, amount, price)
             #
             if allow_grid_shift:
                 bb = None
@@ -2760,7 +2758,7 @@ class Strategy(StrategyBase):
                             self.order_q_placed = True
                         break
                     waiting_order_id = self.place_limit_order_check(i['buy'], i['amount'], i['price'], check=True)
-                    self.orders_init.append(waiting_order_id, i['buy'], i['amount'], i['price'])
+                    self.orders_init.append_order(waiting_order_id, i['buy'], i['amount'], i['price'])
                     k += 1
                 del self.orders_hold.orders_list[:k]
 
@@ -2861,7 +2859,7 @@ class Strategy(StrategyBase):
                 _, _buy, _amount, _price = self.orders_hold.get_first()
                 check = (len(self.orders_grid) + len(self.orders_hold)) <= 2
                 waiting_order_id = self.place_limit_order_check(_buy, _amount, _price, check=check)
-                self.orders_init.append(waiting_order_id, _buy, _amount, _price)
+                self.orders_init.append_order(waiting_order_id, _buy, _amount, _price)
                 del self.orders_hold.orders_list[0]
             # Exist filled but non processing TP
             if self.tp_was_filled:
@@ -2915,7 +2913,7 @@ class Strategy(StrategyBase):
             _order = list(self.orders_hold.get_last())
             _order[2] += amount / _order[3] if self.cycle_buy else amount
             self.orders_hold.remove(_order[0])
-            self.orders_hold.append(*_order)
+            self.orders_hold.append_order(*_order)
             return True
 
         if self.orders_grid:
@@ -2925,7 +2923,7 @@ class Strategy(StrategyBase):
             _order[2] = f2d(_order_updated.remaining_amount) + (amount / _order[3] if self.cycle_buy else amount)
             self.cancel_grid_order_id = _order[0]
             self.cancel_order(_order[0])
-            self.orders_hold.append(*_order)
+            self.orders_hold.append_order(*_order)
             return True
 
         self.message_log("Too small for trade and not grid for update", tlg=True)
@@ -3350,7 +3348,7 @@ class Strategy(StrategyBase):
                                  color=Style.B_RED)
         else:
             if self.orders_init.exist(place_order_id):
-                self.orders_grid.append(order.id, order.buy, f2d(order.amount), f2d(order.price))
+                self.orders_grid.append_order(order.id, order.buy, f2d(order.amount), f2d(order.price))
                 self.orders_grid.sort(self.cycle_buy)
                 '''
                 self.message_log(f"on_place_order_success.orders_grid", log_level=LogLevel.DEBUG)
@@ -3463,7 +3461,7 @@ class Strategy(StrategyBase):
             if self.tp_part_amount_first:
                 self.message_log(f"Partially filled TP order {order_id} was canceled")
                 self.convert_tp(self.tp_part_amount_first, self.tp_part_amount_second)
-                self.tp_part_amount_first = self.tp_part_amount_second =  Decimal('0')
+                self.tp_part_amount_first = self.tp_part_amount_second = Decimal('0')
                 # Save part profit
                 self.profit_first += self.part_profit_first
                 self.profit_second += self.part_profit_second

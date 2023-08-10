@@ -92,34 +92,31 @@ def write_log(level: LogLevel, message: str) -> None:
 def convert_from_minute(m: int) -> str:
     if 1 <= m < 3:
         return '1m'
-    elif 3 <= m < 5:
+    if 3 <= m < 5:
         return '3m'
-    elif 5 <= m < 15:
+    if 5 <= m < 15:
         return '5m'
-    elif 15 <= m < 30:
+    if 15 <= m < 30:
         return '15m'
-    elif 30 <= m < 60:
+    if 30 <= m < 60:
         return '30m'
-    elif 60 <= m < 120:
+    if 60 <= m < 120:
         return '1h'
-    elif 120 <= m < 240:
+    if 120 <= m < 240:
         return '2h'
-    elif 240 <= m < 360:
+    if 240 <= m < 360:
         return '4h'
-    elif 360 <= m < 480:
+    if 360 <= m < 480:
         return '6h'
-    elif 480 <= m < 720:
+    if 480 <= m < 720:
         return '8h'
-    elif 720 <= m < 1440:
+    if 720 <= m < 1440:
         return '12h'
-    elif 1440 <= m < 4320:
+    if 1440 <= m < 4320:
         return '1d'
-    elif 4320 <= m < 10080:
+    if 4320 <= m < 10080:
         return '3d'
-    elif 10080 <= m < 44640:
-        return '1w'
-    else:
-        return '1m'
+    return '1w' if 10080 <= m < 44640 else '1m'
 
 
 def trade_not_exist(_order_id: int, _trade_id: int) -> bool:
@@ -377,7 +374,6 @@ class OrderBook:
     order_book.asks[0].amount
     """
     def __init__(self, _order_book) -> None:
-
 
 
         class _OrderBookRow:

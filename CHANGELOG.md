@@ -1,3 +1,10 @@
+## v1.3.4rc2 2023-08-10
+### Info
+* Starting with version `martin-binance 1.3.4`, compatibility with `margin` will be lost, since some new parts
+of the code are no longer supported by implemented `Python 3.7`. I'm focused on `Python 3.10`.
+I won't rid the code of numerous compatibility elements yet, so if the margin team will update its version,
+everything should work.
+
 ## v1.3.4rc1 2023-08-09
 ### Fix
 * Processing of the situation when at bulk cancel of the grid orders and one or more of orders are FILLED.

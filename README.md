@@ -8,10 +8,8 @@
 
 <h3 align="center">Free trading system for crypto exchanges (Binance, Bitfinex, Huobi, OKX,)</h3>
 
-<h4 align="center">Other crypto exchanges available through multi-exchange terminal MARGIN https://margin.de</h4>
-
 ***
-<h4 align="center">martin-binance <a href="https://pypi.org/project/martin-binance/"><img align="center" src="https://img.shields.io/pypi/v/martin-binance" alt="PyPI version"></a> <--> exchanges-wrapper <a href="https://pypi.org/project/exchanges-wrapper/"><img align="center" src="https://img.shields.io/pypi/v/exchanges-wrapper" alt="PyPI version"></a></h4>
+<h4 align="center">martin-binance <a href="https://pypi.org/project/martin-binance/"><img src="https://img.shields.io/pypi/v/martin-binance" alt="PyPI version"></a> <--> exchanges-wrapper <a href="https://pypi.org/project/exchanges-wrapper/"><img src="https://img.shields.io/pypi/v/exchanges-wrapper" alt="PyPI version"></a></h4>
 
 ***
 <h1 align="center"><a href="https://codeclimate.com/github/DogsTailFarmer/martin-binance/maintainability"><img src="https://api.codeclimate.com/v1/badges/bfa43f47d1c9a385fd8a/maintainability"/></a>
@@ -28,6 +26,12 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
+
+* Starting with version `martin-binance 1.3.4`, compatibility with `margin` will be lost, since some new parts
+  of the code are no longer supported by implemented `Python 3.7`. I'm focused on `Python 3.10`.
+  I won't rid the code of numerous compatibility elements yet, so if the margin team will update its version,
+  everything should work.
+
 * You cannot run multiple pairs with overlapping currencies on the same account!
 
 >Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
