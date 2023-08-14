@@ -1,6 +1,5 @@
-exchanges-wrapper~=1.3.5rc2
+exchanges-wrapper~=1.3.5rc6
 margin-strategy-sdk==0.0.11
-aiohttp==3.8.5
 grpcio==1.56.0
 jsonpickle==3.0.1
 psutil==5.9.5

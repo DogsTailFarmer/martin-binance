@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "1.3.4rc4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -648,11 +648,11 @@ async def heartbeat(_session):
                 #
                 if cls.client_id and cls.wss_fire_up:
                     try:
-                        await cls.session.get_client()
-                        update_class_var(cls.session)
-                        await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
-                        await wss_init(update_max_queue_size=update_max_queue_size)
-                        cls.wss_fire_up = False
+                        if await cls.session.get_client():
+                            update_class_var(cls.session)
+                            await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
+                            await wss_init(update_max_queue_size=update_max_queue_size)
+                            cls.wss_fire_up = False
                     except Exception as ex:
                         logger.warning(f"Exception on fire up WSS: {ex}")
                         cls.wss_fire_up = True

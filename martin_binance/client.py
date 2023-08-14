@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "1.3.4rc4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -47,6 +47,9 @@ class Trade:
                 else:
                     self.wait_connection = False
                     self.client = client
+                    return True
+        else:
+            return False
 
     async def connect(self):
         try:
