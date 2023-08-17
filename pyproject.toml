@@ -19,20 +19,20 @@ requires-python = ">=3.8"
 dependencies = [
     "exchanges-wrapper~=1.3.6b2",
     "margin-strategy-sdk==0.0.11",
-    "jsonpickle==3.0.1",
+    "jsonpickle==3.0.2",
     "psutil==5.9.5",
     "requests==2.31.0",
     "libtmux==0.22.1",
     "colorama==0.4.6",
     "prometheus-client==0.17.1",
     "optuna==3.3.0",
-    "plotly==5.15.0",
+    "plotly==5.16.1",
     "pandas==2.0.3",
-    "dash==2.11.1",
+    "dash==2.12.1",
     "future==0.18.3",
     "inquirer==3.1.3",
     "scikit-learn==1.3.0",
-    "tqdm==4.66.0",
+    "tqdm==4.66.1",
 ]
 
 [tool.flit.module]
