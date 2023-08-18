@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "1.3.4rc4-4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -3342,6 +3342,7 @@ class Strategy(StrategyBase):
                     # After place but before accept TP was filled some grid
                     self.after_filled_tp(one_else_grid=True)
                 else:
+                    self.restore_orders = False
                     self.cancel_grid(cancel_all=True)
             else:
                 self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR,
