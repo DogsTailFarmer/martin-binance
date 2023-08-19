@@ -1,3 +1,13 @@
+## 1.3.4rc4-5 2023-08-19
+### Fix
+* Up requirements for exchanges-wrapper to 1.3.6b6
+* Up other requirements
+* Some minor improvements
+
+## 1.3.4rc4-4
+### Fix
+* [Handling additional TP filled by market after placed additional grid after filled grid after filled ordinary TP](https://github.com/DogsTailFarmer/martin-binance/issues/62#issue-1856466446)
+
 ## v1.3.4rc2 2023-08-10
 ### Info
 * Starting with version `martin-binance 1.3.4`, compatibility with `margin` will be lost, since some new parts

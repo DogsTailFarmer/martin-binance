@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4rc4-4"
+__version__ = "1.3.4rc4-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1552,7 +1552,8 @@ class Strategy(StrategyBase):
             self.message_log('Stop, waiting manual action', tlg=True)
         else:
             self.message_log(f"Number of unreachable objects collected by GC: {gc.collect(generation=2)}")
-            self.message_log(f"Initial first: {ff}, second: {fs}", color=Style.B_WHITE)
+            if self.first_run or self.restart:
+                self.message_log(f"Initial first: {ff}, second: {fs}", color=Style.B_WHITE)
             self.restart = None
             # Init variable
             self.profit_first = Decimal('0')
@@ -3206,6 +3207,7 @@ class Strategy(StrategyBase):
                         self.tp_cancel_from_grid_handler = False
                         self.grid_handler()
                     else:
+                        self.restore_orders = False
                         self.cancel_grid(cancel_all=True)
                 else:
                     self.message_log('Wild order, do not know it', tlg=True)

@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4rc4"
+__version__ = "1.3.4rc4-5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -127,7 +127,7 @@ def trade_not_exist(_order_id: int, _trade_id: int) -> bool:
 
 
 def order_trades_sum(_order_id: int) -> Decimal:
-    saved_filled_quantity = Decimal(0)
+    saved_filled_quantity = Decimal("0")
     for _trade in StrategyBase.trades:
         if _trade.order_id == _order_id:
             saved_filled_quantity += Decimal(str(_trade.amount))
@@ -1037,7 +1037,7 @@ async def buffered_orders():
             for order in orders:
                 _id = int(order['orderId'])
                 exch_orders.append(_id)
-                if (order.get('status', None) == 'PARTIALLY_FILLED'
+                if (order.get('status') == 'PARTIALLY_FILLED'
                         and order_trades_sum(_id) < Decimal(order['executedQty'])):
                     diff_id.add(_id)
 
