@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4rc4-5"
+__version__ = "1.3.4rc5-1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1053,7 +1053,7 @@ async def buffered_orders():
             if cls.last_state:
                 cls.strategy.restore_strategy_state(restore=True)
 
-            if ms.MODE == 'TC' and cls.last_state:
+            if cls.last_state and ms.MODE == 'TC' and ms.SAVED_STATE:
                 last_state = cls.strategy.save_strategy_state(return_only=True)
                 last_state_update(cls, last_state)
                 with cls.state_file.open(mode='w') as outfile:
