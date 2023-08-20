@@ -1,3 +1,7 @@
+## 1.3.4rc5 2023-08-20
+### Fix
+* Up requirements for exchanges-wrapper to 1.3.6b7
+
 ## 1.3.4rc4-5 2023-08-19
 ### Fix
 * Up requirements for exchanges-wrapper to 1.3.6b6
