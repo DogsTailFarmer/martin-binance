@@ -1,3 +1,10 @@
+## 1.3.4rc5-1 2023-08-24
+### Update
+* `relaunch.py`: update deprecation method for `libtmux==0.22.1` 
+
+### Fix
+* [ Windows path can't contain ':' symbol #65 ](https://github.com/DogsTailFarmer/martin-binance/issues/65)
+
 ## 1.3.4rc5 2023-08-20
 ### Fix
 * Up requirements for exchanges-wrapper to 1.3.6b7

@@ -858,7 +858,7 @@ def session_data_handler(cls):
     #
     copy(ms.PARAMS, Path(session_root, Path(ms.PARAMS).name))
 
-    shutil.make_archive(str(Path(BACKTEST_PATH, f"{session_root}_{datetime.now().strftime('%m%d-%H:%M')}")),
+    shutil.make_archive(str(Path(BACKTEST_PATH, f"{session_root}_{datetime.now().strftime('%m%d-%H-%M')}")),
                         'zip',
                         session_root)
 
@@ -1468,7 +1468,7 @@ def back_test_handler(cls):
 def _back_test_handler_ext(cls):
     # Save test data
     session_path = Path(BACKTEST_PATH,
-                        f"{cls.exchange}_{cls.symbol}_{datetime.now().strftime('%m%d-%H:%M:%S')}")
+                        f"{cls.exchange}_{cls.symbol}_{datetime.now().strftime('%m%d-%H-%M-%S')}")
     session_path.mkdir(parents=True)
     ds_ticker = pd.Series(cls.strategy.account.ticker).astype(float)
     ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
