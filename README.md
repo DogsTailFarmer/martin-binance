@@ -25,7 +25,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* For exchanges-wrapper `v1.3.6b4`, `v1.3.6b7` must be updated `exch_srv_cfg.toml` (see [CHANGELOG](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/CHANGELOG.md) for details)
+* For `exchanges-wrapper` `v1.3.6b4`-`v1.3.6b7` must be updated `exch_srv_cfg.toml` (see [CHANGELOG](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/CHANGELOG.md) for details)
 * Starting with version `martin-binance 1.3.4`, compatibility with `margin` will be lost, since some new parts
   of the code are no longer supported by implemented `Python 3.7`. I'm focused on `Python 3.10`.
   I won't rid the code of numerous compatibility elements yet, so if the margin team will update its version,
