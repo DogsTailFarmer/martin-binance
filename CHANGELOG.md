@@ -1,3 +1,5 @@
+* Fix: tmp converted when restored MS_ORDERS from list to dict (inter-version compatibility)
+
 ## 1.3.4rc5-1 2023-08-24
 ### Update
 * `relaunch.py`: update deprecation method for `libtmux==0.22.1` 

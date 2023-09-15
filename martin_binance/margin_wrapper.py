@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4rc5-1"
+__version__ = "1.3.5b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -437,6 +437,7 @@ class StrategyBase:
     bulk_orders_cancel = {}
     session_root: Path
     state_file: Path
+    operational_status = None
 
     def __init__(self):
         print("Init StrategyBase")
@@ -634,7 +635,7 @@ async def heartbeat(_session):
                     json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                 #
                 update_max_queue_size = False
-                if time.time() - last_exec_time > HEARTBEAT * 30:
+                if cls.operational_status and (time.time() - last_exec_time > HEARTBEAT * 30):
                     last_exec_time = time.time()
                     try:
                         res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
@@ -793,6 +794,9 @@ async def ask_exit():
     if cls.strategy:
         cls.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
 
+        cls.operational_status = False
+        await asyncio.sleep(HEARTBEAT)
+
         if ms.MODE in ('T', 'TC'):
             await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
             if ms.MODE == 'TC':
@@ -810,12 +814,7 @@ async def ask_exit():
         await cls.channel.close()
         cls.strategy = None
         if ms.MODE in ('T', 'TC') and ms.LAST_STATE_FILE.exists():
-            answer = input('Save current state? y/n:\n')
-            if answer.lower() != 'y':
-                ms.LAST_STATE_FILE.replace(ms.LAST_STATE_FILE.with_suffix('.bak'))
-                print('Current state cleared')
-            else:
-                print('OK')
+            print(f"Current state saved into {ms.LAST_STATE_FILE}")
 
 
 def session_data_handler(cls):
@@ -926,7 +925,7 @@ async def on_klines_update(_klines: {str: StrategyBase.Klines}):
             async for candle in cls.for_request(cls.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
                                                 symbol=cls.symbol,
                                                 interval=json.dumps(_interval)):
-                # print(f"on_klines_update: {candle.symbol}, {candle.interval}, candle: {json.loads(candle.candle)}")
+                # print(f"on_klines_update: {candle.symbol}, {candle.interval}, candle: {json.loads(candle.candle)[0]}")
                 _klines.get(candle.interval).refresh(json.loads(candle.candle))
                 if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
                     new_raw = {int(time.time() * 1000): candle.candle}
@@ -989,17 +988,16 @@ async def buffered_orders():
     exch_orders = []
     diff_id = set()
     restore = False
-    run = False
-    while not run:
+    while not cls.operational_status:
         try:
             res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
         except Exception as ex:
             logger.warning(f"Exception on Check WSS: {ex}")
         else:
             if res.success:
-                run = True
+                cls.operational_status = True
         await asyncio.sleep(HEARTBEAT)
-    while run:
+    while cls.operational_status:
         try:
             res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
             if res is None or not res.success:
@@ -1013,14 +1011,7 @@ async def buffered_orders():
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.trades = jsonpickle.decode(cls.last_state.pop('ms_trades', '[]'))
-                # TODO change after update and restart
-                # cls.orders = jsonpickle.decode(cls.last_state.pop(ms_orders, '{}'), keys=True)
-                _orders_from_save = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
-                if isinstance(_orders_from_save, list):
-                    for _o in _orders_from_save:
-                        cls.orders[_o.id] = _o
-                else:
-                    cls.orders = _orders_from_save
+                cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
                 #
                 cls.strategy.restore_strategy_state(cls.last_state, restore=False)
 
@@ -1066,7 +1057,7 @@ async def buffered_orders():
 
         except asyncio.CancelledError:
             # print("buffered_orders.Cancelled")
-            run = False
+            cls.operational_status = False
         except UserWarning as ex:
             cls.strategy.message_log(f"Exception buffered_orders: {ex}", log_level=LogLevel.WARNING)
             restore = True
@@ -1425,6 +1416,7 @@ async def on_ticker_update():
                               'lastPrice': ticker.close_price,
                               'closeTime': ticker.event_time}
                 cls.ticker = ticker_24h
+                # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                 cls.strategy.on_new_ticker(Ticker(cls.ticker))
                 #
                 if ms.MODE == 'TC' and cls.strategy.start_collect:
