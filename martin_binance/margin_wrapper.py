@@ -546,10 +546,6 @@ class StrategyBase:
                          color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
         loop.create_task(create_limit_order(cls.order_id, buy, any2str(amount), any2str(price)))
-        if cls.exchange == 'huobi':
-            time.sleep(0.02)
-        elif cls.exchange == 'okx':
-            time.sleep(0.035)
         return cls.order_id
 
     def get_buffered_completed_trades(self, _get_all_trades: bool = False) -> List[PrivateTrade]:

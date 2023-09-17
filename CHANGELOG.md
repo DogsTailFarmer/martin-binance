@@ -1,3 +1,4 @@
+* Fix: Incorrect calculated depo volume for grid update, not include held grid orders volume
 * Fix: tmp converted when restored MS_ORDERS from list to dict (inter-version compatibility)
 
 ## 1.3.4rc5-1 2023-08-24

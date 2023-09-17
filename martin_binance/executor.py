@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4rc4-5"
+__version__ = "1.3.5b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2953,7 +2953,9 @@ class Strategy(StrategyBase):
                 self.cancel_order_exp(_id, cancel_all=cancel_all)
             elif self.grid_remove:
                 self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
-                sum_amount = self.orders_save.sum_amount(self.cycle_buy) if self.grid_update_started else Decimal('0.0')
+                sum_amount = ((self.orders_save.sum_amount(self.cycle_buy) +
+                               self.orders_hold.sum_amount(self.cycle_buy))
+                              if self.grid_update_started else Decimal('0.0'))
                 self.orders_save.orders_list.clear()
                 self.orders_hold.orders_list.clear()
                 self.grid_remove = None
