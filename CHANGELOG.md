@@ -1,5 +1,10 @@
+## 1.3.5 2023-09-19
+### Fix
 * Fix: Incorrect calculated depo volume for grid update, not include held grid orders volume
-* Fix: tmp converted when restored MS_ORDERS from list to dict (inter-version compatibility)
+* Up requirements for exchanges-wrapper to 1.3.7
+
+### Update
+* Restored MS_ORDERS, convert from list to dict (inter-version compatibility), clear
 
 ## 1.3.4rc5-1 2023-08-24
 ### Update

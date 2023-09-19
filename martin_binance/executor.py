@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.5b4"
+__version__ = "1.3.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1242,6 +1242,7 @@ class Strategy(StrategyBase):
                 elif no_orders:
                     self.restart = True
                     self.message_log("Restore, no orders, restart", tlg=True)
+                    self.sum_amount_first = self.sum_amount_second = f2d(0)
                     self.start()
                 elif not GRID_ONLY and not self.tp_order_id and self.check_min_amount():
                     self.message_log("Restore, replace TP", tlg=True)
