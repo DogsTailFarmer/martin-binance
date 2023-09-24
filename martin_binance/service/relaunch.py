@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "1.3.6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -18,9 +18,7 @@ from martin_binance import Path, WORK_PATH, LAST_STATE_PATH
 time.sleep(10)
 
 server = libtmux.Server()
-session = [s for s in server.sessions if s.name == "Trade"][0]
-
-if session:
+if session := [s for s in server.sessions if s.name == "Trade"][0]:
     for window in session.windows:
         if window.name == 'srv':
             window.attached_pane.send_keys('exchanges-wrapper-srv', enter=True)

@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.5"
+__version__ = "1.3.6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -23,7 +23,7 @@ import shutil
 import psutil
 
 from colorama import init as color_init
-from decimal import Decimal
+from decimal import Decimal, ROUND_FLOOR
 from pathlib import Path
 from datetime import datetime, timedelta
 from tqdm import tqdm
@@ -131,7 +131,7 @@ def order_trades_sum(_order_id: int) -> Decimal:
     for _trade in StrategyBase.trades:
         if _trade.order_id == _order_id:
             saved_filled_quantity += Decimal(str(_trade.amount))
-    return saved_filled_quantity
+    return saved_filled_quantity.quantize(Decimal("1.01234567"), rounding=ROUND_FLOOR)
 
 
 class PrivateTrade:
@@ -1025,7 +1025,8 @@ async def buffered_orders():
                 _id = int(order['orderId'])
                 exch_orders.append(_id)
                 if (order.get('status') == 'PARTIALLY_FILLED'
-                        and order_trades_sum(_id) < Decimal(order['executedQty'])):
+                        and order_trades_sum(_id) < Decimal(order['executedQty']).quantize(Decimal("1.01234567"),
+                                                                                           rounding=ROUND_FLOOR)):
                     diff_id.add(_id)
 
             # Missed fill event list

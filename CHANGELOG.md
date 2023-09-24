@@ -1,3 +1,20 @@
+## 1.3.6 2023-09-24
+### Fix
+* Due to a rounding error, the order status was incorrectly fetched if it was partially completed
+
+### Update
+* Up requirements for exchanges-wrapper==1.3.7.post1
+
+### Added for new features
+* To boost trade in case of low market volatility: TP order is updated once every 15 minutes,
+    and in Reverse cycle grid update once an hour
+
+## 1.3.5-1.dev1
+* Fix: Error getting internal id while re-placing grid order
+
+## 1.3.5-1.dev0
+* Update: On-the-fly update assets with withdrawal and deposit operations also for Reverse cycle
+
 ## 1.3.5 2023-09-19
 ### Fix
 * Fix: Incorrect calculated depo volume for grid update, not include held grid orders volume
