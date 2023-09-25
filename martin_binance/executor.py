@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.6"
+__version__ = "1.3.6.post1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2191,42 +2191,42 @@ class Strategy(StrategyBase):
     def grid_update(self):
         do_it = False
         depo_remaining = self.depo_unused() / (self.deposit_second if self.cycle_buy else self.deposit_first)
-        if depo_remaining >= f2d(0.3):
-            if self.reverse:
-                if self.local_time() - self.ts_grid_update > GRID_UPDATE_INTERVAL:
-                    do_it = True
+
+        if self.reverse and depo_remaining >= f2d(0.65):
+            if self.local_time() - self.ts_grid_update > GRID_UPDATE_INTERVAL:
+                do_it = True
+        elif not self.reverse and depo_remaining >= f2d(0.35):
+            try:
+                bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
+            except Exception as ex:
+                self.message_log(f"Can't get BB in grid update: {ex}", log_level=LogLevel.INFO)
             else:
-                try:
-                    bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
-                except Exception as ex:
-                    self.message_log(f"Can't get BB in grid update: {ex}", log_level=LogLevel.INFO)
+                if self.heartbeat_counter % 150 == 0:
+                    frequency = 'low'
+                elif self.heartbeat_counter % 30 == 0:
+                    frequency = 'mid'
                 else:
-                    if self.heartbeat_counter % 150 == 0:
-                        frequency = 'low'
-                    elif self.heartbeat_counter % 30 == 0:
-                        frequency = 'mid'
-                    else:
-                        frequency = 'hi'
-                    #
-                    if self.orders_hold:
-                        last_price = float(self.orders_hold.get_last()[3])
-                    else:
-                        last_price = float(self.orders_grid.get_last()[3])
-                    predicted_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
-                    if self.cycle_buy:
-                        delta = 100 * (last_price - predicted_price) / last_price
-                    else:
-                        delta = 100 * (predicted_price - last_price) / last_price
-                    #
-                    if delta > 0:
-                        if frequency == 'hi':
-                            do_it = delta > 0.5
-                        elif frequency == 'mid':
-                            do_it = delta > 0.25
-                        elif frequency == 'low':
-                            do_it = delta > 0.12
-                    elif delta < 0 and frequency == 'low':
-                        do_it = -1 * delta > 3
+                    frequency = 'hi'
+                #
+                if self.orders_hold:
+                    last_price = float(self.orders_hold.get_last()[3])
+                else:
+                    last_price = float(self.orders_grid.get_last()[3])
+                predicted_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
+                if self.cycle_buy:
+                    delta = 100 * (last_price - predicted_price) / last_price
+                else:
+                    delta = 100 * (predicted_price - last_price) / last_price
+                #
+                if delta > 0:
+                    if frequency == 'hi':
+                        do_it = delta > 0.5
+                    elif frequency == 'mid':
+                        do_it = delta > 0.25
+                    elif frequency == 'low':
+                        do_it = delta > 0.12
+                elif delta < 0 and frequency == 'low':
+                    do_it = -1 * delta > 3
         if do_it:
             if self.reverse:
                 self.message_log("Update grid in Reverse cycle", color=Style.B_WHITE)

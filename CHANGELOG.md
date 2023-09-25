@@ -1,3 +1,9 @@
+## 1.3.6.post1 2023-09-25
+### Update
+* Limit for grid updates, updated when:
+  + For Original cycle: the amount of free deposit not involved in the turnover more than 35%
+  + For Reverse cycle: the amount of free deposit not involved in the turnover more than 65%
+
 ## 1.3.6 2023-09-24
 ### Fix
 * Due to a rounding error, the order status was incorrectly fetched if it was partially completed
