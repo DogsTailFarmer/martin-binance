@@ -1,3 +1,18 @@
+## 1.3.7b1 2023-09-26
+### Added for new features
+* Save trading (filling orders) and transfer asset history into a file `~/.MartinBinance/log/X_AAABBB.csv`
+  
+headers:
+```
+"TRADE","transaction_time","side","order_id","client_order_id","trade_id","order_quantity","order_price","cumulative_filled_quantity","quote_asset_transacted","last_executed
+"TRANSFER","event_time","asset","balance_delta"
+```
+data:
+```
+"TRADE","1695745010026","SELL","9850221","4815001","1716764","0.00539700","26193.86000000","0.00539700","141.36826242","0.00539700","26193.86000000" 
+"TRANSFER","1695745010027","LTC","-0.001"
+```
+
 ## 1.3.6.post1 2023-09-25
 ### Update
 * Limit for grid updates, updated when:

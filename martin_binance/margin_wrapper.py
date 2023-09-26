@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.6"
+__version__ = "1.3.7b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -21,7 +21,9 @@ import traceback
 import pandas as pd
 import shutil
 import psutil
+import aiofiles
 
+from aiocsv import AsyncWriter
 from colorama import init as color_init
 from decimal import Decimal, ROUND_FLOOR
 from pathlib import Path
@@ -44,7 +46,6 @@ from martin_binance import executor as ms, BACKTEST_PATH, copy
 from martin_binance.client import Trade
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 
-
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [
     ('grpc.lb_policy_name', 'pick_first'),
@@ -53,6 +54,8 @@ CHANNEL_OPTIONS = [
 ]
 
 loop = asyncio.get_event_loop()
+save_trade_queue = asyncio.Queue()
+
 KLINES_INIT = [Interval.ONE_MINUTE, Interval.FIFTY_MINUTES, Interval.ONE_HOUR]
 KLINES_LIM = 50  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and ms.LOAD_LAST_STATE = 0
@@ -373,8 +376,8 @@ class OrderBook:
     order_book.bids[0].price
     order_book.asks[0].amount
     """
-    def __init__(self, _order_book) -> None:
 
+    def __init__(self, _order_book) -> None:
         class _OrderBookRow:
             __slots__ = ("price", "amount")
 
@@ -599,8 +602,8 @@ class StrategyBase:
                                     include_current_building_candle: bool = False) -> List[Candle]:
         size = convert_from_minute(candle_size_in_minutes)
         kline = StrategyBase.Klines.get_kline(size)
-        if len(kline) > number_of_candles+1:
-            return kline[-number_of_candles-(0 if include_current_building_candle else 1):
+        if len(kline) > number_of_candles + 1:
+            return kline[-number_of_candles - (0 if include_current_building_candle else 1):
                          None if include_current_building_candle else -1]
         return kline[:None if include_current_building_candle else -1]
 
@@ -613,6 +616,34 @@ class StrategyBase:
     def transfer_to_master(symbol: str, amount: str):
         if ms.MODE in ('T', 'TC'):
             loop.create_task(transfer2master(symbol, amount))
+
+
+async def save_to_csv() -> None:
+    cls = StrategyBase
+    file_name = Path(ms.LOG_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
+    async with aiofiles.open(file_name, mode="a", encoding="utf-8", newline="") as afp:
+        writer = AsyncWriter(afp, dialect="unix")
+        await writer.writerow(["TRADE",
+                               "transaction_time",
+                               "side",
+                               "order_id",
+                               "client_order_id",
+                               "trade_id",
+                               "order_quantity",
+                               "order_price",
+                               "cumulative_filled_quantity",
+                               "quote_asset_transacted",
+                               "last_executed_quantity",
+                               "last_executed_price",
+                               ])
+        await writer.writerow(['TRANSFER',
+                               "event_time",
+                               "asset",
+                               "balance_delta",
+                               ])
+        while cls.strategy:
+            await writer.writerow(await save_trade_queue.get())
+            save_trade_queue.task_done()
 
 
 async def heartbeat(_session):
@@ -1113,7 +1144,15 @@ async def on_balance_update():
     cls = StrategyBase
     try:
         async for res in cls.for_request(cls.stub.OnBalanceUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
-            cls.strategy.on_balance_update(json.loads(res.balance))
+            _res = json.loads(res.balance)
+            if ms.SAVE_TRADE_HISTORY:
+                row = ['TRANSFER',
+                       _res["event_time"],
+                       _res["asset"],
+                       _res["balance_delta"],
+                       ]
+                await save_trade_queue.put(row)
+            cls.strategy.on_balance_update(_res)
     except Exception as ex:
         logger.warning(f"Exception on WSS, on_balance_update loop closed: {ex}")
         cls.wss_fire_up = True
@@ -1125,17 +1164,17 @@ async def on_order_update():
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
             ed = ast.literal_eval(json.loads(event.result))
-            on_order_update_handler(cls, ed)
+            await on_order_update_handler(cls, ed)
     except Exception as ex:
         logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}\n{traceback.format_exc()}")
         cls.wss_fire_up = True
 
 
-def on_order_update_handler(cls, ed):
+async def on_order_update_handler(cls, ed):
     if (
-        cls.symbol != ed['symbol']
-        or not cls.order_exist(ed['order_id'])
-        or ed['order_status'] not in ('FILLED', 'PARTIALLY_FILLED')
+            cls.symbol != ed['symbol']
+            or not cls.order_exist(ed['order_id'])
+            or ed['order_status'] not in ('FILLED', 'PARTIALLY_FILLED')
     ):
         return
     if ed['order_status'] == 'FILLED':
@@ -1156,6 +1195,21 @@ def on_order_update_handler(cls, ed):
 
     if trade_not_exist(ed['order_id'], ed['trade_id']):
         _on_order_update_handler_ext(ed, cls)
+        if ms.SAVE_TRADE_HISTORY:
+            row = ["TRADE",
+                   ed["transaction_time"],
+                   ed["side"],
+                   ed["order_id"],
+                   ed["client_order_id"],
+                   ed["trade_id"],
+                   ed["order_quantity"],
+                   ed["order_price"],
+                   ed["cumulative_filled_quantity"],
+                   ed["quote_asset_transacted"],
+                   ed["last_executed_quantity"],
+                   ed["last_executed_price"],
+                   ]
+            await save_trade_queue.put(row)
 
 
 def _on_order_update_handler_ext(ed, cls):
@@ -1212,7 +1266,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                                                        buy=buy,
                                                        amount=amount,
                                                        price=price,
-                                                       lt=int(cls.strategy.local_time()*1000))
+                                                       lt=int(cls.strategy.local_time() * 1000))
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except grpc.RpcError as ex:
@@ -1256,6 +1310,22 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
 
             if executed_qty < orig_qty:
                 cls.orders[order.id] = order
+            elif ms.SAVE_TRADE_HISTORY:
+                row = ["TRADE_BY_MARKET",
+                       result["transactTime"],
+                       result["side"],
+                       result["orderId"],
+                       result["clientOrderId"],
+                       '-1',
+                       result["origQty"],
+                       result["price"],
+                       result["executedQty"],
+                       result["cummulativeQuoteQty"],
+                       result["executedQty"],
+                       result["price"],
+                       ]
+                await save_trade_queue.put(row)
+
             if ms.MODE == 'TC' and cls.strategy.start_collect:
                 cls.strategy.open_orders_snapshot()
             elif ms.MODE == 'S':
@@ -1287,7 +1357,7 @@ async def cancel_order_call(_id: int, cancel_all: bool):
                                              order_id=_id)
                 result = json_format.MessageToDict(res)
         else:
-            result = cls.strategy.account.cancel_order(order_id=_id, ts=int(cls.strategy.local_time()*1000))
+            result = cls.strategy.account.cancel_order(order_id=_id, ts=int(cls.strategy.local_time() * 1000))
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
     except grpc.RpcError as ex:
@@ -1432,7 +1502,7 @@ async def on_ticker_update():
             cls.strategy.on_new_ticker(Ticker(row))
             res = cls.strategy.account.on_ticker_update(row, int(cls.strategy.local_time() * 1000))
             for _res in res:
-                on_order_update_handler(cls, _res)
+                await on_order_update_handler(cls, _res)
                 await on_funds_update()
             pbar.update()
         pbar.close()
@@ -1816,6 +1886,7 @@ async def main(_symbol):
                     print("Can't load saved state")
         if restored:
             loop.create_task(heartbeat(cls.session))
+            loop.create_task(save_to_csv())
     except (KeyboardInterrupt, SystemExit):
         # noinspection PyProtectedMember, PyUnresolvedReferences
         os._exit(1)
