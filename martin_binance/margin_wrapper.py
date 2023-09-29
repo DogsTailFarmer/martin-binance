@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.7b1"
+__version__ = "1.3.7b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1312,7 +1312,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
                 cls.orders[order.id] = order
             elif ms.SAVE_TRADE_HISTORY:
                 row = ["TRADE_BY_MARKET",
-                       result["transactTime"],
+                       int(time.time() * 1000),
                        result["side"],
                        result["orderId"],
                        result["clientOrderId"],
@@ -1381,7 +1381,8 @@ async def cancel_order_call(_id: int, cancel_all: bool):
             elif ms.MODE == 'S':
                 await on_funds_update()
         else:
-            cls.strategy.on_cancel_order_error_string(_id, f"Cancel order warning, result: {result}")
+            await fetch_order(_id, _filled_update_call=True)
+            cls.strategy.on_cancel_order_error_string(_id, "Warning, not result getting")
 
 
 async def cancel_order_timeout(_id):
