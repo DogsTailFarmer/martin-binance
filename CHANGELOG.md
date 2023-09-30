@@ -1,3 +1,7 @@
+## 1.3.7 - 2023-09-30
+### Update
+* Up requirements for exchanges-wrapper==1.3.7.post2
+
 ## 1.3.7b1 2023-09-26
 ### Added for new features
 * Save trading (filling orders) and transfer asset history into a file `~/.MartinBinance/log/X_AAABBB.csv`

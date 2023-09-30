@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.7b2"
+__version__ = "1.3.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -21,9 +21,8 @@ import traceback
 import pandas as pd
 import shutil
 import psutil
-import aiofiles
+import csv
 
-from aiocsv import AsyncWriter
 from colorama import init as color_init
 from decimal import Decimal, ROUND_FLOOR
 from pathlib import Path
@@ -549,6 +548,8 @@ class StrategyBase:
                          color=ms.Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
         loop.create_task(create_limit_order(cls.order_id, buy, any2str(amount), any2str(price)))
+        if cls.exchange == 'huobi':
+            time.sleep(0.02)
         return cls.order_id
 
     def get_buffered_completed_trades(self, _get_all_trades: bool = False) -> List[PrivateTrade]:
@@ -621,28 +622,28 @@ class StrategyBase:
 async def save_to_csv() -> None:
     cls = StrategyBase
     file_name = Path(ms.LOG_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
-    async with aiofiles.open(file_name, mode="a", encoding="utf-8", newline="") as afp:
-        writer = AsyncWriter(afp, dialect="unix")
-        await writer.writerow(["TRADE",
-                               "transaction_time",
-                               "side",
-                               "order_id",
-                               "client_order_id",
-                               "trade_id",
-                               "order_quantity",
-                               "order_price",
-                               "cumulative_filled_quantity",
-                               "quote_asset_transacted",
-                               "last_executed_quantity",
-                               "last_executed_price",
-                               ])
-        await writer.writerow(['TRANSFER',
-                               "event_time",
-                               "asset",
-                               "balance_delta",
-                               ])
+    with open(file_name, mode="a", buffering=1) as fp:
+        writer = csv.writer(fp)
+        writer.writerow(["TRADE",
+                         "transaction_time",
+                         "side",
+                         "order_id",
+                         "client_order_id",
+                         "trade_id",
+                         "order_quantity",
+                         "order_price",
+                         "cumulative_filled_quantity",
+                         "quote_asset_transacted",
+                         "last_executed_quantity",
+                         "last_executed_price",
+                         ])
+        writer.writerow(['TRANSFER',
+                         "event_time",
+                         "asset",
+                         "balance_delta",
+                         ])
         while cls.strategy:
-            await writer.writerow(await save_trade_queue.get())
+            writer.writerow(await save_trade_queue.get())
             save_trade_queue.task_done()
 
 

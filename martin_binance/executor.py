@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.6.post1"
+__version__ = "1.3.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -3450,7 +3450,7 @@ class Strategy(StrategyBase):
         if order:
             self.message_log(f"Order {place_order_id} placed", tlg=True)
             self.on_place_order_success(place_order_id, order)
-        elif 'FAILED_PRECONDITION' not in error:
+        else:
             self.message_log(f"Trying place order {place_order_id} one more time", tlg=True)
             if self.orders_init.exist(place_order_id):
                 _order = self.orders_init.get_by_id(place_order_id)
@@ -3466,12 +3466,7 @@ class Strategy(StrategyBase):
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
                 self.tp_error = True
-        else:
-            self.message_log(f"Order {place_order_id} can't be placed. Check it manually", LogLevel.ERROR, tlg=True)
-            if self.orders_init.exist(place_order_id):
-                self.orders_init.remove(place_order_id)
-            elif place_order_id == self.tp_wait_id:
-                self.tp_wait_id = None
+
 
     def on_cancel_order_success(self, order_id: int, canceled_order: Order, cancel_all=False) -> None:  # noqa
         if order_id == self.cancel_grid_order_id:
