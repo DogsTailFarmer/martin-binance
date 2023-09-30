@@ -1,3 +1,7 @@
+## 1.3.7.post1 - 2023-09-30
+### Fix
+* Sonarcloud issues
+
 ## 1.3.7 - 2023-09-30
 ### Update
 * Up requirements for exchanges-wrapper==1.3.7.post2
