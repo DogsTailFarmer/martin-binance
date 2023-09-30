@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.7"
+__version__ = "1.3.7.post1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -19,6 +19,7 @@ from requests.adapters import HTTPAdapter, Retry
 # noinspection PyUnresolvedReferences
 import traceback  # lgtm [py/unused-import]
 import contextlib
+import math
 
 from martin_binance import Path, STANDALONE, DB_FILE
 # noinspection PyUnresolvedReferences
@@ -507,7 +508,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         if err >= 0:
             solves.append((err, x))
         slope = dx(fn, x, delta, **kwargs)
-        if slope != 0.0:
+        if not math.isclose(slope, 0, abs_tol=1e-09):
             x -= err/slope
             x = max(_x + delta * tries, x + correction)
         else:
@@ -2972,7 +2973,7 @@ class Strategy(StrategyBase):
                     self.orders_save.orders_list.append(self.orders_grid.get_by_id(_id))
                 self.message_log(f"cancel_grid order: {_id}", log_level=LogLevel.DEBUG)
                 self.cancel_order_exp(_id, cancel_all=cancel_all)
-            elif self.grid_remove:
+            else:
                 self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
                 self.orders_save.orders_list.clear()
                 self.orders_hold.orders_list.clear()
@@ -3344,7 +3345,7 @@ class Strategy(StrategyBase):
         if order.amount > order.received_amount > 0:
             self.message_log(f"Order {place_order_id} was partially filled", color=Style.B_WHITE)
             self.shift_grid_threshold = None
-        if order.remaining_amount == 0.0:
+        if math.isclose(order.remaining_amount, 0, abs_tol=1e-09):
             self.shift_grid_threshold = None
             # Get actual parameter of last trade order
             market_order = self.get_buffered_completed_trades()

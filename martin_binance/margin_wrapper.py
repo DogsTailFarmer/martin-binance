@@ -70,6 +70,7 @@ ORDER_BOOK_PKL = "order_book.pkl"
 TICKER_PKL = "ticker.pkl"
 MS_ORDER_ID = 'ms.order_id'
 MS_ORDERS = 'ms.orders'
+EQUAL_STR = "================================================================"
 
 session_result = {}
 
@@ -1000,10 +1001,10 @@ async def buffered_funds(print_info: bool = True):
 
         cls.funds = funds
         if print_info:
-            print('================================================================')
+            print(EQUAL_STR)
             print(f"Base asset balance: {balance_f}")
             print(f"Quote asset balance: {balance_s}")
-            print('================================================================')
+            print(EQUAL_STR)
         else:
             # print(f"buffered_funds.funds: {cls.funds}")
             funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
@@ -1771,7 +1772,7 @@ async def main(_symbol):
                             for i in cancel_orders:
                                 print(f"Order:{i['orderId']}, side:{i['side']},"
                                       f" amount:{i['origQty']}, price:{i['price']}, status:{i['status']}")
-                            print('================================================================')
+                            print(EQUAL_STR)
                         except asyncio.CancelledError:
                             pass  # Task cancellation should not be logged as an error.
                         except grpc.RpcError as ex:
