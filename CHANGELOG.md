@@ -1,3 +1,5 @@
+* Fix: Refine exception handling when deleting a grid of orders, one of which is partially filled
+
 ## 1.3.7.post1 - 2023-09-30
 ### Fix
 * Sonarcloud issues

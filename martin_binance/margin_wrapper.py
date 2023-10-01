@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.7"
+__version__ = "1.3.7.post2.dev1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1383,6 +1383,7 @@ async def cancel_order_call(_id: int, cancel_all: bool):
             elif ms.MODE == 'S':
                 await on_funds_update()
         else:
+            await asyncio.sleep(HEARTBEAT)
             await fetch_order(_id, _filled_update_call=True)
             cls.strategy.on_cancel_order_error_string(_id, "Warning, not result getting")
 
@@ -1415,7 +1416,7 @@ async def fetch_order(_id: int, _filled_update_call=False):
             remove_from_orders_lists([_id])
             cls.strategy.on_cancel_order_success(_id, Order(result))
         elif not result:
-            raise UserWarning(f"For order {_id} can't get status")
+            cls.strategy.message_log(f"Can't get status for order {_id}", log_level=LogLevel.WARNING)
         return result
 
 

@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.7.post1"
+__version__ = "1.3.7.post2.dev1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -19,7 +19,6 @@ from requests.adapters import HTTPAdapter, Retry
 # noinspection PyUnresolvedReferences
 import traceback  # lgtm [py/unused-import]
 import contextlib
-import math
 
 from martin_binance import Path, STANDALONE, DB_FILE
 # noinspection PyUnresolvedReferences
@@ -2959,6 +2958,7 @@ class Strategy(StrategyBase):
         if self.grid_remove is None:
             self.grid_remove = True
             if cancel_all:
+                self.orders_save.orders_list.clear()
                 self.orders_save.orders_list.extend(self.orders_grid)
             self.message_log("cancel_grid: Started", log_level=LogLevel.DEBUG)
         if self.grid_remove:
@@ -3520,6 +3520,12 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
+        if self.orders_save:
+            self.grid_update_started = None
+            self.grid_remove = None
+        if order_id == self.cancel_order_id:
+            self.cancel_order_id = None
+            self.tp_hold = False
         if order_id == self.cancel_grid_order_id:
             self.cancel_grid_order_id = None
             self.message_log(f"It was updated grid order {order_id}", log_level=LogLevel.INFO)
