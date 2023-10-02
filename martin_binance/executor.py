@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.7.post2.dev1"
+__version__ = "1.3.7.post2.dev2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -3520,9 +3520,6 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
-        if self.orders_save:
-            self.grid_update_started = None
-            self.grid_remove = None
         if order_id == self.cancel_order_id:
             self.cancel_order_id = None
             self.tp_hold = False
