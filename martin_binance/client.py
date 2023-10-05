@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4rc4"
+__version__ = "1.3.7.post2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -36,20 +36,19 @@ class Trade:
         self.trade_id = shortuuid.uuid()
 
     async def get_client(self):
-        if not self.wait_connection:
-            self.wait_connection = True
-            client = None
-            while client is None:
-                try:
-                    client = await self.connect()
-                except UserWarning:
-                    client = None
-                else:
-                    self.wait_connection = False
-                    self.client = client
-                    return True
-        else:
+        if self.wait_connection:
             return False
+        self.wait_connection = True
+        client = None
+        while client is None:
+            try:
+                client = await self.connect()
+            except UserWarning:
+                client = None
+            else:
+                self.wait_connection = False
+                self.client = client
+                return True
 
     async def connect(self):
         try:

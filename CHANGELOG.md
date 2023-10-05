@@ -1,4 +1,9 @@
+## 1.3.7.post2 - 2023-10-05
+### Fix
 * Fix: Refine exception handling when deleting a grid of orders, one of which is partially filled
+
+### Update
+* Up requirements for exchanges-wrapper==1.3.7.post3
 
 ## 1.3.7.post1 - 2023-09-30
 ### Fix
