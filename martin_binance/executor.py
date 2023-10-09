@@ -4,7 +4,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.7.post2"
+__version__ = "1.3.7.post3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1911,8 +1911,7 @@ class Strategy(StrategyBase):
             round_pattern = "1.01234567"
         else:
             round_pattern = self.round_base if base else self.round_quote
-        xr = _x.quantize(Decimal(round_pattern), rounding=_rounding)
-        return xr
+        return _x.quantize(Decimal(round_pattern), rounding=_rounding)
 
     def round_fee(self, fee, amount, base):
         return self.round_truncate(fee * amount / 100, base=base, fee=True, _rounding=ROUND_CEILING)
@@ -2422,9 +2421,9 @@ class Strategy(StrategyBase):
             self.tp_amount = self.sum_amount_first
             profit = self.set_profit(self.sum_amount_second, by_market)
             target_amount_first = self.sum_amount_first + profit * self.sum_amount_first / 100
-            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             if target_amount_first - self.tp_amount < step_size_f:
                 target_amount_first = self.tp_amount + step_size_f
+            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             amount = target = target_amount_first
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_FLOOR)
@@ -2435,9 +2434,9 @@ class Strategy(StrategyBase):
             self.tp_amount = self.sum_amount_second
             profit = self.set_profit(self.sum_amount_first, by_market)
             target_amount_second = self.sum_amount_second + profit * self.sum_amount_second / 100
-            target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             if target_amount_second - self.tp_amount < step_size_s:
                 target_amount_second = self.tp_amount + step_size_s
+            target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
             price = f2d(tcm.round_price(float(target_amount_second / amount), RoundingType.CEIL))

@@ -1,3 +1,10 @@
+## 1.3.7.post3 - 2023-10-09
+### Fix
+* calc_profit_order(): rounding issue when correction tp amount on step_size
+
+### Update
+* Up requirements for exchanges-wrapper==1.3.7.post4
+
 ## 1.3.7.post2 - 2023-10-05
 ### Fix
 * Fix: Refine exception handling when deleting a grid of orders, one of which is partially filled
