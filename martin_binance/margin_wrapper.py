@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.7.post2"
+__version__ = "1.4.0.b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -827,7 +827,11 @@ async def ask_exit():
         await asyncio.sleep(HEARTBEAT)
 
         if ms.MODE in ('T', 'TC'):
-            await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
+            try:
+                await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
+            except Exception as ex:
+                logger.warning(f"ask_exit: {ex}")
+
             if ms.MODE == 'TC':
                 # Save stream data for backtesting
                 session_data_handler(cls.strategy)
@@ -923,16 +927,22 @@ async def buffered_candle():
         klines_from_file = json.load(open(Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}/raw/klines.json")))
     for i in KLINES_INIT:
         if ms.MODE in ('T', 'TC'):
-            res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
-                                         symbol=cls.symbol,
-                                         interval=i.value,
-                                         limit=KLINES_LIM)
-            kline = json_format.MessageToDict(res)
-            if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
-                cls.strategy.klines[i.value] = kline
+            try:
+                res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
+                                             symbol=cls.symbol,
+                                             interval=i.value,
+                                             limit=KLINES_LIM)
+            except Exception as ex:
+                kline = {}
+                logger.warning(f"FetchKlines: {ex}")
+            else:
+                kline = json_format.MessageToDict(res)
+                if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
+                    cls.strategy.klines[i.value] = kline
         else:
             kline = klines_from_file.get(i.value, {})
-        if candles := kline.get('klines', []):
+
+        if candles := kline.get('klines'):
             kline_i = cls.Klines(i.value)
             for candle in candles:
                 kline_i.refresh(json.loads(candle))
@@ -1061,7 +1071,6 @@ async def buffered_orders():
                         and order_trades_sum(_id) < Decimal(order['executedQty']).quantize(Decimal("1.01234567"),
                                                                                            rounding=ROUND_FLOOR)):
                     diff_id.add(_id)
-
             # Missed fill event list
             diff_id.update(set(cls.orders).difference(set(exch_orders)))
 
@@ -1101,8 +1110,11 @@ async def buffered_orders():
                 cls.strategy.message_log(f"RATE_LIMITER set to {StrategyBase.rate_limiter}s",
                                          log_level=LogLevel.WARNING)
                 await asyncio.sleep(ORDER_TIMEOUT)
-                await cls.send_request(cls.stub.ResetRateLimit, api_pb2.OpenClientConnectionId,
-                                       rate_limiter=StrategyBase.rate_limiter)
+                try:
+                    await cls.send_request(cls.stub.ResetRateLimit, api_pb2.OpenClientConnectionId,
+                                           rate_limiter=StrategyBase.rate_limiter)
+                except Exception as ex:
+                    logger.warning(f"Exception buffered_orders:ResetRateLimit: {ex}")
             else:
                 restore = True
         except Exception as _ex:
@@ -1336,6 +1348,8 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
 
 
 async def place_limit_order_timeout(_id):
+    # TODO Check if order exist on exchange remove it or take in account
+    #   /home/ubuntu/.config/JetBrains/IdeaIC2023.2/scratches/Duplicate order sent.txt
     cls = StrategyBase
     await asyncio.sleep(ORDER_TIMEOUT)
     if _id in cls.wait_order_id:
@@ -1369,7 +1383,7 @@ async def cancel_order_call(_id: int, cancel_all: bool):
             cls.canceled_order_id.remove(_id)
             cls.strategy.on_cancel_order_error_string(_id, "The order has not been canceled")
     except Exception as _ex:
-        cls.strategy.message_log(f"Exception on cancel order call for {_id}:\n{_ex}")
+        cls.strategy.message_log(f"Exception on cancel order call for {_id}: {_ex}")
         logger.debug(f"Exception traceback: {traceback.format_exc()}")
     else:
         # print(f"cancel_order_call.result: {result}")
@@ -1738,7 +1752,8 @@ async def main(_symbol):
             print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
             session = Trade(channel_options=CHANNEL_OPTIONS,
                             account_name=account_name,
-                            rate_limiter=StrategyBase.rate_limiter)
+                            rate_limiter=StrategyBase.rate_limiter,
+                            symbol=_symbol)
             #
             cls.session = session
             #

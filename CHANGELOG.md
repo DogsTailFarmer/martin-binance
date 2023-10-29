@@ -1,3 +1,6 @@
+### Update
+* Improved gRPC outage exception handling
+
 ## 1.3.7.post3 - 2023-10-09
 ### Fix
 * calc_profit_order(): rounding issue when correction tp amount on step_size
