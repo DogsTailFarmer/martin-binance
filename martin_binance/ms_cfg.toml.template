@@ -9,13 +9,15 @@ telegram_url = "https://api.telegram.org/bot"
 # Accounts name wold be identically accounts.name from exchanges_wrapper/exch_srv_cfg.toml
 exchange = [
    'Demo - Binance',   # 0
-   'Demo - OKEX',      # 1
+   'Demo - OKX',       # 1
    "Demo - Bitfinex",  # 2
-   'Binance',          # 3
-   'OKEX',             # 4
-   'Bitfinex',         # 5
-   'Huobi',            # 6
-   "Binance US",       # 7
+   "Demo - Bybit",     # 3
+   "Binance",          # 4
+   "OKX",              # 5
+   "Bitfinex",         # 6
+   "Huobi",            # 7
+   "Binance US",       # 8
+   "Bybit",            # 9
 ]
 
 [Exporter]
@@ -28,19 +30,25 @@ api = "********** Place API key for CoinMarketCap there ***********"
 rate_limit = 30  # Requests per minute
 
 [[Telegram]]
-id_exchange = [0, 3, 7]  # 'Binance', 'Demo - Binance', 'Binance US'
+id_exchange = [0, 4, 8]  # 'Binance', 'Demo - Binance', 'Binance US'
 token = "********** Place Token for Telegram bot there ***********"
 channel_id = "*** Place channel_id there ***"
 inline = true
 
 [[Telegram]]
-id_exchange = [1, 4]  # 'Demo - OKEX', 'OKEX'
+id_exchange = [1, 5]  # 'Demo - OKEX', 'OKEX'
 token = "********** Place Token for Telegram bot there ***********"
 channel_id = "*** Place channel_id there ***"
 inline = false
 
 [[Telegram]]
-id_exchange = [2, 5]  # "Demo - Bitfinex", "Bitfinex"
+id_exchange = [2, 6]  # "Demo - Bitfinex", "Bitfinex"
+token = "********** Place Token for Telegram bot there ***********"
+channel_id = "*** Place channel_id there ***"
+inline = false
+
+[[Telegram]]
+id_exchange = [3, 9]  # "Demo - Bitfinex", "Bitfinex"
 token = "********** Place Token for Telegram bot there ***********"
 channel_id = "*** Place channel_id there ***"
 inline = false

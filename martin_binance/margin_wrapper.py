@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.4.0.b2"
+__version__ = "2.0.0rc1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1262,6 +1262,7 @@ def _on_order_update_handler_ext(ed, cls):
 async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> None:
     cls = StrategyBase
     cls.wait_order_id.append(_id)
+    _fetch_order = False
     try:
         if ms.MODE in ('T', 'TC'):
             ts = time.time()
@@ -1284,72 +1285,79 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except grpc.RpcError as ex:
-        status_code = ex.code()
-        cls.strategy.message_log(f"Exception creating order {_id}: {status_code.name}, {ex.details()}")
-        if status_code == grpc.StatusCode.FAILED_PRECONDITION:
-            # Supress order timeout message
-            cls.wait_order_id.remove(_id)
-            cls.strategy.on_place_order_error_string(_id, error=f"FAILED_PRECONDITION: {ex.details()}")
+        _fetch_order = True
+        cls.strategy.message_log(f"Exception creating order {_id}: {ex.code().name}, {ex.details()}")
     except Exception as _ex:
+        _fetch_order = True
         cls.strategy.message_log(f"Exception creating order {_id}: {_ex}")
     else:
-        # cls.strategy.message_log(f"Create_limit_order.result: {result}",
-        #                          log_level=LogLevel.DEBUG, color=ms.Style.UNDERLINE)
         if result:
-            cls.wait_order_id.remove(_id)
-            order = Order(result)
-            cls.strategy.message_log(
-                f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
-                f" {any2str(order.amount)} by {any2str(order.price)}"
-                f" Remaining amount {any2str(order.remaining_amount)}",
-                color=ms.Style.GREEN)
-            orig_qty = Decimal(result['origQty'])
-            executed_qty = Decimal(result['executedQty'])
-            cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
-            if executed_qty > 0:
-                price = float(cummulative_quote_qty / executed_qty)
-                trade = {"qty": float(executed_qty),
-                         "isBuyer": order.buy,
-                         "id": int(time.time() * 1000),
-                         "orderId": order.id,
-                         "price": price,
-                         "time": order.timestamp}
-                # cls.strategy.message_log(f"place_limit_order_callback.trade: {trade}", color=ms.Style.YELLOW)
-                if len(cls.trades) > TRADES_LIST_LIMIT:
-                    del cls.trades[0]
-                cls.trades.append(PrivateTrade(trade))
+            await create_order_handler(_id, result)
+        else:
+            _fetch_order = True
+    finally:
+        if _fetch_order:
+            await asyncio.sleep(HEARTBEAT)
+            await fetch_order(0, str(_id), _filled_update_call=True)
 
-                if ms.MODE == 'TC' and cls.strategy.start_collect:
-                    cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update({'lastPrice': str(price)})
 
-            if executed_qty < orig_qty:
-                cls.orders[order.id] = order
-            elif ms.SAVE_TRADE_HISTORY:
-                row = ["TRADE_BY_MARKET",
-                       int(time.time() * 1000),
-                       result["side"],
-                       result["orderId"],
-                       result["clientOrderId"],
-                       '-1',
-                       result["origQty"],
-                       result["price"],
-                       result["executedQty"],
-                       result["cummulativeQuoteQty"],
-                       result["executedQty"],
-                       result["price"],
-                       ]
-                await save_trade_queue.put(row)
+async def create_order_handler(_id, result):
+    cls = StrategyBase
+    if _id in cls.wait_order_id:
+        cls.wait_order_id.remove(_id)
+    order = Order(result)
+    if cls.orders.get(order.id) is None:
+        cls.strategy.message_log(
+            f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
+            f" {any2str(order.amount)} by {any2str(order.price)}"
+            f" Remaining amount {any2str(order.remaining_amount)}",
+            color=ms.Style.GREEN)
+        orig_qty = Decimal(result['origQty'])
+        executed_qty = Decimal(result['executedQty'])
+        cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
+        if executed_qty > 0:
+            price = float(cummulative_quote_qty / executed_qty)
+
+            '''
+            trade = {"qty": float(executed_qty),
+                     "isBuyer": order.buy,
+                     "id": int(time.time() * 1000),
+                     "orderId": order.id,
+                     "price": price,
+                     "time": order.timestamp}
+            # cls.strategy.message_log(f"place_limit_order_callback.trade: {trade}", color=ms.Style.YELLOW)
+            if len(cls.trades) > TRADES_LIST_LIMIT:
+                del cls.trades[0]
+            cls.trades.append(PrivateTrade(trade))
+            '''
 
             if ms.MODE == 'TC' and cls.strategy.start_collect:
-                cls.strategy.open_orders_snapshot()
-            elif ms.MODE == 'S':
-                await on_funds_update()
-            cls.strategy.on_place_order_success(_id, order)
+                cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update({'lastPrice': str(price)})
+        if executed_qty < orig_qty:
+            cls.orders[order.id] = order
+        elif ms.SAVE_TRADE_HISTORY:
+            row = ["TRADE_BY_MARKET",
+                   int(time.time() * 1000),
+                   result["side"],
+                   result["orderId"],
+                   result["clientOrderId"],
+                   '-1',
+                   result["origQty"],
+                   result["price"],
+                   result["executedQty"],
+                   result["cummulativeQuoteQty"],
+                   result["executedQty"],
+                   result["price"],
+                   ]
+            await save_trade_queue.put(row)
+        if ms.MODE == 'TC' and cls.strategy.start_collect:
+            cls.strategy.open_orders_snapshot()
+        elif ms.MODE == 'S':
+            await on_funds_update()
+        cls.strategy.on_place_order_success(_id, order)
 
 
 async def place_limit_order_timeout(_id):
-    # TODO Check if order exist on exchange remove it or take in account
-    #   /home/ubuntu/.config/JetBrains/IdeaIC2023.2/scratches/Duplicate order sent.txt
     cls = StrategyBase
     await asyncio.sleep(ORDER_TIMEOUT)
     if _id in cls.wait_order_id:
@@ -1360,6 +1368,7 @@ async def place_limit_order_timeout(_id):
 async def cancel_order_call(_id: int, cancel_all: bool):
     cls = StrategyBase
     cls.canceled_order_id.append(_id)
+    _fetch_order = False
     try:
         if ms.MODE in ('T', 'TC'):
             if cancel_all:
@@ -1377,19 +1386,17 @@ async def cancel_order_call(_id: int, cancel_all: bool):
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
     except grpc.RpcError as ex:
-        status_code = ex.code()
-        cls.strategy.message_log(f"Exception on cancel order for {_id}: {status_code.name}, {ex.details()}")
-        if status_code == grpc.StatusCode.UNKNOWN:
-            cls.canceled_order_id.remove(_id)
-            cls.strategy.on_cancel_order_error_string(_id, "The order has not been canceled")
+        _fetch_order = True
+        cls.strategy.message_log(f"Exception on cancel order {_id}: {ex.code().name}, {ex.details()}")
     except Exception as _ex:
+        _fetch_order = True
         cls.strategy.message_log(f"Exception on cancel order call for {_id}: {_ex}")
         logger.debug(f"Exception traceback: {traceback.format_exc()}")
     else:
         # print(f"cancel_order_call.result: {result}")
         # Remove from orders lists
-        cls.canceled_order_id.remove(_id)
         if result and result.get('status') == 'CANCELED':
+            cls.canceled_order_id.remove(_id)
             remove_from_orders_lists([_id])
             cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
             cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=cancel_all)
@@ -1398,9 +1405,12 @@ async def cancel_order_call(_id: int, cancel_all: bool):
             elif ms.MODE == 'S':
                 await on_funds_update()
         else:
+            cls.strategy.message_log(f"Cancel order {_id}: Warning, not result getting")
+            _fetch_order = True
+    finally:
+        if _fetch_order:
             await asyncio.sleep(HEARTBEAT)
             await fetch_order(_id, _filled_update_call=True)
-            cls.strategy.on_cancel_order_error_string(_id, "Warning, not result getting")
 
 
 async def cancel_order_timeout(_id):
@@ -1411,12 +1421,13 @@ async def cancel_order_timeout(_id):
         cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
 
 
-async def fetch_order(_id: int, _filled_update_call=False):
+async def fetch_order(_id: int, _client_order_id: str = None, _filled_update_call=False):
     cls = StrategyBase
     try:
         res = await cls.send_request(cls.stub.FetchOrder, api_pb2.FetchOrderRequest,
                                      symbol=cls.symbol,
                                      order_id=_id,
+                                     client_order_id=_client_order_id,
                                      filled_update_call=_filled_update_call)
         result = json_format.MessageToDict(res)
     except asyncio.CancelledError:
@@ -1425,11 +1436,15 @@ async def fetch_order(_id: int, _filled_update_call=False):
         cls.strategy.message_log(f"Exception in fetch_order: {_ex}", log_level=LogLevel.ERROR)
         return {}
     else:
-        cls.strategy.message_log(f"For order {_id} fetched status is {result.get('status')}",
+        cls.strategy.message_log(f"For order {_id}({_client_order_id}) fetched status is {result.get('status')}",
                                  log_level=LogLevel.INFO, color=ms.Style.GREEN)
         if _filled_update_call and result.get('status') == 'CANCELED':
+            if _id in cls.canceled_order_id:
+                cls.canceled_order_id.remove(_id)
             remove_from_orders_lists([_id])
             cls.strategy.on_cancel_order_success(_id, Order(result))
+        elif _filled_update_call and result.get('status') in ('NEW', 'PARTIALLY_FILLED'):
+            await create_order_handler(_client_order_id, result)
         elif not result:
             cls.strategy.message_log(f"Can't get status for order {_id}", log_level=LogLevel.WARNING)
         return result

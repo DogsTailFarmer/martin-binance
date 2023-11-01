@@ -4,14 +4,14 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.4.0.b2"
+__version__ = "2.0.0rc1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
 import sys
 import gc
 import statistics
-from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
+from decimal import ROUND_CEILING
 from threading import Thread
 import queue
 import requests
@@ -20,23 +20,13 @@ from requests.adapters import HTTPAdapter, Retry
 import traceback  # lgtm [py/unused-import]
 import contextlib
 
-from martin_binance import Path, STANDALONE, DB_FILE
+from martin_binance import DB_FILE
 # noinspection PyUnresolvedReferences
 from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH  # lgtm [py/unused-import]
 
-if STANDALONE:
-    from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
-    from martin_binance.margin_wrapper import __version__ as msb_ver
-    import psutil
-else:
-    from margin_strategy_sdk import *  # lgtm [py/polluting-import] skipcq: PY-W2000
-    from typing import Dict, List
-    import sqlite3
-    import time
-    import math
-    import simplejson as json
-    msb_ver = str()
-    psutil = None
+from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
+from martin_binance.margin_wrapper import __version__ as msb_ver
+import psutil
 
 # region SetParameters
 SYMBOL = str()
@@ -800,7 +790,7 @@ class Strategy(StrategyBase):
         self.start_reverse_time = None  # -
         self.last_ticker_update = 0  # -
         self.grid_only_restart = None  # -
-        self.local_time = self.get_time if STANDALONE else time.time
+        self.local_time = self.get_time
         self.wait_wss_refresh = {}  # -
         self.start_collect = None
         self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
@@ -820,8 +810,7 @@ class Strategy(StrategyBase):
             init_params_error = None
         if init_params_error:
             self.message_log(f"Incorrect value for {init_params_error}", log_level=LogLevel.ERROR)
-            if STANDALONE:
-                raise SystemExit(1)
+            raise SystemExit(1)
         db_management()
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
@@ -858,8 +847,7 @@ class Strategy(StrategyBase):
                         self.deposit_second = self.round_truncate(f2d(ds), base=False)
                     elif self.deposit_second > f2d(ds):
                         self.message_log('Not enough second coin for Buy cycle!', color=Style.B_RED)
-                        if STANDALONE:
-                            raise SystemExit(1)
+                        raise SystemExit(1)
                 else:
                     df = self.get_buffered_funds().get(self.f_currency, 0)
                     df = df.available if df else 0
@@ -867,12 +855,10 @@ class Strategy(StrategyBase):
                         self.deposit_first = self.round_truncate(f2d(df), base=True)
                     elif self.deposit_first > f2d(df):
                         self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
-                        if STANDALONE:
-                            raise SystemExit(1)
+                        raise SystemExit(1)
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
-            if STANDALONE:
-                raise SystemExit(1)
+            raise SystemExit(1)
         # self.message_log('End Init section')
 
     @staticmethod
@@ -1207,13 +1193,23 @@ class Strategy(StrategyBase):
             self.avg_rate = f2d(self.get_buffered_ticker().last_price)
             #
             open_orders = self.get_buffered_open_orders()
+            tp_order = None
+            # Separate TP order
+            if self.tp_order_id:
+                for i, o in enumerate(open_orders):
+                    if o.id == self.tp_order_id:
+                        tp_order = open_orders[i]
+                        del open_orders[i]  # skipcq: PYL-E1138
+                        break
             # Possible strategy states in compare with saved one
-            open_orders_len = len(open_orders)
-            grid_hold = open_orders_len == 0 and self.orders_hold
+            grid_open_orders_len = len(open_orders)
             #
-            if grid_hold:
+            if not grid_open_orders_len and self.orders_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                 self.place_grid_part()
+            if not GRID_ONLY and self.shift_grid_threshold is None and not tp_order:
+                self.message_log("Restore, no TP order, replace", tlg=True)
+                self.place_profit_order()
             #
             self.message_log("Restored, go work", tlg=True)
 
@@ -1290,7 +1286,7 @@ class Strategy(StrategyBase):
                         print('Send data to .db t_funds')
                         self.queue_to_db.put(data_to_db)
                 self.save_init_assets(ff, fs)
-                if STANDALONE and COLLECT_ASSETS:
+                if COLLECT_ASSETS:
                     _ff, _fs = self.collect_assets()
                     ff -= _ff
                     fs -= _fs
@@ -1415,16 +1411,13 @@ class Strategy(StrategyBase):
             if self.first_run and self.order_q < 3:
                 self.message_log(f"Depo amount {depo} not enough to set the grid with 3 or more orders",
                                  log_level=LogLevel.ERROR)
-                if STANDALONE:
-                    raise SystemExit(1)
-                raise UserWarning
+                raise SystemExit(1)
             _amount_first_grid = (_amount_first_grid * self.avg_rate) if self.cycle_buy else _amount_first_grid
             if _amount_first_grid > 80 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} too large for"
                                  f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
-                if STANDALONE and self.first_run:
+                if self.first_run:
                     raise SystemExit(1)
-                raise UserWarning
             if _amount_first_grid > 20 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} it is rather"
                                  f" big for a small deposit"
@@ -1438,9 +1431,8 @@ class Strategy(StrategyBase):
             if first_order_vlm < _amount_first_grid:
                 self.message_log(f"Depo amount {depo}{self.s_currency} not enough for {ORDER_Q} orders",
                                  color=Style.B_RED)
-                if STANDALONE and self.first_run:
+                if self.first_run:
                     raise SystemExit(1)
-                raise UserWarning
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -1471,7 +1463,6 @@ class Strategy(StrategyBase):
         if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
             tlg = True
             color = Style.B_RED
-        color = color if STANDALONE else 0
         color_msg = color+msg+Style.RESET if color else msg
         if log_level not in LOG_LEVEL_NO_PRINT:
             if MODE in ('T', 'TC'):
@@ -1507,10 +1498,7 @@ class Strategy(StrategyBase):
                 self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
 
     def cancel_order_exp(self, order_id: int, cancel_all=False) -> None:
-        if STANDALONE:
-            self.cancel_order(order_id, cancel_all=cancel_all)
-        else:
-            self.cancel_order(order_id)
+        self.cancel_order(order_id, cancel_all=cancel_all)
 
     ##############################################################
     # Technical analysis
@@ -1829,9 +1817,7 @@ class Strategy(StrategyBase):
                 i, amount, price = order
                 # create order for grid
                 if i < GRID_MAX_COUNT:
-                    waiting_order_id = self.place_limit_order(buy_side,
-                                                              amount if STANDALONE else float(amount),
-                                                              price if STANDALONE else float(price))
+                    waiting_order_id = self.place_limit_order(buy_side, amount, price)
                     self.orders_init.append_order(waiting_order_id, buy_side, amount, price)
                 else:
                     self.orders_hold.append_order(i, buy_side, amount, price)
@@ -2077,19 +2063,6 @@ class Strategy(StrategyBase):
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"
                                      f" vlm: {amount}, price: {price}, profit: {profit}%")
                     self.tp_target = target
-                    if not STANDALONE:
-                        _amount = float(amount)
-                        _price = float(price)
-                        tcm = self.get_trading_capability_manager()
-                        if not tcm.is_limit_order_valid(buy_side, _amount, _price):
-                            _amount = tcm.round_amount(_amount, RoundingType.FLOOR)
-                            if buy_side:
-                                _price = tcm.round_price(_price, RoundingType.FLOOR)
-                            else:
-                                _price = tcm.round_price(_price, RoundingType.CEIL)
-                            amount = f2d(_amount)
-                            price = f2d(_price)
-                            self.message_log(f"Rounded amount: {amount}, price: {price}")
                     self.tp_order = (buy_side, amount, price, self.local_time())
                     check = (len(self.orders_grid) + len(self.orders_hold)) > 2
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=check)
@@ -2826,9 +2799,7 @@ class Strategy(StrategyBase):
             elif not buy and order_book.asks:
                 price = f2d(max(_price, order_book.asks[0].price))
 
-        waiting_order_id = self.place_limit_order(buy,
-                                                  amount if STANDALONE else float(amount),
-                                                  price if STANDALONE else float(price))
+        waiting_order_id = self.place_limit_order(buy, amount, price)
         if check and _price != float(price):
             self.message_log(f"For order {waiting_order_id} price was updated from {_price} to {price}",
                              log_level=LogLevel.WARNING)

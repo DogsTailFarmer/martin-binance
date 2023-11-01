@@ -1,5 +1,15 @@
+## 2.0.0rc1 - 2023-11-01
+### Added for new features
+* Bybit exchange V5 API support implemented. Supported account type is
+ [Unified Trading Account](https://testnet.bybit.com/en/help-center/article/Introduction-to-Bybit-Unified-Trading-Account),
+ for main and sub-accounts. Spot Trading only.
+
 ### Update
+* Lost compatibility with margin.de terminal. Scripts developed for use with the terminal can be run as
+executable modules, but not the other way around.
+* The logic and implementation of monitoring exceptional situations when placing and deleting orders has been updated.
 * Improved gRPC outage exception handling
+* Up requirements
 
 ## 1.3.7.post3 - 2023-10-09
 ### Fix

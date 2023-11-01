@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "2.0.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -17,10 +17,7 @@ Disclaimer
 All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 ##################################################################
-For standalone use set SYMBOL parameter at the TOP of this file
-
 Check and set parameter at the TOP part of script
-
 Verify init message in Strategy output window for no error
 """
 ################################################################
@@ -32,7 +29,7 @@ from martin_binance.executor import *  # lgtm [py/polluting-import]
 ################################################################
 # Exchange setup and parameter settings
 ################################################################
-# Set trading pair for STANDALONE mode, for margin mode takes from terminal
+# Set trading pair for Strategy
 ex.SYMBOL = 'BTCUSDT'
 # Exchange setup, see list of exchange in ms_cfg.toml
 ex.ID_EXCHANGE = 1  # See ms_cfg.toml Use for collection of statistics *and get client connection*
@@ -61,7 +58,7 @@ ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
 ex.STATUS_DELAY = 5  # Minute between sending Tlg message about current status, 0 - disable
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
 ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list member
-ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for STANDALONE mode on subaccount only
+ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for subaccount only
 # Parameter for calculate grid over price and grid orders quantity in set_trade_condition()
 # If ADAPTIVE_TRADE_CONDITION = True, ORDER_Q / OVER_PRICE determines the density of grid orders
 ex.ADAPTIVE_TRADE_CONDITION = True
@@ -139,5 +136,5 @@ def trade():
             loop.close()
 
 
-if __name__ == "__main__" and STANDALONE:
+if __name__ == "__main__":
     trade()
