@@ -1,3 +1,10 @@
+### Fix
+* Handling of partially filled TP when Reverse hold
+
+### Update
+* README.md updated
+* Clear from margin code fragments compatibility
+
 ## 2.0.0rc1 - 2023-11-01
 ### Added for new features
 * Bybit exchange V5 API support implemented. Supported account type is

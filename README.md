@@ -6,7 +6,8 @@
 
 <h2 align="center">Cyclic grid strategy for SPOT market</h2>
 
-<h3 align="center">Free trading system for crypto exchanges (Binance, Bitfinex, Huobi, OKX,)</h3>
+<h3 align="center">Free trading system for crypto exchanges:</h3>
+<h3 align="center">Binance, Bitfinex, Huobi, OKX, Bybit,</h3>
 
 ***
 <h4 align="center">martin-binance <a href="https://pypi.org/project/martin-binance/"><img src="https://img.shields.io/pypi/v/martin-binance" alt="PyPI version"></a> <--> exchanges-wrapper <a href="https://pypi.org/project/exchanges-wrapper/"><img src="https://img.shields.io/pypi/v/exchanges-wrapper" alt="PyPI version"></a></h4>
@@ -26,6 +27,8 @@ Strongly recommended that you test the strategy in the demo mode before using re
 
 ## Important notices
 * For [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper) `v>= v1.4.0` must be updated `exch_srv_cfg.toml`
+* After updating the version to `v2.0.0`, the configuration files `cli_XX_AAABBB.py` for all running trading pairs
+should be updated
 * Lost compatibility with `margin.de` terminal. Scripts developed for use with the terminal can be run as
   executable modules, but not the other way around.
 

@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc1"
+__version__ = "2.0.0rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1287,6 +1287,10 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
     except grpc.RpcError as ex:
         _fetch_order = True
         cls.strategy.message_log(f"Exception creating order {_id}: {ex.code().name}, {ex.details()}")
+
+        cls.strategy.message_log(f"create_limit_order: order_book: {cls.order_book}")
+        cls.strategy.message_log(f"create_limit_order: ticker: {cls.ticker}")
+
     except Exception as _ex:
         _fetch_order = True
         cls.strategy.message_log(f"Exception creating order {_id}: {_ex}")
@@ -1443,11 +1447,14 @@ async def fetch_order(_id: int, _client_order_id: str = None, _filled_update_cal
                 cls.canceled_order_id.remove(_id)
             remove_from_orders_lists([_id])
             cls.strategy.on_cancel_order_success(_id, Order(result))
-        elif _filled_update_call and result.get('status') in ('NEW', 'PARTIALLY_FILLED'):
+            return result
+        if _filled_update_call and result.get('status') in ('NEW', 'PARTIALLY_FILLED'):
             await create_order_handler(_client_order_id, result)
-        elif not result:
-            cls.strategy.message_log(f"Can't get status for order {_id}", log_level=LogLevel.WARNING)
-        return result
+            return result
+        if not result:
+            cls.strategy.message_log(f"Can't get status for order {_id}({_client_order_id})",
+                                     log_level=LogLevel.WARNING)
+        return {}
 
 
 async def transfer2master(symbol: str, amount: str):
