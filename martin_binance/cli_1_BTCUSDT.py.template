@@ -21,11 +21,10 @@ Check and set parameter at the TOP part of script
 Verify init message in Strategy output window for no error
 """
 ################################################################
-import toml
-# noinspection PyUnresolvedReferences
+from decimal import Decimal
 import sys
+from pathlib import Path
 import martin_binance.executor as ex
-from martin_binance.executor import *  # lgtm [py/polluting-import]
 ################################################################
 # Exchange setup and parameter settings
 ################################################################
@@ -44,7 +43,7 @@ ex.START_ON_BUY = True  # First cycle direction
 ex.AMOUNT_FIRST = Decimal('0.05')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FUND = False  # Use all available fund for initial cycle or alltime for GRID_ONLY
 ex.AMOUNT_SECOND = Decimal('1000.0')  # Deposit for Buy cycle in second currency
-ex.PRICE_SHIFT = 0.01  # 'No market' shift price in % from current bid/ask price
+ex.PRICE_SHIFT = Decimal(0.01)  # 'No market' shift price in % from current bid/ask price
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()
@@ -89,52 +88,9 @@ ex.SAVED_STATE = False  # Use saved state for backtesting
 #                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
 ex.PARAMS = Path(__file__).absolute()
-config = toml.load(str(ex.CONFIG_FILE)) if ex.CONFIG_FILE.exists() else None
 ex.HEAD_VERSION = __version__
-ex.EXCHANGE = config.get('exchange')
-ex.VPS_NAME = config.get('Exporter').get('vps_name')
-# Telegram parameters
-telegram = config.get('Telegram')
-ex.TELEGRAM_URL = config.get('telegram_url')
-for tlg in telegram:
-    if ex.ID_EXCHANGE in tlg.get('id_exchange'):
-        ex.TOKEN = tlg.get('token')
-        ex.CHANNEL_ID = tlg.get('channel_id')
-        ex.INLINE_BOT = tlg.get('inline')
-        break
-
-
-def trade():
-    import logging.handlers
-    # For autoload last state
-    ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
-    #
-    log_file = Path(ex.LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
-    ex.LAST_STATE_FILE = Path(ex.LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
-    #
-    _logger = logging.getLogger('logger')
-    _logger.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
-    handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-    _logger.addHandler(handler)
-    _logger.propagate = False
-    #
-    try:
-        loop.create_task(main(ex.SYMBOL))
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        try:
-            loop.run_until_complete(ask_exit())
-        except asyncio.CancelledError:
-            pass
-        except Exception as _err:
-            print(f"Error: {_err}")
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        if ex.MODE in ('T', 'TC'):
-            loop.close()
-
+# For autoload last state
+ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
 
 if __name__ == "__main__":
-    trade()
+    ex.trade()

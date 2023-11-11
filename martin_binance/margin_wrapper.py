@@ -4,7 +4,7 @@ margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exc
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc2"
+__version__ = "2.0.0rc3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -12,7 +12,6 @@ import ast
 import asyncio
 import simplejson as json
 import logging
-import math
 import os
 import time
 import sqlite3
@@ -24,7 +23,7 @@ import psutil
 import csv
 
 from colorama import init as color_init
-from decimal import Decimal, ROUND_FLOOR
+from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
 from pathlib import Path
 from datetime import datetime, timedelta
 from tqdm import tqdm
@@ -34,7 +33,7 @@ import grpc
 import jsonpickle
 # noinspection PyPackageRequirements
 from google.protobuf import json_format
-from margin_strategy_sdk import LogLevel, OrderUpdate, RoundingType, Dict, List
+from margin_strategy_sdk import LogLevel, OrderUpdate, Dict, List
 # noinspection PyUnresolvedReferences
 from margin_strategy_sdk import StrategyConfig  # lgtm [py/unused-import]
 
@@ -62,6 +61,7 @@ TRADES_LIST_LIMIT = 100
 HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
+TRY_LIMIT = 30
 
 logger = logging.getLogger('logger')
 color_init()
@@ -133,7 +133,7 @@ def order_trades_sum(_order_id: int) -> Decimal:
     saved_filled_quantity = Decimal("0")
     for _trade in StrategyBase.trades:
         if _trade.order_id == _order_id:
-            saved_filled_quantity += Decimal(str(_trade.amount))
+            saved_filled_quantity += _trade.amount
     return saved_filled_quantity.quantize(Decimal("1.01234567"), rounding=ROUND_FLOOR)
 
 
@@ -142,7 +142,7 @@ class PrivateTrade:
 
     def __init__(self, _trade: {}) -> None:
         # Amount of the trade.
-        self.amount = float(_trade["qty"])
+        self.amount = Decimal(_trade["qty"])
         # True, if the trade was a buy.
         self.buy = _trade.get('isBuyer', False)
         # id of the trade.
@@ -150,7 +150,7 @@ class PrivateTrade:
         # id of the order that the trade belongs to.
         self.order_id = int(_trade["orderId"])
         # Price at which the trade was executed.
-        self.price = float(_trade["price"])
+        self.price = Decimal(_trade["price"])
         # Timestamp of the trade.
         self.timestamp = int(_trade["time"])
 
@@ -201,7 +201,7 @@ class Order:
 
     def __init__(self, order: {}) -> None:
         # Overall amount of the order.
-        self.amount = float(order['origQty'])
+        self.amount = Decimal(order['origQty'])
         # True if the order is a buy order.
         self.buy = order['side'] == 'BUY'
         # id of the order.
@@ -209,11 +209,11 @@ class Order:
         # Type of the order.
         self.order_type = order['type']
         # Price of the order.
-        self.price = float(order['price'])
+        self.price = Decimal(order['price'])
         # Amount that has been filled already.
-        self.received_amount = float(order['executedQty'])
+        self.received_amount = Decimal(order['executedQty'])
         # Amount that has not been filled yet.
-        self.remaining_amount = float(ms.f2d(self.amount) - ms.f2d(self.received_amount))
+        self.remaining_amount = self.amount - self.received_amount
         # Timestamp of the order.
         self.timestamp = int(order.get('transactTime', order.get('time', time.time())))
 
@@ -262,66 +262,44 @@ class TradingCapabilityManager:
     def __init__(self, _exchange_info_symbol):
         self.base_asset_precision = int(_exchange_info_symbol.get('baseAssetPrecision'))
         self.quote_asset_precision = int(_exchange_info_symbol.get('quoteAssetPrecision'))
-        self.min_qty = float(_exchange_info_symbol['filters']['lotSize']['minQty'])
-        self.max_qty = float(_exchange_info_symbol['filters']['lotSize']['maxQty'])
-        self.step_size = float(_exchange_info_symbol['filters']['lotSize']['stepSize'])
-        self.min_notional = (float(_exchange_info_symbol['filters'].get('notional', {}).get('minNotional', 0))
-                             or float(_exchange_info_symbol['filters'].get('minNotional', {}).get('minNotional', 0)))
-        self.tick_size = float(_exchange_info_symbol['filters']['priceFilter']['tickSize'])
-        self.multiplier_up = float(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
-        self.multiplier_down = float(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
+        self.min_qty = Decimal(_exchange_info_symbol['filters']['lotSize']['minQty'])
+        self.max_qty = Decimal(_exchange_info_symbol['filters']['lotSize']['maxQty'])
+        self.step_size = Decimal(_exchange_info_symbol['filters']['lotSize']['stepSize'].rstrip('0'))
+        self.min_notional = (
+                Decimal(_exchange_info_symbol['filters'].get('notional', {}).get('minNotional', '0'))
+                or Decimal(_exchange_info_symbol['filters'].get('minNotional', {}).get('minNotional', '0'))
+        )
+        self.tick_size = Decimal(_exchange_info_symbol['filters']['priceFilter']['tickSize'].rstrip('0'))
+        self.multiplier_up = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
+        self.multiplier_down = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
 
     def __call__(self):
         return self
 
-    def round_amount(self, unrounded_amount: float, rounding_type: RoundingType) -> float:
-        k = next((i for i, x in enumerate(f"{self.step_size:.10f}") if x not in ('.', '0')), 0)
-        k = max(k - 1, 0)
-        n = 10 ** k
-        if rounding_type == RoundingType.CEIL:
-            rounded_amount = math.ceil(unrounded_amount * n) / n if k else math.ceil(unrounded_amount)
-        elif rounding_type == RoundingType.FLOOR:
-            rounded_amount = math.floor(unrounded_amount * n) / n if k else math.floor(unrounded_amount)
-        elif rounding_type == RoundingType.ROUND:
-            rounded_amount = round(unrounded_amount, self.base_asset_precision)
-        else:
-            rounded_amount = unrounded_amount
-            StrategyBase.strategy.strategy.message_log("round_amount: Unknown RoundingType", log_level=LogLevel.ERROR)
-        return rounded_amount
+    def round_amount(self, unrounded_amount: Decimal, rounding_type: str) -> Decimal:
+        return unrounded_amount.quantize(self.step_size, rounding=rounding_type)
 
-    def round_price(self, unrounded_price: float, rounding_type: RoundingType) -> float:
-        k = f"{self.tick_size:.8f}".replace('5', '1').find('1') - 1
-        k = max(k, 0)
-        n = 10 ** k
-        if rounding_type == RoundingType.CEIL:
-            rounded_price = math.ceil(unrounded_price * n) / n if k else math.ceil(unrounded_price)
-        elif rounding_type == RoundingType.FLOOR:
-            rounded_price = math.floor(unrounded_price * n) / n if k else math.floor(unrounded_price)
-        elif rounding_type == RoundingType.ROUND:
-            rounded_price = round(unrounded_price, k)
-        else:
-            rounded_price = unrounded_price
-            StrategyBase.strategy.message_log("round_price: Unknown RoundingType", log_level=LogLevel.ERROR)
-        return rounded_price
+    def round_price(self, unrounded_price: Decimal, rounding_type: str) -> Decimal:
+        return unrounded_price.quantize(self.tick_size, rounding=rounding_type)
 
-    def get_min_sell_amount(self, price: float) -> float:
+    def get_min_sell_amount(self, price: Decimal) -> Decimal:
         # print(f"get_min_sell_amount: price:{price}, min_qty:{self.min_qty}, min_notional:{self.min_notional}")
-        return max(self.min_qty, self.round_amount(self.min_notional / price, RoundingType.CEIL))
+        return max(self.min_qty, self.round_amount(self.min_notional / price, ROUND_CEILING))
 
-    def get_max_sell_amount(self, _unused_price: float) -> float:
+    def get_max_sell_amount(self, _unused_price: Decimal) -> Decimal:
         """
         Returns the maximally possible sell amount that can be placed at a given price.
         """
         return self.max_qty
 
-    def get_min_buy_amount(self, price: float) -> float:
+    def get_min_buy_amount(self, price: Decimal) -> Decimal:
         # print(f"get_min_buy_amount: price:{price}, min_notional:{self.min_notional}")
-        return max(self.min_qty, self.round_amount(self.min_notional / price, RoundingType.CEIL))
+        return max(self.min_qty, self.round_amount(self.min_notional / price, ROUND_CEILING))
 
-    def get_minimal_price_change(self, _unused_price: float) -> float:
+    def get_minimal_price_change(self) -> Decimal:
         return self.tick_size
 
-    def get_minimal_amount_change(self, _unused_reference_amount: float = None) -> float:
+    def get_minimal_amount_change(self) -> Decimal:
         """
         Get the minimal amount change that is possible to use on the exchange.
         """
@@ -330,11 +308,11 @@ class TradingCapabilityManager:
     def is_limit_order_valid(self, buy_side, _amount, _price):
         pass  # For margin compatibility
 
-    def get_max_sell_price(self, avg_price: float) -> float:
-        return self.round_price(avg_price * self.multiplier_up, RoundingType.FLOOR)
+    def get_max_sell_price(self, avg_price: Decimal) -> Decimal:
+        return self.round_price(avg_price * self.multiplier_up, ROUND_FLOOR)
 
-    def get_min_buy_price(self, avg_price: float) -> float:
-        return self.round_price(avg_price * self.multiplier_down, RoundingType.CEIL)
+    def get_min_buy_price(self, avg_price: Decimal) -> Decimal:
+        return self.round_price(avg_price * self.multiplier_down, ROUND_CEILING)
 
 
 class Ticker:
@@ -342,9 +320,9 @@ class Ticker:
 
     def __init__(self, _ticker):
         # Price of the currency pair one day ago.
-        self.last_day_price = float(_ticker.get('openPrice', 0))
+        self.last_day_price = Decimal(_ticker.get('openPrice', '0'))
         # Last traded price of the currency pair.
-        self.last_price = float(_ticker.get('lastPrice', 0))
+        self.last_price = Decimal(_ticker.get('lastPrice', '0'))
         # Timestamp of the ticker data.
         self.timestamp = int(_ticker.get('closeTime', 0))
         # print(f"self.last_price: {self.last_price}")
@@ -358,11 +336,11 @@ class FundsEntry:
 
     def __init__(self, _funds):
         # The available amount for a currency.
-        self.available = float(_funds.get('free'))
+        self.available = Decimal(_funds.get('free'))
         # The reserved amount for a currency.
-        self.reserved = float(_funds.get('locked'))
+        self.reserved = Decimal(_funds.get('locked'))
         # Total amount of a currency in the account.
-        self.total_for_currency = float(Decimal(_funds.get('free')) + Decimal(_funds.get('locked')))
+        self.total_for_currency = self.available + self.reserved
         # print(f"self.total_for_currency: {self.total_for_currency}")
 
     def __call__(self):
@@ -382,8 +360,8 @@ class OrderBook:
             __slots__ = ("price", "amount")
 
             def __init__(self, _order) -> None:
-                self.price = float(_order[0])
-                self.amount = float(_order[1])
+                self.price = Decimal(_order[0])
+                self.amount = Decimal(_order[1])
 
         self.asks = []
         # List of asks ordered by price in ascending order.
@@ -1078,7 +1056,9 @@ async def buffered_orders():
                 cls.strategy.message_log(f"Perhaps was missed event for order(s): {diff_id},"
                                          f" checking it", log_level=LogLevel.WARNING, tlg=False)
                 for _id in diff_id:
-                    await fetch_order(_id, _filled_update_call=True)
+                    res = await fetch_order(_id, _filled_update_call=True)
+                    if res.get('status') == 'CANCELED':
+                        await cancel_order_handler(_id, False, res)
 
             if cls.last_state:
                 cls.strategy.restore_strategy_state(restore=True)
@@ -1287,10 +1267,6 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
     except grpc.RpcError as ex:
         _fetch_order = True
         cls.strategy.message_log(f"Exception creating order {_id}: {ex.code().name}, {ex.details()}")
-
-        cls.strategy.message_log(f"create_limit_order: order_book: {cls.order_book}")
-        cls.strategy.message_log(f"create_limit_order: ticker: {cls.ticker}")
-
     except Exception as _ex:
         _fetch_order = True
         cls.strategy.message_log(f"Exception creating order {_id}: {_ex}")
@@ -1302,15 +1278,15 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
     finally:
         if _fetch_order:
             await asyncio.sleep(HEARTBEAT)
-            await fetch_order(0, str(_id), _filled_update_call=True)
+            res = await fetch_order(0, str(_id), _filled_update_call=True)
+            if res.get('status') in ('NEW', 'PARTIALLY_FILLED', 'FILLED'):
+                await create_order_handler(_id, res)
 
 
 async def create_order_handler(_id, result):
     cls = StrategyBase
-    if _id in cls.wait_order_id:
-        cls.wait_order_id.remove(_id)
     order = Order(result)
-    if cls.orders.get(order.id) is None:
+    if cls.orders.get(order.id) is None or (result.get('status') == 'FILLED' and order_trades_sum(_id) == 0):
         cls.strategy.message_log(
             f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
             f" {any2str(order.amount)} by {any2str(order.price)}"
@@ -1319,24 +1295,10 @@ async def create_order_handler(_id, result):
         orig_qty = Decimal(result['origQty'])
         executed_qty = Decimal(result['executedQty'])
         cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
-        if executed_qty > 0:
-            price = float(cummulative_quote_qty / executed_qty)
-
-            '''
-            trade = {"qty": float(executed_qty),
-                     "isBuyer": order.buy,
-                     "id": int(time.time() * 1000),
-                     "orderId": order.id,
-                     "price": price,
-                     "time": order.timestamp}
-            # cls.strategy.message_log(f"place_limit_order_callback.trade: {trade}", color=ms.Style.YELLOW)
-            if len(cls.trades) > TRADES_LIST_LIMIT:
-                del cls.trades[0]
-            cls.trades.append(PrivateTrade(trade))
-            '''
-
-            if ms.MODE == 'TC' and cls.strategy.start_collect:
-                cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update({'lastPrice': str(price)})
+        if executed_qty > 0 and ms.MODE == 'TC' and cls.strategy.start_collect:
+            cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update(
+                {'lastPrice': str(cummulative_quote_qty / executed_qty)}
+            )
         if executed_qty < orig_qty:
             cls.orders[order.id] = order
         elif ms.SAVE_TRADE_HISTORY:
@@ -1360,6 +1322,9 @@ async def create_order_handler(_id, result):
             await on_funds_update()
         cls.strategy.on_place_order_success(_id, order)
 
+    if _id in cls.wait_order_id:
+        cls.wait_order_id.remove(_id)
+
 
 async def place_limit_order_timeout(_id):
     cls = StrategyBase
@@ -1369,9 +1334,12 @@ async def place_limit_order_timeout(_id):
         cls.strategy.on_place_order_error_string(_id, 'Place order timeout')
 
 
-async def cancel_order_call(_id: int, cancel_all: bool):
+async def cancel_order_call(_id: int, cancel_all: bool, count=0):
     cls = StrategyBase
-    cls.canceled_order_id.append(_id)
+    if count == 0:
+        cls.canceled_order_id.append(_id)
+    elif _id in cls.canceled_order_id:
+        cls.canceled_order_id.remove(_id)
     _fetch_order = False
     try:
         if ms.MODE in ('T', 'TC'):
@@ -1400,21 +1368,35 @@ async def cancel_order_call(_id: int, cancel_all: bool):
         # print(f"cancel_order_call.result: {result}")
         # Remove from orders lists
         if result and result.get('status') == 'CANCELED':
-            cls.canceled_order_id.remove(_id)
-            remove_from_orders_lists([_id])
-            cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
-            cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=cancel_all)
-            if ms.MODE == 'TC' and cls.strategy.start_collect:
-                cls.strategy.open_orders_snapshot()
-            elif ms.MODE == 'S':
-                await on_funds_update()
+            await cancel_order_handler(_id, cancel_all, result)
         else:
             cls.strategy.message_log(f"Cancel order {_id}: Warning, not result getting")
             _fetch_order = True
     finally:
         if _fetch_order:
             await asyncio.sleep(HEARTBEAT)
-            await fetch_order(_id, _filled_update_call=True)
+            res = await fetch_order(_id)
+            if res.get('status') == 'CANCELED':
+                await cancel_order_handler(_id, cancel_all, res)
+            elif res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
+                await asyncio.sleep(HEARTBEAT * count)
+                if count > TRY_LIMIT:
+                    cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
+                    return
+                await cancel_order_call(_id, cancel_all, count+1)
+
+
+async def cancel_order_handler(_id, cancel_all, result):
+    cls = StrategyBase
+    if _id in cls.canceled_order_id:
+        cls.canceled_order_id.remove(_id)
+    remove_from_orders_lists([_id])
+    cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
+    cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=cancel_all)
+    if ms.MODE == 'TC' and cls.strategy.start_collect:
+        cls.strategy.open_orders_snapshot()
+    elif ms.MODE == 'S':
+        await on_funds_update()
 
 
 async def cancel_order_timeout(_id):
@@ -1442,18 +1424,10 @@ async def fetch_order(_id: int, _client_order_id: str = None, _filled_update_cal
     else:
         cls.strategy.message_log(f"For order {_id}({_client_order_id}) fetched status is {result.get('status')}",
                                  log_level=LogLevel.INFO, color=ms.Style.GREEN)
-        if _filled_update_call and result.get('status') == 'CANCELED':
-            if _id in cls.canceled_order_id:
-                cls.canceled_order_id.remove(_id)
-            remove_from_orders_lists([_id])
-            cls.strategy.on_cancel_order_success(_id, Order(result))
+        if result:
             return result
-        if _filled_update_call and result.get('status') in ('NEW', 'PARTIALLY_FILLED'):
-            await create_order_handler(_client_order_id, result)
-            return result
-        if not result:
-            cls.strategy.message_log(f"Can't get status for order {_id}({_client_order_id})",
-                                     log_level=LogLevel.WARNING)
+        cls.strategy.message_log(f"Can't get status for order {_id}({_client_order_id})",
+                                 log_level=LogLevel.WARNING)
         return {}
 
 

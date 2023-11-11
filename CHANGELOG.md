@@ -4,6 +4,7 @@
 ### Update
 * README.md updated
 * Clear from margin code fragments compatibility
+* decimal.Decimal calculation for all modules was implemented
 
 ## 2.0.0rc1 - 2023-11-01
 ### Added for new features
