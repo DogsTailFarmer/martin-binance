@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "2.0.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -17,22 +17,22 @@ Disclaimer
 All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 ##################################################################
-For standalone use set SYMBOL parameter at the TOP of this file
-
 Check and set parameter at the TOP part of script
-
 Verify init message in Strategy output window for no error
 """
 ################################################################
-import toml
-# noinspection PyUnresolvedReferences
+from decimal import Decimal
 import sys
+import asyncio
+from pathlib import Path
+import toml
 import martin_binance.executor as ex
-from martin_binance.executor import *  # lgtm [py/polluting-import]
+from martin_binance import CONFIG_FILE, LOG_PATH, LAST_STATE_PATH
+from martin_binance.margin_wrapper import main, ask_exit, LogLevel  # noqa
 ################################################################
 # Exchange setup and parameter settings
 ################################################################
-# Set trading pair for STANDALONE mode, for margin mode takes from terminal
+# Set trading pair for Strategy
 ex.SYMBOL = 'BTCUSDT'
 # Exchange setup, see list of exchange in ms_cfg.toml
 ex.ID_EXCHANGE = 0  # See ms_cfg.toml Use for collection of statistics *and get client connection*
@@ -92,8 +92,8 @@ ex.SAVED_STATE = False  # Use saved state for backtesting
 #                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
 ex.PARAMS = Path(__file__).absolute()
-config = toml.load(str(ex.CONFIG_FILE)) if ex.CONFIG_FILE.exists() else None
 ex.HEAD_VERSION = __version__
+config = toml.load(str(CONFIG_FILE)) if CONFIG_FILE.exists() else None
 ex.EXCHANGE = config.get('exchange')
 ex.VPS_NAME = config.get('Exporter').get('vps_name')
 # Telegram parameters
@@ -109,11 +109,12 @@ for tlg in telegram:
 
 def trade():
     import logging.handlers
+    loop = asyncio.get_event_loop()
     # For autoload last state
     ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
     #
-    log_file = Path(ex.LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
-    ex.LAST_STATE_FILE = Path(ex.LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
+    log_file = Path(LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
+    ex.LAST_STATE_FILE = Path(LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
     #
     _logger = logging.getLogger('logger')
     _logger.setLevel(logging.DEBUG)
@@ -139,5 +140,5 @@ def trade():
             loop.close()
 
 
-if __name__ == "__main__" and STANDALONE:
+if __name__ == "__main__":
     trade()

@@ -23,8 +23,12 @@ Verify init message in Strategy output window for no error
 ################################################################
 from decimal import Decimal
 import sys
+import asyncio
 from pathlib import Path
+import toml
 import martin_binance.executor as ex
+from martin_binance import CONFIG_FILE, LOG_PATH, LAST_STATE_PATH
+from martin_binance.margin_wrapper import main, ask_exit, LogLevel  # noqa
 ################################################################
 # Exchange setup and parameter settings
 ################################################################
@@ -57,7 +61,7 @@ ex.SHIFT_GRID_DELAY = 1  # sec delay for shift grid action
 ex.STATUS_DELAY = 60  # Minute between sending Tlg message about current status, 0 - disable
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
 ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list member
-ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for subaccount only
+ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for STANDALONE mode on subaccount only
 # Parameter for calculate grid over price and grid orders quantity in set_trade_condition()
 # If ADAPTIVE_TRADE_CONDITION = True, ORDER_Q / OVER_PRICE determines the density of grid orders
 ex.ADAPTIVE_TRADE_CONDITION = True
@@ -89,8 +93,52 @@ ex.SAVED_STATE = False  # Use saved state for backtesting
 ################################################################
 ex.PARAMS = Path(__file__).absolute()
 ex.HEAD_VERSION = __version__
-# For autoload last state
-ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
+config = toml.load(str(CONFIG_FILE)) if CONFIG_FILE.exists() else None
+ex.EXCHANGE = config.get('exchange')
+ex.VPS_NAME = config.get('Exporter').get('vps_name')
+# Telegram parameters
+telegram = config.get('Telegram')
+ex.TELEGRAM_URL = config.get('telegram_url')
+for tlg in telegram:
+    if ex.ID_EXCHANGE in tlg.get('id_exchange'):
+        ex.TOKEN = tlg.get('token')
+        ex.CHANNEL_ID = tlg.get('channel_id')
+        ex.INLINE_BOT = tlg.get('inline')
+        break
+
+
+def trade():
+    import logging.handlers
+    loop = asyncio.get_event_loop()
+    # For autoload last state
+    ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
+    #
+    log_file = Path(LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
+    ex.LAST_STATE_FILE = Path(LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
+    #
+    _logger = logging.getLogger('logger')
+    _logger.setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
+    handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
+    _logger.addHandler(handler)
+    _logger.propagate = False
+    #
+    try:
+        loop.create_task(main(ex.SYMBOL))
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            loop.run_until_complete(ask_exit())
+        except asyncio.CancelledError:
+            pass
+        except Exception as _err:
+            print(f"Error: {_err}")
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        if ex.MODE in ('T', 'TC'):
+            loop.close()
+
 
 if __name__ == "__main__":
-    ex.trade()
+    trade()
