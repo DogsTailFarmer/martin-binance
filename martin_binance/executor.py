@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc4"
+__version__ = "2.0.0rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1298,7 +1298,8 @@ class Strategy(StrategyBase):
                          f"! command: {self.command}\n"
                          f"! reverse: {self.reverse}\n"
                          f"! Profit: {self.get_sum_profit()}\n"
-                         f"! ======================================")
+                         f"! ======================================",
+                         log_level=LogLevel.DEBUG)
 
     def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total', backtest=False) -> ():
         """
@@ -2272,7 +2273,10 @@ class Strategy(StrategyBase):
             if GRID_ONLY:
                 self.shift_grid_threshold = None
                 self.grid_only_stop()
-            elif self.tp_part_amount_first and self.convert_tp(self.tp_part_amount_first, self.tp_part_amount_second):
+            elif self.tp_part_amount_first and self.convert_tp(
+                    self.tp_part_amount_first,
+                    self.tp_part_amount_second,
+                    _update_sum_amount=False):
                 self.message_log("No grid orders after part filled TP, converted TP to grid", tlg=True)
                 self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
             elif self.tp_was_filled:
