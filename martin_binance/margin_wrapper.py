@@ -1,10 +1,10 @@
 """
-margin.de <-> Python strategy <-> <margin_wrapper> <-> exchanges-wrapper <-> Exchanges API/WSS
+Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> Exchanges API/WSS
 """
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc3"
+__version__ = "2.0.0rc4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -21,6 +21,7 @@ import pandas as pd
 import shutil
 import psutil
 import csv
+import queue
 
 from colorama import init as color_init
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
@@ -40,7 +41,7 @@ from margin_strategy_sdk import StrategyConfig  # lgtm [py/unused-import]
 from exchanges_wrapper.definitions import Interval
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
-from martin_binance import executor as ms, BACKTEST_PATH, copy
+from martin_binance import executor as ms, BACKTEST_PATH, copy, LOG_PATH
 from martin_binance.client import Trade
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 
@@ -73,6 +74,29 @@ MS_ORDERS = 'ms.orders'
 EQUAL_STR = "================================================================"
 
 session_result = {}
+
+
+class Style:
+    __slots__ = ()
+
+    BLACK: str = '\033[30m'
+    RED: str = '\033[31m'
+    B_RED: str = '\033[1;31m'
+    GREEN: str = '\033[32m'
+    YELLOW: str = '\033[33m'
+    B_YELLOW: str = "\033[33;1m"
+    BLUE: str = '\033[34m'
+    MAGENTA: str = '\033[35m'
+    CYAN: str = '\033[36m'
+    GRAY: str = '\033[37m'
+    WHITE: str = '\033[0;37m'
+    B_WHITE: str = '\033[1;37m'
+    UNDERLINE: str = '\033[4m'
+    RESET: str = '\033[0m'
+
+    @classmethod
+    def __add__(cls, b):
+        return Style() + b
 
 
 def any2str(_x) -> str:
@@ -385,6 +409,10 @@ class StrategyBase:
         "grid_buy",
         "grid_sell",
         "get_buffered_funds_last_time",
+        "queue_to_tlg",
+        "local_time",
+        "status_time",
+        "tlg_header",
     )
 
     session = None
@@ -431,6 +459,10 @@ class StrategyBase:
         self.grid_buy = {}
         self.grid_sell = {}
         self.get_buffered_funds_last_time = self.get_time()
+        self.queue_to_tlg = queue.Queue()  # - Queue for sending message to Telegram
+        self.local_time = self.get_time
+        self.status_time = None  # + Last time sending status message
+        self.tlg_header = ''  # - Header for Telegram message
 
     def __call__(self):
         return self
@@ -487,9 +519,6 @@ class StrategyBase:
         cls.backtest = {}
         cls.bulk_orders_cancel = {}
 
-    def message_log(self, *args, **kwargs):
-        pass  # meant to be overridden in a subclass
-
     @classmethod
     def order_exist(cls, _id) -> bool:
         return bool(cls.orders.get(_id))
@@ -524,7 +553,7 @@ class StrategyBase:
         cls.order_id += 1
         self.message_log(f"Send order id:{cls.order_id} for {'BUY' if buy else 'SELL'}"
                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
-                         color=ms.Style.B_YELLOW)
+                         color=Style.B_YELLOW)
         loop.create_task(place_limit_order_timeout(cls.order_id))
         loop.create_task(create_limit_order(cls.order_id, buy, any2str(amount), any2str(price)))
         if cls.exchange == 'huobi':
@@ -597,10 +626,29 @@ class StrategyBase:
         if ms.MODE in ('T', 'TC'):
             loop.create_task(transfer2master(symbol, amount))
 
+    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg=False, color=Style.WHITE) -> None:
+        if tlg and color == Style.WHITE:
+            color = Style.B_WHITE
+        if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
+            tlg = True
+            color = Style.B_RED
+        color_msg = color+msg+Style.RESET if color else msg
+        if log_level not in ms.LOG_LEVEL_NO_PRINT:
+            if ms.MODE in ('T', 'TC'):
+                print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
+            else:
+                tqdm.write(f"{datetime.fromtimestamp(self.local_time()).strftime('%H:%M:%S.%f')} {color_msg}")
+        if ms.MODE in ('T', 'TC'):
+            write_log(log_level, msg)
+            if tlg and self.queue_to_tlg:
+                msg = self.tlg_header + msg
+                self.status_time = self.local_time()
+                self.queue_to_tlg.put(msg)
+
 
 async def save_to_csv() -> None:
     cls = StrategyBase
-    file_name = Path(ms.LOG_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
+    file_name = Path(LOG_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
     with open(file_name, mode="a", buffering=1) as fp:
         writer = csv.writer(fp)
         writer.writerow(["TRADE",
@@ -799,7 +847,7 @@ async def save_asset():
 async def ask_exit():
     cls = StrategyBase
     if cls.strategy:
-        cls.strategy.message_log("Got signal for exit", color=ms.Style.MAGENTA)
+        cls.strategy.message_log("Got signal for exit", color=Style.MAGENTA)
 
         cls.operational_status = False
         await asyncio.sleep(HEARTBEAT)
@@ -1008,8 +1056,8 @@ async def buffered_orders():
     while not cls.operational_status:
         try:
             res = await cls.send_request(cls.stub.CheckStream, api_pb2.MarketRequest, symbol=cls.symbol)
-        except Exception as ex:
-            logger.warning(f"Exception on Check WSS: {ex}")
+        except Exception as ex_1:
+            logger.warning(f"Exception on Check WSS: {ex_1}")
         else:
             if res.success:
                 cls.operational_status = True
@@ -1022,7 +1070,7 @@ async def buffered_orders():
                 raise UserWarning(f"Not active WSS for {cls.symbol} on {cls.exchange}, restart request sent")
 
             if cls.last_state:
-                cls.strategy.message_log("Trying restore saved state after restart", color=ms.Style.GREEN)
+                cls.strategy.message_log("Trying restore saved state after restart", color=Style.GREEN)
                 # Restore StrategyBase class var
                 cls.order_id = json.loads(cls.last_state.pop(MS_ORDER_ID,
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
@@ -1034,7 +1082,7 @@ async def buffered_orders():
 
             if restore:
                 cls.strategy.message_log("Trying restore saved state after lost connection to host",
-                                         color=ms.Style.GREEN)
+                                         color=Style.GREEN)
 
             _orders = await cls.send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=cls.symbol)
             if _orders is None:
@@ -1058,7 +1106,7 @@ async def buffered_orders():
                 for _id in diff_id:
                     res = await fetch_order(_id, _filled_update_call=True)
                     if res.get('status') == 'CANCELED':
-                        await cancel_order_handler(_id, False, res)
+                        await cancel_order_handler(_id, False)
 
             if cls.last_state:
                 cls.strategy.restore_strategy_state(restore=True)
@@ -1077,13 +1125,13 @@ async def buffered_orders():
         except asyncio.CancelledError:
             # print("buffered_orders.Cancelled")
             cls.operational_status = False
-        except UserWarning as ex:
-            cls.strategy.message_log(f"Exception buffered_orders: {ex}", log_level=LogLevel.WARNING)
+        except UserWarning as ex_2:
+            cls.strategy.message_log(f"Exception buffered_orders: {ex_2}", log_level=LogLevel.WARNING)
             restore = True
-        except grpc.RpcError as ex:
-            status_code = ex.code()
-            cls.strategy.message_log(f"Exception buffered_orders: {status_code.name}, {ex.details()}",
-                                     log_level=LogLevel.WARNING, color=ms.Style.B_RED, tlg=True)
+        except grpc.RpcError as ex_3:
+            status_code = ex_3.code()
+            cls.strategy.message_log(f"Exception buffered_orders: {status_code.name}, {ex_3.details()}",
+                                     log_level=LogLevel.WARNING, color=Style.B_RED, tlg=True)
             if status_code == grpc.StatusCode.RESOURCE_EXHAUSTED:
                 # Decrease requests frequency
                 StrategyBase.rate_limiter += HEARTBEAT
@@ -1093,12 +1141,12 @@ async def buffered_orders():
                 try:
                     await cls.send_request(cls.stub.ResetRateLimit, api_pb2.OpenClientConnectionId,
                                            rate_limiter=StrategyBase.rate_limiter)
-                except Exception as ex:
-                    logger.warning(f"Exception buffered_orders:ResetRateLimit: {ex}")
+                except Exception as ex_4:
+                    logger.warning(f"Exception buffered_orders:ResetRateLimit: {ex_4}")
             else:
                 restore = True
-        except Exception as _ex:
-            cls.strategy.message_log(f"Exception buffered_orders: {_ex}\n{traceback.format_exc()}",
+        except Exception as ex_5:
+            cls.strategy.message_log(f"Exception buffered_orders: {ex_5}\n{traceback.format_exc()}",
                                      log_level=LogLevel.ERROR)
             restore = True
         await asyncio.sleep(StrategyBase.rate_limiter)
@@ -1291,7 +1339,7 @@ async def create_order_handler(_id, result):
             f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
             f" {any2str(order.amount)} by {any2str(order.price)}"
             f" Remaining amount {any2str(order.remaining_amount)}",
-            color=ms.Style.GREEN)
+            color=Style.GREEN)
         orig_qty = Decimal(result['origQty'])
         executed_qty = Decimal(result['executedQty'])
         cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
@@ -1368,7 +1416,7 @@ async def cancel_order_call(_id: int, cancel_all: bool, count=0):
         # print(f"cancel_order_call.result: {result}")
         # Remove from orders lists
         if result and result.get('status') == 'CANCELED':
-            await cancel_order_handler(_id, cancel_all, result)
+            await cancel_order_handler(_id, cancel_all)
         else:
             cls.strategy.message_log(f"Cancel order {_id}: Warning, not result getting")
             _fetch_order = True
@@ -1377,7 +1425,7 @@ async def cancel_order_call(_id: int, cancel_all: bool, count=0):
             await asyncio.sleep(HEARTBEAT)
             res = await fetch_order(_id)
             if res.get('status') == 'CANCELED':
-                await cancel_order_handler(_id, cancel_all, res)
+                await cancel_order_handler(_id, cancel_all)
             elif res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
                 await asyncio.sleep(HEARTBEAT * count)
                 if count > TRY_LIMIT:
@@ -1386,13 +1434,13 @@ async def cancel_order_call(_id: int, cancel_all: bool, count=0):
                 await cancel_order_call(_id, cancel_all, count+1)
 
 
-async def cancel_order_handler(_id, cancel_all, result):
+async def cancel_order_handler(_id, cancel_all):
     cls = StrategyBase
     if _id in cls.canceled_order_id:
         cls.canceled_order_id.remove(_id)
     remove_from_orders_lists([_id])
-    cls.strategy.message_log(f"Cancel order {_id} success", color=ms.Style.GREEN)
-    cls.strategy.on_cancel_order_success(_id, Order(result), cancel_all=cancel_all)
+    cls.strategy.message_log(f"Cancel order {_id} success", color=Style.GREEN)
+    cls.strategy.on_cancel_order_success(_id, cancel_all=cancel_all)
     if ms.MODE == 'TC' and cls.strategy.start_collect:
         cls.strategy.open_orders_snapshot()
     elif ms.MODE == 'S':
@@ -1423,7 +1471,7 @@ async def fetch_order(_id: int, _client_order_id: str = None, _filled_update_cal
         return {}
     else:
         cls.strategy.message_log(f"For order {_id}({_client_order_id}) fetched status is {result.get('status')}",
-                                 log_level=LogLevel.INFO, color=ms.Style.GREEN)
+                                 log_level=LogLevel.INFO, color=Style.GREEN)
         if result:
             return result
         cls.strategy.message_log(f"Can't get status for order {_id}({_client_order_id})",

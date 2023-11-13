@@ -1,10 +1,15 @@
+## 2.0.0rc4 - 2023-11-13
 ### Fix
 * Handling of partially filled TP when Reverse hold
 
 ### Update
+* Refine cli_X_AAABBB.py
+* Remove db support to module
+* Remove Telegram support to module
 * README.md updated
 * Clear from margin code fragments compatibility
 * decimal.Decimal calculation for all modules was implemented
+* Up requirements for exchanges-wrapper==1.4.0rc6
 
 ## 2.0.0rc1 - 2023-11-01
 ### Added for new features

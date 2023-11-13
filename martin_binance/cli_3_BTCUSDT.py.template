@@ -43,7 +43,7 @@ ex.START_ON_BUY = True  # First cycle direction
 ex.AMOUNT_FIRST = Decimal('0')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FUND = False  # Use all available fund for initial cycle or alltime for GRID_ONLY
 ex.AMOUNT_SECOND = Decimal('1000.0')  # Deposit for Buy cycle in second currency
-ex.PRICE_SHIFT = Decimal(0.01)  # 'No market' shift price in % from current bid/ask price
+ex.PRICE_SHIFT = Decimal('0.01')  # 'No market' shift price in % from current bid/ask price
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()

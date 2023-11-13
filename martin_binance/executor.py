@@ -1,39 +1,38 @@
-####################################################################
-# Cyclic grid strategy based on martingale
-##################################################################
+"""
+Cyclic grid strategy based on martingale
+"""
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc3"
+__version__ = "2.0.0rc4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
-
-
 ##################################################################
 import sys
 import gc
 import statistics
-from decimal import ROUND_HALF_EVEN
+from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING
 from threading import Thread
 import queue
-import requests
-from requests.adapters import HTTPAdapter, Retry
-import contextlib
 import math
-import toml
-import logging.handlers
+import sqlite3
+from pathlib import Path
+import simplejson as json
+from datetime import datetime
+import os
+import psutil
 
 from martin_binance import DB_FILE
-from martin_binance import WORK_PATH, CONFIG_FILE, LOG_PATH, LAST_STATE_PATH
-
-from martin_binance.margin_wrapper import *  # lgtm [py/polluting-import]
-from martin_binance.margin_wrapper import __version__ as msb_ver
-import psutil
+from martin_binance.db_utils import db_management, save_to_db
+from martin_binance.margin_wrapper import __version__ as msb_ver, any2str, Dict, LogLevel, StrategyConfig
+from martin_binance.margin_wrapper import StrategyBase, Style, OrderUpdate, Ticker, OrderBook, FundsEntry, Order
+from martin_binance.telegram_utils import telegram
 
 O_DEC = Decimal('0')
 
 # region SetParameters
 SYMBOL = str()
+EXCHANGE = ()
 # Exchange setup
 ID_EXCHANGE = int()
 FEE_IN_PAIR = bool()
@@ -89,8 +88,13 @@ REVERSE_STOP = bool()
 HEAD_VERSION = str()
 LOAD_LAST_STATE = int()
 # Path and files name
+LAST_STATE_FILE: Path
+VPS_NAME = str()
 PARAMS: Path
 # Telegram
+TELEGRAM_URL = str()
+TOKEN = str()
+CHANNEL_ID = str()
 STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
@@ -100,405 +104,6 @@ SAVE_DS = True  # Save session result data (ticker, orders) for compare
 SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
 SAVED_STATE = False  # Use saved state for backtesting
 # endregion
-
-LAST_STATE_FILE = Path(LAST_STATE_PATH, f"{ID_EXCHANGE}_{SYMBOL}.json")
-config = toml.load(str(CONFIG_FILE)) if CONFIG_FILE.exists() else None
-EXCHANGE = config.get('exchange')
-VPS_NAME = config.get('Exporter').get('vps_name')
-# Telegram parameters
-TELEGRAM_URL = config.get('telegram_url')
-telegram = config.get('Telegram', [])
-for _tlg in telegram:
-    if ID_EXCHANGE in _tlg.get('id_exchange'):
-        TOKEN = _tlg.get('token')
-        CHANNEL_ID = _tlg.get('channel_id')
-        INLINE_BOT = _tlg.get('inline')
-        break
-
-
-def trade():
-    log_file = Path(LOG_PATH, f"{ID_EXCHANGE}_{SYMBOL}.log")
-    _logger = logging.getLogger('logger')
-    _logger.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
-    handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-    _logger.addHandler(handler)
-    _logger.propagate = False
-    #
-    try:
-        loop.create_task(main(SYMBOL))
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        try:
-            loop.run_until_complete(ask_exit())
-        except asyncio.CancelledError:
-            pass
-        except Exception as _err:
-            print(f"Error: {_err}")
-        loop.run_until_complete(loop.shutdown_asyncgens())
-        if MODE in ('T', 'TC'):
-            loop.close()
-
-
-class Style:
-    __slots__ = ()
-
-    BLACK: str = '\033[30m'
-    RED: str = '\033[31m'
-    B_RED: str = '\033[1;31m'
-    GREEN: str = '\033[32m'
-    YELLOW: str = '\033[33m'
-    B_YELLOW: str = "\033[33;1m"
-    BLUE: str = '\033[34m'
-    MAGENTA: str = '\033[35m'
-    CYAN: str = '\033[36m'
-    GRAY: str = '\033[37m'
-    WHITE: str = '\033[0;37m'
-    B_WHITE: str = '\033[1;37m'
-    UNDERLINE: str = '\033[4m'
-    RESET: str = '\033[0m'
-
-    @classmethod
-    def __add__(cls, b):
-        return Style() + b
-
-
-def telegram(queue_to_tlg, _bot_id) -> None:
-    url = TELEGRAM_URL
-    token = TOKEN
-    channel_id = CHANNEL_ID
-    url += token
-    method = f'{url}/sendMessage'
-    s = requests.Session()
-    retries = Retry(total=5, backoff_factor=1, status_forcelist=[101, 111, 502, 503, 504])
-    s.mount('https://', HTTPAdapter(max_retries=retries))
-
-    def get_keyboard_markup():
-        return json.dumps({
-            "inline_keyboard": [
-                [
-                    {'text': 'status', 'callback_data': 'status_callback'},
-                    {'text': 'stop', 'callback_data': 'stop_callback'},
-                    {'text': 'end', 'callback_data': 'end_callback'},
-                    {'text': 'restart', 'callback_data': 'restart_callback'},
-                ]
-            ]})
-
-    def requests_post(_method, _data, session, inline_buttons=False):
-        if INLINE_BOT and inline_buttons:
-            keyboard = get_keyboard_markup()
-            _data['reply_markup'] = keyboard
-
-        _res = None
-        try:
-            _res = session.post(_method, data=_data)
-        except requests.exceptions.RetryError as _exc:
-            print(f"Telegram: {_exc}")
-        except Exception as _exc:
-            print(f"Telegram: {_exc}")
-        return _res
-
-    def parse_query(update_inner):
-        update_id = update_inner.get('update_id')
-        query = update_inner.get('callback_query')
-        from_id = query.get('from').get('id')
-
-        if from_id != int(channel_id):
-            return None
-
-        message = query.get('message')
-        message_id = message.get('message_id')
-        query_data = query.get('data')
-        reply_to_message = message.get('text')
-
-        command = None
-        if query_data == 'status_callback':
-            command = 'status'
-        elif query_data == 'stop_callback':
-            command = 'stop'
-        elif query_data == 'end_callback':
-            command = 'end'
-        elif query_data == 'restart_callback':
-            command = 'restart'
-
-        requests_post(
-            f'{url}/answerCallbackQuery',
-            {'callback_query_id': query.get('id')},
-            s,
-        )
-
-        return {
-            'update_id': update_id,
-            'message_id': message_id,
-            'text_in': command,
-            'reply_to_message': reply_to_message
-        }
-
-    def parse_command(update_inner):
-        update_id = update_inner.get('update_id')
-        message = update_inner.get('message')
-        from_id = message.get('from').get('id')
-        if from_id != int(channel_id):
-            return None
-
-        message_id = message.get('message_id')
-        text_in = update_inner.get('message').get('text')
-
-        try:
-            reply_to_message = message.get('reply_to_message').get('text')
-        except AttributeError:
-            reply_to_message = None
-            _text = "The command must be a response to any message from a specific strategy," \
-                    " use Reply + Menu combination"
-            requests_post(method, _data={'chat_id': channel_id, 'text': _text}, session=s)
-
-        return {
-            'update_id': update_id,
-            'message_id': message_id,
-            'text_in': text_in,
-            'reply_to_message': reply_to_message
-        }
-
-    def telegram_get(offset=None) -> []:
-        command_list = []
-        _method = f'{url}/getUpdates'
-        _res = requests_post(_method, _data={'chat_id': channel_id, 'offset': offset}, session=s)
-        if not _res or _res.status_code != 200:
-            return command_list
-        __result = _res.json().get('result')
-
-        for result_in in __result:
-            parsed = None
-            if result_in.get('message') is not None:
-                parsed = parse_command(result_in)
-            if result_in.get('callback_query') is not None:
-                parsed = parse_query(result_in)
-            if parsed:
-                command_list.append(parsed)
-
-        return command_list
-
-    def process_update(update_inner, offset=None):
-        reply = update_inner.get('reply_to_message')
-
-        if not reply:
-            return
-
-        in_bot_id = reply.split('.')[0]
-        if in_bot_id != _bot_id:
-            return
-
-        try:
-            msg_in = str(update_inner['text_in']).lower().strip().replace('/', '')
-            if offset and msg_in == 'restart':
-                telegram_get(offset_id)
-            connection_control.execute('insert into t_control values(?,?,?,?)',
-                                       (update_inner['message_id'], msg_in, in_bot_id, None))
-            connection_control.commit()
-        except sqlite3.Error as ex:
-            print(f"telegram: insert into t_control: {ex}")
-        else:
-            # Send receipt
-            post_text = f"Received '{msg_in}' command, OK"
-            requests_post(method, _data={'chat_id': channel_id, 'text': post_text}, session=s)
-
-    # Set command for Telegram bot
-    _command = requests_post(f'{url}/getMyCommands', _data=None, session=s)
-    if _command and _command.status_code == 200 and (not _command.json().get('result') or
-                                                     len(_command.json().get('result')) < 4):
-        _commands = {
-            "commands": json.dumps([
-                {"command": "status",
-                 "description": "Get strategy status"},
-                {"command": "stop",
-                 "description": "Stop strategy after end of cycle, not for Reverse"},
-                {"command": "end",
-                 "description": "Stop strategy after executed TP order, in Direct and Reverse, all the same"},
-                {"command": "restart",
-                 "description": "Restart current pair with recovery"}
-            ])
-        }
-        res = requests_post(f'{url}/setMyCommands', _data=_commands, session=s)
-        print(f"Set or update command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
-              f"restart Telegram bot by /start command for update it")
-    #
-    connection_control = sqlite3.connect(DB_FILE)
-    offset_id = None
-    while True:
-        try:
-            text = queue_to_tlg.get(block=True, timeout=10)
-        except KeyboardInterrupt:
-            break
-        except queue.Empty:
-            # Get external command from Telegram bot
-            updates = telegram_get(offset_id)
-            if not updates:
-                continue
-            offset_id = updates[-1].get('update_id') + 1
-            for update in updates:
-                process_update(update, offset_id)
-        else:
-            if text and STOP_TLG in text:
-                connection_control.close()
-                break
-            requests_post(method, _data={'chat_id': channel_id, 'text': text}, session=s, inline_buttons=True)
-
-
-def db_management() -> None:
-    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
-    conn.execute("CREATE TABLE IF NOT EXISTS t_orders (\
-                  id_exchange   INTEGER REFERENCES t_exchange (id_exchange)\
-                                    ON DELETE RESTRICT ON UPDATE CASCADE NOT NULL,\
-                  f_currency    TEXT                NOT NULL,\
-                  s_currency    TEXT                NOT NULL,\
-                  cycle_buy     BOOLEAN             NOT NULL,\
-                  order_buy     INTEGER             NOT NULL,\
-                  order_sell    INTEGER             NOT NULL,\
-                  order_hold    INTEGER             NOT NULL,\
-                  PRIMARY KEY(id_exchange, f_currency, s_currency))")
-    conn.commit()
-    #
-    try:
-        conn.execute('SELECT active FROM t_funds LIMIT 1')
-    except sqlite3.Error:
-        try:
-            conn.execute('ALTER TABLE t_funds ADD COLUMN active BOOLEAN DEFAULT 0')
-            conn.commit()
-        except sqlite3.Error as ex:
-            print(f"ALTER table t_funds failed: {ex}")
-    #
-    cursor = conn.cursor()
-    # Compliance check t_exchange and EXCHANGE() = exchange() from ms_cfg.toml
-    cursor.execute("SELECT id_exchange, name FROM t_exchange")
-    row = cursor.fetchall()
-    cursor.close()
-    row_n = len(row)
-    for i, exch in enumerate(EXCHANGE):
-        if i >= row_n:
-            print(f"save_to_db: Add exchange {i}, {exch}")
-            try:
-                conn.execute("INSERT into t_exchange values(?,?)", (i, exch))
-                conn.commit()
-            except sqlite3.Error as err:
-                print(f"INSERT into t_exchange: {err}")
-    #
-    try:
-        conn.execute('UPDATE t_funds SET active = 0 WHERE active = 1')
-        conn.commit()
-    except sqlite3.Error as ex:
-        print(f"Initialise t_funds failed: {ex}")
-    conn.close()
-
-
-def save_to_db(queue_to_db) -> None:
-    connection_analytic = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
-    # Save data to .db
-    data = None
-    result = True
-    while True:
-        with contextlib.suppress(KeyboardInterrupt):
-            if result:
-                data = queue_to_db.get()
-        if data is None or data.get('stop_signal'):
-            break
-        if data.get('destination') == 't_funds':
-            # print("save_to_db: Record row into t_funds")
-            try:
-                connection_analytic.execute("INSERT INTO t_funds values(\
-                                             ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                                            (ID_EXCHANGE,
-                                             None,
-                                             data.get('f_currency'),
-                                             data.get('s_currency'),
-                                             float(data.get('f_funds')),
-                                             float(data.get('s_funds')),
-                                             float(data.get('avg_rate')),
-                                             data.get('cycle_buy'),
-                                             float(data.get('f_depo')),
-                                             float(data.get('s_depo')),
-                                             float(data.get('f_profit')),
-                                             float(data.get('s_profit')),
-                                             datetime.utcnow(),
-                                             float(PRICE_SHIFT),
-                                             float(PROFIT),
-                                             float(data.get('over_price')),
-                                             data.get('order_q'),
-                                             float(MARTIN),
-                                             LINEAR_GRID_K,
-                                             ADAPTIVE_TRADE_CONDITION,
-                                             KBB,
-                                             1,
-                                             data.get('cycle_time'),
-                                             1))
-                connection_analytic.commit()
-            except sqlite3.Error as err:
-                result = False
-                print(f"For save data into t_funds: {err}, retry")
-            else:
-                result = True
-        elif data.get('destination') == 't_orders':
-            # print("save_to_db: Record row into t_orders")
-            try:
-                connection_analytic.execute("INSERT INTO t_orders VALUES(:id_exchange,\
-                                                                         :f_currency,\
-                                                                         :s_currency,\
-                                                                         :cycle_buy,\
-                                                                         :order_buy,\
-                                                                         :order_sell,\
-                                                                         :order_hold)\
-                                                ON CONFLICT(id_exchange, f_currency, s_currency)\
-                                             DO UPDATE SET cycle_buy=:cycle_buy,\
-                                                           order_buy=:order_buy,\
-                                                           order_sell=:order_sell,\
-                                                           order_hold=:order_hold",
-                                            {'id_exchange': ID_EXCHANGE,
-                                             'f_currency': data.get('f_currency'),
-                                             's_currency': data.get('s_currency'),
-                                             'cycle_buy': data.get('cycle_buy'),
-                                             'order_buy': data.get('order_buy'),
-                                             'order_sell': data.get('order_sell'),
-                                             'order_hold': data.get('order_hold')})
-                connection_analytic.commit()
-            except sqlite3.Error as err:
-                print(f"INSERT into t_orders: {err}")
-        elif data.get('destination') == 't_funds.active update':
-            cursor_analytic = connection_analytic.cursor()
-            try:
-                cursor_analytic.execute('SELECT 1 FROM t_funds\
-                                         WHERE id_exchange =:id_exchange\
-                                         AND f_currency =:f_currency\
-                                         AND s_currency =:s_currency\
-                                         AND active = 1',
-                                        {'id_exchange': ID_EXCHANGE,
-                                         'f_currency': data.get('f_currency'),
-                                         's_currency': data.get('s_currency'),
-                                         }
-                                        )
-                row_active = cursor_analytic.fetchone()
-                cursor_analytic.close()
-            except sqlite3.Error as err:
-                cursor_analytic.close()
-                row_active = (2,)
-                print(f"SELECT from t_funds: {err}")
-            if row_active is None:
-                # print("save_to_db: UPDATE t_funds set active=1")
-                try:
-                    connection_analytic.execute('UPDATE t_funds SET active = 1\
-                                                 WHERE id=(SELECT max(id) FROM t_funds\
-                                                 WHERE id_exchange=:id_exchange\
-                                                 AND f_currency=:f_currency\
-                                                 AND s_currency=:s_currency)',
-                                                {'id_exchange': ID_EXCHANGE,
-                                                 'f_currency': data.get('f_currency'),
-                                                 's_currency': data.get('s_currency'),
-                                                 }
-                                                )
-                    connection_analytic.commit()
-                except sqlite3.Error as err:
-                    print(f"save_to_db: UPDATE t_funds: {err}")
-    connection_analytic.commit()
 
 
 def f2d(_f: float) -> Decimal:
@@ -685,7 +290,6 @@ class Strategy(StrategyBase):
         "f_currency",
         "s_currency",
         "connection_analytic",
-        "tlg_header",
         "last_shift_time",
         "avg_rate",
         #
@@ -706,13 +310,11 @@ class Strategy(StrategyBase):
         "start_after_shift",
         "queue_to_db",
         "pr_db",
-        "queue_to_tlg",
         "pr_tlg",
         "pr_tlg_control",
         "restart",
         "profit_first",
         "profit_second",
-        "status_time",
         "cycle_time",
         "cycle_time_reverse",
         "reverse",
@@ -733,7 +335,6 @@ class Strategy(StrategyBase):
         "start_reverse_time",
         "last_ticker_update",
         "grid_only_restart",
-        "local_time",
         "wait_wss_refresh",
         "start_collect",
         "restore_orders",
@@ -780,7 +381,6 @@ class Strategy(StrategyBase):
         self.f_currency = ''  # - First currency name
         self.s_currency = ''  # - Second currency name
         self.connection_analytic = None  # - Connection to .db
-        self.tlg_header = ''  # - Header for Telegram message
         self.last_shift_time = None  # +
         self.avg_rate = O_DEC  # - Flow average rate for trading pair
         #
@@ -801,13 +401,11 @@ class Strategy(StrategyBase):
         self.start_after_shift = False  # - Flag set before shift, clear after place grid
         self.queue_to_db = queue.Queue()  # - Queue for save data to .db
         self.pr_db = None  # - Process for save data to .db
-        self.queue_to_tlg = queue.Queue()  # - Queue for sending message to Telegram
         self.pr_tlg = None  # - Process for sending message to Telegram
         self.pr_tlg_control = None  # - Process for get command from Telegram
         self.restart = None  # - Set after execute take profit order and restart cycle
         self.profit_first = O_DEC  # + Cycle profit
         self.profit_second = O_DEC  # + Cycle profit
-        self.status_time = None  # + Last time sending status message
         self.cycle_time = None  # + Cycle start time
         self.cycle_time_reverse = None  # + Reverse cycle start time
         self.reverse = REVERSE  # + Current cycle is Reverse
@@ -828,7 +426,6 @@ class Strategy(StrategyBase):
         self.start_reverse_time = None  # -
         self.last_ticker_update = 0  # -
         self.grid_only_restart = None  # -
-        self.local_time = self.get_time
         self.wait_wss_refresh = {}  # -
         self.start_collect = None
         self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
@@ -849,7 +446,7 @@ class Strategy(StrategyBase):
         if init_params_error:
             self.message_log(f"Incorrect value for {init_params_error}", log_level=LogLevel.ERROR)
             raise SystemExit(1)
-        db_management()
+        db_management(EXCHANGE)
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
         self.s_currency = self.get_second_currency()
@@ -932,13 +529,16 @@ class Strategy(StrategyBase):
                 cycle_status = (self.cycle_buy, order_buy, order_sell, order_hold)
                 if self.cycle_status != cycle_status:
                     self.cycle_status = cycle_status
-                    data_to_db = {'f_currency': self.f_currency,
-                                  's_currency': self.s_currency,
-                                  'cycle_buy': self.cycle_buy,
-                                  'order_buy': order_buy,
-                                  'order_sell': order_sell,
-                                  'order_hold': order_hold,
-                                  'destination': 't_orders'}
+                    data_to_db = {
+                        'ID_EXCHANGE': ID_EXCHANGE,
+                        'f_currency': self.f_currency,
+                        's_currency': self.s_currency,
+                        'cycle_buy': self.cycle_buy,
+                        'order_buy': order_buy,
+                        'order_sell': order_sell,
+                        'order_hold': order_hold,
+                        'destination': 't_orders'
+                    }
                     if self.queue_to_db:
                         # print('Send data to t_orders')
                         self.queue_to_db.put(data_to_db)
@@ -1090,9 +690,12 @@ class Strategy(StrategyBase):
                 self.heartbeat_counter = 0
                 if MODE in ('T', 'TC') and not GRID_ONLY:
                     # Update t_funds.active set True
-                    data_to_db = {'f_currency': self.f_currency,
-                                  's_currency': self.s_currency,
-                                  'destination': 't_funds.active update'}
+                    data_to_db = {
+                        'ID_EXCHANGE': ID_EXCHANGE,
+                        'f_currency': self.f_currency,
+                        's_currency': self.s_currency,
+                        'destination': 't_funds.active update'
+                    }
                     if self.queue_to_db:
                         self.queue_to_db.put(data_to_db)
             if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
@@ -1212,8 +815,12 @@ class Strategy(StrategyBase):
             self.reverse_hold = json.loads(strategy_state.get('reverse_hold'))
             self.reverse_init_amount = f2d(json.loads(strategy_state.get('reverse_init_amount')))
             self.reverse_price = json.loads(strategy_state.get('reverse_price'))
+            if self.reverse_price:
+                self.reverse_price = f2d(self.reverse_price)
             self.reverse_target_amount = f2d(json.loads(strategy_state.get('reverse_target_amount')))
             self.shift_grid_threshold = json.loads(strategy_state.get('shift_grid_threshold'))
+            if self.shift_grid_threshold:
+                self.shift_grid_threshold = f2d(self.shift_grid_threshold)
             self.status_time = json.loads(strategy_state.get('status_time'))
             self.sum_amount_first = f2d(json.loads(strategy_state.get('sum_amount_first')))
             self.sum_amount_second = f2d(json.loads(strategy_state.get('sum_amount_second')))
@@ -1318,20 +925,29 @@ class Strategy(StrategyBase):
                     ct = datetime.utcnow() - self.cycle_time
                     ct = ct.total_seconds()
                     # noinspection PyUnboundLocalVariable
-                    data_to_db = {'f_currency': self.f_currency,
-                                  's_currency': self.s_currency,
-                                  'f_funds': _ff,
-                                  's_funds': _fs,
-                                  'avg_rate': self.avg_rate,
-                                  'cycle_buy': self.cycle_buy,
-                                  'f_depo': df,
-                                  's_depo': ds,
-                                  'f_profit': self.profit_first,
-                                  's_profit': self.profit_second,
-                                  'order_q': self.order_q,
-                                  'over_price': self.over_price,
-                                  'cycle_time': ct,
-                                  'destination': 't_funds'}
+                    data_to_db = {
+                        'ID_EXCHANGE': ID_EXCHANGE,
+                        'f_currency': self.f_currency,
+                        's_currency': self.s_currency,
+                        'f_funds': _ff,
+                        's_funds': _fs,
+                        'avg_rate': self.avg_rate,
+                        'cycle_buy': self.cycle_buy,
+                        'f_depo': df,
+                        's_depo': ds,
+                        'f_profit': self.profit_first,
+                        's_profit': self.profit_second,
+                        'PRICE_SHIFT': PRICE_SHIFT,
+                        'PROFIT': PROFIT,
+                        'order_q': self.order_q,
+                        'MARTIN': MARTIN,
+                        'LINEAR_GRID_K': LINEAR_GRID_K,
+                        'ADAPTIVE_TRADE_CONDITION': ADAPTIVE_TRADE_CONDITION,
+                        'KBB': KBB,
+                        'over_price': self.over_price,
+                        'cycle_time': ct,
+                        'destination': 't_funds'
+                    }
                     if self.queue_to_db:
                         print('Send data to .db t_funds')
                         self.queue_to_db.put(data_to_db)
@@ -1370,12 +986,10 @@ class Strategy(StrategyBase):
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
         if self.first_run or MODE in ('T', 'TC'):
             self.cycle_time = datetime.utcnow()
-        if psutil:
-            memory = psutil.virtual_memory()
-            swap = psutil.swap_memory()
-            total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
-        else:
-            total_used_percent = 0
+        #
+        memory = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
         if total_used_percent > 85:
             self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
             self.command = 'end'
@@ -1507,33 +1121,27 @@ class Strategy(StrategyBase):
             fs = f2d(0)
         return ff, fs
 
-    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg=False, color=Style.WHITE) -> None:
-        if tlg and color == Style.WHITE:
-            color = Style.B_WHITE
-        if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
-            tlg = True
-            color = Style.B_RED
-        color_msg = color+msg+Style.RESET if color else msg
-        if log_level not in LOG_LEVEL_NO_PRINT:
-            if MODE in ('T', 'TC'):
-                print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
-            else:
-                tqdm.write(f"{datetime.fromtimestamp(self.local_time()).strftime('%H:%M:%S.%f')} {color_msg}")
-        if MODE in ('T', 'TC'):
-            write_log(log_level, msg)
-            if tlg and self.queue_to_tlg:
-                msg = self.tlg_header + msg
-                self.status_time = self.local_time()
-                self.queue_to_tlg.put(msg)
-
     def start_process(self):
         # Init analytic
-        self.connection_analytic = self.connection_analytic or sqlite3.connect(DB_FILE,
-                                                                               check_same_thread=False,
-                                                                               timeout=10)
+        self.connection_analytic = (
+                self.connection_analytic or
+                sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
+        )
         # Create processes for save to .db and send Telegram message
         self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,))
-        self.pr_tlg = Thread(target=telegram, args=(self.queue_to_tlg, self.tlg_header.split('.')[0],))
+        self.pr_tlg = Thread(
+            target=telegram,
+            args=(
+                self.queue_to_tlg,
+                self.tlg_header.split('.')[0],
+                TELEGRAM_URL,
+                TOKEN,
+                CHANNEL_ID,
+                DB_FILE,
+                STOP_TLG,
+                INLINE_BOT,
+            )
+        )
         if not self.pr_db.is_alive():
             self.message_log('Start process for .db save')
             try:
@@ -2138,7 +1746,7 @@ class Strategy(StrategyBase):
             except statistics.StatisticsError as ex:
                 self.message_log(f"Can't get ATR value: {ex}, use default PROFIT value", LogLevel.WARNING)
                 profit_max = PROFIT
-            self.message_log(f"Profit max for first order volume is set {profit_max}%", LogLevel.DEBUG)
+            self.message_log(f"Profit max for first order volume is set {float(profit_max):f}%", LogLevel.DEBUG)
             k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             amount_first_grid = self.round_truncate(amount_first_grid, base=True, _rounding=ROUND_CEILING)
@@ -3257,8 +2865,7 @@ class Strategy(StrategyBase):
                 self.tp_wait_id = None
                 self.tp_error = True
 
-
-    def on_cancel_order_success(self, order_id: int, canceled_order: Order, cancel_all=False) -> None:  # noqa
+    def on_cancel_order_success(self, order_id: int, cancel_all=False) -> None:
         if order_id == self.cancel_grid_order_id:
             self.ts_grid_update = self.local_time()
             self.cancel_grid_order_id = None
