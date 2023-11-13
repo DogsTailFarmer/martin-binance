@@ -2599,143 +2599,140 @@ class Strategy(StrategyBase):
                              OrderUpdate.DISAPPEARED,
                              OrderUpdate.CANCELED,
                              OrderUpdate.OTHER_CHANGE]:
-            pass
-        else:
-            self.message_log(f"Order {update.original_order.id}: {update.status}", color=Style.B_WHITE)
-            result_trades = update.resulting_trades
-            amount_first = amount_second = O_DEC
-            if update.status == OrderUpdate.PARTIALLY_FILLED:
-                # Get last trade row
-                if result_trades:
-                    i = result_trades[-1]
-                    amount_first = i.amount
-                    amount_second = i.amount * i.price
-                    self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
-                else:
-                    self.message_log(f"No records for {update.original_order.id}", log_level=LogLevel.WARNING)
+            return
+        #
+        self.message_log(f"Order {update.original_order.id}: {update.status}", color=Style.B_WHITE)
+        result_trades = update.resulting_trades
+        amount_first = amount_second = O_DEC
+        if update.status == OrderUpdate.PARTIALLY_FILLED:
+            # Get last trade row
+            if result_trades:
+                i = result_trades[-1]
+                amount_first = i.amount
+                amount_second = i.amount * i.price
+                self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
             else:
-                for i in result_trades:
-                    # Calculate sum trade amount for both currency
-                    amount_first += i.amount
-                    amount_second += i.amount * i.price
-                    self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
-            # Retreat of courses
-            if amount_first == 0:
-                self.message_log(f"No amount for {update.original_order.id}", log_level=LogLevel.WARNING)
-                return
-            self.avg_rate = amount_second / amount_first
-            self.message_log(f"Executed amount: First: {float(amount_first):f},"
-                             f" Second: {float(amount_second):f},"
-                             f" price: {float(self.avg_rate):.6f}")
-            if update.status in (OrderUpdate.FILLED, OrderUpdate.ADAPTED_AND_FILLED):
-                if not GRID_ONLY:
-                    self.shift_grid_threshold = None
-                if self.orders_grid.exist(update.original_order.id):
-                    self.ts_grid_update = self.local_time()
-                    # Remove grid order with =id from order list
-                    self.orders_grid.remove(update.original_order.id)
-                    if self.orders_save:
-                        self.orders_save.remove(update.original_order.id)
-                        if not self.orders_save:
-                            self.restore_orders = False
-                    self.grid_handler(_amount_first=amount_first,
-                                      _amount_second=amount_second,
-                                      after_full_fill=True,
-                                      order_id=update.original_order.id)
-                elif self.tp_order_id == update.original_order.id:
-                    # Filled take profit order, restart
-                    self.tp_order_id = None
-                    self.cancel_order_id = None
-                    self.tp_order = ()
-                    if self.reverse_hold:
-                        self.cancel_hold_reverse()
-                    self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-                    self.tp_was_filled = (amount_first, amount_second, False)
-                    # print(f"on_order_update.was_filled_tp: {self.tp_was_filled}")
-                    if self.tp_hold:
-                        # After place but before execute TP was filled some grid
-                        self.tp_hold = False
-                        self.after_filled_tp(one_else_grid=True)
-                    elif self.tp_cancel_from_grid_handler:
-                        self.tp_cancel_from_grid_handler = False
-                        self.grid_handler()
-                    else:
+                self.message_log(f"No records for {update.original_order.id}", log_level=LogLevel.WARNING)
+        else:
+            for i in result_trades:
+                # Calculate sum trade amount for both currency
+                amount_first += i.amount
+                amount_second += i.amount * i.price
+                self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
+        # Retreat of courses
+        if amount_first == 0:
+            self.message_log(f"No amount for {update.original_order.id}", log_level=LogLevel.WARNING)
+            return
+        self.avg_rate = amount_second / amount_first
+        self.message_log(f"Executed amount: First: {float(amount_first):f},"
+                         f" Second: {float(amount_second):f},"
+                         f" price: {float(self.avg_rate):.6f}")
+        if update.status in (OrderUpdate.FILLED, OrderUpdate.ADAPTED_AND_FILLED):
+            if not GRID_ONLY:
+                self.shift_grid_threshold = None
+            if self.orders_grid.exist(update.original_order.id):
+                self.ts_grid_update = self.local_time()
+                # Remove grid order with =id from order list
+                self.orders_grid.remove(update.original_order.id)
+                if self.orders_save:
+                    self.orders_save.remove(update.original_order.id)
+                    if not self.orders_save:
                         self.restore_orders = False
-                        self.cancel_grid(cancel_all=True)
+                self.grid_handler(_amount_first=amount_first,
+                                  _amount_second=amount_second,
+                                  after_full_fill=True,
+                                  order_id=update.original_order.id)
+            elif self.tp_order_id == update.original_order.id:
+                # Filled take profit order, restart
+                self.tp_order_id = None
+                self.cancel_order_id = None
+                self.tp_order = ()
+                if self.reverse_hold:
+                    self.cancel_hold_reverse()
+                self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
+                self.tp_was_filled = (amount_first, amount_second, False)
+                # print(f"on_order_update.was_filled_tp: {self.tp_was_filled}")
+                if self.tp_hold:
+                    # After place but before execute TP was filled some grid
+                    self.tp_hold = False
+                    self.after_filled_tp(one_else_grid=True)
+                elif self.tp_cancel_from_grid_handler:
+                    self.tp_cancel_from_grid_handler = False
+                    self.grid_handler()
                 else:
-                    self.message_log('Wild order, do not know it', tlg=True)
-            elif update.status == OrderUpdate.PARTIALLY_FILLED:
-                if self.tp_order_id == update.original_order.id:
-                    self.message_log("Take profit partially filled", color=Style.B_WHITE)
-                    amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second)
-                    # Calculate profit for filled part TP
-                    _profit_first = _profit_second = O_DEC
+                    self.restore_orders = False
+                    self.cancel_grid(cancel_all=True)
+            else:
+                self.message_log('Wild order, do not know it', tlg=True)
+        elif update.status == OrderUpdate.PARTIALLY_FILLED:
+            if self.tp_order_id == update.original_order.id:
+                self.message_log("Take profit partially filled", color=Style.B_WHITE)
+                amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second)
+                # Calculate profit for filled part TP
+                _profit_first = _profit_second = O_DEC
+                if self.cycle_buy:
+                    _, target_fee = self.fee_for_tp(O_DEC, self.tp_target, log_output=False)
+                    _profit_second = self.round_truncate(((target_fee - self.tp_amount) * amount_second_fee /
+                                                          target_fee), base=False)
+                    self.part_profit_second += _profit_second
+                    self.message_log(f"Part profit second {self.part_profit_second}", log_level=LogLevel.DEBUG)
+                else:
+                    target_fee, _ = self.fee_for_tp(self.tp_target, O_DEC, log_output=False)
+                    _profit_first = self.round_truncate(((target_fee - self.tp_amount) * amount_first_fee /
+                                                         target_fee), base=True)
+                    self.part_profit_first += _profit_first
+                    self.message_log(f"Part profit first {self.part_profit_first}", log_level=LogLevel.DEBUG)
+                self.tp_part_amount_first += amount_first_fee - _profit_first
+                self.tp_part_amount_second += amount_second_fee - _profit_second
+                self.update_sum_amount(amount_first_fee - _profit_first, amount_second_fee - _profit_second)
+                if self.reverse_hold:
+                    self.start_reverse_time = self.local_time()
+                    if self.convert_tp(self.tp_part_amount_first,
+                                       self.tp_part_amount_second,
+                                       _update_sum_amount=False):
+                        self.cancel_hold_reverse()
+                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
+                        self.message_log("Part filled TP was converted to grid", tlg=True)
+            else:
+                self.message_log("Grid order partially filled", color=Style.B_WHITE)
+                self.ts_grid_update = self.local_time()
+                amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
+                # Correction amount for saved order, if exists
+                _order = self.orders_save.get_by_id(update.original_order.id)
+                if _order:
+                    self.orders_save.remove(update.original_order.id)
+                    _order['amount'] -= amount_first
+                    self.orders_save.orders_list.append(_order)
+                # Increase trade result and if next fill order is grid decrease trade result
+                self.sum_amount_first += amount_first_fee
+                self.sum_amount_second += amount_second_fee
+                self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
+                                 f" Sum_amount_second: {self.sum_amount_second}",
+                                 log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+                part_amount_first, part_amount_second = self.part_amount.pop(update.original_order.id, (O_DEC, O_DEC))
+                part_amount_first -= amount_first_fee
+                part_amount_second -= amount_second_fee
+                self.part_amount[update.original_order.id] = (part_amount_first, part_amount_second)
+                self.message_log(f"Part_amount_first: {part_amount_first},"
+                                 f" Part_amount_second: {part_amount_second}", log_level=LogLevel.DEBUG)
+                if GRID_ONLY:
+                    # Correct depo and init amount
                     if self.cycle_buy:
-                        _, target_fee = self.fee_for_tp(O_DEC, self.tp_target, log_output=False)
-                        _profit_second = self.round_truncate(((target_fee - self.tp_amount) * amount_second_fee /
-                                                              target_fee), base=False)
-                        self.part_profit_second += _profit_second
-                        self.message_log(f"Part profit second {self.part_profit_second}", log_level=LogLevel.DEBUG)
+                        self.deposit_second -= amount_second_fee
+                        self.initial_first += amount_first_fee
+                        self.initial_second -= amount_second_fee
                     else:
-                        target_fee, _ = self.fee_for_tp(self.tp_target, O_DEC, log_output=False)
-                        _profit_first = self.round_truncate(((target_fee - self.tp_amount) * amount_first_fee /
-                                                             target_fee), base=True)
-                        self.part_profit_first += _profit_first
-                        self.message_log(f"Part profit first {self.part_profit_first}", log_level=LogLevel.DEBUG)
-                    self.tp_part_amount_first += amount_first_fee - _profit_first
-                    self.tp_part_amount_second += amount_second_fee - _profit_second
-                    self.update_sum_amount(amount_first_fee - _profit_first, amount_second_fee - _profit_second)
-                    if self.reverse_hold:
-                        self.start_reverse_time = self.local_time()
-                        if self.convert_tp(self.tp_part_amount_first,
-                                           self.tp_part_amount_second,
-                                           _update_sum_amount=False):
-                            self.cancel_hold_reverse()
-                            self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-                            self.message_log("Part filled TP was converted to grid", tlg=True)
+                        self.deposit_first -= amount_first_fee
+                        self.initial_first -= amount_first_fee
+                        self.initial_second += amount_second_fee
                 else:
-                    self.message_log("Grid order partially filled", color=Style.B_WHITE)
-                    self.ts_grid_update = self.local_time()
-                    amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
-                    # Correction amount for saved order, if exists
-                    _order = self.orders_save.get_by_id(update.original_order.id)
-                    if _order:
-                        self.orders_save.remove(update.original_order.id)
-                        _order['amount'] -= amount_first
-                        self.orders_save.orders_list.append(_order)
-                    # Increase trade result and if next fill order is grid decrease trade result
-                    self.sum_amount_first += amount_first_fee
-                    self.sum_amount_second += amount_second_fee
-                    self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
-                                     f" Sum_amount_second: {self.sum_amount_second}",
-                                     log_level=LogLevel.DEBUG, color=Style.MAGENTA)
-                    part_amount_first, part_amount_second = self.part_amount.pop(
-                        update.original_order.id,
-                        (O_DEC, O_DEC)
-                    )
-                    part_amount_first -= amount_first_fee
-                    part_amount_second -= amount_second_fee
-                    self.part_amount[update.original_order.id] = (part_amount_first, part_amount_second)
-                    self.message_log(f"Part_amount_first: {part_amount_first},"
-                                     f" Part_amount_second: {part_amount_second}", log_level=LogLevel.DEBUG)
-                    if GRID_ONLY:
-                        # Correct depo and init amount
-                        if self.cycle_buy:
-                            self.deposit_second -= amount_second_fee
-                            self.initial_first += amount_first_fee
-                            self.initial_second -= amount_second_fee
-                        else:
-                            self.deposit_first -= amount_first_fee
-                            self.initial_first -= amount_first_fee
-                            self.initial_second += amount_second_fee
+                    # Get min trade amount
+                    if self.check_min_amount():
+                        self.shift_grid_threshold = None
+                        self.grid_handler(after_full_fill=False)
                     else:
-                        # Get min trade amount
-                        if self.check_min_amount():
-                            self.shift_grid_threshold = None
-                            self.grid_handler(after_full_fill=False)
-                        else:
-                            self.last_shift_time = self.local_time() + 2 * SHIFT_GRID_DELAY
-                            self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
+                        self.last_shift_time = self.local_time() + 2 * SHIFT_GRID_DELAY
+                        self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
 
     def cancel_hold_reverse(self):
         self.reverse_hold = False
@@ -2895,7 +2892,7 @@ class Strategy(StrategyBase):
             self.tp_order = ()
             if self.tp_part_amount_first:
                 self.message_log(f"Partially filled TP order {order_id} was canceled")
-                self.convert_tp(self.tp_part_amount_first, self.tp_part_amount_second)
+                self.convert_tp(self.tp_part_amount_first, self.tp_part_amount_second, _update_sum_amount=False)
                 self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                 # Save part profit
                 self.profit_first += self.part_profit_first
