@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc4"
+__version__ = "2.0.0rc8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1426,7 +1426,7 @@ async def cancel_order_call(_id: int, cancel_all: bool, count=0):
             res = await fetch_order(_id)
             if res.get('status') == 'CANCELED':
                 await cancel_order_handler(_id, cancel_all)
-            elif res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
+            elif not res or res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
                 await asyncio.sleep(HEARTBEAT * count)
                 if count > TRY_LIMIT:
                     cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
@@ -1753,11 +1753,10 @@ def restore_state_before_backtesting(cls):
     cls.strategy.reverse_init_amount = ms.f2d(json.loads(saved_state.get('reverse_init_amount')))
     cls.strategy.reverse_price = json.loads(saved_state.get('reverse_price'))
     cls.strategy.reverse_target_amount = ms.f2d(json.loads(saved_state.get('reverse_target_amount')))
-    cls.strategy.shift_grid_threshold = json.loads(saved_state.get('shift_grid_threshold'))
+    cls.strategy.shift_grid_threshold = ms.f2d(json.loads(saved_state.get('shift_grid_threshold')))
     cls.strategy.sum_amount_first = ms.f2d(json.loads(saved_state.get('sum_amount_first')))
     cls.strategy.sum_amount_second = ms.f2d(json.loads(saved_state.get('sum_amount_second')))
     cls.strategy.tp_amount = ms.f2d(json.loads(saved_state.get('tp_amount')))
-    cls.strategy.tp_init = eval(json.loads(saved_state.get('tp_init')))
     cls.strategy.tp_order_id = json.loads(saved_state.get('tp_order_id'))
     cls.strategy.tp_part_amount_first = ms.f2d(json.loads(saved_state.get('tp_part_amount_first')))
     cls.strategy.tp_part_amount_second = ms.f2d(json.loads(saved_state.get('tp_part_amount_second')))

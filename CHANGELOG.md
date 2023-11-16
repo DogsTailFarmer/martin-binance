@@ -1,4 +1,4 @@
-## 2.0.0rc6 - 2023-11-13
+## 2.0.0rc8 - 2023-11-16
 ### Fix
 * Handling of partially filled TP when Reverse hold
 * Part filled TP and part filled grid orders, unnecessary adjustment sum_amount_
