@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc8"
+__version__ = "2.0.0rc9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -28,7 +28,7 @@ from martin_binance.margin_wrapper import __version__ as msb_ver, any2str, Dict,
 from martin_binance.margin_wrapper import StrategyBase, Style, OrderUpdate, Ticker, OrderBook, FundsEntry, Order
 from martin_binance.telegram_utils import telegram
 
-O_DEC = Decimal('0')
+O_DEC = Decimal()
 
 # region SetParameters
 SYMBOL = str()
@@ -40,7 +40,6 @@ FEE_MAKER = Decimal()
 FEE_TAKER = Decimal()
 FEE_SECOND = bool()
 FEE_BNB_IN_PAIR = bool()
-FEE_FTX = bool()
 GRID_MAX_COUNT = int()
 # Trade parameter
 START_ON_BUY = bool()
@@ -48,6 +47,7 @@ AMOUNT_FIRST = Decimal()
 USE_ALL_FUND = bool()
 AMOUNT_SECOND = Decimal()
 PRICE_SHIFT = Decimal()
+PRICE_LIMIT_RULES = Decimal()
 # Round pattern
 ROUND_BASE = str()
 ROUND_QUOTE = str()
@@ -702,7 +702,7 @@ class Strategy(StrategyBase):
                 self.get_buffered_funds()
             if self.tp_error:
                 self.tp_error = False
-                self.place_profit_order()
+                self.place_profit_order(after_error=True)
             if self.reverse_hold:
                 if self.start_reverse_time:
                     if self.local_time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
@@ -1534,15 +1534,6 @@ class Strategy(StrategyBase):
         amount_min = kwargs.get('amount_min')
         #
         tcm = self.get_trading_capability_manager()
-        # Decimal zone
-        avg_rate = self.avg_rate or base_price
-        try:
-            max_price = tcm.get_max_sell_price(avg_rate)
-            min_price = tcm.get_min_buy_price(avg_rate)
-        except AttributeError:
-            max_price = avg_rate * f2d(5)
-            min_price = avg_rate * f2d(0.2)
-        #
         delta_price = over_price * base_price / (100 * (self.order_q - 1))
         price_prev = base_price
         avg_amount = O_DEC
@@ -1569,9 +1560,9 @@ class Strategy(StrategyBase):
                 if i and price - price_prev < min_delta:
                     price = price_prev + min_delta
             if buy_side:
-                price = max(price, min_price)
+                price = max(price, tcm.get_min_price())
             else:
-                price = min(price, max_price)
+                price = min(price, tcm.get_max_price())
             price_prev = price
             if i == 0:
                 amount_0 = depo * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
@@ -1668,7 +1659,7 @@ class Strategy(StrategyBase):
             self.grid_update_started = True
             self.cancel_grid()
 
-    def place_profit_order(self, by_market: bool = False) -> None:
+    def place_profit_order(self, by_market=False, after_error=False) -> None:
         if not GRID_ONLY and self.check_min_amount():
             self.tp_order_hold.clear()
             if self.tp_wait_id or self.cancel_order_id or self.tp_was_filled:
@@ -1719,7 +1710,7 @@ class Strategy(StrategyBase):
                                      f" vlm: {amount}, price: {price}, profit: {profit}%")
                     self.tp_target = target
                     self.tp_order = (buy_side, amount, price, self.local_time())
-                    check = (len(self.orders_grid) + len(self.orders_hold)) > 2
+                    check = after_error or (len(self.orders_grid) + len(self.orders_hold)) > 2
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=check)
         elif self.tp_order_id and self.tp_cancel:
             self.cancel_order_id = self.tp_order_id
@@ -2199,9 +2190,18 @@ class Strategy(StrategyBase):
                         if k + n >= ORDER_Q:
                             self.order_q_placed = True
                         break
-                    waiting_order_id = self.place_limit_order_check(i['buy'], i['amount'], i['price'], check=True)
-                    self.orders_init.append_order(waiting_order_id, i['buy'], i['amount'], i['price'])
-                    k += 1
+                    waiting_order_id = self.place_limit_order_check(
+                        i['buy'],
+                        i['amount'],
+                        i['price'],
+                        check=True,
+                        price_limit_rules=True
+                    )
+                    if waiting_order_id:
+                        self.orders_init.append_order(waiting_order_id, i['buy'], i['amount'], i['price'])
+                        k += 1
+                    else:
+                        break
                 del self.orders_hold.orders_list[:k]
 
     def grid_only_stop(self) -> None:
@@ -2302,9 +2302,16 @@ class Strategy(StrategyBase):
                 # PLace one hold grid order and remove it from hold list
                 _, _buy, _amount, _price = self.orders_hold.get_first()
                 check = (len(self.orders_grid) + len(self.orders_hold)) <= 2
-                waiting_order_id = self.place_limit_order_check(_buy, _amount, _price, check=check)
-                self.orders_init.append_order(waiting_order_id, _buy, _amount, _price)
-                del self.orders_hold.orders_list[0]
+                waiting_order_id = self.place_limit_order_check(
+                    _buy,
+                    _amount,
+                    _price,
+                    check=check,
+                    price_limit_rules=True
+                )
+                if waiting_order_id:
+                    self.orders_init.append_order(waiting_order_id, _buy, _amount, _price)
+                    del self.orders_hold.orders_list[0]
             # Exist filled but non processing TP
             if self.tp_was_filled:
                 self.after_filled_tp(one_else_grid=True)
@@ -2445,10 +2452,29 @@ class Strategy(StrategyBase):
                 res = True
         return res
 
-    def place_limit_order_check(self, buy: bool, amount: Decimal, price: Decimal, check=False) -> int:
+    def place_limit_order_check(
+            self,
+            buy: bool,
+            amount: Decimal,
+            price: Decimal,
+            check=False,
+            price_limit_rules=False
+    ) -> int:
         """
         Before place limit order check trade conditions and correct price
         """
+        if price_limit_rules:
+            tcm = self.get_trading_capability_manager()
+            _price = self.get_buffered_ticker().last_price or self.avg_rate
+            if ((buy and price < tcm.get_min_buy_price(_price)) or
+                    (not buy and price > tcm.get_max_sell_price(_price))):
+                self.message_log(
+                    f"{'Buy' if buy else 'Sell'} price is out of trading range."
+                    f" Price: {price}, will try later",
+                    log_level=LogLevel.WARNING,
+                    color=Style.YELLOW
+                )
+                return 0
         _price = price
         if check:
             order_book = self.get_buffered_order_book()
@@ -2458,7 +2484,7 @@ class Strategy(StrategyBase):
                 price = max(_price, order_book.asks[0].price)
 
         waiting_order_id = self.place_limit_order(buy, amount, price)
-        if check and _price != price:
+        if _price != price:
             self.message_log(f"For order {waiting_order_id} price was updated from {_price} to {price}",
                              log_level=LogLevel.WARNING)
         return waiting_order_id
@@ -2468,7 +2494,20 @@ class Strategy(StrategyBase):
     ##############################################################
     def on_new_ticker(self, ticker: Ticker) -> None:
         # print(f"on_new_ticker:{datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
-        self.last_ticker_update = int(self.local_time())
+        if not self.orders_grid and not self.orders_init and self.orders_hold:
+            _, _buy, _amount, _price = self.orders_hold.get_first()
+            tcm = self.get_trading_capability_manager()
+            if ((_buy and _price >= tcm.get_min_buy_price(ticker.last_price)) or
+                    (not _buy and _price <= tcm.get_max_sell_price(ticker.last_price))):
+                waiting_order_id = self.place_limit_order_check(
+                    _buy,
+                    _amount,
+                    _price,
+                    check=True
+                )
+                self.orders_init.append_order(waiting_order_id, _buy, _amount, _price)
+                del self.orders_hold.orders_list[0]
+        #
         if (self.shift_grid_threshold and self.last_shift_time and self.local_time() -
                 self.last_shift_time > SHIFT_GRID_DELAY
             and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
@@ -2862,10 +2901,12 @@ class Strategy(StrategyBase):
                     _order['buy'],
                     _order['amount'],
                     _order['price'],
-                    check=True
+                    check=True,
+                    price_limit_rules=True
                 )
-                _order['id'] = waiting_order_id
-                self.orders_init.orders_list.append(_order)
+                if waiting_order_id:
+                    _order['id'] = waiting_order_id
+                    self.orders_init.orders_list.append(_order)
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
                 self.tp_error = True

@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc8"
+__version__ = "2.0.0rc9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -273,17 +273,21 @@ class Candle:
 
 
 class TradingCapabilityManager:
-    __slots__ = ("base_asset_precision",
-                 "quote_asset_precision",
-                 "min_qty",
-                 "max_qty",
-                 "step_size",
-                 "min_notional",
-                 "tick_size",
-                 "multiplier_up",
-                 "multiplier_down")
+    __slots__ = (
+        "base_asset_precision",
+        "quote_asset_precision",
+        "min_qty",
+        "max_qty",
+        "step_size",
+        "min_notional",
+        "tick_size",
+        "multiplier_up",
+        "multiplier_down",
+        "min_price",
+        "max_price",
+    )
 
-    def __init__(self, _exchange_info_symbol):
+    def __init__(self, _exchange_info_symbol, price_limit_rules):
         self.base_asset_precision = int(_exchange_info_symbol.get('baseAssetPrecision'))
         self.quote_asset_precision = int(_exchange_info_symbol.get('quoteAssetPrecision'))
         self.min_qty = Decimal(_exchange_info_symbol['filters']['lotSize']['minQty'])
@@ -294,8 +298,14 @@ class TradingCapabilityManager:
                 or Decimal(_exchange_info_symbol['filters'].get('minNotional', {}).get('minNotional', '0'))
         )
         self.tick_size = Decimal(_exchange_info_symbol['filters']['priceFilter']['tickSize'].rstrip('0'))
-        self.multiplier_up = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
-        self.multiplier_down = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
+        self.min_price = Decimal(_exchange_info_symbol['filters']['priceFilter']['minPrice'])
+        self.max_price = Decimal(_exchange_info_symbol['filters']['priceFilter']['maxPrice'])
+        if price_limit_rules:
+            self.multiplier_up = 1 + price_limit_rules / 100
+            self.multiplier_down = 1 - price_limit_rules / 100
+        else:
+            self.multiplier_up = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
+            self.multiplier_down = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
 
     def __call__(self):
         return self
@@ -329,14 +339,17 @@ class TradingCapabilityManager:
         """
         return self.step_size
 
-    def is_limit_order_valid(self, buy_side, _amount, _price):
-        pass  # For margin compatibility
-
     def get_max_sell_price(self, avg_price: Decimal) -> Decimal:
         return self.round_price(avg_price * self.multiplier_up, ROUND_FLOOR)
 
+    def get_max_price(self) -> Decimal:
+        return self.max_price
+
     def get_min_buy_price(self, avg_price: Decimal) -> Decimal:
         return self.round_price(avg_price * self.multiplier_down, ROUND_CEILING)
+
+    def get_min_price(self) -> Decimal:
+        return self.min_price
 
 
 class Ticker:
@@ -1849,7 +1862,7 @@ async def main(_symbol):
                 print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
             # init Strategy class var
             cls.info_symbol = exchange_info_symbol
-            cls.tcm = TradingCapabilityManager(exchange_info_symbol)
+            cls.tcm = TradingCapabilityManager(exchange_info_symbol, ms.PRICE_LIMIT_RULES)
             cls.base_asset = exchange_info_symbol.get('baseAsset')
             cls.quote_asset = exchange_info_symbol.get('quoteAsset')
             if ms.MODE in ('T', 'TC'):
