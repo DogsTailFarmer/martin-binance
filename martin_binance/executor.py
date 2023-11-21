@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc9"
+__version__ = "2.0.0rc11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2224,12 +2224,14 @@ class Strategy(StrategyBase):
             return
         self.command = 'stop'
 
-    def grid_handler(self,
-                     _amount_first=None,
-                     _amount_second=None,
-                     by_market: bool = False,
-                     after_full_fill: bool = True,
-                     order_id=None) -> None:
+    def grid_handler(
+        self,
+        _amount_first=None,
+        _amount_second=None,
+        by_market=False,
+        after_full_fill=True,
+        order_id=None
+    ) -> None:
         """
         Handler after filling grid order
         """
@@ -2469,8 +2471,7 @@ class Strategy(StrategyBase):
             if ((buy and price < tcm.get_min_buy_price(_price)) or
                     (not buy and price > tcm.get_max_sell_price(_price))):
                 self.message_log(
-                    f"{'Buy' if buy else 'Sell'} price is out of trading range."
-                    f" Price: {price}, will try later",
+                    f"{'Buy' if buy else 'Sell'} price {price} is out of trading range, will try later",
                     log_level=LogLevel.WARNING,
                     color=Style.YELLOW
                 )
@@ -2494,6 +2495,7 @@ class Strategy(StrategyBase):
     ##############################################################
     def on_new_ticker(self, ticker: Ticker) -> None:
         # print(f"on_new_ticker:{datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
+        self.last_ticker_update = int(self.local_time())
         if not self.orders_grid and not self.orders_init and self.orders_hold:
             _, _buy, _amount, _price = self.orders_hold.get_first()
             tcm = self.get_trading_capability_manager()
@@ -2932,7 +2934,7 @@ class Strategy(StrategyBase):
                     self.grid_remove = None
                     self.order_q_placed = False
                     self.place_profit_order()
-            else:
+            elif self.grid_remove and cancel_all:
                 self.cancel_grid(cancel_all=cancel_all)
         elif order_id == self.cancel_order_id:
             self.message_log(f"Processing canceled TP order {order_id}")

@@ -4,34 +4,34 @@
 node "binance.com" {
     package "Sub account n" {
         [BTCUSDT] <--> (API n)
-        [ETHBUSD] <--> (API n)
+        [ETHTUSD] <--> (API n)
   }
     package "Main account" {
-        [BTCBUSD] <--> (API 1)
+        [BTCBNB] <--> (API 1)
         [ETHUSDT] <--> (API 1)
   }
 }
 
 node "okx.com" {
     package "Sub account i" {
-        [FTTUSDT] <--> (API i)
+        [OKBUSDT] <--> (API i)
   }
      package "Main account on okx" {
         [PAXGUSDT] <--> (API main)
   }
 }
 
-node "DeFi (will be later)" {
+node "..." {
      package "Account" {
-        [DOGEUSDT] <--> (API k)
+        [AVAXUSDT] <--> (API k)
   }
 }
 
 package "exchanges-wrapper" #D3D3D3 {
-    component ew [API/WSS async wrapper with grpc powered server
+    component ew [API/WSS async wrapper with gRPC powered server
     ===
     https://github.com/DogsTailFarmer/exchanges-wrapper]
-    (aiohttp)
+    (aiohttp/websockets)
     (exch_srv.py) as srv
 }
 
@@ -44,23 +44,23 @@ package "martin-binance" #D3D3D3 {
     component mw [
         margin_wrapper.py
         ===
-        Emulator for margin.de Python API
+        Strategy API layer
     ]
     frame python_strategy #E6E6FA {
         component ex [
             executor.py
             ===
-            Python trade strategy
+            "Logic of trading strategy"
         ]
         component c1 [
-            cli_0_BTCBUSD.py
+            cli_0_BTCUSDT.py
             ===
             Executable module
-            with trade parameter
+            with trade parameters
             setup
         ]
         component cn [
-            cli_X_ETHBUSD.py
+            cli_X_ETHTUSD.py
             ===
             Executable module
             with trade parameter
@@ -84,28 +84,12 @@ cloud data_collect_and_view {
 [https://github.com/prometheus/client_python] as prom
 }
 
-node "margin.de" {
-    (API_OKEX) <-up-> [API_Python]
-    (API_KRAKEN) <-up-> [API_Python]
-    (API_Bitfinex) <-up-> [API_Python]
-    (API_Binance) <-up-> [API_Python]
-    (API_other) <-up-> [API_Python]
-    note left
-        https://margin.de
-        ===
-        Multi exchange
-        trade terminal
-    end note
-}
 
-
-[aiohttp] <-up-> (API 1)
-[aiohttp] <-up-> (API n)
-[aiohttp] <-up-> (API main)
-[aiohttp] <-up-> (API i)
-[aiohttp] <-up-> (API k)
-[c1] <-down-> [API_Python]
-[cn] <-down-> [API_Python]
+[aiohttp/websockets] <-up-> (API 1)
+[aiohttp/websockets] <-up-> (API n)
+[aiohttp/websockets] <-up-> (API main)
+[aiohttp/websockets] <-up-> (API i)
+[aiohttp/websockets] <-up-> (API k)
 [ex] --> [trade raw]
 [mw] --> [assets]
 [exp] -left-> prom

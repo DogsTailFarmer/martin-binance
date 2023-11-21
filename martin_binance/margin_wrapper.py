@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc9"
+__version__ = "2.0.0rc11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1119,7 +1119,7 @@ async def buffered_orders():
                 for _id in diff_id:
                     res = await fetch_order(_id, _filled_update_call=True)
                     if res.get('status') == 'CANCELED':
-                        await cancel_order_handler(_id, False)
+                        await cancel_order_handler(_id, cancel_all=False)
 
             if cls.last_state:
                 cls.strategy.restore_strategy_state(restore=True)
