@@ -1,3 +1,7 @@
+## 2.0.0.post1 - 2023-11-23
+### Fix
+* Fix issue detected by SonarCloud
+
 ## 2.0.0 - 2023-11-23
 ### Fix
 *  Order price must be higher than the minimum price #67

@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0"
+__version__ = "2.0.0.post1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1441,10 +1441,9 @@ async def cancel_order_call(_id: int, cancel_all: bool, count=0):
                 await cancel_order_handler(_id, cancel_all)
             elif not res or res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
                 await asyncio.sleep(HEARTBEAT * count)
-                if count > TRY_LIMIT:
-                    cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
-                    return
-                await cancel_order_call(_id, cancel_all, count+1)
+                if count <= TRY_LIMIT:
+                    await cancel_order_call(_id, cancel_all, count+1)
+                cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
 
 
 async def cancel_order_handler(_id, cancel_all):
