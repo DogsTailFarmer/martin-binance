@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0rc11"
+__version__ = "2.0.0rc13"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -681,11 +681,6 @@ class Strategy(StrategyBase):
                     self.place_profit_order()
                 elif (self.orders_grid or self.orders_hold) and not self.part_amount:
                     self.grid_update()
-
-            if 0:  # ID_EXCHANGE == 36 and self.heartbeat_counter % 10 == 0:
-                self.message_log("Sending to main account", color=Style.UNDERLINE, tlg=True)
-                self.transfer_to_master(self.s_currency, "0.5")
-
             if self.heartbeat_counter > 150:
                 self.heartbeat_counter = 0
                 if MODE in ('T', 'TC') and not GRID_ONLY:
@@ -962,9 +957,7 @@ class Strategy(StrategyBase):
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
         #
-        self.init_assets_check()
-        #
-        self.avg_rate = f2d(self.get_buffered_ticker().last_price)
+        self.avg_rate = self.get_buffered_ticker().last_price
         if GRID_ONLY:
             if USE_ALL_FUND and not self.start_after_shift:
                 if self.cycle_buy:
@@ -973,6 +966,7 @@ class Strategy(StrategyBase):
                 else:
                     self.deposit_first = ff
                     self.message_log(f'Use all available funds: {self.deposit_first} {self.f_currency}')
+                self.save_init_assets(ff, fs)
             if not self.check_min_amount(for_tp=False) and self.command is None:
                 self.first_run = False
                 self.grid_only_restart = True
@@ -2161,23 +2155,6 @@ class Strategy(StrategyBase):
             self.debug_output()
             self.start(profit_f, profit_s)
 
-    def init_assets_check(self):
-        error_message = None
-        if self.reverse:
-            if self.cycle_buy and self.initial_reverse_second < self.deposit_second:
-                error_message = (f"Negative second free asset: {self.initial_reverse_second - self.deposit_second}, "
-                                 f"check it")
-            elif not self.cycle_buy and self.initial_reverse_first < self.deposit_first:
-                error_message = (f"Negative first free asset: {self.initial_reverse_first - self.deposit_first},"
-                                 f" check it")
-        else:
-            if self.cycle_buy and self.initial_second < self.deposit_second:
-                error_message = f"Negative second free asset: {self.initial_second - self.deposit_second}, check it"
-            elif not self.cycle_buy and self.initial_first < self.deposit_first:
-                error_message = f"Negative first free asset: {self.initial_first - self.deposit_first}, check it"
-        if error_message:
-            self.message_log(error_message, log_level=LogLevel.ERROR)
-
     def place_grid_part(self) -> None:
         if not self.grid_remove:
             self.grid_place_flag = True
@@ -2326,26 +2303,20 @@ class Strategy(StrategyBase):
             # Correction sum_amount
             self.update_sum_amount(_amount_f, _amount_s)
         # Return depo in turnover without loss
-        tcm = self.get_trading_capability_manager()
+        reverse_target_amount = O_DEC
         if self.cycle_buy:
-            min_trade_amount = tcm.get_min_buy_amount(self.avg_rate)
             amount = _amount_s
             if self.reverse:
                 reverse_target_amount = self.reverse_target_amount * _amount_f / self.reverse_init_amount
-            else:
-                reverse_target_amount = _amount_f + (FEE_MAKER * 2 + PROFIT) * _amount_f / 100
         else:
-            min_trade_amount = tcm.get_min_sell_amount(self.avg_rate)
             amount = _amount_f
             if self.reverse:
                 reverse_target_amount = self.reverse_target_amount * _amount_s / self.reverse_init_amount
-            else:
-                reverse_target_amount = _amount_s + (FEE_MAKER * 2 + PROFIT) * _amount_s / 100
+
         self.message_log(f"For additional {'Buy' if self.cycle_buy else 'Sell'}"
-                         f"{' Reverse' if self.reverse else ''} grid amount: {amount},"
-                         f" reverse_target_amount: {float(reverse_target_amount):f}",
+                         f"{' Reverse' if self.reverse else ''} grid amount: {amount}",
                          tlg=True)
-        if amount > min_trade_amount:
+        if self.check_min_amount(amount=_amount_f):
             self.message_log("Place additional grid orders and replace TP", tlg=True)
             self.tp_hold_additional = True
             self.place_grid(self.cycle_buy,
@@ -2366,7 +2337,7 @@ class Strategy(StrategyBase):
             self.message_log("Small amount was added to last grid order", tlg=True)
             _order = list(self.orders_grid.get_last())
             _order_updated = self.get_buffered_open_order(_order[0])
-            _order[2] = f2d(_order_updated.remaining_amount) + ((amount / _order[3]) if self.cycle_buy else amount)
+            _order[2] = _order_updated.remaining_amount + ((amount / _order[3]) if self.cycle_buy else amount)
             self.cancel_grid_order_id = _order[0]
             self.cancel_order(_order[0])
             self.orders_hold.append_order(*_order)
@@ -2438,21 +2409,25 @@ class Strategy(StrategyBase):
         else:
             self.grid_remove = None
 
-    def check_min_amount(self, for_tp=True) -> bool:
-        res = False
-        if self.avg_rate:
-            tcm = self.get_trading_capability_manager()
-            if self.cycle_buy:
-                min_trade_amount = tcm.get_min_sell_amount(self.avg_rate)
-                amount = self.sum_amount_first if for_tp else (self.deposit_second / self.avg_rate)
-            else:
-                min_trade_amount = tcm.get_min_buy_amount(self.avg_rate)
-                amount = (self.sum_amount_second / self.avg_rate) if for_tp else self.deposit_first
+    def check_min_amount(self, amount=O_DEC, price=O_DEC, for_tp=True) -> bool:
+        _price = price or self.avg_rate
 
-            amount = self.round_truncate(amount, base=True)
-            if amount >= min_trade_amount:
-                res = True
-        return res
+        if not _price:
+            return False
+
+        _amount = amount
+        tcm = self.get_trading_capability_manager()
+        if self.cycle_buy:
+            min_trade_amount = tcm.get_min_sell_amount(_price)
+            if not _amount:
+                _amount = self.sum_amount_first if for_tp else (self.deposit_second / _price)
+        else:
+            min_trade_amount = tcm.get_min_buy_amount(_price)
+            if not _amount:
+                _amount = (self.sum_amount_second / _price) if for_tp else self.deposit_first
+
+        _amount = self.round_truncate(_amount, base=True)
+        return _amount >= min_trade_amount
 
     def place_limit_order_check(
             self,
@@ -2669,9 +2644,7 @@ class Strategy(StrategyBase):
                 self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
         # Retreat of courses
         self.avg_rate = amount_second / amount_first
-        self.message_log(f"Executed amount: First: {float(amount_first):f},"
-                         f" Second: {float(amount_second):f},"
-                         f" price: {float(self.avg_rate):f}")
+        self.message_log(f"Executed amount: First: {amount_first}, Second: {amount_second}, price: {self.avg_rate}")
         if update.status in (OrderUpdate.FILLED, OrderUpdate.ADAPTED_AND_FILLED):
             if not GRID_ONLY:
                 self.shift_grid_threshold = None
@@ -2747,8 +2720,7 @@ class Strategy(StrategyBase):
                 self.ts_grid_update = self.local_time()
                 amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
                 # Correction amount for saved order, if exists
-                _order = self.orders_save.get_by_id(update.original_order.id)
-                if _order:
+                if _order := self.orders_save.get_by_id(update.original_order.id):
                     self.orders_save.remove(update.original_order.id)
                     _order['amount'] -= amount_first
                     self.orders_save.orders_list.append(_order)
@@ -2786,6 +2758,8 @@ class Strategy(StrategyBase):
     def cancel_reverse_hold(self):
         self.reverse_hold = False
         self.cycle_time_reverse = None
+        self.reverse_target_amount = O_DEC
+        self.reverse_init_amount = O_DEC
         self.initial_reverse_first = self.initial_reverse_second = O_DEC
         self.message_log("Cancel hold reverse cycle", color=Style.B_WHITE, tlg=True)
 
@@ -2927,7 +2901,24 @@ class Strategy(StrategyBase):
             if self.restore_orders:
                 _order = self.orders_save.get_by_id(order_id)
                 self.orders_save.remove(order_id)
-                self.orders_hold.orders_list.append(_order)
+                if self.check_min_amount(amount=_order['amount'], price=_order['price']):
+                    self.orders_hold.orders_list.append(_order)
+                elif self.orders_save:
+                    _order_saved = list(self.orders_save.get_last())
+                    _order_saved[2] += _order['amount']
+                    self.orders_save.remove(_order_saved[0])
+                    self.orders_save.append_order(*_order_saved)
+                    self.message_log(f"Small restored amount {_order['amount']} was added"
+                                     f" to last saved order {_order_saved[0]}", tlg=True)
+                elif self.orders_hold:
+                    _order_hold = list(self.orders_hold.get_last())
+                    _order_hold[2] += _order['amount']
+                    self.orders_hold.remove(_order_hold[0])
+                    self.orders_hold.append_order(*_order_hold)
+                    self.message_log(f"Small restored amount {_order['amount']} was added"
+                                     f" to last held order {_order_hold[0]}", tlg=True)
+                else:
+                    self.message_log("Too small restore for trade and not saved or held grid for update", tlg=True)
                 if not self.orders_save:
                     self.restore_orders = False
                     self.orders_hold.sort(self.cycle_buy)
