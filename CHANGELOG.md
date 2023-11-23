@@ -1,3 +1,11 @@
+## 2.0.0 - 2023-11-23
+### Fix
+*  Order price must be higher than the minimum price #67
+
+### Update
+* Up requirements for exchanges-wrapper==1.4.0
+* Some minor improvements
+
 ## 2.0.0rc8 - 2023-11-16
 ### Fix
 * Handling of partially filled TP when Reverse hold
