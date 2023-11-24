@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0"
+__version__ = "2.0.0.post2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2277,7 +2277,7 @@ class Strategy(StrategyBase):
                 except AttributeError:
                     self.message_log("grid_handler: AttributeError raised", LogLevel.WARNING)
 
-            if after_full_fill and self.orders_hold and self.order_q_placed:
+            if after_full_fill and self.orders_hold and self.order_q_placed and not self.grid_remove:
                 # PLace one hold grid order and remove it from hold list
                 _, _buy, _amount, _price = self.orders_hold.get_first()
                 check = (len(self.orders_grid) + len(self.orders_hold)) <= 2
@@ -2899,26 +2899,26 @@ class Strategy(StrategyBase):
             self.part_amount.pop(order_id, None)
             self.orders_grid.remove(order_id)
             if self.restore_orders:
-                _order = self.orders_save.get_by_id(order_id)
-                self.orders_save.remove(order_id)
-                if self.check_min_amount(amount=_order['amount'], price=_order['price']):
-                    self.orders_hold.orders_list.append(_order)
-                elif self.orders_save:
-                    _order_saved = list(self.orders_save.get_last())
-                    _order_saved[2] += _order['amount']
-                    self.orders_save.remove(_order_saved[0])
-                    self.orders_save.append_order(*_order_saved)
-                    self.message_log(f"Small restored amount {_order['amount']} was added"
-                                     f" to last saved order {_order_saved[0]}", tlg=True)
-                elif self.orders_hold:
-                    _order_hold = list(self.orders_hold.get_last())
-                    _order_hold[2] += _order['amount']
-                    self.orders_hold.remove(_order_hold[0])
-                    self.orders_hold.append_order(*_order_hold)
-                    self.message_log(f"Small restored amount {_order['amount']} was added"
-                                     f" to last held order {_order_hold[0]}", tlg=True)
-                else:
-                    self.message_log("Too small restore for trade and not saved or held grid for update", tlg=True)
+                if _order := self.orders_save.get_by_id(order_id):
+                    self.orders_save.remove(order_id)
+                    if self.check_min_amount(amount=_order['amount'], price=_order['price']):
+                        self.orders_hold.orders_list.append(_order)
+                    elif self.orders_save:
+                        _order_saved = list(self.orders_save.get_last())
+                        _order_saved[2] += _order['amount']
+                        self.orders_save.remove(_order_saved[0])
+                        self.orders_save.append_order(*_order_saved)
+                        self.message_log(f"Small restored amount {_order['amount']} was added"
+                                         f" to last saved order {_order_saved[0]}", tlg=True)
+                    elif self.orders_hold:
+                        _order_hold = list(self.orders_hold.get_last())
+                        _order_hold[2] += _order['amount']
+                        self.orders_hold.remove(_order_hold[0])
+                        self.orders_hold.append_order(*_order_hold)
+                        self.message_log(f"Small restored amount {_order['amount']} was added"
+                                         f" to last held order {_order_hold[0]}", tlg=True)
+                    else:
+                        self.message_log("Too small restore for trade and not saved or held grid for update", tlg=True)
                 if not self.orders_save:
                     self.restore_orders = False
                     self.orders_hold.sort(self.cycle_buy)

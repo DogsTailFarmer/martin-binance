@@ -1,3 +1,7 @@
+## 2.0.0.post2 - 2023-11-24
+### Fix
+*  Exception buffered_orders: 'NoneType' object is not subscriptable #68
+
 ## 2.0.0.post1 - 2023-11-23
 ### Fix
 * Fix issue detected by SonarCloud
