@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0.post2"
+__version__ = "2.0.0.post3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -155,7 +155,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         if tries > max_tries * 2:
             break
         _err.append(err)
-    return f2d(0), "\n".join(f"delta: {k}\tresult: {v}" for k, v in solves)
+    return O_DEC, "\n".join(f"delta: {k}\tresult: {v}" for k, v in solves)
 
 
 class Orders:
@@ -2925,7 +2925,7 @@ class Strategy(StrategyBase):
                     self.grid_remove = None
                     self.order_q_placed = False
                     self.place_profit_order()
-            elif self.grid_remove and cancel_all:
+            elif self.grid_remove:
                 self.cancel_grid(cancel_all=cancel_all)
         elif order_id == self.cancel_order_id:
             self.message_log(f"Processing canceled TP order {order_id}")
