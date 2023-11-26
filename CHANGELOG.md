@@ -1,3 +1,7 @@
+## 2.0.2 - 2023-11-26
+### Fix
+* Version tags
+
 ## 2.0.1 - 2023-11-26
 ### Fix
 * "Groggy" state after start canceling grid before update it
