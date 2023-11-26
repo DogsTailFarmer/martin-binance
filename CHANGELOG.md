@@ -1,3 +1,10 @@
+## 2.0.1 - 2023-11-26
+### Fix
+* "Groggy" state after start canceling grid before update it
+
+### Update
+* Improved calc_over_price()
+
 ## 2.0.0.post2 - 2023-11-24
 ### Fix
 *  Exception buffered_orders: 'NoneType' object is not subscriptable #68

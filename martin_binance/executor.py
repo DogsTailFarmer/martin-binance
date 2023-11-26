@@ -1900,7 +1900,12 @@ class Strategy(StrategyBase):
                       'amount_first_grid': amount_first_grid,
                       'min_delta': min_delta,
                       'amount_min': amount_min}
-            over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
+            while True:
+                over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
+                if over_price or self.order_q <= ORDER_Q:
+                    break
+                self.order_q -= 1
+
             self.message_log(msg)
             if over_price == 0:
                 self.message_log("Can't calculate over price for reverse cycle,"
