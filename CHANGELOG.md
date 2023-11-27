@@ -1,3 +1,8 @@
+## 2.0.3 - 2023-11-xx
+### Update
+* solve(): The limit of attempts has been increased
+* calc_over_price(): The range of changes in the number of orders has been expanded
+
 ## 2.0.2 - 2023-11-26
 ### Fix
 * Version tags

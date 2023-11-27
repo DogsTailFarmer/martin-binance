@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.2"
+__version__ = "2.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -148,7 +148,7 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
             if delta > 1:
                 break
         # print(f"tries: {tries}, delta: {delta}, correction: {correction}, slope: {slope}")
-        if (_err.count(err) or tries > max_tries) and len(solves) > 5:
+        if (_err.count(err) or tries > max_tries) and len(solves) > max_tries:
             solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
             # print("\n".join(f"delta: {k}\t result: {v}" for k, v in solves))
             return solves[0][1], 'Solve return the best of the right value ;-)'
@@ -1902,7 +1902,7 @@ class Strategy(StrategyBase):
                       'amount_min': amount_min}
             while True:
                 over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
-                if over_price or self.order_q <= ORDER_Q:
+                if over_price or self.order_q <= GRID_MAX_COUNT:
                     break
                 self.order_q -= 1
 
