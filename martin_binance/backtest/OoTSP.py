@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "2.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -23,7 +23,7 @@ from martin_binance import BACKTEST_PATH
 vis = optuna.visualization
 ii_params = []
 
-PARAMS_FLOAT = ['PRICE_SHIFT', 'KBB']
+PARAMS_FLOAT = ['KBB']
 
 
 def try_trade(mbs, **kwargs):
@@ -70,7 +70,7 @@ def main():
             message="Enter number of cycles, from 50 to 500",
             ignore=lambda x: x["mode"] == "Analise saved study session",
             default='150',
-            validate=lambda _, c: 10 <= int(c) <= 500,
+            validate=lambda _, c: 50 <= int(c) <= 500,
         ),
     ]
 
@@ -85,6 +85,9 @@ def main():
             strategy = next(Path(BACKTEST_PATH, answers.get('path')).glob("cli_*.py"))
         except StopIteration:
             raise UserWarning(f"Can't find cli_*.py in {Path(BACKTEST_PATH, answers.get('path'))}")
+
+        print(f"Importing strategy from {strategy}")
+
         spec = importlib.util.spec_from_file_location("strategy", strategy)
         mbs = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mbs)
@@ -138,10 +141,15 @@ def main():
 
 def print_study_result(study):
     print(f"Optimal parameters: {study.best_params} for get {study.best_value}")
-    importance_params = optuna.importance.get_param_importances(study)
-    print("Evaluate parameter importance based on completed trials in the given study:")
-    for p in importance_params.items():
-        print(p)
+    try:
+        importance_params = optuna.importance.get_param_importances(study)
+    except RuntimeError as e:
+        importance_params = {}
+        print(e)
+    else:
+        print("Evaluate parameter importance based on completed trials in the given study:")
+        for p in importance_params.items():
+            print(p)
     return importance_params
 
 

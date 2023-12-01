@@ -6,7 +6,7 @@ Visual Comparison of Session Extended Log
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.0"
+__version__ = "2.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -22,7 +22,8 @@ from martin_binance import BACKTEST_PATH
 clrs = {'background': '#696969',
         'text': '#7FDBFF'}
 
-source_path = askdirectory(title='Pick a folder for base strategy', initialdir=str(BACKTEST_PATH))
+source_path = askdirectory(title='Pick a folder for base strategy: "back_test/exchange_AAABBB/snapshot/"',
+                           initialdir=str(BACKTEST_PATH))
 s_ds = pd.read_pickle(Path(BACKTEST_PATH, source_path, "ticker.pkl"))
 s_sell_df: pd.DataFrame = pd.read_pickle(Path(BACKTEST_PATH, source_path, "sell.pkl"))
 s_buy_df = pd.read_pickle(Path(BACKTEST_PATH, source_path, "buy.pkl"))
@@ -65,7 +66,7 @@ for col in df_grid_buy.columns:
     fig.add_traces(go.Scatter(x=df_grid_buy.index, y=df_grid_buy[col], mode='lines', line_color='green',
                               showlegend=False))
 
-fig.update_layout(xaxis_tickformat="%H:%M:%S", height=700, autosize=True)
+fig.update_layout(xaxis_tickformat="%H:%M:%S.%L", height=700, autosize=True)
 
 app.layout = html.Div(
     [

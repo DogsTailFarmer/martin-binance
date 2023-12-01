@@ -1,4 +1,7 @@
-## 2.0.3 - 2023-11-xx
+## 2.0.3 - 2023-12-01
+### Fix
+* Backtesting, Simulation mode
+
 ### Update
 * solve(): The limit of attempts has been increased
 * calc_over_price(): The range of changes in the number of orders has been expanded

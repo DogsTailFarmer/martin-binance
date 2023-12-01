@@ -99,7 +99,7 @@ STOP_TLG = 'stop_signal_QWE#@!'
 INLINE_BOT = True
 # Backtesting
 MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
-XTIME = 500  # Time accelerator
+XTIME = 1000  # Time accelerator
 SAVE_DS = True  # Save session result data (ticker, orders) for compare
 SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
 SAVED_STATE = False  # Use saved state for backtesting
@@ -428,7 +428,7 @@ class Strategy(StrategyBase):
         self.wait_wss_refresh = {}  # -
         self.start_collect = None
         self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
-        self.ts_grid_update = self.local_time()  # - When updated grid
+        self.ts_grid_update = self.get_time()  # - When updated grid
         self.tp_part_free = False  # + Can use TP part amount for converting to grid orders
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
@@ -452,7 +452,7 @@ class Strategy(StrategyBase):
         self.s_currency = self.get_second_currency()
         self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}. "
         self.message_log(f"{self.tlg_header}", color=Style.B_WHITE)
-        self.status_time = int(self.local_time())
+        self.status_time = int(self.get_time())
         self.start_after_shift = True
         self.over_price = OVER_PRICE
         self.order_q = ORDER_Q
@@ -519,9 +519,9 @@ class Strategy(StrategyBase):
                             and not self.tp_was_filled
                             and not self.orders_init)
             if (MODE in ('T', 'TC') and (stable_state or (self.grid_hold.get('timestamp') and
-                int(self.local_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT) or
+                int(self.get_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT) or
                     (self.tp_order_hold.get('timestamp') and
-                     int(self.local_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT))):
+                     int(self.get_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT))):
                 orders = self.get_buffered_open_orders()
                 order_buy = len([i for i in orders if i.buy is True])
                 order_sell = len([i for i in orders if i.buy is False])
@@ -584,10 +584,10 @@ class Strategy(StrategyBase):
                 self.stop()
                 os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
             if (MODE in ('T', 'TC') and
-                    (command or (STATUS_DELAY and (self.local_time() - self.status_time) / 60 > STATUS_DELAY))):
+                    (command or (STATUS_DELAY and (self.get_time() - self.status_time) / 60 > STATUS_DELAY))):
                 # Report current status
                 last_price = self.get_buffered_ticker().last_price
-                ticker_update = int(self.local_time()) - self.last_ticker_update
+                ticker_update = int(self.get_time()) - self.last_ticker_update
                 if self.cycle_time:
                     ct = str(datetime.utcnow() - self.cycle_time).rsplit('.')[0]
                 else:
@@ -602,7 +602,7 @@ class Strategy(StrategyBase):
                     fund_s = funds.get(self.s_currency, O_DEC)
                     fund_s = fund_s.available if fund_s else O_DEC
                     if self.grid_hold.get('timestamp'):
-                        time_diff = int(self.local_time() - self.grid_hold['timestamp'])
+                        time_diff = int(self.get_time() - self.grid_hold['timestamp'])
                         self.message_log(f"Exist unreleased grid orders for\n"
                                          f"{'Buy' if self.cycle_buy else 'Sell'} cycle with"
                                          f" {self.grid_hold['depo']}"
@@ -614,7 +614,7 @@ class Strategy(StrategyBase):
                                          f"From start {ct}\n"
                                          f"Delay: {time_diff} sec", tlg=True)
                     elif self.tp_order_hold.get('timestamp'):
-                        time_diff = int(self.local_time() - self.tp_order_hold['timestamp'])
+                        time_diff = int(self.get_time() - self.tp_order_hold['timestamp'])
                         if time_diff > HOLD_TP_ORDER_TIMEOUT:
                             self.message_log(f"Exist hold TP order for"
                                              f" {'Sell' if self.cycle_buy else 'Buy'} {self.tp_order_hold['amount']}"
@@ -667,7 +667,7 @@ class Strategy(StrategyBase):
                                      tlg=True)
             # endregion
             # region ProcessingEvent
-            if self.wait_wss_refresh and self.local_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
+            if self.wait_wss_refresh and self.get_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
                 self.place_grid(self.wait_wss_refresh['buy_side'],
                                 self.wait_wss_refresh['depo'],
                                 self.reverse_target_amount,
@@ -676,7 +676,7 @@ class Strategy(StrategyBase):
                                 self.wait_wss_refresh['grid_update'])
             self.heartbeat_counter += 1
             if ADAPTIVE_TRADE_CONDITION and stable_state and self.command != 'stopped':
-                if self.tp_order_id and not self.tp_part_amount_first and self.local_time() - self.tp_order[3] > 60*15:
+                if self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60*15:
                     self.message_log("Update TP order", color=Style.B_WHITE)
                     self.place_profit_order()
                 elif (self.orders_grid or self.orders_hold) and not self.part_amount:
@@ -700,7 +700,7 @@ class Strategy(StrategyBase):
                 self.place_profit_order(after_error=True)
             if self.reverse_hold:
                 if self.start_reverse_time:
-                    if self.local_time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
+                    if self.get_time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
                         last_price = self.get_buffered_ticker().last_price
                         if self.cycle_buy:
                             price_diff = 100 * (self.reverse_price - last_price) / self.reverse_price
@@ -719,7 +719,7 @@ class Strategy(StrategyBase):
                             self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
                             self.start()
                 else:
-                    self.start_reverse_time = self.local_time()
+                    self.start_reverse_time = self.get_time()
             # endregion
         if MODE in ('T', 'TC'):
             return {'command': json.dumps(self.command),
@@ -792,7 +792,7 @@ class Strategy(StrategyBase):
                 )
             self.deposit_first = f2d(json.loads(strategy_state.get('deposit_first')))
             self.deposit_second = f2d(json.loads(strategy_state.get('deposit_second')))
-            self.last_shift_time = json.loads(strategy_state.get('last_shift_time')) or self.local_time()
+            self.last_shift_time = json.loads(strategy_state.get('last_shift_time')) or self.get_time()
             self.martin = f2d(json.loads(strategy_state.get('martin')))
             self.order_q = json.loads(strategy_state.get('order_q'))
             self.orders_grid.restore(json.loads(strategy_state.get('orders')))
@@ -827,7 +827,7 @@ class Strategy(StrategyBase):
             self.tp_part_amount_second = f2d(json.loads(strategy_state.get('tp_part_amount_second')))
             self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
             self.tp_order = eval(json.loads(strategy_state.get('tp_order')))
-            self.tp_order = self.tp_order[:3] + (self.local_time(),)
+            self.tp_order = self.tp_order[:3] + (self.get_time(),)
             self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id'))
             self.restore_orders = json.loads(strategy_state.get('restore_orders', 'false'))
             self.tp_part_free = json.loads(strategy_state.get('tp_part_free', 'false'))
@@ -1024,9 +1024,11 @@ class Strategy(StrategyBase):
             if self.reverse:
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
-            self.first_run = False
             self.debug_output()
+            if self.first_run and MODE == 'TC':
+                self.s_order_book = {int(self.get_time() * 1000): self.order_book}
             self.start_collect = True
+            self.first_run = False
             self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
 
     def stop(self) -> None:
@@ -1420,7 +1422,7 @@ class Strategy(StrategyBase):
                               'allow_grid_shift': allow_grid_shift,
                               'additional_grid': additional_grid,
                               'grid_update': grid_update,
-                              'timestamp': self.local_time()
+                              'timestamp': self.get_time()
                     }
                     return
                 except Exception as ex:
@@ -1503,7 +1505,7 @@ class Strategy(StrategyBase):
                               'allow_grid_shift': allow_grid_shift,
                               'additional_grid': additional_grid,
                               'grid_update': grid_update,
-                              'timestamp': self.local_time()}
+                              'timestamp': self.get_time()}
             self.message_log(f"Hold grid for {'Buy' if buy_side else 'Sell'} cycle with {depo} {currency} depo."
                              f" Available funds is {fund} {currency}", tlg=False)
         if self.tp_hold_additional:
@@ -1612,7 +1614,7 @@ class Strategy(StrategyBase):
         depo_remaining = self.depo_unused() / (self.deposit_second if self.cycle_buy else self.deposit_first)
 
         if self.reverse and depo_remaining >= f2d(0.65):
-            if self.local_time() - self.ts_grid_update > GRID_UPDATE_INTERVAL:
+            if self.get_time() - self.ts_grid_update > GRID_UPDATE_INTERVAL:
                 do_it = True
         elif not self.reverse and depo_remaining >= f2d(0.35):
             try:
@@ -1687,7 +1689,7 @@ class Strategy(StrategyBase):
                     self.tp_order_hold = {'buy_side': buy_side,
                                           'amount': amount * price,
                                           'by_market': by_market,
-                                          'timestamp': self.local_time()}
+                                          'timestamp': self.get_time()}
                     self.message_log(f"Hold take profit order for Buy {amount} {self.f_currency} by {price},"
                                      f" wait {amount * price} {self.s_currency}, exist: {fund}")
                 elif not buy_side and amount > fund:
@@ -1695,7 +1697,7 @@ class Strategy(StrategyBase):
                     self.tp_order_hold = {'buy_side': buy_side,
                                           'amount': amount,
                                           'by_market': by_market,
-                                          'timestamp': self.local_time()}
+                                          'timestamp': self.get_time()}
                     self.message_log(f"Hold take profit order for Sell {amount} {self.f_currency}"
                                      f" by {price}, exist {fund}")
                 else:
@@ -1703,7 +1705,7 @@ class Strategy(StrategyBase):
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"
                                      f" vlm: {amount}, price: {price}, profit: {profit}%")
                     self.tp_target = target
-                    self.tp_order = (buy_side, amount, price, self.local_time())
+                    self.tp_order = (buy_side, amount, price, self.get_time())
                     check = after_error or (len(self.orders_grid) + len(self.orders_hold)) > 2
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=check)
         elif self.tp_order_id and self.tp_cancel:
@@ -2118,7 +2120,7 @@ class Strategy(StrategyBase):
                 trend_down = adx.get('adx') > ADX_THRESHOLD and adx.get('-DI') > adx.get('+DI')
                 # print('adx: {}, +DI: {}, -DI: {}'.format(adx.get('adx'), adx.get('+DI'), adx.get('-DI')))
             self.cycle_time_reverse = self.cycle_time or datetime.utcnow()
-            self.start_reverse_time = self.local_time()
+            self.start_reverse_time = self.get_time()
             # Calculate target return amount
             tp = self.calc_profit_order(not self.cycle_buy)
             if self.cycle_buy:
@@ -2475,7 +2477,7 @@ class Strategy(StrategyBase):
     ##############################################################
     def on_new_ticker(self, ticker: Ticker) -> None:
         # print(f"on_new_ticker:{datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
-        self.last_ticker_update = int(self.local_time())
+        self.last_ticker_update = int(self.get_time())
         if not self.orders_grid and not self.orders_init and self.orders_hold:
             _, _buy, _amount, _price = self.orders_hold.get_first()
             tcm = self.get_trading_capability_manager()
@@ -2490,7 +2492,7 @@ class Strategy(StrategyBase):
                 self.orders_init.append_order(waiting_order_id, _buy, _amount, _price)
                 del self.orders_hold.orders_list[0]
         #
-        if (self.shift_grid_threshold and self.last_shift_time and self.local_time() -
+        if (self.shift_grid_threshold and self.last_shift_time and self.get_time() -
                 self.last_shift_time > SHIFT_GRID_DELAY
             and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
                  or
@@ -2654,7 +2656,7 @@ class Strategy(StrategyBase):
             if not GRID_ONLY:
                 self.shift_grid_threshold = None
             if self.orders_grid.exist(update.original_order.id):
-                self.ts_grid_update = self.local_time()
+                self.ts_grid_update = self.get_time()
                 # Remove grid order with =id from order list
                 self.orders_grid.remove(update.original_order.id)
                 if self.orders_save:
@@ -2713,7 +2715,7 @@ class Strategy(StrategyBase):
                 self.tp_part_free = True
                 self.update_sum_amount(amount_first_fee - _profit_first, amount_second_fee - _profit_second)
                 if self.reverse_hold:
-                    self.start_reverse_time = self.local_time()
+                    self.start_reverse_time = self.get_time()
                     if self.convert_tp(self.tp_part_amount_first,
                                        self.tp_part_amount_second,
                                        _update_sum_amount=False):
@@ -2722,7 +2724,7 @@ class Strategy(StrategyBase):
                         self.message_log("Part filled TP was converted to grid", tlg=True)
             else:
                 self.message_log("Grid order partially filled", color=Style.B_WHITE)
-                self.ts_grid_update = self.local_time()
+                self.ts_grid_update = self.get_time()
                 amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
                 # Correction amount for saved order, if exists
                 if _order := self.orders_save.get_by_id(update.original_order.id):
@@ -2757,7 +2759,7 @@ class Strategy(StrategyBase):
                         self.shift_grid_threshold = None
                         self.grid_handler(after_full_fill=False)
                     else:
-                        self.last_shift_time = self.local_time() + 2 * SHIFT_GRID_DELAY
+                        self.last_shift_time = self.get_time() + 2 * SHIFT_GRID_DELAY
                         self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
 
     def cancel_reverse_hold(self):
@@ -2790,7 +2792,7 @@ class Strategy(StrategyBase):
             self.message_log(f"For {order.id} first: {float(amount_first):f},"
                              f" second: {float(amount_second):f}, price: {float(self.avg_rate):f}")
             if self.orders_init.exist(place_order_id):
-                self.ts_grid_update = self.local_time()
+                self.ts_grid_update = self.get_time()
                 self.message_log(f"Grid order {order.id} execute by market")
                 self.orders_init.remove(place_order_id)
                 self.message_log(f"Waiting order count is: {len(self.orders_init)}, hold: {len(self.orders_hold)}")
@@ -2821,12 +2823,12 @@ class Strategy(StrategyBase):
                                  color=Style.B_RED)
         else:
             if self.orders_init.exist(place_order_id):
-                self.ts_grid_update = self.local_time()
+                self.ts_grid_update = self.get_time()
                 self.orders_grid.append_order(order.id, order.buy, order.amount, order.price)
                 self.orders_grid.sort(self.cycle_buy)
                 self.orders_init.remove(place_order_id)
                 if not self.orders_init:
-                    self.last_shift_time = self.local_time()
+                    self.last_shift_time = self.get_time()
                     if GRID_ONLY and self.orders_hold:
                         # Place next part of grid orders
                         self.place_grid_part()
@@ -2894,13 +2896,13 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_success(self, order_id: int, cancel_all=False) -> None:
         if order_id == self.cancel_grid_order_id:
-            self.ts_grid_update = self.local_time()
+            self.ts_grid_update = self.get_time()
             self.cancel_grid_order_id = None
             self.message_log(f"Processing updated grid order {order_id}", log_level=LogLevel.INFO)
             self.orders_grid.remove(order_id)
         elif self.orders_grid.exist(order_id):
             self.message_log(f"Processing canceled grid order {order_id}", log_level=LogLevel.INFO)
-            self.ts_grid_update = self.local_time()
+            self.ts_grid_update = self.get_time()
             self.part_amount.pop(order_id, None)
             self.orders_grid.remove(order_id)
             if self.restore_orders:

@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0"
+__version__ = "2.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -28,7 +28,7 @@ from pathlib import Path
 import toml
 import martin_binance.executor as ex
 from martin_binance import CONFIG_FILE, LOG_PATH, LAST_STATE_PATH
-from martin_binance.margin_wrapper import main, ask_exit, LogLevel  # noqa
+from martin_binance.margin_wrapper import main, ask_exit, LogLevel, session_result  # noqa
 ################################################################
 # Exchange setup and parameter settings
 ################################################################
