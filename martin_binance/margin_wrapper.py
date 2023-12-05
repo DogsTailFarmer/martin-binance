@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -588,22 +588,19 @@ class StrategyBase:
         return system int(time.time()) Unix time.
         :return: int
         """
+        current_time = time.time()
+
         if self.time_operational['new']:
-            if self.time_operational['ts']:
-                diff = time.time() - self.time_operational['ts']
-            else:
-                diff = 0.0
+            diff = current_time - self.time_operational['ts'] if self.time_operational['ts'] else 0.0
             if self.time_operational['start'] == self.time_operational['new']:
                 last = self.time_operational['new'] + diff
-                self.time_operational['start'] = self.time_operational['new'] = last
-            elif self.time_operational['start'] > self.time_operational['new']:
-                last = self.time_operational['start'] + diff
-                self.time_operational['start'] = self.time_operational['new'] = last
             else:
-                self.time_operational['start'] = last = self.time_operational['new']
-            self.time_operational['ts'] = time.time()
+                last = self.time_operational['start'] + diff
+            self.time_operational['start'] = self.time_operational['new'] = last
+            self.time_operational['ts'] = current_time
         else:
-            last = time.time()
+            last = current_time
+
         return last
 
     def open_orders_snapshot(self):
@@ -1406,7 +1403,7 @@ async def cancel_order_call(_id: int, cancel_all: bool, count=0):
     try:
         if ms.MODE in ('T', 'TC'):
             if cancel_all:
-                if cls.bulk_orders_cancel.get(_id) is None:
+                if _id not in cls.bulk_orders_cancel:
                     res = await cls.send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=cls.symbol)
                     [cls.bulk_orders_cancel.update({v['orderId']: v}) for v in ast.literal_eval(json.loads(res.result))]
                 result = cls.bulk_orders_cancel.pop(_id, None)

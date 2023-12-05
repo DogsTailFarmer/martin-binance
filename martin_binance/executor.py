@@ -110,52 +110,44 @@ def f2d(_f: float) -> Decimal:
     return Decimal(str(_f))
 
 
-def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwargs) -> ():
-    """
-    Numerical solution of the equation, value = fn(x)
-    :param fn: Function
-    :param value: Specified value
-    :param x: Predict of the search value
-    :param max_err:
-    :param max_tries:
-    :param kwargs: Function parameters as {}
-    :return: fine x
-    """
-    delta = f2d(0.000001)
+def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwargs) -> (Decimal, str):
+    delta = Decimal('0.000001')
     solves = []
     tries = 0
     _x = x
-    _err = []
+    _err = set()
 
     def dx(_fn, _x, _delta, **_kwargs):
         return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
 
-    while 1:
+    while tries < max_tries * 2:
         tries += 1
         err = fn(x, **kwargs) - value
-        # print(f"tries: {tries}, x: {x}, fn: {fn(x, **kwargs)}, err: {err}")
         if err >= 0 and abs(err) <= max_err:
             return x, f"In {tries} attempts the best solution was found!"
-        correction = (delta * tries) if err < 0 and _err.count(err) else O_DEC
+
+        correction = delta * tries if err < 0 and err not in _err else Decimal('0')
+
         if err >= 0:
             solves.append((err, x))
+
         slope = dx(fn, x, delta, **kwargs)
+
         if slope != 0:
-            x -= err/slope
+            x -= err / slope
             x = max(_x + delta * tries, x + correction)
         else:
             delta *= 10
             if delta > 1:
                 break
-        # print(f"tries: {tries}, delta: {delta}, correction: {correction}, slope: {slope}")
-        if (_err.count(err) or tries > max_tries) and len(solves) > max_tries:
-            solves.sort(key=lambda a: (a[0], a[1]), reverse=False)
-            # print("\n".join(f"delta: {k}\t result: {v}" for k, v in solves))
-            return solves[0][1], 'Solve return the best of the right value ;-)'
-        if tries > max_tries * 2:
-            break
-        _err.append(err)
-    return O_DEC, "\n".join(f"delta: {k}\tresult: {v}" for k, v in solves)
+
+        if (err in _err or tries > max_tries) and len(solves) > max_tries:
+            solves.sort(key=lambda a: (a[0], a[1]))
+            return solves[0][1], 'Solve returns the best of the right value ;-)'
+
+        _err.add(err)
+
+    return Decimal('0'), "\n".join(f"delta: {k}\tresult: {v}" for k, v in solves)
 
 
 class Orders:
@@ -679,7 +671,8 @@ class Strategy(StrategyBase):
                 if self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60*15:
                     self.message_log("Update TP order", color=Style.B_WHITE)
                     self.place_profit_order()
-                elif (self.orders_grid or self.orders_hold) and not self.part_amount:
+                elif self.heartbeat_counter % 15 == 0 \
+                        and (self.orders_grid or self.orders_hold) and not self.part_amount:
                     self.grid_update()
             if self.heartbeat_counter > 150:
                 self.heartbeat_counter = 0
@@ -1109,12 +1102,12 @@ class Strategy(StrategyBase):
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
             self.transfer_to_master(self.f_currency, any2str(ff))
         else:
-            ff = f2d(0)
+            ff = O_DEC
         if fs >= f2d(tcm.min_notional):
             self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
             self.transfer_to_master(self.s_currency, any2str(fs))
         else:
-            fs = f2d(0)
+            fs = O_DEC
         return ff, fs
 
     def start_process(self):
@@ -1515,20 +1508,13 @@ class Strategy(StrategyBase):
             self.place_profit_order()
 
     def calc_grid(self, over_price: Decimal, calc_avg_amount=True, **kwargs):
-        """
-        Calculate return average amount in second coin for grid orders with fixed initial parameters by default
-        :param over_price:
-        :param calc_avg_amount: False: Return Dict with prepared grid orders
-        :param kwargs:
-        :return:
-        """
         buy_side = kwargs.get('buy_side')
         depo = kwargs.get('depo')
         base_price = kwargs.get('base_price')
         amount_first_grid = kwargs.get('amount_first_grid')
         min_delta = kwargs.get('min_delta')
         amount_min = kwargs.get('amount_min')
-        #
+
         tcm = self.get_trading_capability_manager()
         delta_price = over_price * base_price / (100 * (self.order_q - 1))
         price_prev = base_price
@@ -1541,73 +1527,72 @@ class Strategy(StrategyBase):
         price_k = 1
         amount_last_grid = O_DEC
         orders = []
+
         for i in range(self.order_q):
             if LINEAR_GRID_K >= 0:
                 price_k = f2d(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
-            if buy_side:
-                price = base_price - i * delta_price * price_k
-            else:
-                price = base_price + i * delta_price * price_k
+            price = base_price - i * delta_price * price_k if buy_side else base_price + i * delta_price * price_k
             price = tcm.round_price(price, ROUND_HALF_EVEN)
-            if buy_side:
-                if i and price_prev - price < min_delta:
-                    price = price_prev - min_delta
-            else:
-                if i and price - price_prev < min_delta:
-                    price = price_prev + min_delta
+
+            if buy_side and i and price_prev - price < min_delta:
+                price = price_prev - min_delta
+            elif not buy_side and i and price - price_prev < min_delta:
+                price = price_prev + min_delta
+
             if buy_side:
                 price = max(price, tcm.get_min_price())
             else:
                 price = min(price, tcm.get_max_price())
+
             price_prev = price
+
             if i == 0:
                 amount_0 = depo * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
                 amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
                 depo_i = depo - amount
-                # print(f"calc_grid 0: {i}, amount: {amount}, price: {price}, depo: {depo}, depo_i: {depo_i}")
             elif i < self.order_q - 1:
                 amount = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
-                # print(f"calc_grid 1: {i}, amount: {amount}, price: {price}")
             else:
                 amount = amount_last_grid
                 rounding = ROUND_FLOOR
-                # print(f"calc_grid last: {i}, amount: {amount}, price: {price}")
+
             if buy_side:
                 amount /= price
+
             amount = self.round_truncate(amount, base=True, _rounding=rounding)
             total_grid_amount_f += amount
             total_grid_amount_s += amount * price
-            # Check last order volume
+
             if i == self.order_q - 2:
                 amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
                 if amount_last_grid < amount_min * (price if buy_side else 1):
-                    # Skip last order
                     total_grid_amount_f -= amount
                     total_grid_amount_s -= amount * price
                     amount += amount_last_grid / (price if buy_side else 1)
                     amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
                     last_order_pass = True
+
             if buy_side:
                 avg_amount += amount
             else:
                 avg_amount += amount * price
+
             if not calc_avg_amount:
                 orders.append((i, amount, price))
-            # print(f"calc_grid: {i}, amount: {amount}, price: {price}")
+
             if last_order_pass:
                 total_grid_amount_f += amount
                 total_grid_amount_s += amount * price
                 break
-        # print(f"calc_grid: total_grid_amount_f: {total_grid_amount_f}, total_grid_amount_s: {total_grid_amount_s}")
-        # print(f"calc_grid: order_q: {self.order_q}, over_price: {float(over_price):f}, avg_amount: {avg_amount}")
+
         if calc_avg_amount:
             return avg_amount
-        res = {
+
+        return {
             'total_grid_amount_f': total_grid_amount_f,
             'total_grid_amount_s': total_grid_amount_s,
             'orders': orders
         }
-        return res
 
     def grid_update(self):
         do_it = False

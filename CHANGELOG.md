@@ -1,3 +1,8 @@
+## 2.0.4 - 2023-12-xx
+### Update
+* `funds_rate_exporter.py`: average CPU load present as percent value at 1 minute period
+* `solve()`, `calc_grid()`: optimized
+
 ## 2.0.3 - 2023-12-01
 ### Fix
 * Backtesting, Simulation mode

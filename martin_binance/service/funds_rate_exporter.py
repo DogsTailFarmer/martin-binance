@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "2.0.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -16,7 +16,6 @@ import time
 import sqlite3
 import psutil
 from requests import Session
-import json
 import toml
 import platform
 from prometheus_client import start_http_server, Gauge
@@ -109,15 +108,16 @@ KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
 
 def get_rate(_currency_rate) -> {}:
     global request_delay
-    # Replace info
-    replace = {'UST': 'USDT',
-               'IOT': 'MIOTA',
-               'LUNA': 'LUNC',
-               'LUNA2': 'LUNA'
-               }
+    replace = {
+        'UST': 'USDT',
+        'IOT': 'MIOTA',
+        'LUNA': 'LUNC',
+        'LUNA2': 'LUNA'
+    }
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
     session = Session()
     session.headers.update(headers)
+
     for currency in list(_currency_rate.keys()):
         _currency = replace.get(currency, currency)
         price = -1
@@ -135,9 +135,10 @@ def get_rate(_currency_rate) -> {}:
                 except Exception as er:
                     print(er)
             if response.status_code == 200:
-                data = json.loads(response.text)
+                data = response.json()
                 price = data['data'][0]['quote'][_currency]['price'] or -1
-            _currency_rate[currency] = price
+
+        _currency_rate[currency] = price
         time.sleep(request_delay)
     return _currency_rate
 
@@ -350,7 +351,7 @@ if __name__ == '__main__':
             CURRENCY_RATE_LAST_TIME = db_handler(sqlite_connection, currency_rate, CURRENCY_RATE_LAST_TIME)
         except sqlite3.Error as error:
             print("DB operational error:", error)
-        VPS_CPU.labels(VPS_NAME).set(psutil.getloadavg()[1])
+        VPS_CPU.labels(VPS_NAME).set(100 * psutil.getloadavg()[0] / psutil.cpu_count())
         #
         memory = psutil.virtual_memory()
         swap = psutil.swap_memory()
