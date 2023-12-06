@@ -58,7 +58,7 @@ save_trade_queue = asyncio.Queue()
 KLINES_INIT = [Interval.ONE_MINUTE, Interval.FIFTY_MINUTES, Interval.ONE_HOUR]
 KLINES_LIM = 50  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and ms.LOAD_LAST_STATE = 0
-TRADES_LIST_LIMIT = 100
+TRADES_LIST_LIMIT = 50
 HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
@@ -729,7 +729,6 @@ def last_state_update(cls, last_state):
     last_state[MS_ORDER_ID] = json.dumps(cls.order_id)
     last_state['ms_start_time_ms'] = json.dumps(cls.start_time_ms)
     last_state[MS_ORDERS] = jsonpickle.encode(cls.orders, keys=True)
-    last_state['ms_trades'] = jsonpickle.encode(cls.trades)
 
 
 async def save_asset():
@@ -1086,7 +1085,6 @@ async def buffered_orders():
                 cls.order_id = json.loads(cls.last_state.pop(MS_ORDER_ID,
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
-                cls.trades = jsonpickle.decode(cls.last_state.pop('ms_trades', '[]'))
                 cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
                 #
                 cls.strategy.restore_strategy_state(cls.last_state, restore=False)
@@ -1737,7 +1735,6 @@ def update_class_var(_session):
 def restore_state_before_backtesting(cls):
     saved_state = load_file(cls.state_file)
     cls.order_id = json.loads(saved_state.pop(MS_ORDER_ID, "0"))
-    cls.trades = jsonpickle.decode(saved_state.pop('ms_trades', '[]'))
     cls.orders = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
     orders = json.loads(saved_state.get('orders'))
     # Restore initial state

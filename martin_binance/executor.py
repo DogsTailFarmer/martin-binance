@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -120,33 +120,28 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
     def dx(_fn, _x, _delta, **_kwargs):
         return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
 
-    while tries < max_tries * 2:
+    while tries <= max_tries:
         tries += 1
         err = fn(x, **kwargs) - value
         if err >= 0 and abs(err) <= max_err:
             return x, f"In {tries} attempts the best solution was found!"
-
-        correction = delta * tries if err < 0 and err not in _err else Decimal('0')
-
         if err >= 0:
             solves.append((err, x))
-
+        if err in _err and len(solves) > max_tries / 2:
+            solves.sort(key=lambda a: (a[0], a[1]))
+            if solves[0][0] <= value / 100:
+                return solves[0][1], 'Solve returns the best of the right value ;-)'
+            break
         slope = dx(fn, x, delta, **kwargs)
-
         if slope != 0:
             x -= err / slope
+            correction = delta * tries if err < 0 and err in _err else Decimal('0')
             x = max(_x + delta * tries, x + correction)
         else:
             delta *= 10
-            if delta > 1:
+            if delta >= 1:
                 break
-
-        if (err in _err or tries > max_tries) and len(solves) > max_tries:
-            solves.sort(key=lambda a: (a[0], a[1]))
-            return solves[0][1], 'Solve returns the best of the right value ;-)'
-
         _err.add(err)
-
     return Decimal('0'), "\n".join(f"delta: {k}\tresult: {v}" for k, v in solves)
 
 
