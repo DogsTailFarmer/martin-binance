@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.4"
+__version__ = "2.0.4b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -111,7 +111,7 @@ def f2d(_f: float) -> Decimal:
 
 
 def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwargs) -> (Decimal, str):
-    delta = Decimal('0.000001')
+    delta = max_err
     solves = []
     tries = 0
     _x = x
@@ -124,25 +124,28 @@ def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwar
         tries += 1
         err = fn(x, **kwargs) - value
         if err >= 0 and abs(err) <= max_err:
-            return x, f"In {tries} attempts the best solution was found!"
+            return x, f"In {tries} attempts the right solution was found!"
         if err >= 0:
             solves.append((err, x))
-        if err in _err and len(solves) > max_tries / 2:
-            solves.sort(key=lambda a: (a[0], a[1]))
-            if solves[0][0] <= value / 100:
-                return solves[0][1], 'Solve returns the best of the right value ;-)'
-            break
+
         slope = dx(fn, x, delta, **kwargs)
         if slope != 0:
             x -= err / slope
-            correction = delta * tries if err < 0 and err in _err else Decimal('0')
-            x = max(_x + delta * tries, x + correction)
         else:
             delta *= 10
-            if delta >= 1:
+            if delta > 1:
                 break
+
+        correction = delta * tries if err < 0 and err in _err else O_DEC
+        x = max(_x + delta * tries, x + correction)
+
         _err.add(err)
-    return Decimal('0'), "\n".join(f"delta: {k}\tresult: {v}" for k, v in solves)
+
+    solves.sort(key=lambda a: (a[0], a[1]))
+    if solves and solves[0][0] <= value / 100:
+        return solves[0][1], 'Solve returns the best of the right value ;-)'
+
+    return O_DEC, "Can't calculate over price"
 
 
 class Orders:
@@ -1760,7 +1763,7 @@ class Strategy(StrategyBase):
             q_max -= 1
         #
         self.order_q = max(q_max if order_q > q_max else order_q, 1)
-        # Correction over_price after change quantity of orders
+        # Correction over_price after change orders count
         if self.reverse and self.order_q > 1:
             over_price = self.calc_over_price(buy_side,
                                               depo,
@@ -1882,17 +1885,19 @@ class Strategy(StrategyBase):
                       'amount_first_grid': amount_first_grid,
                       'min_delta': min_delta,
                       'amount_min': amount_min}
+            order_q = self.order_q
             while True:
                 over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
                 if over_price or self.order_q <= GRID_MAX_COUNT:
                     break
                 self.order_q -= 1
 
-            self.message_log(msg)
             if over_price == 0:
-                self.message_log("Can't calculate over price for reverse cycle,"
-                                 " use previous or over_price_coarse * 2", log_level=LogLevel.ERROR)
+                self.message_log(f"{msg}, use previous or over_price_coarse * 2", log_level=LogLevel.ERROR)
                 over_price = over_price_previous or 2 * over_price_coarse
+                self.order_q = order_q
+            else:
+                self.message_log(msg)
         else:
             over_price = over_price_coarse
         return over_price
