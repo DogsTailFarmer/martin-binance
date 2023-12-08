@@ -1,7 +1,8 @@
 ## 2.0.4 - 2023-12-xx
 ### Update
 * `funds_rate_exporter.py`: average CPU load present as percent value at 1 minute period
-* `solve()`, `calc_grid()`: optimized
+* `solve()`, `calc_grid()`: use [scipy.optimize.minimize](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.minimize.html#scipy-optimize-minimize)
+for calculation Reverse cycle over price
 * optimize CPU loads at last_state_update()
 
 ## 2.0.3 - 2023-12-01

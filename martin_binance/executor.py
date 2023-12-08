@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.4b3"
+__version__ = "2.0.4b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -21,6 +21,8 @@ import simplejson as json
 from datetime import datetime
 import os
 import psutil
+import numpy as np
+from scipy.optimize import minimize
 
 from martin_binance import DB_FILE
 from martin_binance.db_utils import db_management, save_to_db
@@ -110,42 +112,13 @@ def f2d(_f: float) -> Decimal:
     return Decimal(str(_f))
 
 
-def solve(fn, value: Decimal, x: Decimal, max_err: Decimal, max_tries=50, **kwargs) -> (Decimal, str):
-    delta = max_err
-    solves = []
-    tries = 0
-    _x = x
-    _err = set()
-
-    def dx(_fn, _x, _delta, **_kwargs):
-        return (_fn(_x + _delta, **_kwargs) - _fn(_x, **_kwargs)) / _delta
-
-    while tries <= max_tries:
-        tries += 1
-        err = fn(x, **kwargs) - value
-        if err >= 0 and abs(err) <= max_err:
-            return x, f"In {tries} attempts the right solution was found!"
-        if err >= 0:
-            solves.append((err, x))
-
-        slope = dx(fn, x, delta, **kwargs)
-        if slope != 0:
-            x -= err / slope
-        else:
-            delta *= 10
-            if delta > 1:
-                break
-
-        correction = delta * tries if err < 0 and err in _err else O_DEC
-        x = max(_x + delta * tries, x + correction)
-
-        _err.add(err)
-
-    solves.sort(key=lambda a: (a[0], a[1]))
-    if solves and solves[0][0] <= value / 100:
-        return solves[0][1], 'Solve returns the best of the right value ;-)'
-
-    return O_DEC, "Can't calculate over price"
+def solve(fn, value: Decimal, x: Decimal, **kwargs) -> (Decimal, str):
+    def _fn(_x):
+        return abs(float(value) - fn(_x, **kwargs))
+    res = minimize(_fn, x0=np.array([float(x)]), method='Nelder-Mead')
+    if res.success:
+        return f2d(res.x[0]), f"{res.message} Number of iterations: {res.nit}"
+    return O_DEC, res.message
 
 
 class Orders:
@@ -1506,6 +1479,10 @@ class Strategy(StrategyBase):
             self.place_profit_order()
 
     def calc_grid(self, over_price: Decimal, calc_avg_amount=True, **kwargs):
+        if isinstance(over_price, np.ndarray):
+            over_price = float(over_price[0])
+        over_price = f2d(over_price)
+
         buy_side = kwargs.get('buy_side')
         depo = kwargs.get('depo')
         base_price = kwargs.get('base_price')
@@ -1584,7 +1561,7 @@ class Strategy(StrategyBase):
                 break
 
         if calc_avg_amount:
-            return avg_amount
+            return float(avg_amount)
 
         return {
             'total_grid_amount_f': total_grid_amount_f,
@@ -1885,17 +1862,12 @@ class Strategy(StrategyBase):
                       'amount_first_grid': amount_first_grid,
                       'min_delta': min_delta,
                       'amount_min': amount_min}
-            order_q = self.order_q
-            while True:
-                over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, max_err, **params)
-                if over_price or self.order_q <= GRID_MAX_COUNT:
-                    break
-                self.order_q -= 1
+
+            over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
 
             if over_price == 0:
                 self.message_log(f"{msg}, use previous or over_price_coarse * 2", log_level=LogLevel.ERROR)
                 over_price = over_price_previous or 2 * over_price_coarse
-                self.order_q = order_q
             else:
                 self.message_log(msg)
         else:
