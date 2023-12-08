@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.4b4"
+__version__ = "2.0.4b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2232,15 +2232,7 @@ class Strategy(StrategyBase):
                 # Ended grid order, calculate depo and Reverse
                 self.reverse_after_grid_ending()
         else:
-            if self.orders_save and not self.restore_orders:
-                self.start_hold = False
-                self.restore_orders = True
-                self.message_log("Restore deleted and unplaced grid orders")
-                try:
-                    Strategy.bulk_orders_cancel.clear()
-                except AttributeError:
-                    self.message_log("grid_handler: AttributeError raised", LogLevel.WARNING)
-
+            self.restore_orders_fire()
             if after_full_fill and self.orders_hold and self.order_q_placed and not self.grid_remove:
                 # PLace one hold grid order and remove it from hold list
                 _, _buy, _amount, _price = self.orders_hold.get_first()
@@ -2260,6 +2252,17 @@ class Strategy(StrategyBase):
                 self.after_filled_tp(one_else_grid=True)
             else:
                 self.place_profit_order(by_market)
+
+    def restore_orders_fire(self, _start_hold=True):
+        if self.orders_save and not self.restore_orders:
+            if _start_hold:
+                self.start_hold = False
+            self.restore_orders = True
+            self.message_log("Restore deleted and unplaced grid orders")
+            try:
+                Strategy.bulk_orders_cancel.clear()
+            except AttributeError:
+                self.message_log("grid_handler: AttributeError raised", LogLevel.WARNING)
 
     def convert_tp(self, _amount_f: Decimal, _amount_s: Decimal, _update_sum_amount=True) -> bool:
         self.message_log(f"Converted TP amount to grid: first: {_amount_f}, second: {_amount_s}")
@@ -2282,6 +2285,8 @@ class Strategy(StrategyBase):
                          tlg=True)
         if self.check_min_amount(amount=_amount_f):
             self.message_log("Place additional grid orders and replace TP", tlg=True)
+            self.start_hold = False
+            self.restore_orders_fire(_start_hold=False)
             self.tp_hold_additional = True
             self.place_grid(self.cycle_buy,
                             amount,
@@ -2291,6 +2296,8 @@ class Strategy(StrategyBase):
             return True
         if self.orders_hold:
             self.message_log("Small amount was added to last held grid order", tlg=True)
+            self.start_hold = False
+            self.restore_orders_fire(_start_hold=False)
             _order = list(self.orders_hold.get_last())
             _order[2] += (amount / _order[3]) if self.cycle_buy else amount
             self.orders_hold.remove(_order[0])
@@ -2299,6 +2306,8 @@ class Strategy(StrategyBase):
 
         if self.orders_grid:
             self.message_log("Small amount was added to last grid order", tlg=True)
+            self.start_hold = False
+            self.restore_orders_fire(_start_hold=False)
             _order = list(self.orders_grid.get_last())
             _order_updated = self.get_buffered_open_order(_order[0])
             _order[2] = _order_updated.remaining_amount + ((amount / _order[3]) if self.cycle_buy else amount)
