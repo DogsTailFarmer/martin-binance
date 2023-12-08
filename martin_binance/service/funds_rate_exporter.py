@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.4b2"
+__version__ = "2.0.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -123,7 +123,6 @@ def get_rate(_currency_rate) -> {}:
     for currency in _currency_rate:
         _currency = replace.get(currency, currency)
         price = -1
-        '''
         parameters = {'amount': 1, 'symbol': 'USD', 'convert': _currency}
         try:
             response = session.get(URL, params=parameters)
@@ -140,9 +139,8 @@ def get_rate(_currency_rate) -> {}:
             if response.status_code == 200:
                 data = response.json()
                 price = data['data'][0]['quote'][_currency]['price'] or -1
-        '''
         _currency_rate[currency] = price
-        # time.sleep(request_delay)
+        time.sleep(request_delay)
     return _currency_rate
 
 
