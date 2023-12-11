@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.4.post2"
+__version__ = "2.0.4.post3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1690,7 +1690,7 @@ class Strategy(StrategyBase):
             except statistics.StatisticsError as ex:
                 self.message_log(f"Can't get ATR value: {ex}, use default PROFIT value", LogLevel.WARNING)
                 profit_max = PROFIT
-            self.message_log(f"Profit max for first order volume is set {float(profit_max):f}%", LogLevel.DEBUG)
+            self.message_log(f"Profit max for first order set {float(profit_max):f}%", LogLevel.DEBUG)
             k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             amount_first_grid = self.round_truncate(amount_first_grid, base=True, _rounding=ROUND_CEILING)
@@ -2007,6 +2007,7 @@ class Strategy(StrategyBase):
             self.message_log("Strategy have a negative cycle result, STOP", log_level=LogLevel.CRITICAL)
             self.command = 'end'
             self.tp_was_filled = ()
+            self.grid_remove = None
             self.cancel_grid(cancel_all=True)
         else:
             self.message_log("Restart after filling take profit order", tlg=False)
@@ -2246,16 +2247,11 @@ class Strategy(StrategyBase):
         self.start_hold = False
         if self.orders_save:
             self.grid_remove = False
+            Strategy.bulk_orders_cancel.clear()
             self.restore_orders = True
             self.message_log("Restore canceled grid orders")
         else:
             self.grid_remove = None
-        try:
-            Strategy.bulk_orders_cancel.clear()
-        except AttributeError:
-            self.message_log("restore_orders_fire: AttributeError raised", LogLevel.WARNING)
-        else:
-            self.message_log("restore_orders_fire: Bulk cancel orders result cleared", LogLevel.INFO)
 
     def convert_tp(self, _amount_f: Decimal, _amount_s: Decimal, _update_sum_amount=True) -> bool:
         self.message_log(f"Converted TP amount to grid: first: {_amount_f}, second: {_amount_s}")
@@ -2267,12 +2263,19 @@ class Strategy(StrategyBase):
         if self.cycle_buy:
             amount = _amount_s
             if self.reverse:
-                reverse_target_amount = self.reverse_target_amount * _amount_f / self.reverse_init_amount
+                reverse_target_amount = self.round_truncate(
+                    self.reverse_target_amount * _amount_f / self.reverse_init_amount,
+                    base=True,
+                    _rounding=ROUND_CEILING
+                )
         else:
             amount = _amount_f
             if self.reverse:
-                reverse_target_amount = self.reverse_target_amount * _amount_s / self.reverse_init_amount
-
+                reverse_target_amount = self.round_truncate(
+                    self.reverse_target_amount * _amount_s / self.reverse_init_amount,
+                    base=False,
+                    _rounding=ROUND_CEILING
+                )
         self.message_log(f"For additional {'Buy' if self.cycle_buy else 'Sell'}"
                          f"{' Reverse' if self.reverse else ''} grid amount: {amount}",
                          tlg=True)
@@ -2643,6 +2646,7 @@ class Strategy(StrategyBase):
                     self.grid_handler()
                 else:
                     self.restore_orders = False
+                    self.grid_remove = None
                     self.cancel_grid(cancel_all=True)
             else:
                 self.message_log('Wild order, do not know it', tlg=True)
@@ -2771,6 +2775,7 @@ class Strategy(StrategyBase):
                     self.after_filled_tp(one_else_grid=True)
                 else:
                     self.restore_orders = False
+                    self.grid_remove = None
                     self.cancel_grid(cancel_all=True)
             else:
                 self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR,
