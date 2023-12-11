@@ -1,3 +1,7 @@
+## 2.0.4.post1 - 2023-12-xx
+### Update
+* Some minor changes
+
 ## 2.0.4 - 2023-12-08
 ### Update
 * `funds_rate_exporter.py`: average CPU load present as percent value at 1 minute period

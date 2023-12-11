@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.4"
+__version__ = "2.0.4.post2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1480,8 +1480,7 @@ class Strategy(StrategyBase):
 
     def calc_grid(self, over_price: Decimal, calc_avg_amount=True, **kwargs):
         if isinstance(over_price, np.ndarray):
-            over_price = float(over_price[0])
-        over_price = f2d(over_price)
+            over_price = Decimal(str(over_price[0]))
 
         buy_side = kwargs.get('buy_side')
         depo = kwargs.get('depo')
@@ -1671,7 +1670,7 @@ class Strategy(StrategyBase):
         elif self.tp_order_id and self.tp_cancel:
             self.cancel_order_id = self.tp_order_id
             self.cancel_order_exp(self.tp_order_id)
-            self.message_log('Try cancel TPO, then Start', color=Style.B_WHITE)
+            self.message_log('Try cancel TP, then Start', color=Style.B_WHITE)
 
     def set_trade_conditions(self,
                              buy_side: bool,
@@ -1684,10 +1683,6 @@ class Strategy(StrategyBase):
                              grid_update: bool = False) -> Decimal:
         tcm = self.get_trading_capability_manager()
         step_size = tcm.get_minimal_amount_change()
-        self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f},"
-                         f" base_price: {base_price}, reverse_target_amount: {reverse_target_amount},"
-                         f" amount_min: {amount_min}, step_size: {step_size}, delta_min: {delta_min}",
-                         LogLevel.DEBUG)
         depo_c = (depo / base_price) if buy_side else depo
         if not additional_grid and not grid_update and not GRID_ONLY and 0 < PROFIT_MAX < 100:
             try:
@@ -1721,13 +1716,15 @@ class Strategy(StrategyBase):
                 tbb = bb.get('tbb')
                 over_price = 100 * (tbb - base_price) / base_price
         self.over_price = max(over_price, OVER_PRICE)
-        # Adapt grid orders quantity for current over price
+        # Adapt grid orders quantity for new over price
         order_q = int(self.over_price * ORDER_Q / OVER_PRICE)
         amnt_2 = amount_min * self.martin
         q_max = int(math.log(1 + (depo_c - amount_first_grid) * self.martin * (self.martin - 1) / amnt_2, self.martin))
-        self.message_log(f"set_trade_conditions: depo: {float(depo):f}, order_q: {order_q},"
-                         f" amount_first_grid: {amount_first_grid:f}, amount_2: {amnt_2:f},"
-                         f" q_max: {q_max}, coarse overprice: {float(self.over_price):f}", LogLevel.DEBUG)
+        self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f},"
+                         f" base_price: {base_price}, reverse_target_amount: {reverse_target_amount},"
+                         f" amount_min: {amount_min}, step_size: {step_size}, delta_min: {delta_min},"
+                         f" amount_first_grid: {amount_first_grid:f}, coarse overprice: {float(self.over_price):f}",
+                         LogLevel.DEBUG)
         while q_max > ORDER_Q or (GRID_ONLY and q_max > 1):
             delta_price = self.over_price * base_price / (100 * (q_max - 1))
             if LINEAR_GRID_K >= 0:
@@ -1841,19 +1838,11 @@ class Strategy(StrategyBase):
         :param over_price_previous:
         :return: Decimal calculated over price
         """
-        self.message_log(f"calc_over_price: buy_side: {buy_side}, depo: {depo:.6f}, base_price: {base_price:f},"
-                         f" reverse_target_amount: {reverse_target_amount}, order_q: {self.order_q},"
-                         f" amount_first_grid: {amount_first_grid}",
-                         log_level=LogLevel.DEBUG)
         if buy_side:
             over_price_coarse = 100 * (base_price - (depo / reverse_target_amount)) / base_price
-            max_err = self.round_truncate(f2d(0.00000001), base=True, _rounding=ROUND_CEILING)
         else:
             over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
-            max_err = self.round_truncate(f2d(0.00000001), base=False, _rounding=ROUND_CEILING)
-        max_err *= 10
-        self.message_log(f"over_price coarse: {float(over_price_coarse):.6f}, max_err: {max_err}",
-                         log_level=LogLevel.DEBUG)
+
         if self.order_q > 1 and over_price_coarse > 0:
             # Fine calculate over_price for target return amount
             params = {'buy_side': buy_side,
@@ -1866,7 +1855,7 @@ class Strategy(StrategyBase):
             over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
 
             if over_price == 0:
-                self.message_log(f"{msg}, use previous or over_price_coarse * 2", log_level=LogLevel.ERROR)
+                self.message_log(f"{msg}, use previous or over_price_coarse * 2", log_level=LogLevel.WARNING)
                 over_price = over_price_previous or 2 * over_price_coarse
             else:
                 self.message_log(msg)
@@ -2247,22 +2236,26 @@ class Strategy(StrategyBase):
                 if waiting_order_id:
                     self.orders_init.append_order(waiting_order_id, _buy, _amount, _price)
                     del self.orders_hold.orders_list[0]
-            # Exist filled but non processing TP
             if self.tp_was_filled:
+                # Exist filled but non processing TP
                 self.after_filled_tp(one_else_grid=True)
             else:
                 self.place_profit_order(by_market)
 
-    def restore_orders_fire(self, _start_hold=True):
-        if self.orders_save and not self.restore_orders:
-            if _start_hold:
-                self.start_hold = False
+    def restore_orders_fire(self):
+        self.start_hold = False
+        if self.orders_save:
+            self.grid_remove = False
             self.restore_orders = True
-            self.message_log("Restore deleted and unplaced grid orders")
-            try:
-                Strategy.bulk_orders_cancel.clear()
-            except AttributeError:
-                self.message_log("grid_handler: AttributeError raised", LogLevel.WARNING)
+            self.message_log("Restore canceled grid orders")
+        else:
+            self.grid_remove = None
+        try:
+            Strategy.bulk_orders_cancel.clear()
+        except AttributeError:
+            self.message_log("restore_orders_fire: AttributeError raised", LogLevel.WARNING)
+        else:
+            self.message_log("restore_orders_fire: Bulk cancel orders result cleared", LogLevel.INFO)
 
     def convert_tp(self, _amount_f: Decimal, _amount_s: Decimal, _update_sum_amount=True) -> bool:
         self.message_log(f"Converted TP amount to grid: first: {_amount_f}, second: {_amount_s}")
@@ -2285,8 +2278,7 @@ class Strategy(StrategyBase):
                          tlg=True)
         if self.check_min_amount(amount=_amount_f):
             self.message_log("Place additional grid orders and replace TP", tlg=True)
-            self.start_hold = False
-            self.restore_orders_fire(_start_hold=False)
+            self.restore_orders_fire()
             self.tp_hold_additional = True
             self.place_grid(self.cycle_buy,
                             amount,
@@ -2296,8 +2288,7 @@ class Strategy(StrategyBase):
             return True
         if self.orders_hold:
             self.message_log("Small amount was added to last held grid order", tlg=True)
-            self.start_hold = False
-            self.restore_orders_fire(_start_hold=False)
+            self.restore_orders_fire()
             _order = list(self.orders_hold.get_last())
             _order[2] += (amount / _order[3]) if self.cycle_buy else amount
             self.orders_hold.remove(_order[0])
@@ -2306,8 +2297,7 @@ class Strategy(StrategyBase):
 
         if self.orders_grid:
             self.message_log("Small amount was added to last grid order", tlg=True)
-            self.start_hold = False
-            self.restore_orders_fire(_start_hold=False)
+            self.restore_orders_fire()
             _order = list(self.orders_grid.get_last())
             _order_updated = self.get_buffered_open_order(_order[0])
             _order[2] = _order_updated.remaining_amount + ((amount / _order[3]) if self.cycle_buy else amount)
@@ -2615,7 +2605,6 @@ class Strategy(StrategyBase):
                 amount_first += i.amount
                 amount_second += i.amount * i.price
                 self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
-        # Retreat of courses
         self.avg_rate = amount_second / amount_first
         self.message_log(f"Executed amount: First: {amount_first}, Second: {amount_second}, price: {self.avg_rate}")
         if update.status in (OrderUpdate.FILLED, OrderUpdate.ADAPTED_AND_FILLED):
@@ -2623,7 +2612,6 @@ class Strategy(StrategyBase):
                 self.shift_grid_threshold = None
             if self.orders_grid.exist(update.original_order.id):
                 self.ts_grid_update = self.get_time()
-                # Remove grid order with =id from order list
                 self.orders_grid.remove(update.original_order.id)
                 if self.orders_save:
                     self.orders_save.remove(update.original_order.id)
