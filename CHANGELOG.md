@@ -1,5 +1,7 @@
-## 2.0.4.post1 - 2023-12-xx
+## 2.0.5 - 2023-12-11
 ### Update
+* Refining restoration of grid orders after their execution during the grid shift process
+* Up requirements for exchanges-wrapper==1.4.2
 * Some minor changes
 
 ## 2.0.4 - 2023-12-08

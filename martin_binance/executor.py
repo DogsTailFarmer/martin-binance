@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.4.post3"
+__version__ = "2.0.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2688,7 +2688,8 @@ class Strategy(StrategyBase):
                 if _order := self.orders_save.get_by_id(update.original_order.id):
                     self.orders_save.remove(update.original_order.id)
                     _order['amount'] -= amount_first
-                    self.orders_save.orders_list.append(_order)
+                    if _order['amount'] > 0:
+                        self.orders_save.orders_list.append(_order)
                 # Increase trade result and if next fill order is grid decrease trade result
                 self.sum_amount_first += amount_first_fee
                 self.sum_amount_second += amount_second_fee
