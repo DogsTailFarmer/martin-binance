@@ -1,3 +1,7 @@
+## 2.0.6 - 2023-12-12
+### Update
+* Up requirements for exchanges-wrapper==1.4.3 [fixed #42](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/42)
+
 ## 2.0.5 - 2023-12-11
 ### Update
 * Refining restoration of grid orders after their execution during the grid shift process
