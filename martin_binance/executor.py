@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.5"
+__version__ = "2.0.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -579,8 +579,7 @@ class Strategy(StrategyBase):
                     elif self.tp_order_hold.get('timestamp'):
                         time_diff = int(self.get_time() - self.tp_order_hold['timestamp'])
                         if time_diff > HOLD_TP_ORDER_TIMEOUT:
-                            self.message_log(f"Exist hold TP order for"
-                                             f" {'Sell' if self.cycle_buy else 'Buy'} {self.tp_order_hold['amount']}"
+                            self.message_log(f"Exist hold TP order on {self.tp_order_hold['amount']}"
                                              f" {self.f_currency if self.cycle_buy else self.s_currency}\n"
                                              f"Available first:{fund_f} {self.f_currency}\n"
                                              f"Available second:{fund_s} {self.s_currency}\n"

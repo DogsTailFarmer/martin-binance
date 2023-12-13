@@ -1,3 +1,7 @@
+## 2.0.7 - 2023-12-13
+### Update
+* Up requirements for exchanges-wrapper==1.4.4
+
 ## 2.0.6 - 2023-12-12
 ### Update
 * Up requirements for exchanges-wrapper==1.4.3 [fixed #42](https://github.com/DogsTailFarmer/exchanges-wrapper/issues/42)
