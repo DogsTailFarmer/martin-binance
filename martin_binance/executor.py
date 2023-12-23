@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.7"
+__version__ = "2.1.0b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -256,7 +256,7 @@ class Strategy(StrategyBase):
         "avg_rate",
         #
         "grid_hold",
-        "start_hold",
+        "cancel_grid_hold",
         "initial_first",
         "initial_second",
         "initial_reverse_first",
@@ -347,7 +347,7 @@ class Strategy(StrategyBase):
         self.avg_rate = O_DEC  # - Flow average rate for trading pair
         #
         self.grid_hold = {}  # - Save for later create grid orders
-        self.start_hold = False  # - Hold start if exist not accepted grid order(s)
+        self.cancel_grid_hold = False  # - Hold start if exist not accepted grid order(s)
         self.initial_first = O_DEC  # + Use if balance replenishment delay
         self.initial_second = O_DEC  # + Use if balance replenishment delay
         self.initial_reverse_first = O_DEC  # + Use if balance replenishment delay
@@ -2243,7 +2243,7 @@ class Strategy(StrategyBase):
                 self.place_profit_order(by_market)
 
     def restore_orders_fire(self):
-        self.start_hold = False
+        self.cancel_grid_hold = False
         if self.orders_save:
             self.grid_remove = False
             Strategy.bulk_orders_cancel.clear()
@@ -2334,7 +2334,7 @@ class Strategy(StrategyBase):
         if self.grid_remove:
             if self.orders_init:
                 # Exist not accepted grid order(s), wait msg from exchange
-                self.start_hold = True
+                self.cancel_grid_hold = True
             elif self.orders_grid:
                 # Sequential removal orders from grid and make this 'atomic'
                 # - on_cancel_order_success: save canceled order to orders_save
@@ -2801,9 +2801,9 @@ class Strategy(StrategyBase):
                                 self.message_log('All grid orders place successfully', color=Style.B_WHITE)
                         elif not self.order_q_placed and not self.shift_grid_threshold:
                             self.place_grid_part()
-                        if self.start_hold:
-                            self.message_log('Release hold Start, continue remove grid orders', color=Style.B_WHITE)
-                            self.start_hold = False
+                        if self.cancel_grid_hold:
+                            self.message_log('Continue remove grid orders', color=Style.B_WHITE)
+                            self.cancel_grid_hold = False
                             self.cancel_grid()
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
@@ -2839,6 +2839,10 @@ class Strategy(StrategyBase):
             if self.orders_init.exist(place_order_id):
                 _order = self.orders_init.get_by_id(place_order_id)
                 self.orders_init.remove(place_order_id)
+                if self.cancel_grid_hold:
+                    self.message_log('Continue remove grid orders', color=Style.B_WHITE)
+                    self.cancel_grid_hold = False
+                    self.cancel_grid()
                 waiting_order_id = self.place_limit_order_check(
                     _order['buy'],
                     _order['amount'],

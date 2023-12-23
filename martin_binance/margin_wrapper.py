@@ -19,9 +19,10 @@ import random
 import traceback
 import pandas as pd
 import shutil
-import psutil
 import csv
 import queue
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from colorama import init as color_init
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
@@ -63,12 +64,13 @@ HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
 TRY_LIMIT = 30
+PYARROW_BATCH_BUFFER_SIZE = 32  # Rows
 
 logger = logging.getLogger('logger')
 color_init()
 
 ORDER_BOOK_PKL = "order_book.pkl"
-TICKER_PKL = "ticker.pkl"
+TICKER_PKL = "ticker.parquet"
 MS_ORDER_ID = 'ms.order_id'
 MS_ORDERS = 'ms.orders'
 EQUAL_STR = "================================================================"
@@ -414,7 +416,8 @@ class OrderBook:
 class StrategyBase:
     __slots__ = (
         "time_operational",
-        "s_ticker",
+        "s_ticker_writer",
+        "s_ticker_pylist",
         "s_order_book",
         "klines",
         "candles",
@@ -463,7 +466,8 @@ class StrategyBase:
     def __init__(self):
         print("Init StrategyBase")
         self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
-        self.s_ticker = {}
+        self.s_ticker_writer = None
+        self.s_ticker_pylist = []
         self.s_order_book = {}
         self.klines = {}  # KLines snapshot
         self.candles = {}  # Candles stream
@@ -506,7 +510,7 @@ class StrategyBase:
             return cls.klines_series.get(_interval, [])
 
     def reset_var(self):
-        self.s_ticker = {}
+        self.s_ticker_pylist = []
         self.s_order_book = {}
         self.klines = {}  # KLines snapshot
         self.candles = {}  # Candles stream
@@ -603,7 +607,7 @@ class StrategyBase:
 
         return last
 
-    def open_orders_snapshot(self):
+    def open_orders_snapshot(self, ts=None):
         orders_buy = {}
         orders_sell = {}
         for k, order in self.orders.items():
@@ -611,8 +615,8 @@ class StrategyBase:
                 orders_buy[k] = order.price
             else:
                 orders_sell[k] = order.price
-        self.grid_buy.update({int(time.time() * 1000): pd.Series(orders_buy)})
-        self.grid_sell.update({int(time.time() * 1000): pd.Series(orders_sell)})
+        self.grid_buy.update({ts or int(time.time() * 1000): pd.Series(orders_buy)})
+        self.grid_sell.update({ts or int(time.time() * 1000): pd.Series(orders_sell)})
 
     @staticmethod
     def get_buffered_recent_candles(candle_size_in_minutes: int, number_of_candles: int = 50,
@@ -867,6 +871,7 @@ async def ask_exit():
 
             if ms.MODE == 'TC':
                 # Save stream data for backtesting
+                cls.strategy.start_collect = False
                 session_data_handler(cls.strategy)
 
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
@@ -889,45 +894,48 @@ def session_data_handler(cls):
     :param cls: StrategyBase.strategy
     :return:
     """
-    session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
-    raw_path = Path(session_root, "raw")
-    raw_path.mkdir(parents=True, exist_ok=True)
-    # Save ticker
-    ds = pd.Series(cls.s_ticker)
-    ds.to_pickle(Path(raw_path, TICKER_PKL))
+    # Finalize ticker file
+    cls.strategy.s_ticker_writer.write_batch(
+        pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker_pylist)
+    )
+    cls.strategy.s_ticker_pylist.clear()
+    cls.strategy.s_ticker_writer.close()
+
     # Save order_book
+    # print(f"s_order_book: {cls.s_order_book}")
     ds = pd.Series(cls.s_order_book)
-    ds.to_pickle(Path(raw_path, ORDER_BOOK_PKL))
+    ds.to_pickle(Path(cls.session_root, "raw", ORDER_BOOK_PKL))
     # Save klines snapshot
-    with open(Path(raw_path, "klines.json"), 'w') as f:
+    with open(Path(cls.session_root, "raw", "klines.json"), 'w') as f:
         json.dump(cls.klines, f)
     # Save candles
     for k, v in cls.candles.items():
         ds = pd.Series(v)
-        ds.to_pickle(Path(raw_path, f"candles_{k}.pkl"))
+        ds.to_pickle(Path(cls.session_root, "raw", f"candles_{k}.pkl"))
+
     # Save session detail for analytics
-    session_data = Path(session_root, "snapshot")
+    session_data = Path(cls.session_root, "snapshot")
     session_data.mkdir(parents=True, exist_ok=True)
-    d_ticker = {k: v['lastPrice'] for k, v in cls.s_ticker.items()}
-    ds_ticker = pd.Series(d_ticker).astype(float)
-    ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
+    # d_ticker = {k: v['lastPrice'] for k, v in cls.s_ticker.items()}
+    # ds_ticker = pd.Series(d_ticker).astype(float)
+    # ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
     #
     df_grid_sell = pd.DataFrame().from_dict(cls.grid_sell, orient='index')
     df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
     df_grid_buy = pd.DataFrame().from_dict(cls.grid_buy, orient='index')
     df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
     #
-    ds_ticker.to_pickle(Path(session_data, TICKER_PKL))
+    # ds_ticker.to_pickle(Path(session_data, TICKER_PKL))
     df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
     df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
-    #
-    copy(ms.PARAMS, Path(session_root, Path(ms.PARAMS).name))
 
-    shutil.make_archive(str(Path(BACKTEST_PATH, f"{session_root}_{datetime.now().strftime('%m%d-%H-%M')}")),
-                        'zip',
-                        session_root)
+    shutil.make_archive(
+        str(Path(BACKTEST_PATH, f"{cls.session_root}_{datetime.now().strftime('%m%d-%H-%M')}")),
+        'zip',
+        cls.session_root
+    )
 
-    print(f"Stream data for backtesting saved to {session_root}")
+    print(f"Stream data for backtesting saved to {cls.session_root}")
 
 
 async def backtest_data_control():
@@ -938,17 +946,13 @@ async def backtest_data_control():
     delay = HEARTBEAT * 300  # 10 min
     ts = time.time()
     while 1:
-        memory = psutil.virtual_memory()
-        swap = psutil.swap_memory()
-        total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
-        if time.time() - ts > ms.SAVE_PERIOD or total_used_percent > 70:
-            if sc := cls.start_collect:
-                cls.start_collect = False
-                session_data_handler(cls)
-                cls.reset_var()
-                cls.start_collect = sc
-                ts = time.time()
+        if cls.start_collect and time.time() - ts > ms.SAVE_PERIOD:
+            cls.start_collect = False
+            session_data_handler(cls)
+            cls.reset_var()
+            break
         await asyncio.sleep(delay)
+    cls.strategy.message_log("Backtest record session ended", tlg=True)
 
 
 async def buffered_candle():
@@ -1232,7 +1236,9 @@ async def on_order_update_handler(cls, ed):
         # Remove from orders dict
         remove_from_orders_lists([ed['order_id']])
         if ms.MODE == 'TC' and cls.strategy.start_collect:
-            cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update({'lastPrice': ed['last_executed_price']})
+            s_tic = cls.strategy.s_ticker_pylist.pop()
+            s_tic.update({'lastPrice': ed['last_executed_price']})
+            cls.strategy.s_ticker_pylist.append(s_tic)
             cls.strategy.open_orders_snapshot()
     elif ed['order_status'] == 'PARTIALLY_FILLED':
         # Update order in orders dict
@@ -1353,9 +1359,9 @@ async def create_order_handler(_id, result):
         executed_qty = Decimal(result['executedQty'])
         cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
         if executed_qty > 0 and ms.MODE == 'TC' and cls.strategy.start_collect:
-            cls.strategy.s_ticker[list(cls.strategy.s_ticker)[-1]].update(
-                {'lastPrice': str(cummulative_quote_qty / executed_qty)}
-            )
+            s_tic = cls.strategy.s_ticker_pylist.pop()
+            s_tic.update({'lastPrice': str(cummulative_quote_qty / executed_qty)})
+            cls.strategy.s_ticker_pylist.append(s_tic)
         if executed_qty < orig_qty:
             cls.orders[order.id] = order
         elif ms.SAVE_TRADE_HISTORY:
@@ -1566,9 +1572,22 @@ async def on_ticker_update():
                 #
                 if ms.MODE == 'TC' and cls.strategy.start_collect:
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
-                    ticker_24h['delay'] = cls.delay_ordering_s
-                    cls.strategy.s_ticker.update({int(time.time() * 1000): ticker_24h})
-                    cls.strategy.open_orders_snapshot()
+                    ts = int(time.time() * 1000)
+                    cls.strategy.open_orders_snapshot(ts=ts)
+                    if len(cls.strategy.s_ticker_pylist) > PYARROW_BATCH_BUFFER_SIZE:
+                        cls.strategy.s_ticker_writer.write_batch(
+                            pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker_pylist)
+                        )
+                        cls.strategy.s_ticker_pylist.clear()
+                    cls.strategy.s_ticker_pylist.append(
+                        {
+                            "key": ts,
+                            "openPrice": ticker.open_price,
+                            "lastPrice": ticker.close_price,
+                            "closeTime": ticker.event_time,
+                            "delay": cls.delay_ordering_s
+                        }
+                    )
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
@@ -1643,6 +1662,8 @@ async def on_order_book_update():
                 cls.order_book = order_book
                 cls.strategy.on_new_order_book(OrderBook(cls.order_book))
                 if ms.MODE == 'TC' and cls.strategy.start_collect:
+                    order_book['bids'] = order_book['bids'][:1]
+                    order_book['asks'] = order_book['asks'][:1]
                     cls.strategy.s_order_book.update({int(time.time() * 1000): order_book})
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
@@ -1891,13 +1912,27 @@ async def main(_symbol):
             #
             if ms.MODE == 'TC':
                 BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
+                cls.session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
+                cls.session_root.mkdir(parents=True, exist_ok=True)
+                raw_path = Path(cls.session_root, "raw")
+                raw_path.mkdir(parents=True, exist_ok=True)
+                #
+                copy(ms.PARAMS, Path(cls.session_root, Path(ms.PARAMS).name))
+
+                schema_ticker = pa.schema([
+                    ("key", pa.int64()),
+                    ("openPrice", pa.string()),
+                    ("lastPrice", pa.string()),
+                    ("closeTime", pa.int64()),
+                    ("delay", pa.float64())
+                ])
+
+                cls.strategy.s_ticker_writer = pq.ParquetWriter(Path(raw_path, TICKER_PKL), schema=schema_ticker)
+
             #
             if ms.MODE in ('TC', 'S') and ms.SAVED_STATE:
-                cls.session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
                 cls.state_file = Path(cls.session_root, "saved_state.json")
-                #
-                if ms.MODE == 'TC':
-                    cls.session_root.mkdir(parents=True, exist_ok=True)
+
         #
         else:
             # Init class atr for reuse in next backtest cycle
