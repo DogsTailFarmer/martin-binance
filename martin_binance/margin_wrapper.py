@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.5"
+__version__ = "2.1.0b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -64,7 +64,7 @@ HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
 TRY_LIMIT = 30
-PYARROW_BATCH_BUFFER_SIZE = 32  # Rows
+PYARROW_BATCH_BUFFER_SIZE = 40960  # Rows
 
 logger = logging.getLogger('logger')
 color_init()
@@ -465,7 +465,7 @@ class StrategyBase:
 
     def __init__(self):
         print("Init StrategyBase")
-        self.time_operational = {'start': 0.0, 'ts': 0.0, 'new': 0.0}  # - See get_time()
+        self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
         self.s_ticker_writer = None
         self.s_ticker_pylist = []
         self.s_order_book = {}
@@ -586,25 +586,14 @@ class StrategyBase:
         return cls.orders.get(_id)
 
     def get_time(self) -> float:
-        """
-        For backtesting purpose. Calculating monotonic local time based on self.time_operational['new'] value.
-        It can be set from external source as int(time.time()) getting from historical data. If can't setting
-        return system int(time.time()) Unix time.
-        :return: int
-        """
         current_time = time.time()
-
         if self.time_operational['new']:
-            diff = current_time - self.time_operational['ts'] if self.time_operational['ts'] else 0.0
-            if self.time_operational['start'] == self.time_operational['new']:
-                last = self.time_operational['new'] + diff
-            else:
-                last = self.time_operational['start'] + diff
-            self.time_operational['start'] = self.time_operational['new'] = last
-            self.time_operational['ts'] = current_time
+            diff = current_time - self.time_operational['diff'] if self.time_operational['diff'] else 0.0
+            last = max(self.time_operational['new'], self.time_operational['ts'] + diff)
+            self.time_operational['diff'] = current_time
+            self.time_operational['ts'] = last
         else:
             last = current_time
-
         return last
 
     def open_orders_snapshot(self, ts=None):
@@ -1526,10 +1515,35 @@ def remove_from_trades_lists(_order_id) -> None:
     cls.trades[:] = [i for i in cls.trades if i.order_id != _order_id]
 
 
-async def loop_ds(ds, tik=False):
+async def loop_ds_pq(ds, ticker=False):
+    cls = StrategyBase
+    while not cls.strategy.start_collect:
+        await asyncio.sleep(0.001)
+
+    batches = ds.iter_batches(PYARROW_BATCH_BUFFER_SIZE)
+    index_prev = 0
+    for batch in batches:
+        for row in batch.to_pylist():
+            index = row.pop('key') / 1000
+            if ticker:
+                cls.strategy.time_operational['new'] = index
+                delay = index - index_prev if index_prev else 0
+                index_prev = index
+            else:
+                delay = index - cls.strategy.get_time()
+
+            if delay > 0:
+                delay /= ms.XTIME
+                await asyncio.sleep(delay)
+            yield row
+    if ticker:
+        cls.backtest['ticker_index_last'] = index_prev * 1000
+
+
+async def loop_ds(ds, ticker=False):
     """
     Pandas time Series asynchronous generator with delay (real time/XTIME) multiplier
-    :param tik: True - update local time
+    :param ticker: True - update local time
     :param ds: pandas time Series object
     :return: next row
     """
@@ -1541,7 +1555,7 @@ async def loop_ds(ds, tik=False):
     for index, row in ds.items():
         index /= 1000
 
-        if tik:
+        if ticker:
             cls.strategy.time_operational['new'] = index
             delay = (index - index_prev) if index_prev else 0
             index_prev = index
@@ -1592,8 +1606,8 @@ async def on_ticker_update():
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
     else:
-        pbar = tqdm(total=cls.backtest['ticker'].count())
-        async for row in loop_ds(cls.backtest['ticker'], tik=True):
+        pbar = tqdm(total=cls.backtest['ticker'].metadata.num_rows)
+        async for row in loop_ds_pq(cls.backtest['ticker'], ticker=True):
             cls.delay_ordering_s = row.pop('delay', 0)
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(row))
@@ -1610,7 +1624,7 @@ async def on_ticker_update():
 def back_test_handler(cls):
     # Test result handler
     test_time = datetime.utcnow() - cls.strategy.cycle_time
-    original_time = (cls.backtest['ticker'].index.max() - cls.backtest['ticker'].index.min()) / 1000
+    original_time = (cls.backtest['ticker_index_last'] - cls.backtest['ticker_index_first']) / 1000
     original_time = timedelta(seconds=original_time)
     print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
     if ms.SAVE_DS:
@@ -1633,7 +1647,7 @@ def _back_test_handler_ext(cls):
     df_grid_buy = pd.DataFrame().from_dict(cls.strategy.account.grid_buy, orient='index').astype(float)
     df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
     #
-    ds_ticker.to_pickle(Path(session_path, TICKER_PKL))
+    ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
     df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
     df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
     copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
@@ -1948,11 +1962,12 @@ async def main(_symbol):
             cls.strategy.account.fee_maker = ms.FEE_MAKER
             cls.strategy.account.fee_taker = ms.FEE_TAKER
             #
-            cls.backtest['ticker'] = pd.read_pickle(Path(BACKTEST_PATH,
+            cls.backtest['ticker'] = pq.ParquetFile(Path(BACKTEST_PATH,
                                                          f"{cls.exchange}_{cls.symbol}/raw/{TICKER_PKL}"))
             cls.backtest['order_book'] = pd.read_pickle(Path(BACKTEST_PATH,
                                                              f"{cls.exchange}_{cls.symbol}/raw/{ORDER_BOOK_PKL}"))
-            cls.ticker = cls.backtest['ticker'].iat[0]
+            cls.ticker = next(cls.backtest['ticker'].iter_batches(batch_size=1)).to_pylist()[0]
+            cls.backtest['ticker_index_first'] = cls.ticker['key']
             cls.order_book = cls.backtest['order_book'].iat[0]
         #
         await buffered_funds()
@@ -1987,7 +2002,7 @@ async def main(_symbol):
                     cls.strategy.init()
                 await wss_declare()
                 # Set initial local time from backtest data
-                cls.strategy.time_operational['new'] = cls.backtest['ticker'].index[0] / 1000
+                cls.strategy.time_operational['new'] = cls.ticker['key'] / 1000
                 cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
                 cls.start_time_ms = int(cls.strategy.get_time() * 1000)
                 cls.strategy.cycle_time = datetime.utcnow()

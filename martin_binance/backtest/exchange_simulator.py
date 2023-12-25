@@ -256,7 +256,7 @@ class Account:
                     'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def on_ticker_update(self, ticker: {}, ts: int) -> [dict]:
-        # print(f"on_ticker_update.ticker: {ticker['lastPrice']}")
+        # print(f"on_ticker_update.ticker: {ts}: {ticker['lastPrice']}")
         # print(f"BUY: {self.orders_buy}")
         # print(f"SELL: {self.orders_sell}")
 

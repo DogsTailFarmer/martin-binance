@@ -6,7 +6,7 @@ Visual Comparison of Session Extended Log
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.3"
+__version__ = "2.1.0b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -24,7 +24,7 @@ clrs = {'background': '#696969',
 
 source_path = askdirectory(title='Pick a folder for base strategy: "back_test/exchange_AAABBB/snapshot/"',
                            initialdir=str(BACKTEST_PATH))
-s_ds = pd.read_pickle(Path(BACKTEST_PATH, source_path, "ticker.pkl"))
+# s_ds = pd.read_pickle(Path(BACKTEST_PATH, source_path, "ticker.pkl"))
 s_sell_df: pd.DataFrame = pd.read_pickle(Path(BACKTEST_PATH, source_path, "sell.pkl"))
 s_buy_df = pd.read_pickle(Path(BACKTEST_PATH, source_path, "buy.pkl"))
 
@@ -33,24 +33,11 @@ ds_ticker = pd.read_pickle(Path(BACKTEST_PATH, df_path, "ticker.pkl"))
 df_grid_sell = pd.read_pickle(Path(BACKTEST_PATH, df_path, "sell.pkl"))
 df_grid_buy = pd.read_pickle(Path(BACKTEST_PATH, df_path, "buy.pkl"))
 
+print(f"ds_ticker: {ds_ticker}")
+
 app = Dash(__name__)
 fig = go.Figure()
 fig.update_layout(template='seaborn')
-
-# SOURCE data
-# noinspection PyTypeChecker
-fig.add_traces(go.Scatter(x=s_ds.index, y=s_ds.values, mode='lines', name='Base',
-                          line=dict(color='royalblue', width=5, dash='dot')))
-
-for col in s_sell_df.columns:
-    # noinspection PyTypeChecker
-    fig.add_traces(go.Scatter(x=s_sell_df.index, y=s_sell_df[col], mode='lines', showlegend=False,
-                              line=dict(color='indianred', width=5, dash='dot')))
-
-for col in s_buy_df.columns:
-    # noinspection PyTypeChecker
-    fig.add_traces(go.Scatter(x=s_buy_df.index, y=s_buy_df[col], mode='lines', showlegend=False,
-                              line=dict(color='forestgreen', width=5, dash='dot')))
 
 # Test data
 # noinspection PyTypeChecker
@@ -65,6 +52,24 @@ for col in df_grid_buy.columns:
     # noinspection PyTypeChecker
     fig.add_traces(go.Scatter(x=df_grid_buy.index, y=df_grid_buy[col], mode='lines', line_color='green',
                               showlegend=False))
+
+# SOURCE data
+# noinspection PyTypeChecker
+'''
+fig.add_traces(go.Scatter(x=s_ds.index, y=s_ds.values, mode='lines', name='Base',
+                          line=dict(color='royalblue', width=5, dash='dot')))
+'''
+
+for col in s_sell_df.columns:
+    # noinspection PyTypeChecker
+    fig.add_traces(go.Scatter(x=s_sell_df.index, y=s_sell_df[col], mode='lines', showlegend=False,
+                              line=dict(color='indianred', width=5, dash='dot')))
+
+for col in s_buy_df.columns:
+    # noinspection PyTypeChecker
+    fig.add_traces(go.Scatter(x=s_buy_df.index, y=s_buy_df[col], mode='lines', showlegend=False,
+                              line=dict(color='forestgreen', width=5, dash='dot')))
+
 
 fig.update_layout(xaxis_tickformat="%H:%M:%S.%L", height=700, autosize=True)
 
