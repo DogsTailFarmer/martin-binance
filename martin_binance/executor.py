@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0b1"
+__version__ = "2.1.0b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -17,7 +17,7 @@ import queue
 import math
 import sqlite3
 from pathlib import Path
-import simplejson as json
+import ujson as json
 from datetime import datetime
 import os
 import psutil
@@ -67,7 +67,7 @@ GRID_ONLY = bool()
 LOG_LEVEL_NO_PRINT = []
 HOLD_TP_ORDER_TIMEOUT = 30
 COLLECT_ASSETS = bool()
-SAVE_TRADE_HISTORY = True
+SAVE_TRADE_HISTORY = False
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()
@@ -457,7 +457,6 @@ class Strategy(StrategyBase):
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
             raise SystemExit(1)
-        # self.message_log('End Init section')
 
     @staticmethod
     def get_strategy_config() -> StrategyConfig:
@@ -988,8 +987,6 @@ class Strategy(StrategyBase):
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
             self.debug_output()
-            if self.first_run and MODE == 'TC':
-                self.s_order_book = {int(self.get_time() * 1000): self.order_book}
             self.start_collect = True
             self.first_run = False
             self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)

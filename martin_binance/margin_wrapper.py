@@ -4,13 +4,14 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0b2"
+__version__ = "2.1.0b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import ast
 import asyncio
-import simplejson as json
+import ujson as json
+import orjson
 import logging
 import os
 import time
@@ -64,13 +65,13 @@ HEARTBEAT = 2  # Sec
 RATE_LIMITER = HEARTBEAT * 5
 ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
 TRY_LIMIT = 30
-PYARROW_BATCH_BUFFER_SIZE = 40960  # Rows
+PYARROW_BATCH_BUFFER_SIZE = 20480  # Rows
 
 logger = logging.getLogger('logger')
 color_init()
 
-ORDER_BOOK_PKL = "order_book.pkl"
-TICKER_PKL = "ticker.parquet"
+ORDER_BOOK_PRKT = "order_book.parquet"
+TICKER_PRKT = "ticker.parquet"
 MS_ORDER_ID = 'ms.order_id'
 MS_ORDERS = 'ms.orders'
 EQUAL_STR = "================================================================"
@@ -234,10 +235,14 @@ class Order:
         self.id = int(order['orderId'])
         # Type of the order.
         self.order_type = order['type']
-        # Price of the order.
-        self.price = Decimal(order['price'])
         # Amount that has been filled already.
         self.received_amount = Decimal(order['executedQty'])
+        # Price of the order
+        cummulative_quote_qty = order.get('cummulativeQuoteQty')
+        if self.received_amount > 0 and cummulative_quote_qty:
+            self.price = Decimal(cummulative_quote_qty) / self.received_amount
+        else:
+            self.price = Decimal(order['price'])
         # Amount that has not been filled yet.
         self.remaining_amount = self.amount - self.received_amount
         # Timestamp of the order.
@@ -416,8 +421,7 @@ class OrderBook:
 class StrategyBase:
     __slots__ = (
         "time_operational",
-        "s_ticker_writer",
-        "s_ticker_pylist",
+        "s_ticker",
         "s_order_book",
         "klines",
         "candles",
@@ -466,9 +470,8 @@ class StrategyBase:
     def __init__(self):
         print("Init StrategyBase")
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
-        self.s_ticker_writer = None
-        self.s_ticker_pylist = []
-        self.s_order_book = {}
+        self.s_ticker: dict[str, pq.ParquetWriter | list] = {'pylist': []} if ms.MODE in ('TC', 'S') else None
+        self.s_order_book: dict[str, pq.ParquetWriter | list] = {'pylist': []} if ms.MODE in ('TC', 'S') else None
         self.klines = {}  # KLines snapshot
         self.candles = {}  # Candles stream
         self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
@@ -510,8 +513,8 @@ class StrategyBase:
             return cls.klines_series.get(_interval, [])
 
     def reset_var(self):
-        self.s_ticker_pylist = []
-        self.s_order_book = {}
+        self.s_ticker = {'pylist': []}
+        self.s_order_book = {'pylist': []}
         self.klines = {}  # KLines snapshot
         self.candles = {}  # Candles stream
         self.grid_buy = {}
@@ -633,7 +636,7 @@ class StrategyBase:
         if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
             tlg = True
             color = Style.B_RED
-        color_msg = color+msg+Style.RESET if color else msg
+        color_msg = color + msg + Style.RESET if color else msg
         if log_level not in ms.LOG_LEVEL_NO_PRINT:
             if ms.MODE in ('T', 'TC'):
                 print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
@@ -884,19 +887,23 @@ def session_data_handler(cls):
     :return:
     """
     # Finalize ticker file
-    cls.strategy.s_ticker_writer.write_batch(
-        pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker_pylist)
+    cls.strategy.s_ticker['writer'].write_batch(
+        pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker['pylist'])
     )
-    cls.strategy.s_ticker_pylist.clear()
-    cls.strategy.s_ticker_writer.close()
+    cls.strategy.s_ticker['pylist'].clear()
+    cls.strategy.s_ticker['writer'].close()
 
-    # Save order_book
-    # print(f"s_order_book: {cls.s_order_book}")
-    ds = pd.Series(cls.s_order_book)
-    ds.to_pickle(Path(cls.session_root, "raw", ORDER_BOOK_PKL))
+    # Finalize order_book
+    cls.strategy.s_order_book['writer'].write_batch(
+        pa.RecordBatch.from_pylist(mapping=cls.strategy.s_order_book['pylist'])
+    )
+    cls.strategy.s_order_book['pylist'].clear()
+    cls.strategy.s_order_book['writer'].close()
+
     # Save klines snapshot
     with open(Path(cls.session_root, "raw", "klines.json"), 'w') as f:
         json.dump(cls.klines, f)
+
     # Save candles
     for k, v in cls.candles.items():
         ds = pd.Series(v)
@@ -905,16 +912,12 @@ def session_data_handler(cls):
     # Save session detail for analytics
     session_data = Path(cls.session_root, "snapshot")
     session_data.mkdir(parents=True, exist_ok=True)
-    # d_ticker = {k: v['lastPrice'] for k, v in cls.s_ticker.items()}
-    # ds_ticker = pd.Series(d_ticker).astype(float)
-    # ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
     #
     df_grid_sell = pd.DataFrame().from_dict(cls.grid_sell, orient='index')
     df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
     df_grid_buy = pd.DataFrame().from_dict(cls.grid_buy, orient='index')
     df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
     #
-    # ds_ticker.to_pickle(Path(session_data, TICKER_PKL))
     df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
     df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
 
@@ -997,6 +1000,9 @@ async def on_klines_update(_klines: {str: StrategyBase.Klines}):
                 _klines.get(candle.interval).refresh(json.loads(candle.candle))
                 if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
                     new_raw = {int(time.time() * 1000): candle.candle}
+
+                    # print(f"on_klines_update: interval: {candle.interval}: {new_raw}")
+
                     cls.strategy.candles.setdefault(candle.interval, new_raw).update(new_raw)
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}")
@@ -1224,10 +1230,11 @@ async def on_order_update_handler(cls, ed):
     if ed['order_status'] == 'FILLED':
         # Remove from orders dict
         remove_from_orders_lists([ed['order_id']])
-        if ms.MODE == 'TC' and cls.strategy.start_collect:
-            s_tic = cls.strategy.s_ticker_pylist.pop()
-            s_tic.update({'lastPrice': ed['last_executed_price']})
-            cls.strategy.s_ticker_pylist.append(s_tic)
+        if ms.MODE == 'TC' and cls.strategy.start_collect and cls.strategy.s_ticker['pylist']:
+            s_tic = cls.strategy.s_ticker['pylist'].pop()
+            s_tic_row = orjson.loads(s_tic['row'])
+            s_tic_row['lastPrice'] = ed['last_executed_price']
+            s_tic['row'] = orjson.dumps(s_tic_row)
             cls.strategy.open_orders_snapshot()
     elif ed['order_status'] == 'PARTIALLY_FILLED':
         # Update order in orders dict
@@ -1336,6 +1343,7 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
 
 
 async def create_order_handler(_id, result):
+    # print(f"create_order_handler.result: {result}")
     cls = StrategyBase
     order = Order(result)
     if cls.orders.get(order.id) is None or (result.get('status') == 'FILLED' and order_trades_sum(_id) == 0):
@@ -1347,10 +1355,12 @@ async def create_order_handler(_id, result):
         orig_qty = Decimal(result['origQty'])
         executed_qty = Decimal(result['executedQty'])
         cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
-        if executed_qty > 0 and ms.MODE == 'TC' and cls.strategy.start_collect:
-            s_tic = cls.strategy.s_ticker_pylist.pop()
-            s_tic.update({'lastPrice': str(cummulative_quote_qty / executed_qty)})
-            cls.strategy.s_ticker_pylist.append(s_tic)
+        if executed_qty > 0 and ms.MODE == 'TC' and cls.strategy.start_collect and cls.strategy.s_ticker['pylist']:
+            s_tic = cls.strategy.s_ticker['pylist'].pop()
+            s_tic_row = orjson.loads(s_tic['row'])
+            s_tic_row['lastPrice'] = str(cummulative_quote_qty / executed_qty)
+            s_tic['row'] = orjson.dumps(s_tic_row)
+            cls.strategy.s_ticker['pylist'].append(s_tic)
         if executed_qty < orig_qty:
             cls.orders[order.id] = order
         elif ms.SAVE_TRADE_HISTORY:
@@ -1433,7 +1443,7 @@ async def cancel_order_call(_id: int, cancel_all=False, count=0):
             elif not res or res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
                 await asyncio.sleep(HEARTBEAT * count)
                 if count <= TRY_LIMIT:
-                    await cancel_order_call(_id, cancel_all=False, count=count+1)
+                    await cancel_order_call(_id, cancel_all=False, count=count + 1)
                 cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
 
 
@@ -1535,7 +1545,7 @@ async def loop_ds_pq(ds, ticker=False):
             if delay > 0:
                 delay /= ms.XTIME
                 await asyncio.sleep(delay)
-            yield row
+            yield orjson.loads(row['row'])
     if ticker:
         cls.backtest['ticker_index_last'] = index_prev * 1000
 
@@ -1585,23 +1595,16 @@ async def on_ticker_update():
                 cls.strategy.on_new_ticker(Ticker(cls.ticker))
                 #
                 if ms.MODE == 'TC' and cls.strategy.start_collect:
-                    # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                     ts = int(time.time() * 1000)
                     cls.strategy.open_orders_snapshot(ts=ts)
-                    if len(cls.strategy.s_ticker_pylist) > PYARROW_BATCH_BUFFER_SIZE:
-                        cls.strategy.s_ticker_writer.write_batch(
-                            pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker_pylist)
+                    if len(cls.strategy.s_ticker['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
+                        cls.strategy.s_ticker['writer'].write_batch(
+                            pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker['pylist'])
                         )
-                        cls.strategy.s_ticker_pylist.clear()
-                    cls.strategy.s_ticker_pylist.append(
-                        {
-                            "key": ts,
-                            "openPrice": ticker.open_price,
-                            "lastPrice": ticker.close_price,
-                            "closeTime": ticker.event_time,
-                            "delay": cls.delay_ordering_s
-                        }
-                    )
+                        cls.strategy.s_ticker['pylist'].clear()
+                    ticker_24h['delay'] = cls.delay_ordering_s
+                    # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
+                    cls.strategy.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(ticker_24h)})
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
@@ -1672,20 +1675,26 @@ async def on_order_book_update():
             async for _order_book in cls.for_request(cls.stub.OnOrderBookUpdate, api_pb2.MarketRequest,
                                                      symbol=cls.symbol):
                 order_book = order_book_prepare(_order_book)
-                # print(f"on_order_book_update.order_book: {order_book}")
                 cls.order_book = order_book
                 cls.strategy.on_new_order_book(OrderBook(cls.order_book))
                 if ms.MODE == 'TC' and cls.strategy.start_collect:
                     order_book['bids'] = order_book['bids'][:1]
                     order_book['asks'] = order_book['asks'][:1]
-                    cls.strategy.s_order_book.update({int(time.time() * 1000): order_book})
+                    if len(cls.strategy.s_order_book['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
+                        cls.strategy.s_order_book['writer'].write_batch(
+                            pa.RecordBatch.from_pylist(mapping=cls.strategy.s_order_book['pylist'])
+                        )
+                        cls.strategy.s_order_book['pylist'].clear()
+                    cls.strategy.s_order_book['pylist'].append(
+                        {"key": int(time.time() * 1000), "row": orjson.dumps(order_book)}
+                    )
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
             cls.wss_fire_up = True
     else:
-        async for row in loop_ds(cls.backtest['order_book']):
+        async for row in loop_ds_pq(cls.backtest['order_book']):
             cls.order_book = row
-            cls.strategy.on_new_order_book(OrderBook(cls.order_book))
+            cls.strategy.on_new_order_book(OrderBook(row))
         cls.strategy.message_log("Backtest *** order_book *** timeSeries ended")
 
 
@@ -1932,17 +1941,10 @@ async def main(_symbol):
                 raw_path.mkdir(parents=True, exist_ok=True)
                 #
                 copy(ms.PARAMS, Path(cls.session_root, Path(ms.PARAMS).name))
-
-                schema_ticker = pa.schema([
-                    ("key", pa.int64()),
-                    ("openPrice", pa.string()),
-                    ("lastPrice", pa.string()),
-                    ("closeTime", pa.int64()),
-                    ("delay", pa.float64())
-                ])
-
-                cls.strategy.s_ticker_writer = pq.ParquetWriter(Path(raw_path, TICKER_PKL), schema=schema_ticker)
-
+                # pyarrow and parquet declare
+                schema = pa.schema([("key", pa.int64()), ("row", pa.binary())])
+                cls.strategy.s_ticker['writer'] = pq.ParquetWriter(Path(raw_path, TICKER_PRKT), schema=schema)
+                cls.strategy.s_order_book['writer'] = pq.ParquetWriter(Path(raw_path, ORDER_BOOK_PRKT), schema=schema)
             #
             if ms.MODE in ('TC', 'S') and ms.SAVED_STATE:
                 cls.state_file = Path(cls.session_root, "saved_state.json")
@@ -1961,15 +1963,18 @@ async def main(_symbol):
                                                 'locked': '0.0'}
             cls.strategy.account.fee_maker = ms.FEE_MAKER
             cls.strategy.account.fee_taker = ms.FEE_TAKER
-            #
+            # ticker
             cls.backtest['ticker'] = pq.ParquetFile(Path(BACKTEST_PATH,
-                                                         f"{cls.exchange}_{cls.symbol}/raw/{TICKER_PKL}"))
-            cls.backtest['order_book'] = pd.read_pickle(Path(BACKTEST_PATH,
-                                                             f"{cls.exchange}_{cls.symbol}/raw/{ORDER_BOOK_PKL}"))
-            cls.ticker = next(cls.backtest['ticker'].iter_batches(batch_size=1)).to_pylist()[0]
-            cls.backtest['ticker_index_first'] = cls.ticker['key']
-            cls.order_book = cls.backtest['order_book'].iat[0]
-        #
+                                                         f"{cls.exchange}_{cls.symbol}/raw/{TICKER_PRKT}"))
+            ticker_first_row = next(cls.backtest['ticker'].iter_batches(batch_size=1)).to_pylist()[0]
+            cls.ticker = orjson.loads(ticker_first_row['row'])
+            cls.backtest['ticker_index_first'] = ticker_first_row['key']
+            # order_book
+            cls.backtest['order_book'] = pq.ParquetFile(Path(BACKTEST_PATH,
+                                                             f"{cls.exchange}_{cls.symbol}/raw/{ORDER_BOOK_PRKT}"))
+            cls.order_book = orjson.loads(
+                next(cls.backtest['order_book'].iter_batches(batch_size=1)).to_pylist()[0]['row']
+            )
         await buffered_funds()
         answer = str()
         restored = True
@@ -2002,7 +2007,7 @@ async def main(_symbol):
                     cls.strategy.init()
                 await wss_declare()
                 # Set initial local time from backtest data
-                cls.strategy.time_operational['new'] = cls.ticker['key'] / 1000
+                cls.strategy.time_operational['new'] = cls.backtest['ticker_index_first'] / 1000
                 cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
                 cls.start_time_ms = int(cls.strategy.get_time() * 1000)
                 cls.strategy.cycle_time = datetime.utcnow()

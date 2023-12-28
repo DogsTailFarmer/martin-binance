@@ -6,7 +6,7 @@ Visual Comparison of Session Extended Log
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0b2"
+__version__ = "2.1.0b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -24,7 +24,6 @@ clrs = {'background': '#696969',
 
 source_path = askdirectory(title='Pick a folder for base strategy: "back_test/exchange_AAABBB/snapshot/"',
                            initialdir=str(BACKTEST_PATH))
-# s_ds = pd.read_pickle(Path(BACKTEST_PATH, source_path, "ticker.pkl"))
 s_sell_df: pd.DataFrame = pd.read_pickle(Path(BACKTEST_PATH, source_path, "sell.pkl"))
 s_buy_df = pd.read_pickle(Path(BACKTEST_PATH, source_path, "buy.pkl"))
 
@@ -32,8 +31,6 @@ df_path = askdirectory(title='Pick a folder for test strategy', initialdir=str(B
 ds_ticker = pd.read_pickle(Path(BACKTEST_PATH, df_path, "ticker.pkl"))
 df_grid_sell = pd.read_pickle(Path(BACKTEST_PATH, df_path, "sell.pkl"))
 df_grid_buy = pd.read_pickle(Path(BACKTEST_PATH, df_path, "buy.pkl"))
-
-print(f"ds_ticker: {ds_ticker}")
 
 app = Dash(__name__)
 fig = go.Figure()
@@ -55,10 +52,6 @@ for col in df_grid_buy.columns:
 
 # SOURCE data
 # noinspection PyTypeChecker
-'''
-fig.add_traces(go.Scatter(x=s_ds.index, y=s_ds.values, mode='lines', name='Base',
-                          line=dict(color='royalblue', width=5, dash='dot')))
-'''
 
 for col in s_sell_df.columns:
     # noinspection PyTypeChecker
