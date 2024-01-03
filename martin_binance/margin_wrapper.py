@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0b3"
+__version__ = "2.1.0b4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -473,7 +473,12 @@ class StrategyBase:
         self.s_ticker: dict[str, pq.ParquetWriter | list] = {'pylist': []} if ms.MODE in ('TC', 'S') else None
         self.s_order_book: dict[str, pq.ParquetWriter | list] = {'pylist': []} if ms.MODE in ('TC', 'S') else None
         self.klines = {}  # KLines snapshot
-        self.candles = {}  # Candles stream
+        if ms.MODE in ('TC', 'S'):
+            self.candles = {}
+            for i in KLINES_INIT:
+                self.candles.update({f"pylist_{i.value}": []})
+        else:
+            self.candles = None
         self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
         self.grid_buy = {}
         self.grid_sell = {}
@@ -711,7 +716,7 @@ async def heartbeat(_session):
                         if await cls.session.get_client():
                             update_class_var(cls.session)
                             await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
-                            await wss_init(update_max_queue_size=update_max_queue_size)
+                            await wss_init(cls, update_max_queue_size=update_max_queue_size)
                             cls.wss_fire_up = False
                     except Exception as ex:
                         logger.warning(f"Exception on fire up WSS: {ex}")
@@ -864,7 +869,7 @@ async def ask_exit():
             if ms.MODE == 'TC':
                 # Save stream data for backtesting
                 cls.strategy.start_collect = False
-                session_data_handler(cls.strategy)
+                session_data_handler(cls)
 
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
@@ -893,7 +898,7 @@ def session_data_handler(cls):
     cls.strategy.s_ticker['pylist'].clear()
     cls.strategy.s_ticker['writer'].close()
 
-    # Finalize order_book
+    # Finalize order_book file
     cls.strategy.s_order_book['writer'].write_batch(
         pa.RecordBatch.from_pylist(mapping=cls.strategy.s_order_book['pylist'])
     )
@@ -902,20 +907,23 @@ def session_data_handler(cls):
 
     # Save klines snapshot
     with open(Path(cls.session_root, "raw", "klines.json"), 'w') as f:
-        json.dump(cls.klines, f)
+        json.dump(cls.strategy.klines, f)
 
-    # Save candles
-    for k, v in cls.candles.items():
-        ds = pd.Series(v)
-        ds.to_pickle(Path(cls.session_root, "raw", f"candles_{k}.pkl"))
+    # Finalize candles files
+    for i in KLINES_INIT:
+        cls.strategy.candles[f"writer_{i.value}"].write_batch(
+            pa.RecordBatch.from_pylist(mapping=cls.strategy.candles[f"pylist_{i.value}"])
+        )
+        cls.strategy.candles[f"pylist_{i.value}"].clear()
+        cls.strategy.candles[f"writer_{i.value}"].close()
 
     # Save session detail for analytics
     session_data = Path(cls.session_root, "snapshot")
     session_data.mkdir(parents=True, exist_ok=True)
     #
-    df_grid_sell = pd.DataFrame().from_dict(cls.grid_sell, orient='index')
+    df_grid_sell = pd.DataFrame().from_dict(cls.strategy.grid_sell, orient='index')
     df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-    df_grid_buy = pd.DataFrame().from_dict(cls.grid_buy, orient='index')
+    df_grid_buy = pd.DataFrame().from_dict(cls.strategy.grid_buy, orient='index')
     df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
     #
     df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
@@ -947,13 +955,12 @@ async def backtest_data_control():
     cls.strategy.message_log("Backtest record session ended", tlg=True)
 
 
-async def buffered_candle():
-    cls = StrategyBase
+async def buffered_candle(cls):
     cls.Klines.klines_lim = KLINES_LIM
     klines = {}
     klines_from_file = {}
     if ms.MODE == 'S':
-        klines_from_file = json.load(open(Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}/raw/klines.json")))
+        klines_from_file = json.load(open(Path(cls.session_root, f"/raw/klines.json")))
     for i in KLINES_INIT:
         if ms.MODE in ('T', 'TC'):
             try:
@@ -971,7 +978,7 @@ async def buffered_candle():
         else:
             kline = klines_from_file.get(i.value, {})
             cls.backtest[f"candles_{i.value}"] = pd.read_pickle(
-                Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}/raw/candles_{i.value}.pkl")
+                Path(cls.session_root, f"/raw/candles_{i.value}.pkl")
             )
 
         if candles := kline.get('klines'):
@@ -980,16 +987,16 @@ async def buffered_candle():
                 kline_i.refresh(json.loads(candle))
                 # print(f"buffered_candle.candle: {candle}")
             klines[i.value] = kline_i
+
     if len(klines) == len(KLINES_INIT):
-        loop.create_task(on_klines_update(klines))
+        loop.create_task(on_klines_update(cls, klines))
     else:
         logger.info("Init buffered candle failed. try one else...")
         await asyncio.sleep(random.uniform(1, 5))
         cls.wss_fire_up = True
 
 
-async def on_klines_update(_klines: {str: StrategyBase.Klines}):
-    cls = StrategyBase
+async def on_klines_update(cls, _klines: {str: StrategyBase.Klines}):
     _intervals = list(_klines.keys())
     if ms.MODE in ('T', 'TC'):
         try:
@@ -999,21 +1006,24 @@ async def on_klines_update(_klines: {str: StrategyBase.Klines}):
                 # print(f"on_klines_update: {candle.symbol}, {candle.interval}, candle: {json.loads(candle.candle)[0]}")
                 _klines.get(candle.interval).refresh(json.loads(candle.candle))
                 if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
-                    new_raw = {int(time.time() * 1000): candle.candle}
+                    if len(cls.strategy.candles[f"pylist_{candle.interval}"]) > PYARROW_BATCH_BUFFER_SIZE:
+                        cls.strategy.candles[f"writer_{candle.interval}"].write_batch(
+                            pa.RecordBatch.from_pylist(mapping=cls.strategy.candles[f"pylist_{candle.interval}"])
+                        )
+                        cls.strategy.candles[f"pylist_{candle.interval}"].clear()
 
-                    # print(f"on_klines_update: interval: {candle.interval}: {new_raw}")
-
-                    cls.strategy.candles.setdefault(candle.interval, new_raw).update(new_raw)
+                    cls.strategy.candles[f"pylist_{candle.interval}"].append(
+                        {"key": int(time.time() * 1000), "row": orjson.dumps(candle.candle)}
+                    )
         except Exception as ex:
-            logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}")
+            logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}\n{traceback.format_exc()}")
             cls.wss_fire_up = True
     else:
         for i in _intervals:
-            loop.create_task(aiter_candles(_klines, i))
+            loop.create_task(aiter_candles(cls, _klines, i))
 
 
-async def aiter_candles(_klines: {str: StrategyBase.Klines}, _i: str):
-    cls = StrategyBase
+async def aiter_candles(cls, _klines: {str: StrategyBase.Klines}, _i: str):
     async for row in loop_ds(cls.backtest[f"candles_{_i}"]):
         _klines.get(_i).refresh(json.loads(row))
     StrategyBase.strategy.message_log(f"Backtest candles *** {_i} *** timeSeries ended")
@@ -1160,8 +1170,7 @@ async def buffered_orders():
         await asyncio.sleep(StrategyBase.rate_limiter)
 
 
-async def on_funds_update():
-    cls = StrategyBase
+async def on_funds_update(cls):
     if ms.MODE in ('T', 'TC'):
         try:
             async for _funds in cls.for_request(cls.stub.OnFundsUpdate, api_pb2.OnFundsUpdateRequest,
@@ -1190,8 +1199,7 @@ def on_funds_update_handler(cls, funds):
     cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
 
 
-async def on_balance_update():
-    cls = StrategyBase
+async def on_balance_update(cls):
     try:
         async for res in cls.for_request(cls.stub.OnBalanceUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             _res = json.loads(res.balance)
@@ -1208,8 +1216,7 @@ async def on_balance_update():
         cls.wss_fire_up = True
 
 
-async def on_order_update():
-    cls = StrategyBase
+async def on_order_update(cls):
     try:
         async for event in cls.for_request(cls.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             # Only for registered orders on own pair
@@ -1381,7 +1388,7 @@ async def create_order_handler(_id, result):
         if ms.MODE == 'TC' and cls.strategy.start_collect:
             cls.strategy.open_orders_snapshot()
         elif ms.MODE == 'S':
-            await on_funds_update()
+            await on_funds_update(cls)
         cls.strategy.on_place_order_success(_id, order)
 
     if _id in cls.wait_order_id:
@@ -1457,7 +1464,7 @@ async def cancel_order_handler(_id, cancel_all):
     if ms.MODE == 'TC' and cls.strategy.start_collect:
         cls.strategy.open_orders_snapshot()
     elif ms.MODE == 'S':
-        await on_funds_update()
+        await on_funds_update(cls)
 
 
 async def cancel_order_timeout(_id):
@@ -1578,12 +1585,11 @@ async def loop_ds(ds, ticker=False):
         yield row
 
 
-async def on_ticker_update():
+async def on_ticker_update(cls):
     """
     row = {'openPrice': '26923.97000000', 'lastPrice': '26882.51000000', 'closeTime': 1684572464013}
     :return:
     """
-    cls = StrategyBase
     if ms.MODE in ('T', 'TC'):
         try:
             async for ticker in cls.for_request(cls.stub.OnTickerUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
@@ -1617,7 +1623,7 @@ async def on_ticker_update():
             res = cls.strategy.account.on_ticker_update(row, int(cls.strategy.get_time() * 1000))
             for _res in res:
                 await on_order_update_handler(cls, _res)
-                await on_funds_update()
+                await on_funds_update(cls)
             pbar.update()
         pbar.close()
         cls.strategy.message_log("Backtest *** ticker *** timeSeries ended")
@@ -1668,8 +1674,7 @@ def order_book_prepare(_order_book: {}) -> {}:
     return order_book
 
 
-async def on_order_book_update():
-    cls = StrategyBase
+async def on_order_book_update(cls):
     if ms.MODE in ('T', 'TC'):
         try:
             async for _order_book in cls.for_request(cls.stub.OnOrderBookUpdate, api_pb2.MarketRequest,
@@ -1725,25 +1730,24 @@ def load_last_state() -> {}:
     return res
 
 
-async def wss_declare():
+async def wss_declare(cls):
     # Market stream
-    loop.create_task(on_ticker_update())
-    await buffered_candle()
-    loop.create_task(on_order_book_update())
+    loop.create_task(on_ticker_update(cls))
+    await buffered_candle(cls)
+    loop.create_task(on_order_book_update(cls))
     if ms.MODE in ('T', 'TC'):
         # User Stream
-        loop.create_task(on_funds_update())
-        loop.create_task(on_order_update())
-        loop.create_task(on_balance_update())
+        loop.create_task(on_funds_update(cls))
+        loop.create_task(on_order_update(cls))
+        loop.create_task(on_balance_update(cls))
         if ms.MODE == 'TC':
             loop.create_task(backtest_data_control())
 
 
-async def wss_init(update_max_queue_size=False):
-    cls = StrategyBase
+async def wss_init(cls, update_max_queue_size=False):
     cls.strategy.message_log(f"Init WSS, client_id: {cls.client_id}")
     if cls.client_id:
-        await wss_declare()
+        await wss_declare(cls)
         # WSS start
         '''
         market_stream_count=5
@@ -1855,7 +1859,7 @@ async def main(_symbol):
             print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
             session = Trade(channel_options=CHANNEL_OPTIONS,
                             account_name=account_name,
-                            rate_limiter=StrategyBase.rate_limiter,
+                            rate_limiter=cls.rate_limiter,
                             symbol=_symbol)
             #
             cls.session = session
@@ -1945,6 +1949,10 @@ async def main(_symbol):
                 schema = pa.schema([("key", pa.int64()), ("row", pa.binary())])
                 cls.strategy.s_ticker['writer'] = pq.ParquetWriter(Path(raw_path, TICKER_PRKT), schema=schema)
                 cls.strategy.s_order_book['writer'] = pq.ParquetWriter(Path(raw_path, ORDER_BOOK_PRKT), schema=schema)
+                for i in KLINES_INIT:
+                    cls.strategy.candles[f"writer_{i.value}"] = pq.ParquetWriter(Path(
+                        raw_path, f"candles_{i.value}.parquet"), schema=schema
+                    )
             #
             if ms.MODE in ('TC', 'S') and ms.SAVED_STATE:
                 cls.state_file = Path(cls.session_root, "saved_state.json")
@@ -1987,7 +1995,7 @@ async def main(_symbol):
             if ms.LOAD_LAST_STATE or answer.lower() == 'y':
                 cls.last_state = last_state
                 try:
-                    await wss_init()
+                    await wss_init(cls)
                     cls.strategy.init(check_funds=False)
                 except Exception as ex:
                     print(f"Strategy init error: {ex}")
@@ -1998,14 +2006,14 @@ async def main(_symbol):
             if ms.MODE in ('T', 'TC'):
                 cls.strategy.init()
                 input('Press Enter for Start or Ctrl-Z for Cancel\n')
-                await wss_init()
+                await wss_init(cls)
                 cls.strategy.start()
             else:
                 if ms.SAVED_STATE and cls.state_file.exists():
                     cls.strategy.init(check_funds=False)
                 else:
                     cls.strategy.init()
-                await wss_declare()
+                await wss_declare(cls)
                 # Set initial local time from backtest data
                 cls.strategy.time_operational['new'] = cls.backtest['ticker_index_first'] / 1000
                 cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
