@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0b4"
+__version__ = "2.1.0b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -960,7 +960,7 @@ async def buffered_candle(cls):
     klines = {}
     klines_from_file = {}
     if ms.MODE == 'S':
-        klines_from_file = json.load(open(Path(cls.session_root, f"/raw/klines.json")))
+        klines_from_file = json.load(open(Path(cls.session_root, f"raw/klines.json")))
     for i in KLINES_INIT:
         if ms.MODE in ('T', 'TC'):
             try:
@@ -977,9 +977,6 @@ async def buffered_candle(cls):
                     cls.strategy.klines[i.value] = kline
         else:
             kline = klines_from_file.get(i.value, {})
-            cls.backtest[f"candles_{i.value}"] = pd.read_pickle(
-                Path(cls.session_root, f"/raw/candles_{i.value}.pkl")
-            )
 
         if candles := kline.get('klines'):
             kline_i = cls.Klines(i.value)
@@ -1000,20 +997,21 @@ async def on_klines_update(cls, _klines: {str: StrategyBase.Klines}):
     _intervals = list(_klines.keys())
     if ms.MODE in ('T', 'TC'):
         try:
-            async for candle in cls.for_request(cls.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
-                                                symbol=cls.symbol,
-                                                interval=json.dumps(_intervals)):
+            async for res in cls.for_request(cls.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
+                                             symbol=cls.symbol,
+                                             interval=json.dumps(_intervals)):
                 # print(f"on_klines_update: {candle.symbol}, {candle.interval}, candle: {json.loads(candle.candle)[0]}")
-                _klines.get(candle.interval).refresh(json.loads(candle.candle))
+                candle = json.loads(res.candle)
+                _klines.get(res.interval).refresh(candle)
                 if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
-                    if len(cls.strategy.candles[f"pylist_{candle.interval}"]) > PYARROW_BATCH_BUFFER_SIZE:
-                        cls.strategy.candles[f"writer_{candle.interval}"].write_batch(
-                            pa.RecordBatch.from_pylist(mapping=cls.strategy.candles[f"pylist_{candle.interval}"])
+                    if len(cls.strategy.candles[f"pylist_{res.interval}"]) > PYARROW_BATCH_BUFFER_SIZE:
+                        cls.strategy.candles[f"writer_{res.interval}"].write_batch(
+                            pa.RecordBatch.from_pylist(mapping=cls.strategy.candles[f"pylist_{res.interval}"])
                         )
-                        cls.strategy.candles[f"pylist_{candle.interval}"].clear()
+                        cls.strategy.candles[f"pylist_{res.interval}"].clear()
 
-                    cls.strategy.candles[f"pylist_{candle.interval}"].append(
-                        {"key": int(time.time() * 1000), "row": orjson.dumps(candle.candle)}
+                    cls.strategy.candles[f"pylist_{res.interval}"].append(
+                        {"key": int(time.time() * 1000), "row": orjson.dumps(candle)}
                     )
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}\n{traceback.format_exc()}")
@@ -1025,7 +1023,7 @@ async def on_klines_update(cls, _klines: {str: StrategyBase.Klines}):
 
 async def aiter_candles(cls, _klines: {str: StrategyBase.Klines}, _i: str):
     async for row in loop_ds(cls.backtest[f"candles_{_i}"]):
-        _klines.get(_i).refresh(json.loads(row))
+        _klines.get(_i).refresh(row)
     StrategyBase.strategy.message_log(f"Backtest candles *** {_i} *** timeSeries ended")
 
 
@@ -1532,7 +1530,7 @@ def remove_from_trades_lists(_order_id) -> None:
     cls.trades[:] = [i for i in cls.trades if i.order_id != _order_id]
 
 
-async def loop_ds_pq(ds, ticker=False):
+async def loop_ds(ds, ticker=False):
     cls = StrategyBase
     while not cls.strategy.start_collect:
         await asyncio.sleep(0.001)
@@ -1555,34 +1553,6 @@ async def loop_ds_pq(ds, ticker=False):
             yield orjson.loads(row['row'])
     if ticker:
         cls.backtest['ticker_index_last'] = index_prev * 1000
-
-
-async def loop_ds(ds, ticker=False):
-    """
-    Pandas time Series asynchronous generator with delay (real time/XTIME) multiplier
-    :param ticker: True - update local time
-    :param ds: pandas time Series object
-    :return: next row
-    """
-    cls = StrategyBase
-    while not cls.strategy.start_collect:
-        await asyncio.sleep(0.001)
-
-    index_prev = 0
-    for index, row in ds.items():
-        index /= 1000
-
-        if ticker:
-            cls.strategy.time_operational['new'] = index
-            delay = (index - index_prev) if index_prev else 0
-            index_prev = index
-        else:
-            delay = index - cls.strategy.get_time()
-
-        if delay > 0:
-            delay /= ms.XTIME
-            await asyncio.sleep(delay)
-        yield row
 
 
 async def on_ticker_update(cls):
@@ -1616,7 +1586,7 @@ async def on_ticker_update(cls):
             cls.wss_fire_up = True
     else:
         pbar = tqdm(total=cls.backtest['ticker'].metadata.num_rows)
-        async for row in loop_ds_pq(cls.backtest['ticker'], ticker=True):
+        async for row in loop_ds(cls.backtest['ticker'], ticker=True):
             cls.delay_ordering_s = row.pop('delay', 0)
             cls.ticker = row
             cls.strategy.on_new_ticker(Ticker(row))
@@ -1677,8 +1647,11 @@ def order_book_prepare(_order_book: {}) -> {}:
 async def on_order_book_update(cls):
     if ms.MODE in ('T', 'TC'):
         try:
-            async for _order_book in cls.for_request(cls.stub.OnOrderBookUpdate, api_pb2.MarketRequest,
-                                                     symbol=cls.symbol):
+            async for _order_book in cls.for_request(
+                    cls.stub.OnOrderBookUpdate,
+                    api_pb2.MarketRequest,
+                    symbol=cls.symbol
+            ):
                 order_book = order_book_prepare(_order_book)
                 cls.order_book = order_book
                 cls.strategy.on_new_order_book(OrderBook(cls.order_book))
@@ -1697,7 +1670,7 @@ async def on_order_book_update(cls):
             logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
             cls.wss_fire_up = True
     else:
-        async for row in loop_ds_pq(cls.backtest['order_book']):
+        async for row in loop_ds(cls.backtest['order_book']):
             cls.order_book = row
             cls.strategy.on_new_order_book(OrderBook(row))
         cls.strategy.message_log("Backtest *** order_book *** timeSeries ended")
@@ -1929,6 +1902,10 @@ async def main(_symbol):
                     order_book['bids'] = order_book['bids'] or [[price['price'], amount]]
                     order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
                 cls.order_book = order_book
+                if ms.MODE == 'TC':
+                    cls.strategy.s_order_book['pylist'].append(
+                        {"key": int(time.time() * 1000), "row": orjson.dumps(order_book)}
+                    )
                 # endregion
                 _ticker = await cls.send_request(cls.stub.FetchTickerPriceChangeStatistics,
                                                  api_pb2.MarketRequest,
@@ -1937,11 +1914,16 @@ async def main(_symbol):
                 # print(f"main.ticker: {cls.ticker}")
                 loop.create_task(save_asset())
             #
+            if ms.MODE in ('TC', 'S'):
+                cls.session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
+                raw_path = Path(cls.session_root, "raw")
+                if ms.SAVED_STATE:
+                    cls.state_file = Path(cls.session_root, "saved_state.json")
+            #
             if ms.MODE == 'TC':
                 BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
-                cls.session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
                 cls.session_root.mkdir(parents=True, exist_ok=True)
-                raw_path = Path(cls.session_root, "raw")
+                # noinspection PyUnboundLocalVariable
                 raw_path.mkdir(parents=True, exist_ok=True)
                 #
                 copy(ms.PARAMS, Path(cls.session_root, Path(ms.PARAMS).name))
@@ -1953,10 +1935,6 @@ async def main(_symbol):
                     cls.strategy.candles[f"writer_{i.value}"] = pq.ParquetWriter(Path(
                         raw_path, f"candles_{i.value}.parquet"), schema=schema
                     )
-            #
-            if ms.MODE in ('TC', 'S') and ms.SAVED_STATE:
-                cls.state_file = Path(cls.session_root, "saved_state.json")
-
         #
         else:
             # Init class atr for reuse in next backtest cycle
@@ -1972,17 +1950,19 @@ async def main(_symbol):
             cls.strategy.account.fee_maker = ms.FEE_MAKER
             cls.strategy.account.fee_taker = ms.FEE_TAKER
             # ticker
-            cls.backtest['ticker'] = pq.ParquetFile(Path(BACKTEST_PATH,
-                                                         f"{cls.exchange}_{cls.symbol}/raw/{TICKER_PRKT}"))
+            cls.backtest['ticker'] = pq.ParquetFile(Path(raw_path, TICKER_PRKT))
             ticker_first_row = next(cls.backtest['ticker'].iter_batches(batch_size=1)).to_pylist()[0]
             cls.ticker = orjson.loads(ticker_first_row['row'])
             cls.backtest['ticker_index_first'] = ticker_first_row['key']
             # order_book
-            cls.backtest['order_book'] = pq.ParquetFile(Path(BACKTEST_PATH,
-                                                             f"{cls.exchange}_{cls.symbol}/raw/{ORDER_BOOK_PRKT}"))
+            cls.backtest['order_book'] = pq.ParquetFile(Path(raw_path, ORDER_BOOK_PRKT))
             cls.order_book = orjson.loads(
                 next(cls.backtest['order_book'].iter_batches(batch_size=1)).to_pylist()[0]['row']
             )
+            # candles
+            for i in KLINES_INIT:
+                cls.backtest[f"candles_{i.value}"] = pq.ParquetFile(Path(raw_path, f"candles_{i.value}.parquet"))
+
         await buffered_funds()
         answer = str()
         restored = True
