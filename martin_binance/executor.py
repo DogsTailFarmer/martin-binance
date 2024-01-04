@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0b3"
+__version__ = "2.1.0b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -298,7 +298,6 @@ class Strategy(StrategyBase):
         "last_ticker_update",
         "grid_only_restart",
         "wait_wss_refresh",
-        "start_collect",
         "restore_orders",
         "ts_grid_update",
         "tp_part_free",
@@ -389,7 +388,6 @@ class Strategy(StrategyBase):
         self.last_ticker_update = 0  # -
         self.grid_only_restart = None  # -
         self.wait_wss_refresh = {}  # -
-        self.start_collect = None
         self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
         self.ts_grid_update = self.get_time()  # - When updated grid
         self.tp_part_free = False  # + Can use TP part amount for converting to grid orders
@@ -987,7 +985,8 @@ class Strategy(StrategyBase):
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
             self.debug_output()
-            self.start_collect = True
+            if self.start_collect is None:
+                self.start_collect = True
             self.first_run = False
             self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
 

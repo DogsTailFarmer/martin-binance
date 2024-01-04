@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0b5"
+__version__ = "2.1.0b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -432,6 +432,7 @@ class StrategyBase:
         "queue_to_tlg",
         "status_time",
         "tlg_header",
+        "start_collect",
     )
 
     session = None
@@ -486,6 +487,7 @@ class StrategyBase:
         self.queue_to_tlg = queue.Queue()  # - Queue for sending message to Telegram
         self.status_time = None  # + Last time sending status message
         self.tlg_header = ''  # - Header for Telegram message
+        self.start_collect = None
 
     def __call__(self):
         return self
@@ -866,7 +868,7 @@ async def ask_exit():
             except Exception as ex:
                 logger.warning(f"ask_exit: {ex}")
 
-            if ms.MODE == 'TC':
+            if ms.MODE == 'TC' and cls.strategy.start_collect:
                 # Save stream data for backtesting
                 cls.strategy.start_collect = False
                 session_data_handler(cls)
@@ -942,14 +944,14 @@ async def backtest_data_control():
     """
     Control memory usage and safe saving by predefined timetable
     """
-    cls = StrategyBase.strategy
-    delay = HEARTBEAT * 300  # 10 min
+    cls = StrategyBase
+    delay = HEARTBEAT * 30  # 1 min
     ts = time.time()
     while 1:
-        if cls.start_collect and time.time() - ts > ms.SAVE_PERIOD:
-            cls.start_collect = False
+        if cls.strategy.start_collect and time.time() - ts > ms.SAVE_PERIOD:
+            cls.strategy.start_collect = False
             session_data_handler(cls)
-            cls.reset_var()
+            cls.strategy.reset_var()
             break
         await asyncio.sleep(delay)
     cls.strategy.message_log("Backtest record session ended", tlg=True)
@@ -1000,7 +1002,6 @@ async def on_klines_update(cls, _klines: {str: StrategyBase.Klines}):
             async for res in cls.for_request(cls.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
                                              symbol=cls.symbol,
                                              interval=json.dumps(_intervals)):
-                # print(f"on_klines_update: {candle.symbol}, {candle.interval}, candle: {json.loads(candle.candle)[0]}")
                 candle = json.loads(res.candle)
                 _klines.get(res.interval).refresh(candle)
                 if ms.MODE == 'TC' and (cls.strategy.start_collect or cls.strategy.start_collect is None):
@@ -1892,26 +1893,26 @@ async def main(_symbol):
             if ms.MODE in ('T', 'TC'):
                 # region Get and processing Order book
                 _order_book = await cls.send_request(cls.stub.FetchOrderBook, api_pb2.MarketRequest, symbol=_symbol)
-                order_book = order_book_prepare(_order_book)
-                if not order_book['bids'] or not order_book['asks']:
+                cls.order_book = order_book_prepare(_order_book)
+                if not cls.order_book['bids'] or not cls.order_book['asks']:
                     _price = await cls.send_request(cls.stub.FetchSymbolPriceTicker, api_pb2.MarketRequest,
                                                     symbol=_symbol)
                     price = json_format.MessageToDict(_price)
                     print(f"Not bids or asks for pair {price.get('symbol')}, last known price is {price.get('price')}")
                     amount = exchange_info_symbol['filters']['lotSize']['minQty']
-                    order_book['bids'] = order_book['bids'] or [[price['price'], amount]]
-                    order_book['asks'] = order_book['asks'] or [[price['price'], amount]]
-                cls.order_book = order_book
-                if ms.MODE == 'TC':
-                    cls.strategy.s_order_book['pylist'].append(
-                        {"key": int(time.time() * 1000), "row": orjson.dumps(order_book)}
-                    )
+                    cls.order_book['bids'] = cls.order_book['bids'] or [[price['price'], amount]]
+                    cls.order_book['asks'] = cls.order_book['asks'] or [[price['price'], amount]]
                 # endregion
                 _ticker = await cls.send_request(cls.stub.FetchTickerPriceChangeStatistics,
                                                  api_pb2.MarketRequest,
                                                  symbol=_symbol)
                 cls.ticker = json_format.MessageToDict(_ticker)
-                # print(f"main.ticker: {cls.ticker}")
+                # Save first order_book and ticker raw's
+                if ms.MODE == 'TC':
+                    ts = int(time.time() * 1000)
+                    cls.strategy.s_order_book['pylist'].append({"key": ts, "row": orjson.dumps(cls.order_book)})
+                    cls.strategy.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(cls.ticker)})
+                #
                 loop.create_task(save_asset())
             #
             if ms.MODE in ('TC', 'S'):
