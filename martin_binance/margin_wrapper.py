@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc1"
+__version__ = "2.1.0rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -962,7 +962,7 @@ async def buffered_candle(cls):
     klines = {}
     klines_from_file = {}
     if ms.MODE == 'S':
-        klines_from_file = json.load(open(Path(cls.session_root, f"raw/klines.json")))
+        klines_from_file = json.load(open(Path(cls.session_root, "raw/klines.json")))
     for i in KLINES_INIT:
         if ms.MODE in ('T', 'TC'):
             try:
