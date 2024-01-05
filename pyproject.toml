@@ -33,7 +33,8 @@ dependencies = [
     "inquirer==3.1.3",
     "scikit-learn==1.3.2",
     "tqdm==4.66.1",
-    "ujson~=5.9.0"
+    "ujson~=5.9.0",
+    "orjson~=3.9.10"
 ]
 
 [tool.flit.module]
