@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc1"
+__version__ = "2.1.0rc4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -915,7 +915,7 @@ class Strategy(StrategyBase):
                         print('Send data to .db t_funds')
                         self.queue_to_db.put(data_to_db)
                 self.save_init_assets(ff, fs)
-                if COLLECT_ASSETS:
+                if COLLECT_ASSETS and MODE != 'S':
                     _ff, _fs = self.collect_assets()
                     ff -= _ff
                     fs -= _fs

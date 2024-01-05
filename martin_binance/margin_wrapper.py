@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc2"
+__version__ = "2.1.0rc4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1939,6 +1939,7 @@ async def main(_symbol):
         #
         else:
             # Init class atr for reuse in next backtest cycle
+            raw_path = Path(cls.session_root, "raw")
             cls.reset_class_var()
         #
         if ms.MODE == 'S':
