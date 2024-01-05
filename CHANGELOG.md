@@ -1,7 +1,12 @@
-## 2.1.x - 202x-xx-xx
+## 2.1.0rc1 - 2024-01-05
 ### Update
 * `SAVE_TRADE_HISTORY = False` set default
 * calculation `over price` for Reverse cycle : checking result on positive, correction it if needed
+* [For backtesting change format saved data from Pickle to Feather #64](https://github.com/DogsTailFarmer/martin-binance/issues/64#issue-1858138993)
+    + Change format to [Apache Parquet](https://parquet.apache.org)
+    + Restrictions on the size of RAM have been removed due to write/read buffering
+    + Use orjson for de/serialize stream data
+* replacing `json` with `ujson` to improve performance
 
 ## 2.0.7 - 2023-12-13
 ### Update

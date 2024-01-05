@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.3"
+__version__ = "2.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -88,7 +88,7 @@ ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 # Backtest mode parameters
 ex.MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 ex.SAVE_DS = True  # Save session result data (ticker, orders) for compare
-ex.SAVE_PERIOD = 24 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
+ex.SAVE_PERIOD = 24 * 60 * 60  # sec, timetable for save data portion
 ex.SAVED_STATE = False  # Use saved state for backtesting
 ################################################################
 #                 DO NOT EDIT UNDER THIS LINE                ###

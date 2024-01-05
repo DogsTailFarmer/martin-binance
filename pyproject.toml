@@ -17,7 +17,7 @@ dynamic = ["version", "description"]
 requires-python = ">=3.8"
 
 dependencies = [
-    "exchanges-wrapper==1.4.4",
+    "exchanges-wrapper==1.4.5",
     "margin-strategy-sdk==0.0.11",
     "jsonpickle==3.0.2",
     "psutil==5.9.6",
