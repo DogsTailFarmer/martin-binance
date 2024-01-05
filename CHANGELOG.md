@@ -1,6 +1,7 @@
 ## 2.1.x - 202x-xx-xx
 ### Update
 * `SAVE_TRADE_HISTORY = False` set default
+* calculation `over price` for Reverse cycle : checking result on positive, correction it if needed
 
 ## 2.0.7 - 2023-12-13
 ### Update

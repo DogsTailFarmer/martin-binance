@@ -4,13 +4,14 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0b6"
+__version__ = "2.1.0b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
 import sys
 import gc
 import statistics
+import traceback
 from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING
 from threading import Thread
 import queue
@@ -117,7 +118,14 @@ def solve(fn, value: Decimal, x: Decimal, **kwargs) -> (Decimal, str):
         return abs(float(value) - fn(_x, **kwargs))
     res = minimize(_fn, x0=np.array([float(x)]), method='Nelder-Mead')
     if res.success:
-        return f2d(res.x[0]), f"{res.message} Number of iterations: {res.nit}"
+        _res = f2d(res.x[0])
+        n = 0
+        while f2d(fn(_res, **kwargs)) - value < 0:
+            _res += f2d(0.1)
+            n += 1
+            if n > 200:  # cycle limit check
+                return O_DEC, "Number of cycles exceeded"
+        return _res, f"{res.message} Number of iterations: {res.nit}, correction: +{n*0.1:.2f}"
     return O_DEC, res.message
 
 
@@ -1385,7 +1393,9 @@ class Strategy(StrategyBase):
                     }
                     return
                 except Exception as ex:
-                    self.message_log(f"Can't set trade conditions: {ex}", log_level=LogLevel.ERROR)
+                    self.message_log(
+                        f"Can't set trade conditions: {ex}\n{traceback.format_exc()}", log_level=LogLevel.ERROR
+                    )
                     return
             else:
                 self.over_price = OVER_PRICE
@@ -1820,7 +1830,7 @@ class Strategy(StrategyBase):
                         min_delta: Decimal,
                         amount_first_grid: Decimal,
                         amount_min: Decimal,
-                        over_price_previous: Decimal = None) -> Decimal:
+                        over_price_previous: Decimal = f2d(0)) -> Decimal:
         """
         Calculate over price for depo refund after Reverse cycle
         :param buy_side:
@@ -1850,8 +1860,8 @@ class Strategy(StrategyBase):
             over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
 
             if over_price == 0:
-                self.message_log(f"{msg}, use previous or over_price_coarse * 2", log_level=LogLevel.WARNING)
-                over_price = over_price_previous or 2 * over_price_coarse
+                self.message_log(f"{msg}, use previous or over_price_coarse * 3", log_level=LogLevel.WARNING)
+                over_price = max(over_price_previous, 3 * over_price_coarse)
             else:
                 self.message_log(msg)
         else:
