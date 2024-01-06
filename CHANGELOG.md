@@ -1,3 +1,8 @@
+### Update
+* margin_wrapper.buffered_funds(): some minor improvements
+* executor.get_free_assets(): for "free" mode the volume of the utilized deposit is taken into account when not TP
+* Up requirements for exchanges-wrapper==1.4.6
+
 ## 2.1.0rc1 - 2024-01-05
 ### Update
 * `SAVE_TRADE_HISTORY = False` set default

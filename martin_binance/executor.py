@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc4"
+__version__ = "2.1.0rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -829,7 +829,7 @@ class Strategy(StrategyBase):
             #
             self.message_log("Restored, go work", tlg=True)
 
-    def start(self, profit_f: Decimal = f2d(0), profit_s: Decimal = f2d(0)) -> None:
+    def start(self, profit_f: Decimal = O_DEC, profit_s: Decimal = O_DEC) -> None:
         self.message_log('Start')
         if self.command == 'stopped':
             self.message_log('Strategy stopped, waiting manual action')
@@ -1283,9 +1283,16 @@ class Strategy(StrategyBase):
                 if mode == 'total':
                     ff = _ff.total_for_currency
                     fs = _fs.total_for_currency
-                elif mode in ('available', 'free'):
+                elif mode == 'available':
                     ff = _ff.available
                     fs = _fs.available
+                elif mode == 'free':
+                    if self.tp_order_id or self.tp_wait_id:
+                        ff = _ff.available
+                        fs = _fs.available
+                    else:
+                        ff = max(O_DEC, _ff.available - self.sum_amount_first)
+                        fs = max(O_DEC, _fs.available - self.sum_amount_second)
                 elif mode == 'reserved':
                     ff = _ff.reserved
                     fs = _fs.reserved
@@ -1302,8 +1309,7 @@ class Strategy(StrategyBase):
         ff = self.round_truncate(ff, base=True)
         fs = self.round_truncate(fs, base=False)
         ft = ff * self.avg_rate + fs
-        assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
-        return ff, fs, ft, assets
+        return ff, fs, ft, f"{mode.capitalize()}: First: {ff}, Second: {fs}"
 
     def round_truncate(self, _x: Decimal, base: bool = None, fee=False, _rounding=ROUND_FLOOR) -> Decimal:
         if fee:
@@ -1830,7 +1836,7 @@ class Strategy(StrategyBase):
                         min_delta: Decimal,
                         amount_first_grid: Decimal,
                         amount_min: Decimal,
-                        over_price_previous: Decimal = f2d(0)) -> Decimal:
+                        over_price_previous: Decimal = O_DEC) -> Decimal:
         """
         Calculate over price for depo refund after Reverse cycle
         :param buy_side:

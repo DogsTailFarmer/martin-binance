@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc4"
+__version__ = "2.1.0rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1041,18 +1041,16 @@ async def buffered_funds(print_info: bool = True):
     except Exception as _ex:
         logger.warning(f"Exception buffered_funds: {_ex}")
     else:
-        # print(f"buffered_funds.balances: {balances}")
-        try:
-            balance_f = next(item for item in balances if item["asset"] == cls.base_asset)
-        except StopIteration:
-            balance_f = {'asset': cls.base_asset, 'free': '0.0', 'locked': '0.0'}
-        try:
-            balance_s = next(item for item in balances if item["asset"] == cls.quote_asset)
-        except StopIteration:
-            balance_s = {'asset': cls.quote_asset, 'free': '0.0', 'locked': '0.0'}
+        balance_f = next(
+            (item for item in balances if item["asset"] == cls.base_asset),
+            {'asset': cls.base_asset, 'free': '0.0', 'locked': '0.0'}
+        )
+        balance_s = next(
+            (item for item in balances if item["asset"] == cls.quote_asset),
+            {'asset': cls.quote_asset, 'free': '0.0', 'locked': '0.0'}
+        )
         funds = {cls.base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
                  cls.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
-
         cls.funds = funds
         if print_info:
             print(EQUAL_STR)
@@ -1060,7 +1058,6 @@ async def buffered_funds(print_info: bool = True):
             print(f"Quote asset balance: {balance_s}")
             print(EQUAL_STR)
         else:
-            # print(f"buffered_funds.funds: {cls.funds}")
             funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
                      cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
             cls.strategy.on_new_funds(funds)
@@ -1233,6 +1230,21 @@ async def on_order_update_handler(cls, ed):
             or ed['order_status'] not in ('FILLED', 'PARTIALLY_FILLED')
     ):
         return
+
+    if ed['order_quantity'] == '0':
+        # Get data from saved order
+        so = cls.orders.get(ed['order_id'])
+        ed['order_quantity'] = str(so.amount)
+        ed['order_price'] = str(so.price)
+        last_quantity = Decimal(ed['last_executed_quantity'])
+        if so.received_amount + last_quantity < so.amount:
+            ed['cumulative_filled_quantity'] = str(so.received_amount + last_quantity)
+        else:
+            ed['cumulative_filled_quantity'] = str(so.amount)
+            ed['order_status'] = 'FILLED'
+        ed['quote_order_quantity'] = str(so.amount * so.price)
+        ed['quote_asset_transacted'] = str(Decimal(ed['cumulative_filled_quantity']) * so.price)
+
     if ed['order_status'] == 'FILLED':
         # Remove from orders dict
         remove_from_orders_lists([ed['order_id']])
