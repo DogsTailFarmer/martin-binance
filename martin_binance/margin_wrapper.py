@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc7"
+__version__ = "2.1.0rc8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -43,7 +43,7 @@ from margin_strategy_sdk import StrategyConfig  # lgtm [py/unused-import]
 from exchanges_wrapper.definitions import Interval
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
-from martin_binance import executor as ms, BACKTEST_PATH, copy, LOG_PATH
+from martin_binance import executor as ms, BACKTEST_PATH, copy, LAST_STATE_PATH
 from martin_binance.client import Trade
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 
@@ -157,11 +157,11 @@ def trade_not_exist(_order_id: int, _trade_id: int) -> bool:
 
 
 def order_trades_sum(_order_id: int) -> Decimal:
-    saved_filled_quantity = Decimal("0")
+    saved_filled_quantity = Decimal()
     for _trade in StrategyBase.trades:
         if _trade.order_id == _order_id:
             saved_filled_quantity += _trade.amount
-    return saved_filled_quantity.quantize(Decimal("1.01234567"), rounding=ROUND_FLOOR)
+    return saved_filled_quantity
 
 
 class PrivateTrade:
@@ -658,31 +658,55 @@ class StrategyBase:
 
 
 async def save_to_csv() -> None:
+    """
+    Header: ["TRADE",
+             "transaction_time",
+             "side",
+             "order_id",
+             "client_order_id",
+             "trade_id",
+             "order_quantity",
+             "order_price",
+             "cumulative_filled_quantity",
+             "quote_asset_transacted",
+             "last_executed_quantity",
+             "last_executed_price",
+             ]
+            ['TRANSFER',
+             "event_time",
+             "asset",
+             "balance_delta",
+             ]
+    :return:
+    """
     cls = StrategyBase
-    file_name = Path(LOG_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
+    file_name = Path(LAST_STATE_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
     with open(file_name, mode="a", buffering=1) as fp:
         writer = csv.writer(fp)
-        writer.writerow(["TRADE",
-                         "transaction_time",
-                         "side",
-                         "order_id",
-                         "client_order_id",
-                         "trade_id",
-                         "order_quantity",
-                         "order_price",
-                         "cumulative_filled_quantity",
-                         "quote_asset_transacted",
-                         "last_executed_quantity",
-                         "last_executed_price",
-                         ])
-        writer.writerow(['TRANSFER',
-                         "event_time",
-                         "asset",
-                         "balance_delta",
-                         ])
         while cls.strategy:
             writer.writerow(await save_trade_queue.get())
             save_trade_queue.task_done()
+
+
+def load_from_csv() -> []:
+    file_name = Path(LAST_STATE_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
+    trades = []
+
+    if file_name.exists():
+        with open(file_name, "r") as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                if row[0] in ('TRADE', 'TRADE_BY_MARKET'):
+                    trade = {
+                        "time": row[1],
+                        "isBuyer": row[2] == 'BUY',
+                        "orderId": row[3],
+                        "id": row[5],
+                        "qty": row[10],
+                        "price": row[11],
+                    }
+                    trades.append(trade)
+    return trades
 
 
 async def heartbeat(_session):
@@ -1091,6 +1115,7 @@ async def buffered_orders():
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
+                [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                 #
                 cls.strategy.restore_strategy_state(cls.last_state, restore=False)
 
@@ -1107,9 +1132,7 @@ async def buffered_orders():
             for order in orders:
                 _id = int(order['orderId'])
                 exch_orders.append(_id)
-                if (order.get('status') == 'PARTIALLY_FILLED'
-                        and order_trades_sum(_id) < Decimal(order['executedQty']).quantize(Decimal("1.01234567"),
-                                                                                           rounding=ROUND_FLOOR)):
+                if order.get('status') == 'PARTIALLY_FILLED' and order_trades_sum(_id) < Decimal(order['executedQty']):
                     diff_id.add(_id)
             # Missed fill event list
             diff_id.update(set(cls.orders).difference(set(exch_orders)))
@@ -1230,6 +1253,8 @@ async def on_order_update_handler(cls, ed):
             or ed['order_status'] not in ('FILLED', 'PARTIALLY_FILLED')
     ):
         return
+
+    print(f"on_order_update_handler.ed: {ed}")
 
     if ed['order_quantity'] == '0':
         # Get data from saved order

@@ -1,6 +1,7 @@
 ### Update
 * margin_wrapper.buffered_funds(): some minor improvements
 * executor.get_free_assets(): for "free" mode the volume of the utilized deposit is taken into account when not TP
+* rollback saving/restore trades history, but used for it specified file in `/last_state/X_AAABBB.csv`
 * Up requirements for exchanges-wrapper==1.4.6
 
 ## 2.1.0rc1 - 2024-01-05
