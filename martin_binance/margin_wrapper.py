@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc8"
+__version__ = "2.1.0rc9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -585,7 +585,7 @@ class StrategyBase:
             time.sleep(0.02)
         return cls.order_id
 
-    def get_buffered_completed_trades(self, _get_all_trades: bool = False) -> List[PrivateTrade]:
+    def get_buffered_completed_trades(self) -> List[PrivateTrade]:
         return self.trades
 
     def get_buffered_open_orders(self) -> List[Order]:
@@ -1116,6 +1116,8 @@ async def buffered_orders():
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
                 [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
+                # noinspection PyStatementEffect
+                cls.trades[-TRADES_LIST_LIMIT:]
                 #
                 cls.strategy.restore_strategy_state(cls.last_state, restore=False)
 
