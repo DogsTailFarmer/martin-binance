@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc10"
+__version__ = "2.1.0rc12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -691,7 +691,7 @@ async def save_to_csv() -> None:
 def load_from_csv() -> []:
     file_name = Path(LAST_STATE_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
     trades = []
-    if file_name.exists():
+    if file_name.exists() and file_name.stat().st_size:
         row_count = len(pd.read_csv(file_name).index)
         with open(file_name, "r") as csvfile:
             reader = csv.reader(csvfile)
@@ -1109,6 +1109,14 @@ async def buffered_orders():
                 cls.wss_fire_up = True
                 raise UserWarning(f"Not active WSS for {cls.symbol} on {cls.exchange}, restart request sent")
 
+            _orders = await cls.send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=cls.symbol)
+            if _orders is None:
+                raise UserWarning("Can't fetch open orders")
+
+            orders = json_format.MessageToDict(_orders).get('items', [])
+            for order in orders:
+                exch_orders.append(int(order['orderId']))
+
             if cls.last_state:
                 cls.strategy.message_log("Trying restore saved state after restart", color=Style.GREEN)
                 # Restore StrategyBase class var
@@ -1116,6 +1124,15 @@ async def buffered_orders():
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
+                for _id in exch_orders:
+                    if _id not in cls.orders.keys():
+                        _order = next((_o for _o in orders if int(_o["orderId"]) == _id), None)
+                        if _order:
+                            cls.strategy.message_log(f"Was restored order {_id}({_order['clientOrderId']})"
+                                                     f" from exchange data",
+                                                     log_level=LogLevel.WARNING,
+                                                     color=Style.YELLOW)
+                            cls.orders[_id] = Order(_order)
                 [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                 #
                 cls.strategy.restore_strategy_state(cls.last_state, restore=False)
@@ -1124,17 +1141,12 @@ async def buffered_orders():
                 cls.strategy.message_log("Trying restore saved state after lost connection to host",
                                          color=Style.GREEN)
 
-            _orders = await cls.send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=cls.symbol)
-            if _orders is None:
-                raise UserWarning("Can't fetch open orders")
-            StrategyBase.rate_limiter = max(StrategyBase.rate_limiter, _orders.rate_limiter)
-
-            orders = json_format.MessageToDict(_orders).get('items', [])
             for order in orders:
                 _id = int(order['orderId'])
-                exch_orders.append(_id)
                 if order.get('status') == 'PARTIALLY_FILLED' and order_trades_sum(_id) < Decimal(order['executedQty']):
                     diff_id.add(_id)
+            StrategyBase.rate_limiter = max(StrategyBase.rate_limiter, _orders.rate_limiter)
+
             # Missed fill event list
             diff_id.update(set(cls.orders).difference(set(exch_orders)))
 
