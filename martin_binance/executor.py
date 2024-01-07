@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc7"
+__version__ = "2.1.0rc10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -68,7 +68,6 @@ GRID_ONLY = bool()
 LOG_LEVEL_NO_PRINT = []
 HOLD_TP_ORDER_TIMEOUT = 30
 COLLECT_ASSETS = bool()
-SAVE_TRADE_HISTORY = False
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()

@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc9"
+__version__ = "2.1.0rc10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -681,8 +681,8 @@ async def save_to_csv() -> None:
     """
     cls = StrategyBase
     file_name = Path(LAST_STATE_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
-    with open(file_name, mode="a", buffering=1) as fp:
-        writer = csv.writer(fp)
+    with open(file_name, mode="a", buffering=1) as csvfile:
+        writer = csv.writer(csvfile)
         while cls.strategy:
             writer.writerow(await save_trade_queue.get())
             save_trade_queue.task_done()
@@ -691,10 +691,11 @@ async def save_to_csv() -> None:
 def load_from_csv() -> []:
     file_name = Path(LAST_STATE_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
     trades = []
-
     if file_name.exists():
+        row_count = len(pd.read_csv(file_name).index)
         with open(file_name, "r") as csvfile:
             reader = csv.reader(csvfile)
+            [next(reader) for _ in range(row_count - TRADES_LIST_LIMIT)]
             for row in reader:
                 if row[0] in ('TRADE', 'TRADE_BY_MARKET'):
                     trade = {
@@ -1116,8 +1117,6 @@ async def buffered_orders():
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
                 [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
-                # noinspection PyStatementEffect
-                cls.trades[-TRADES_LIST_LIMIT:]
                 #
                 cls.strategy.restore_strategy_state(cls.last_state, restore=False)
 
@@ -1224,13 +1223,12 @@ async def on_balance_update(cls):
     try:
         async for res in cls.for_request(cls.stub.OnBalanceUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             _res = json.loads(res.balance)
-            if ms.SAVE_TRADE_HISTORY:
-                row = ['TRANSFER',
-                       _res["event_time"],
-                       _res["asset"],
-                       _res["balance_delta"],
-                       ]
-                await save_trade_queue.put(row)
+            await save_trade_queue.put(
+                ['TRANSFER',
+                 _res["event_time"],
+                 _res["asset"],
+                 _res["balance_delta"]]
+            )
             cls.strategy.on_balance_update(_res)
     except Exception as ex:
         logger.warning(f"Exception on WSS, on_balance_update loop closed: {ex}")
@@ -1255,9 +1253,6 @@ async def on_order_update_handler(cls, ed):
             or ed['order_status'] not in ('FILLED', 'PARTIALLY_FILLED')
     ):
         return
-
-    print(f"on_order_update_handler.ed: {ed}")
-
     if ed['order_quantity'] == '0':
         # Get data from saved order
         so = cls.orders.get(ed['order_id'])
@@ -1296,21 +1291,20 @@ async def on_order_update_handler(cls, ed):
 
     if trade_not_exist(ed['order_id'], ed['trade_id']):
         _on_order_update_handler_ext(ed, cls)
-        if ms.SAVE_TRADE_HISTORY:
-            row = ["TRADE",
-                   ed["transaction_time"],
-                   ed["side"],
-                   ed["order_id"],
-                   ed["client_order_id"],
-                   ed["trade_id"],
-                   ed["order_quantity"],
-                   ed["order_price"],
-                   ed["cumulative_filled_quantity"],
-                   ed["quote_asset_transacted"],
-                   ed["last_executed_quantity"],
-                   ed["last_executed_price"],
-                   ]
-            await save_trade_queue.put(row)
+        await save_trade_queue.put(
+            ["TRADE",
+             ed["transaction_time"],
+             ed["side"],
+             ed["order_id"],
+             ed["client_order_id"],
+             ed["trade_id"],
+             ed["order_quantity"],
+             ed["order_price"],
+             ed["cumulative_filled_quantity"],
+             ed["quote_asset_transacted"],
+             ed["last_executed_quantity"],
+             ed["last_executed_price"]]
+        )
 
 
 def _on_order_update_handler_ext(ed, cls):
@@ -1408,21 +1402,21 @@ async def create_order_handler(_id, result):
             cls.strategy.s_ticker['pylist'].append(s_tic)
         if executed_qty < orig_qty:
             cls.orders[order.id] = order
-        elif ms.SAVE_TRADE_HISTORY:
-            row = ["TRADE_BY_MARKET",
-                   int(time.time() * 1000),
-                   result["side"],
-                   result["orderId"],
-                   result["clientOrderId"],
-                   '-1',
-                   result["origQty"],
-                   result["price"],
-                   result["executedQty"],
-                   result["cummulativeQuoteQty"],
-                   result["executedQty"],
-                   result["price"],
-                   ]
-            await save_trade_queue.put(row)
+        else:
+            await save_trade_queue.put(
+                ["TRADE_BY_MARKET",
+                 int(time.time() * 1000),
+                 result["side"],
+                 result["orderId"],
+                 result["clientOrderId"],
+                 '-1',
+                 result["origQty"],
+                 result["price"],
+                 result["executedQty"],
+                 result["cummulativeQuoteQty"],
+                 result["executedQty"],
+                 result["price"]]
+            )
         if ms.MODE == 'TC' and cls.strategy.start_collect:
             cls.strategy.open_orders_snapshot()
         elif ms.MODE == 'S':
