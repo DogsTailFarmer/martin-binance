@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc10"
+__version__ = "2.1.0rc14"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -794,7 +794,8 @@ class Strategy(StrategyBase):
             self.tp_part_amount_second = f2d(json.loads(strategy_state.get('tp_part_amount_second')))
             self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
             self.tp_order = eval(json.loads(strategy_state.get('tp_order')))
-            self.tp_order = self.tp_order[:3] + (self.get_time(),)
+            if self.tp_order:
+                self.tp_order = self.tp_order[:3] + (self.get_time(),)
             self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id'))
             self.restore_orders = json.loads(strategy_state.get('restore_orders', 'false'))
             self.tp_part_free = json.loads(strategy_state.get('tp_part_free', 'false'))

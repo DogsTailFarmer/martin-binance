@@ -3,12 +3,13 @@
 * executor.get_free_assets(): for "free" mode the volume of the utilized deposit is taken into account when not TP
 * rollback saving/restore trades history, but used for it specified file in `/last_state/X_AAABBB.csv`
 * executor: remove parameter SAVE_TRADE_HISTORY, already use for saving/restore trade events
+* comprehensive improvement of the internal accounting and recovery system
 * Up requirements for exchanges-wrapper==1.4.6
 
 ## 2.1.0rc1 - 2024-01-05
 ### Update
 * `SAVE_TRADE_HISTORY = False` set default
-* calculation `over price` for Reverse cycle : checking result on positive, correction it if needed
+* calculation `over price` for Reverse cycle : checking result on true positive, correction it if needed
 * [For backtesting change format saved data from Pickle to Feather #64](https://github.com/DogsTailFarmer/martin-binance/issues/64#issue-1858138993)
     + Change format to [Apache Parquet](https://parquet.apache.org)
     + Restrictions on the size of RAM have been removed due to write/read buffering
