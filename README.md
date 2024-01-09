@@ -61,8 +61,4 @@ Create account on [Bybit](https://www.bybit.com/invite?ref=9KEW1K) and get exclu
 Also, you can start strategy on [Hetzner](https://hetzner.cloud/?ref=uFdrF8nsdGMc) cloud VPS only for 4.75 € per month
 
 ### Donate
-To donate and directly support the project:
-
-*BNB*, *BUSD*, *USDT* (BEP20) 0x5b52c6ba862b11318616ee6cef64388618318b92
-
-*USDT* (TRC20) TP1Y43dpY7rrRyTSLaSKDZmFirqvRcpopC
+*USDT* (TRC20) TU3kagV9kxbjuUmEi6bUym5MTXjeM7Tm8K
