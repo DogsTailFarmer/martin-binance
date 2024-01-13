@@ -6,6 +6,10 @@
 * comprehensive improvement of the internal accounting and recovery system
 * Up requirements for exchanges-wrapper==1.4.6
 
+### Added for new features
+* Per 10 mins update trade rules for pair
+* If new trade rules prevent the grid from placing orders, then the grid will be forced to be re-set
+
 ## 2.1.0rc1 - 2024-01-05
 ### Update
 * `SAVE_TRADE_HISTORY = False` set default

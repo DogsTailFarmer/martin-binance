@@ -6,54 +6,23 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.3"
+__version__ = "2.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 
 from pathlib import Path
-import importlib.util
-from decimal import Decimal
 import optuna
 import inquirer
 from inquirer.themes import GreenPassion
 from martin_binance import BACKTEST_PATH
-
+from optimizer import optimize
 
 vis = optuna.visualization
 ii_params = []
 
-PARAMS_FLOAT = ['KBB']
-
-
-def try_trade(mbs, **kwargs):
-    for key, value in kwargs.items():
-        print(key, value)
-        setattr(mbs.ex, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}"))
-    mbs.ex.MODE = 'S'
-    mbs.ex.SAVE_DS = False
-    mbs.trade()
-    return float(mbs.session_result.get('profit', 0)) + float(
-        mbs.session_result.get('free', 0)
-    )
-
 
 def main():
-    def objective(_trial):
-        params = {
-            'GRID_MAX_COUNT': _trial.suggest_int('GRID_MAX_COUNT', 3, 5),
-            'PRICE_SHIFT': _trial.suggest_float('PRICE_SHIFT', 0, 0.05, step=0.01),
-            'PROFIT': _trial.suggest_float('PROFIT', 0.05, 0.15, step=0.05),
-            'PROFIT_MAX': _trial.suggest_float('PROFIT_MAX', 0.25, 1.0, step=0.05),
-            'OVER_PRICE': _trial.suggest_float('OVER_PRICE', 0.1, 1, step=0.1),
-            'ORDER_Q': _trial.suggest_int('ORDER_Q', 6, 12),
-            'MARTIN': _trial.suggest_float('MARTIN', 5, 15, step=1),
-            'SHIFT_GRID_DELAY': _trial.suggest_int('SHIFT_GRID_DELAY', 10, 60, step=10),
-            'KBB': _trial.suggest_float('KBB', 1, 5, step=0.5),
-            'LINEAR_GRID_K': _trial.suggest_int('LINEAR_GRID_K', 0, 100, step=20),
-        }
-        return try_trade(mbs, **params)
-
     questions = [
         inquirer.List(
             "path",
@@ -67,10 +36,10 @@ def main():
         ),
         inquirer.Text(
             "n_trials",
-            message="Enter number of cycles, from 50 to 500",
+            message="Enter number of cycles, from 50 to 1000",
             ignore=lambda x: x["mode"] == "Analise saved study session",
             default='150',
-            validate=lambda _, c: 50 <= int(c) <= 500,
+            validate=lambda _, c: 10 <= int(c) <= 1000,
         ),
     ]
 
@@ -82,21 +51,18 @@ def main():
     if answers.get('mode') == 'New':
         Path(BACKTEST_PATH, study_name, f'{study_name}.db').unlink(missing_ok=True)
         try:
-            strategy = next(Path(BACKTEST_PATH, answers.get('path')).glob("cli_*.py"))
+            strategy = next(Path(BACKTEST_PATH, study_name).glob("cli_*.py"))
         except StopIteration:
-            raise UserWarning(f"Can't find cli_*.py in {Path(BACKTEST_PATH, answers.get('path'))}")
+            raise UserWarning(f"Can't find cli_*.py in {Path(BACKTEST_PATH, study_name)}")
 
-        print(f"Importing strategy from {strategy}")
-
-        spec = importlib.util.spec_from_file_location("strategy", strategy)
-        mbs = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mbs)
-        study = optuna.create_study(study_name=study_name, storage=storage_name, direction="maximize")
-        study.optimize(objective, n_trials=int(answers.get('n_trials', '0')))
+        study = optimize(study_name, strategy, int(answers.get('n_trials', '0')), storage_name)
         print_study_result(study)
         print(f"Study instance saved to {storage_name} for later use")
     elif answers.get('mode') == 'Analise saved study session':
         study = optuna.load_study(study_name=study_name, storage=storage_name)
+
+        print(study.best_value)
+        print(study.get_trials()[0].value)
 
         while 1:
             questions = [
