@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc15"
+__version__ = "2.1.0rc16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -104,9 +104,8 @@ MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 1000  # Time accelerator
 SAVE_DS = False  # Save session result data (ticker, orders) for compare
 SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
-SAVED_STATE = False  # Use saved state for backtesting
 LOGGING = True
-SKY_NET = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
+SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
 # endregion
 
 
@@ -437,6 +436,8 @@ class Strategy(StrategyBase):
         self.message_log(f"This is {'Trade' if MODE == 'T' else ('Trade & Collect' if MODE == 'TC' else 'Simulate')}"
                          f" mode",
                          color=Style.B_WHITE if MODE == 'T' else (Style.B_RED if MODE == 'TC' else Style.GREEN))
+        if MODE == 'TC' and SELF_OPTIMIZATION:
+            self.message_log("Auto update parameters mode!", log_level=LogLevel.WARNING, color=Style.B_RED)
         # Calculate round float multiplier
         self.round_base = ROUND_BASE or str(tcm.round_amount(f2d(1.123456789), ROUND_FLOOR))
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
@@ -2071,7 +2072,7 @@ class Strategy(StrategyBase):
             self.reverse_init_amount = O_DEC
             self.initial_reverse_first = self.initial_reverse_second = O_DEC
             self.command = 'stop' if REVERSE_STOP and REVERSE else self.command
-            if (self.cycle_buy and self.profit_first <= 0) or (not self.cycle_buy and self.profit_second <= 0):
+            if (self.cycle_buy and self.profit_first < 0) or (not self.cycle_buy and self.profit_second < 0):
                 self.message_log("Strategy have a negative cycle result, STOP", log_level=LogLevel.CRITICAL)
                 self.command = 'end'
         else:

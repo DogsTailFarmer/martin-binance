@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc15"
+__version__ = "2.1.0rc16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -46,7 +46,7 @@ from exchanges_wrapper import api_pb2, api_pb2_grpc
 from martin_binance import executor as ms, BACKTEST_PATH, copy, LAST_STATE_PATH
 from martin_binance.client import Trade
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
-from martin_binance.backtest.optimizer import optimize
+from martin_binance.backtest.optimizer import run_optimize, OPTIMIZER, PARAMS_FLOAT
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [
@@ -919,9 +919,9 @@ async def ask_exit():
 
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
+        await asyncio.gather(*tasks, return_exceptions=True)
         if ms.LOGGING:
             print(f"Cancelling {len(tasks)} outstanding tasks")
-        await asyncio.gather(*tasks, return_exceptions=True)
         try:
             cls.strategy.stop()
         except Exception as _err:
@@ -939,29 +939,33 @@ def session_data_handler(cls):
     :return:
     """
     # Finalize ticker file
-    cls.strategy.s_ticker['writer'].write_batch(
-        pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker['pylist'])
-    )
-    cls.strategy.s_ticker['pylist'].clear()
+    if _ticker := cls.strategy.s_ticker['pylist']:
+        cls.strategy.s_ticker['writer'].write_batch(
+            pa.RecordBatch.from_pylist(mapping=_ticker)
+        )
+        cls.strategy.s_ticker['pylist'].clear()
     cls.strategy.s_ticker['writer'].close()
 
     # Finalize order_book file
-    cls.strategy.s_order_book['writer'].write_batch(
-        pa.RecordBatch.from_pylist(mapping=cls.strategy.s_order_book['pylist'])
-    )
-    cls.strategy.s_order_book['pylist'].clear()
+    if _order_book := cls.strategy.s_order_book['pylist']:
+        cls.strategy.s_order_book['writer'].write_batch(
+            pa.RecordBatch.from_pylist(mapping=_order_book)
+        )
+        cls.strategy.s_order_book['pylist'].clear()
     cls.strategy.s_order_book['writer'].close()
 
     # Save klines snapshot
-    with open(Path(cls.session_root, "raw", "klines.json"), 'w') as f:
-        json.dump(cls.strategy.klines, f)
+    if _klines := cls.strategy.klines:
+        with open(Path(cls.session_root, "raw", "klines.json"), 'w') as f:
+            json.dump(_klines, f)
 
     # Finalize candles files
     for i in KLINES_INIT:
-        cls.strategy.candles[f"writer_{i.value}"].write_batch(
-            pa.RecordBatch.from_pylist(mapping=cls.strategy.candles[f"pylist_{i.value}"])
-        )
-        cls.strategy.candles[f"pylist_{i.value}"].clear()
+        if _candles := cls.strategy.candles[f"pylist_{i.value}"]:
+            cls.strategy.candles[f"writer_{i.value}"].write_batch(
+                pa.RecordBatch.from_pylist(mapping=_candles)
+            )
+            cls.strategy.candles[f"pylist_{i.value}"].clear()
         cls.strategy.candles[f"writer_{i.value}"].close()
 
     if ms.SAVE_DS:
@@ -971,18 +975,13 @@ def session_data_handler(cls):
         #
         df_grid_sell = pd.DataFrame().from_dict(cls.strategy.grid_sell, orient='index')
         df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+        df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
+        #
         df_grid_buy = pd.DataFrame().from_dict(cls.strategy.grid_buy, orient='index')
         df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
-        #
-        df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
         df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
 
-        shutil.make_archive(
-            str(Path(BACKTEST_PATH, f"{cls.session_root}_{datetime.now().strftime('%m%d-%H-%M')}")),
-            'zip',
-            cls.session_root
-        )
-    print(f"Stream data for backtesting saved to {cls.session_root}")
+    cls.strategy.message_log(f"Stream data for backtesting saved to {cls.session_root}")
 
 
 async def backtest_control():
@@ -997,17 +996,52 @@ async def backtest_control():
             cls.strategy.start_collect = False
             session_data_handler(cls)
             cls.strategy.reset_var()
-
-            if ms.SKY_NET:
-                study = optimize(cls.session_root, Path(cls.session_root, Path(ms.PARAMS).name))
-
-                print(f"SKY_NET.study: {study}")
-                break
+            if ms.SELF_OPTIMIZATION and cls.strategy.command != 'stopped':
+                _ts = datetime.utcnow()
+                try:
+                    _res = await run_optimize(OPTIMIZER, cls.session_root, Path(cls.session_root, Path(ms.PARAMS).name))
+                    _res = orjson.loads(_res.splitlines()[0])
+                except (asyncio.CancelledError, KeyboardInterrupt):
+                    break
+                except orjson.JSONDecodeError as err:
+                    logger.warning(f"backtest_control: {err}")
+                else:
+                    if _res:
+                        cls.strategy.message_log(f"Updating strategy parameters from backtest optimal."
+                                                 f" Value {_res.pop('new_value')} vs {_res.pop('_value')}",
+                                                 color=Style.B_WHITE, tlg=True)
+                        for key, value in _res.items():
+                            cls.strategy.message_log(f"{key}: new: {value}, old: {getattr(ms, key)}")
+                            setattr(
+                                ms, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
+                            )
+                cls.strategy.message_log(f"Strategy parameters are optimal now."
+                                         f" Optimization cycle duration {str(datetime.utcnow() - _ts).rsplit('.')[0]}",
+                                         color=Style.B_WHITE, tlg=True)
+                parquet_declare(cls)
+                # Refresh klines init
+                for i in KLINES_INIT:
+                    try:
+                        res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
+                                                     symbol=cls.symbol,
+                                                     interval=i.value,
+                                                     limit=KLINES_LIM)
+                    except Exception as ex:
+                        logger.warning(f"FetchKlines: {ex}")
+                    else:
+                        cls.strategy.klines[i.value] = json_format.MessageToDict(res)
+                # Save current strategy state for backtesting
+                last_state = cls.strategy.save_strategy_state(return_only=True)
+                last_state_update(cls, last_state)
+                with cls.state_file.open(mode='w') as outfile:
+                    json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                #
+                cls.strategy.start_collect = True
+                ts = time.time()
             else:
                 break
-
         await asyncio.sleep(delay)
-    cls.strategy.message_log("Backtest record session ended", tlg=True)
+    cls.strategy.message_log("Backtest and optimize session ended", tlg=True)
 
 
 async def buffered_candle(cls):
@@ -1189,7 +1223,7 @@ async def buffered_orders():
             if cls.last_state:
                 cls.strategy.restore_strategy_state(restore=True)
 
-            if cls.last_state and ms.MODE == 'TC' and ms.SAVED_STATE:
+            if cls.last_state and ms.MODE == 'TC':
                 last_state = cls.strategy.save_strategy_state(return_only=True)
                 last_state_update(cls, last_state)
                 with cls.state_file.open(mode='w') as outfile:
@@ -1897,6 +1931,20 @@ def restore_state_before_backtesting(cls):
     cls.strategy.start_collect = True
 
 
+def parquet_declare(cls):
+    """
+    pyarrow and parquet declare
+    """
+    raw_path = Path(cls.session_root, "raw")
+    schema = pa.schema([("key", pa.int64()), ("row", pa.binary())])
+    cls.strategy.s_ticker['writer'] = pq.ParquetWriter(Path(raw_path, TICKER_PRKT), schema=schema)
+    cls.strategy.s_order_book['writer'] = pq.ParquetWriter(Path(raw_path, ORDER_BOOK_PRKT), schema=schema)
+    for i in KLINES_INIT:
+        cls.strategy.candles[f"writer_{i.value}"] = pq.ParquetWriter(Path(
+            raw_path, f"candles_{i.value}.parquet"), schema=schema
+        )
+
+
 async def main(_symbol):
     cls = StrategyBase
     cls.strategy = ms.Strategy()
@@ -1910,7 +1958,6 @@ async def main(_symbol):
             else:
                 print(f"ID_EXCHANGE = {ms.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
                 raise SystemExit(1)
-            print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
             session = Trade(channel_options=CHANNEL_OPTIONS,
                             account_name=account_name,
                             rate_limiter=cls.rate_limiter,
@@ -1921,9 +1968,11 @@ async def main(_symbol):
             await session.get_client()
             update_class_var(session)
             send_request = session.send_request
-            print(f"main.exchange: {cls.exchange}")
-            print(f"main.client_id: {cls.client_id}")
-            print(f"main.srv_version: {session.client.srv_version}")
+            if ms.LOGGING:
+                print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
+                print(f"main.exchange: {cls.exchange}")
+                print(f"main.client_id: {cls.client_id}")
+                print(f"main.srv_version: {session.client.srv_version}")
             #
             if ms.MODE in ('T', 'TC'):
                 # Check and Cancel ALL ACTIVE ORDER
@@ -1961,9 +2010,10 @@ async def main(_symbol):
             while not cls.info_symbol:
                 await asyncio.sleep(0.1)
             # print("\n".join(f"{k}\t{v}" for k, v in cls.info_symbol.items()))
-            filters = cls.info_symbol.get('filters')
-            for _filter in filters:
-                print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
+            if ms.LOGGING:
+                filters = cls.info_symbol.get('filters')
+                for _filter in filters:
+                    print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
             # init Strategy class var
             cls.base_asset = cls.info_symbol.get('baseAsset')
             cls.quote_asset = cls.info_symbol.get('quoteAsset')
@@ -1995,8 +2045,7 @@ async def main(_symbol):
             if ms.MODE in ('TC', 'S'):
                 cls.session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
                 raw_path = Path(cls.session_root, "raw")
-                if ms.SAVED_STATE:
-                    cls.state_file = Path(cls.session_root, "saved_state.json")
+                cls.state_file = Path(cls.session_root, "saved_state.json")
             #
             if ms.MODE == 'TC':
                 BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
@@ -2005,14 +2054,7 @@ async def main(_symbol):
                 raw_path.mkdir(parents=True, exist_ok=True)
                 #
                 copy(ms.PARAMS, Path(cls.session_root, Path(ms.PARAMS).name))
-                # pyarrow and parquet declare
-                schema = pa.schema([("key", pa.int64()), ("row", pa.binary())])
-                cls.strategy.s_ticker['writer'] = pq.ParquetWriter(Path(raw_path, TICKER_PRKT), schema=schema)
-                cls.strategy.s_order_book['writer'] = pq.ParquetWriter(Path(raw_path, ORDER_BOOK_PRKT), schema=schema)
-                for i in KLINES_INIT:
-                    cls.strategy.candles[f"writer_{i.value}"] = pq.ParquetWriter(Path(
-                        raw_path, f"candles_{i.value}.parquet"), schema=schema
-                    )
+                parquet_declare(cls)
         #
         else:
             # Init class atr for reuse in next backtest cycle
@@ -2068,7 +2110,7 @@ async def main(_symbol):
                 await wss_init(cls)
                 cls.strategy.start()
             else:
-                if ms.SAVED_STATE and cls.state_file.exists():
+                if cls.state_file.exists():
                     cls.strategy.init(check_funds=False)
                 else:
                     cls.strategy.init()
@@ -2078,8 +2120,7 @@ async def main(_symbol):
                 cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
                 cls.start_time_ms = int(cls.strategy.get_time() * 1000)
                 cls.strategy.cycle_time = datetime.utcnow()
-
-                if ms.SAVED_STATE and cls.state_file.exists():
+                if cls.state_file.exists():
                     restore_state_before_backtesting(cls)
                 else:
                     cls.strategy.start()

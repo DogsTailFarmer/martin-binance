@@ -2,13 +2,14 @@
 * margin_wrapper.buffered_funds(): some minor improvements
 * executor.get_free_assets(): for "free" mode the volume of the utilized deposit is taken into account when not TP
 * rollback saving/restore trades history, but used for it specified file in `/last_state/X_AAABBB.csv`
-* executor: remove parameter SAVE_TRADE_HISTORY, already use for saving/restore trade events
+* executor: remove parameters `SAVE_TRADE_HISTORY` and `SAVED_STATE`, already use for saving/restore trade events
 * comprehensive improvement of the internal accounting and recovery system
 * Up requirements for exchanges-wrapper==1.4.6
 
 ### Added for new features
 * Per 10 mins update trade rules for pair
 * If new trade rules prevent the grid from placing orders, then the grid will be forced to be re-set
+* Add parameter`SELF_OPTIMIZATION = True`  # Cyclic self-optimization of parameters, together with `MODE == 'TC'`
 
 ## 2.1.0rc1 - 2024-01-05
 ### Update
