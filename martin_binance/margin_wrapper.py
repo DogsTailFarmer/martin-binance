@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc1"
+__version__ = "2.1.0rc16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -43,9 +43,10 @@ from margin_strategy_sdk import StrategyConfig  # lgtm [py/unused-import]
 from exchanges_wrapper.definitions import Interval
 from exchanges_wrapper import api_pb2, api_pb2_grpc
 
-from martin_binance import executor as ms, BACKTEST_PATH, copy, LOG_PATH
+from martin_binance import executor as ms, BACKTEST_PATH, copy, LAST_STATE_PATH
 from martin_binance.client import Trade
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
+from martin_binance.backtest.optimizer import run_optimize, OPTIMIZER, PARAMS_FLOAT
 
 # For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
 CHANNEL_OPTIONS = [
@@ -157,11 +158,11 @@ def trade_not_exist(_order_id: int, _trade_id: int) -> bool:
 
 
 def order_trades_sum(_order_id: int) -> Decimal:
-    saved_filled_quantity = Decimal("0")
+    saved_filled_quantity = Decimal()
     for _trade in StrategyBase.trades:
         if _trade.order_id == _order_id:
             saved_filled_quantity += _trade.amount
-    return saved_filled_quantity.quantize(Decimal("1.01234567"), rounding=ROUND_FLOOR)
+    return saved_filled_quantity
 
 
 class PrivateTrade:
@@ -469,8 +470,24 @@ class StrategyBase:
     operational_status = None
 
     def __init__(self):
-        print("Init StrategyBase")
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
+        self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
+        self.get_buffered_funds_last_time = self.get_time()
+        self.queue_to_tlg = queue.Queue()  # - Queue for sending message to Telegram
+        self.status_time = None  # + Last time sending status message
+        self.tlg_header = ''  # - Header for Telegram message
+        self.start_collect = None
+        # Init in reset_var()
+        self.s_ticker = None
+        self.s_order_book = None
+        self.klines = None
+        self.candles = None
+        self.grid_buy = None
+        self.grid_sell = None
+        #
+        self.reset_var()
+
+    def reset_var(self):
         self.s_ticker: dict[str, pq.ParquetWriter | list] = {'pylist': []} if ms.MODE in ('TC', 'S') else None
         self.s_order_book: dict[str, pq.ParquetWriter | list] = {'pylist': []} if ms.MODE in ('TC', 'S') else None
         self.klines = {}  # KLines snapshot
@@ -478,16 +495,8 @@ class StrategyBase:
             self.candles = {}
             for i in KLINES_INIT:
                 self.candles.update({f"pylist_{i.value}": []})
-        else:
-            self.candles = None
-        self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
         self.grid_buy = {}
         self.grid_sell = {}
-        self.get_buffered_funds_last_time = self.get_time()
-        self.queue_to_tlg = queue.Queue()  # - Queue for sending message to Telegram
-        self.status_time = None  # + Last time sending status message
-        self.tlg_header = ''  # - Header for Telegram message
-        self.start_collect = None
 
     def __call__(self):
         return self
@@ -518,14 +527,6 @@ class StrategyBase:
         @classmethod
         def get_kline(cls, _interval) -> []:
             return cls.klines_series.get(_interval, [])
-
-    def reset_var(self):
-        self.s_ticker = {'pylist': []}
-        self.s_order_book = {'pylist': []}
-        self.klines = {}  # KLines snapshot
-        self.candles = {}  # Candles stream
-        self.grid_buy = {}
-        self.grid_sell = {}
 
     @staticmethod
     def reset_class_var():
@@ -585,7 +586,7 @@ class StrategyBase:
             time.sleep(0.02)
         return cls.order_id
 
-    def get_buffered_completed_trades(self, _get_all_trades: bool = False) -> List[PrivateTrade]:
+    def get_buffered_completed_trades(self) -> List[PrivateTrade]:
         return self.trades
 
     def get_buffered_open_orders(self) -> List[Order]:
@@ -638,51 +639,77 @@ class StrategyBase:
             loop.create_task(transfer2master(symbol, amount))
 
     def message_log(self, msg: str, log_level=LogLevel.INFO, tlg=False, color=Style.WHITE) -> None:
-        if tlg and color == Style.WHITE:
-            color = Style.B_WHITE
-        if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
-            tlg = True
-            color = Style.B_RED
-        color_msg = color + msg + Style.RESET if color else msg
-        if log_level not in ms.LOG_LEVEL_NO_PRINT:
+        if ms.LOGGING:
+            if tlg and color == Style.WHITE:
+                color = Style.B_WHITE
+            if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
+                tlg = True
+                color = Style.B_RED
+            color_msg = color + msg + Style.RESET if color else msg
+            if log_level not in ms.LOG_LEVEL_NO_PRINT:
+                if ms.MODE in ('T', 'TC'):
+                    print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
+                else:
+                    tqdm.write(f"{datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')[:-3]} {color_msg}")
             if ms.MODE in ('T', 'TC'):
-                print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
-            else:
-                tqdm.write(f"{datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')[:-3]} {color_msg}")
-        if ms.MODE in ('T', 'TC'):
-            write_log(log_level, msg)
-            if tlg and self.queue_to_tlg:
-                msg = self.tlg_header + msg
-                self.status_time = self.get_time()
-                self.queue_to_tlg.put(msg)
+                write_log(log_level, msg)
+                if tlg and self.queue_to_tlg:
+                    msg = self.tlg_header + msg
+                    self.status_time = self.get_time()
+                    self.queue_to_tlg.put(msg)
 
 
 async def save_to_csv() -> None:
+    """
+    Header: ["TRADE",
+             "transaction_time",
+             "side",
+             "order_id",
+             "client_order_id",
+             "trade_id",
+             "order_quantity",
+             "order_price",
+             "cumulative_filled_quantity",
+             "quote_asset_transacted",
+             "last_executed_quantity",
+             "last_executed_price",
+             ]
+            ['TRANSFER',
+             "event_time",
+             "asset",
+             "balance_delta",
+             ]
+    :return:
+    """
     cls = StrategyBase
-    file_name = Path(LOG_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
-    with open(file_name, mode="a", buffering=1) as fp:
-        writer = csv.writer(fp)
-        writer.writerow(["TRADE",
-                         "transaction_time",
-                         "side",
-                         "order_id",
-                         "client_order_id",
-                         "trade_id",
-                         "order_quantity",
-                         "order_price",
-                         "cumulative_filled_quantity",
-                         "quote_asset_transacted",
-                         "last_executed_quantity",
-                         "last_executed_price",
-                         ])
-        writer.writerow(['TRANSFER',
-                         "event_time",
-                         "asset",
-                         "balance_delta",
-                         ])
+    file_name = Path(LAST_STATE_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
+    with open(file_name, mode="a", buffering=1) as csvfile:
+        writer = csv.writer(csvfile)
         while cls.strategy:
             writer.writerow(await save_trade_queue.get())
             save_trade_queue.task_done()
+
+
+def load_from_csv() -> []:
+    file_name = Path(LAST_STATE_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
+    trades = []
+    if file_name.exists() and file_name.stat().st_size:
+        row_count = len(pd.read_csv(file_name).index)
+        with open(file_name, "r") as csvfile:
+            reader = csv.reader(csvfile)
+            [next(reader) for _ in range(row_count - TRADES_LIST_LIMIT)]
+            for row in reader:
+                if row[0] in ('TRADE', 'TRADE_BY_MARKET'):
+                    trade = {
+                        "time": row[1],
+                        "isBuyer": row[2] == 'BUY',
+                        "orderId": row[3],
+                        "id": row[5],
+                        "qty": row[10],
+                        "price": row[11],
+                    }
+                    trades.append(trade)
+    return trades
 
 
 async def heartbeat(_session):
@@ -726,6 +753,25 @@ async def heartbeat(_session):
             await asyncio.sleep(HEARTBEAT)
         except (KeyboardInterrupt, asyncio.CancelledError):
             break
+
+
+async def get_exchange_info(cls, _request, _symbol):
+    """
+    Refresh trading rules for pair every 10 mins
+    """
+    while cls.strategy:
+        try:
+            _exchange_info_symbol = await _request(cls.stub.FetchExchangeInfoSymbol,
+                                                   api_pb2.MarketRequest,
+                                                   symbol=_symbol)
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
+        except Exception as _ex:
+            cls.strategy.message_log(f"Exception get_exchange_info: {_ex}")
+        else:
+            cls.info_symbol = json_format.MessageToDict(_exchange_info_symbol)
+            cls.tcm = TradingCapabilityManager(cls.info_symbol, ms.PRICE_LIMIT_RULES)
+        await asyncio.sleep(600)
 
 
 def last_state_update(cls, last_state):
@@ -858,11 +904,9 @@ async def ask_exit():
     cls = StrategyBase
     if cls.strategy:
         cls.strategy.message_log("Got signal for exit", color=Style.MAGENTA)
-
         cls.operational_status = False
-        await asyncio.sleep(HEARTBEAT)
-
         if ms.MODE in ('T', 'TC'):
+            await asyncio.sleep(HEARTBEAT)
             try:
                 await cls.send_request(cls.stub.StopStream, api_pb2.MarketRequest, symbol=cls.symbol)
             except Exception as ex:
@@ -875,8 +919,9 @@ async def ask_exit():
 
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
-        print(f"Cancelling {len(tasks)} outstanding tasks")
         await asyncio.gather(*tasks, return_exceptions=True)
+        if ms.LOGGING:
+            print(f"Cancelling {len(tasks)} outstanding tasks")
         try:
             cls.strategy.stop()
         except Exception as _err:
@@ -894,55 +939,54 @@ def session_data_handler(cls):
     :return:
     """
     # Finalize ticker file
-    cls.strategy.s_ticker['writer'].write_batch(
-        pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker['pylist'])
-    )
-    cls.strategy.s_ticker['pylist'].clear()
+    if _ticker := cls.strategy.s_ticker['pylist']:
+        cls.strategy.s_ticker['writer'].write_batch(
+            pa.RecordBatch.from_pylist(mapping=_ticker)
+        )
+        cls.strategy.s_ticker['pylist'].clear()
     cls.strategy.s_ticker['writer'].close()
 
     # Finalize order_book file
-    cls.strategy.s_order_book['writer'].write_batch(
-        pa.RecordBatch.from_pylist(mapping=cls.strategy.s_order_book['pylist'])
-    )
-    cls.strategy.s_order_book['pylist'].clear()
+    if _order_book := cls.strategy.s_order_book['pylist']:
+        cls.strategy.s_order_book['writer'].write_batch(
+            pa.RecordBatch.from_pylist(mapping=_order_book)
+        )
+        cls.strategy.s_order_book['pylist'].clear()
     cls.strategy.s_order_book['writer'].close()
 
     # Save klines snapshot
-    with open(Path(cls.session_root, "raw", "klines.json"), 'w') as f:
-        json.dump(cls.strategy.klines, f)
+    if _klines := cls.strategy.klines:
+        with open(Path(cls.session_root, "raw", "klines.json"), 'w') as f:
+            json.dump(_klines, f)
 
     # Finalize candles files
     for i in KLINES_INIT:
-        cls.strategy.candles[f"writer_{i.value}"].write_batch(
-            pa.RecordBatch.from_pylist(mapping=cls.strategy.candles[f"pylist_{i.value}"])
-        )
-        cls.strategy.candles[f"pylist_{i.value}"].clear()
+        if _candles := cls.strategy.candles[f"pylist_{i.value}"]:
+            cls.strategy.candles[f"writer_{i.value}"].write_batch(
+                pa.RecordBatch.from_pylist(mapping=_candles)
+            )
+            cls.strategy.candles[f"pylist_{i.value}"].clear()
         cls.strategy.candles[f"writer_{i.value}"].close()
 
-    # Save session detail for analytics
-    session_data = Path(cls.session_root, "snapshot")
-    session_data.mkdir(parents=True, exist_ok=True)
-    #
-    df_grid_sell = pd.DataFrame().from_dict(cls.strategy.grid_sell, orient='index')
-    df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-    df_grid_buy = pd.DataFrame().from_dict(cls.strategy.grid_buy, orient='index')
-    df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
-    #
-    df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
-    df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
+    if ms.SAVE_DS:
+        # Save session detail for analytics
+        session_data = Path(cls.session_root, "snapshot")
+        session_data.mkdir(parents=True, exist_ok=True)
+        #
+        df_grid_sell = pd.DataFrame().from_dict(cls.strategy.grid_sell, orient='index')
+        df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+        df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
+        #
+        df_grid_buy = pd.DataFrame().from_dict(cls.strategy.grid_buy, orient='index')
+        df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+        df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
 
-    shutil.make_archive(
-        str(Path(BACKTEST_PATH, f"{cls.session_root}_{datetime.now().strftime('%m%d-%H-%M')}")),
-        'zip',
-        cls.session_root
-    )
-
-    print(f"Stream data for backtesting saved to {cls.session_root}")
+    cls.strategy.message_log(f"Stream data for backtesting saved to {cls.session_root}")
 
 
-async def backtest_data_control():
+async def backtest_control():
     """
-    Control memory usage and safe saving by predefined timetable
+    Managing backtest and optimization cycles
     """
     cls = StrategyBase
     delay = HEARTBEAT * 30  # 1 min
@@ -952,9 +996,52 @@ async def backtest_data_control():
             cls.strategy.start_collect = False
             session_data_handler(cls)
             cls.strategy.reset_var()
-            break
+            if ms.SELF_OPTIMIZATION and cls.strategy.command != 'stopped':
+                _ts = datetime.utcnow()
+                try:
+                    _res = await run_optimize(OPTIMIZER, cls.session_root, Path(cls.session_root, Path(ms.PARAMS).name))
+                    _res = orjson.loads(_res.splitlines()[0])
+                except (asyncio.CancelledError, KeyboardInterrupt):
+                    break
+                except orjson.JSONDecodeError as err:
+                    logger.warning(f"backtest_control: {err}")
+                else:
+                    if _res:
+                        cls.strategy.message_log(f"Updating strategy parameters from backtest optimal."
+                                                 f" Value {_res.pop('new_value')} vs {_res.pop('_value')}",
+                                                 color=Style.B_WHITE, tlg=True)
+                        for key, value in _res.items():
+                            cls.strategy.message_log(f"{key}: new: {value}, old: {getattr(ms, key)}")
+                            setattr(
+                                ms, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
+                            )
+                cls.strategy.message_log(f"Strategy parameters are optimal now."
+                                         f" Optimization cycle duration {str(datetime.utcnow() - _ts).rsplit('.')[0]}",
+                                         color=Style.B_WHITE, tlg=True)
+                parquet_declare(cls)
+                # Refresh klines init
+                for i in KLINES_INIT:
+                    try:
+                        res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
+                                                     symbol=cls.symbol,
+                                                     interval=i.value,
+                                                     limit=KLINES_LIM)
+                    except Exception as ex:
+                        logger.warning(f"FetchKlines: {ex}")
+                    else:
+                        cls.strategy.klines[i.value] = json_format.MessageToDict(res)
+                # Save current strategy state for backtesting
+                last_state = cls.strategy.save_strategy_state(return_only=True)
+                last_state_update(cls, last_state)
+                with cls.state_file.open(mode='w') as outfile:
+                    json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                #
+                cls.strategy.start_collect = True
+                ts = time.time()
+            else:
+                break
         await asyncio.sleep(delay)
-    cls.strategy.message_log("Backtest record session ended", tlg=True)
+    cls.strategy.message_log("Backtest and optimize session ended", tlg=True)
 
 
 async def buffered_candle(cls):
@@ -962,7 +1049,7 @@ async def buffered_candle(cls):
     klines = {}
     klines_from_file = {}
     if ms.MODE == 'S':
-        klines_from_file = json.load(open(Path(cls.session_root, f"raw/klines.json")))
+        klines_from_file = json.load(open(Path(cls.session_root, "raw/klines.json")))
     for i in KLINES_INIT:
         if ms.MODE in ('T', 'TC'):
             try:
@@ -1041,26 +1128,23 @@ async def buffered_funds(print_info: bool = True):
     except Exception as _ex:
         logger.warning(f"Exception buffered_funds: {_ex}")
     else:
-        # print(f"buffered_funds.balances: {balances}")
-        try:
-            balance_f = next(item for item in balances if item["asset"] == cls.base_asset)
-        except StopIteration:
-            balance_f = {'asset': cls.base_asset, 'free': '0.0', 'locked': '0.0'}
-        try:
-            balance_s = next(item for item in balances if item["asset"] == cls.quote_asset)
-        except StopIteration:
-            balance_s = {'asset': cls.quote_asset, 'free': '0.0', 'locked': '0.0'}
+        balance_f = next(
+            (item for item in balances if item["asset"] == cls.base_asset),
+            {'asset': cls.base_asset, 'free': '0.0', 'locked': '0.0'}
+        )
+        balance_s = next(
+            (item for item in balances if item["asset"] == cls.quote_asset),
+            {'asset': cls.quote_asset, 'free': '0.0', 'locked': '0.0'}
+        )
         funds = {cls.base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
                  cls.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
-
         cls.funds = funds
-        if print_info:
+        if print_info and ms.LOGGING:
             print(EQUAL_STR)
             print(f"Base asset balance: {balance_f}")
             print(f"Quote asset balance: {balance_s}")
             print(EQUAL_STR)
         else:
-            # print(f"buffered_funds.funds: {cls.funds}")
             funds = {cls.base_asset: FundsEntry(cls.funds[cls.base_asset]),
                      cls.quote_asset: FundsEntry(cls.funds[cls.quote_asset])}
             cls.strategy.on_new_funds(funds)
@@ -1087,6 +1171,14 @@ async def buffered_orders():
                 cls.wss_fire_up = True
                 raise UserWarning(f"Not active WSS for {cls.symbol} on {cls.exchange}, restart request sent")
 
+            _orders = await cls.send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=cls.symbol)
+            if _orders is None:
+                raise UserWarning("Can't fetch open orders")
+
+            orders = json_format.MessageToDict(_orders).get('items', [])
+            for order in orders:
+                exch_orders.append(int(order['orderId']))
+
             if cls.last_state:
                 cls.strategy.message_log("Trying restore saved state after restart", color=Style.GREEN)
                 # Restore StrategyBase class var
@@ -1094,6 +1186,16 @@ async def buffered_orders():
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
+                for _id in exch_orders:
+                    if _id not in cls.orders.keys():
+                        _order = next((_o for _o in orders if int(_o["orderId"]) == _id), None)
+                        if _order:
+                            cls.strategy.message_log(f"Was restored order {_id}({_order['clientOrderId']})"
+                                                     f" from exchange data",
+                                                     log_level=LogLevel.WARNING,
+                                                     color=Style.YELLOW)
+                            cls.orders[_id] = Order(_order)
+                [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                 #
                 cls.strategy.restore_strategy_state(cls.last_state, restore=False)
 
@@ -1101,19 +1203,12 @@ async def buffered_orders():
                 cls.strategy.message_log("Trying restore saved state after lost connection to host",
                                          color=Style.GREEN)
 
-            _orders = await cls.send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=cls.symbol)
-            if _orders is None:
-                raise UserWarning("Can't fetch open orders")
-            StrategyBase.rate_limiter = max(StrategyBase.rate_limiter, _orders.rate_limiter)
-
-            orders = json_format.MessageToDict(_orders).get('items', [])
             for order in orders:
                 _id = int(order['orderId'])
-                exch_orders.append(_id)
-                if (order.get('status') == 'PARTIALLY_FILLED'
-                        and order_trades_sum(_id) < Decimal(order['executedQty']).quantize(Decimal("1.01234567"),
-                                                                                           rounding=ROUND_FLOOR)):
+                if order.get('status') == 'PARTIALLY_FILLED' and order_trades_sum(_id) < Decimal(order['executedQty']):
                     diff_id.add(_id)
+            StrategyBase.rate_limiter = max(StrategyBase.rate_limiter, _orders.rate_limiter)
+
             # Missed fill event list
             diff_id.update(set(cls.orders).difference(set(exch_orders)))
 
@@ -1128,7 +1223,7 @@ async def buffered_orders():
             if cls.last_state:
                 cls.strategy.restore_strategy_state(restore=True)
 
-            if cls.last_state and ms.MODE == 'TC' and ms.SAVED_STATE:
+            if cls.last_state and ms.MODE == 'TC':
                 last_state = cls.strategy.save_strategy_state(return_only=True)
                 last_state_update(cls, last_state)
                 with cls.state_file.open(mode='w') as outfile:
@@ -1202,13 +1297,12 @@ async def on_balance_update(cls):
     try:
         async for res in cls.for_request(cls.stub.OnBalanceUpdate, api_pb2.MarketRequest, symbol=cls.symbol):
             _res = json.loads(res.balance)
-            if ms.SAVE_TRADE_HISTORY:
-                row = ['TRANSFER',
-                       _res["event_time"],
-                       _res["asset"],
-                       _res["balance_delta"],
-                       ]
-                await save_trade_queue.put(row)
+            await save_trade_queue.put(
+                ['TRANSFER',
+                 _res["event_time"],
+                 _res["asset"],
+                 _res["balance_delta"]]
+            )
             cls.strategy.on_balance_update(_res)
     except Exception as ex:
         logger.warning(f"Exception on WSS, on_balance_update loop closed: {ex}")
@@ -1233,6 +1327,20 @@ async def on_order_update_handler(cls, ed):
             or ed['order_status'] not in ('FILLED', 'PARTIALLY_FILLED')
     ):
         return
+    if ed['order_quantity'] == '0':
+        # Get data from saved order
+        so = cls.orders.get(ed['order_id'])
+        ed['order_quantity'] = str(so.amount)
+        ed['order_price'] = str(so.price)
+        last_quantity = Decimal(ed['last_executed_quantity'])
+        if so.received_amount + last_quantity < so.amount:
+            ed['cumulative_filled_quantity'] = str(so.received_amount + last_quantity)
+        else:
+            ed['cumulative_filled_quantity'] = str(so.amount)
+            ed['order_status'] = 'FILLED'
+        ed['quote_order_quantity'] = str(so.amount * so.price)
+        ed['quote_asset_transacted'] = str(Decimal(ed['cumulative_filled_quantity']) * so.price)
+
     if ed['order_status'] == 'FILLED':
         # Remove from orders dict
         remove_from_orders_lists([ed['order_id']])
@@ -1241,7 +1349,8 @@ async def on_order_update_handler(cls, ed):
             s_tic_row = orjson.loads(s_tic['row'])
             s_tic_row['lastPrice'] = ed['last_executed_price']
             s_tic['row'] = orjson.dumps(s_tic_row)
-            cls.strategy.open_orders_snapshot()
+            if ms.SAVE_DS:
+                cls.strategy.open_orders_snapshot()
     elif ed['order_status'] == 'PARTIALLY_FILLED':
         # Update order in orders dict
         _order = {
@@ -1257,21 +1366,20 @@ async def on_order_update_handler(cls, ed):
 
     if trade_not_exist(ed['order_id'], ed['trade_id']):
         _on_order_update_handler_ext(ed, cls)
-        if ms.SAVE_TRADE_HISTORY:
-            row = ["TRADE",
-                   ed["transaction_time"],
-                   ed["side"],
-                   ed["order_id"],
-                   ed["client_order_id"],
-                   ed["trade_id"],
-                   ed["order_quantity"],
-                   ed["order_price"],
-                   ed["cumulative_filled_quantity"],
-                   ed["quote_asset_transacted"],
-                   ed["last_executed_quantity"],
-                   ed["last_executed_price"],
-                   ]
-            await save_trade_queue.put(row)
+        await save_trade_queue.put(
+            ["TRADE",
+             ed["transaction_time"],
+             ed["side"],
+             ed["order_id"],
+             ed["client_order_id"],
+             ed["trade_id"],
+             ed["order_quantity"],
+             ed["order_price"],
+             ed["cumulative_filled_quantity"],
+             ed["quote_asset_transacted"],
+             ed["last_executed_quantity"],
+             ed["last_executed_price"]]
+        )
 
 
 def _on_order_update_handler_ext(ed, cls):
@@ -1369,22 +1477,22 @@ async def create_order_handler(_id, result):
             cls.strategy.s_ticker['pylist'].append(s_tic)
         if executed_qty < orig_qty:
             cls.orders[order.id] = order
-        elif ms.SAVE_TRADE_HISTORY:
-            row = ["TRADE_BY_MARKET",
-                   int(time.time() * 1000),
-                   result["side"],
-                   result["orderId"],
-                   result["clientOrderId"],
-                   '-1',
-                   result["origQty"],
-                   result["price"],
-                   result["executedQty"],
-                   result["cummulativeQuoteQty"],
-                   result["executedQty"],
-                   result["price"],
-                   ]
-            await save_trade_queue.put(row)
-        if ms.MODE == 'TC' and cls.strategy.start_collect:
+        else:
+            await save_trade_queue.put(
+                ["TRADE_BY_MARKET",
+                 int(time.time() * 1000),
+                 result["side"],
+                 result["orderId"],
+                 result["clientOrderId"],
+                 '-1',
+                 result["origQty"],
+                 result["price"],
+                 result["executedQty"],
+                 result["cummulativeQuoteQty"],
+                 result["executedQty"],
+                 result["price"]]
+            )
+        if ms.MODE == 'TC' and ms.SAVE_DS and cls.strategy.start_collect:
             cls.strategy.open_orders_snapshot()
         elif ms.MODE == 'S':
             await on_funds_update(cls)
@@ -1460,7 +1568,7 @@ async def cancel_order_handler(_id, cancel_all):
     remove_from_orders_lists([_id])
     cls.strategy.message_log(f"Cancel order {_id} success", color=Style.GREEN)
     cls.strategy.on_cancel_order_success(_id, cancel_all=cancel_all)
-    if ms.MODE == 'TC' and cls.strategy.start_collect:
+    if ms.MODE == 'TC' and ms.SAVE_DS and cls.strategy.start_collect:
         cls.strategy.open_orders_snapshot()
     elif ms.MODE == 'S':
         await on_funds_update(cls)
@@ -1573,7 +1681,6 @@ async def on_ticker_update(cls):
                 #
                 if ms.MODE == 'TC' and cls.strategy.start_collect:
                     ts = int(time.time() * 1000)
-                    cls.strategy.open_orders_snapshot(ts=ts)
                     if len(cls.strategy.s_ticker['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
                         cls.strategy.s_ticker['writer'].write_batch(
                             pa.RecordBatch.from_pylist(mapping=cls.strategy.s_ticker['pylist'])
@@ -1582,11 +1689,14 @@ async def on_ticker_update(cls):
                     ticker_24h['delay'] = cls.delay_ordering_s
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                     cls.strategy.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(ticker_24h)})
+                    if ms.SAVE_DS:
+                        cls.strategy.open_orders_snapshot(ts=ts)
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
             cls.wss_fire_up = True
     else:
-        pbar = tqdm(total=cls.backtest['ticker'].metadata.num_rows)
+        if ms.LOGGING:
+            pbar = tqdm(total=cls.backtest['ticker'].metadata.num_rows)
         async for row in loop_ds(cls.backtest['ticker'], ticker=True):
             cls.delay_ordering_s = row.pop('delay', 0)
             cls.ticker = row
@@ -1595,23 +1705,27 @@ async def on_ticker_update(cls):
             for _res in res:
                 await on_order_update_handler(cls, _res)
                 await on_funds_update(cls)
-            pbar.update()
-        pbar.close()
+            if ms.LOGGING:
+                # noinspection PyUnboundLocalVariable
+                pbar.update()
+        if ms.LOGGING:
+            pbar.close()
         cls.strategy.message_log("Backtest *** ticker *** timeSeries ended")
         back_test_handler(cls)
 
 
 def back_test_handler(cls):
     # Test result handler
-    test_time = datetime.utcnow() - cls.strategy.cycle_time
-    original_time = (cls.backtest['ticker_index_last'] - cls.backtest['ticker_index_first']) / 1000
-    original_time = timedelta(seconds=original_time)
-    print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
-    if ms.SAVE_DS:
-        _back_test_handler_ext(cls)
     s_profit = session_result['profit'] = f"{cls.strategy.get_sum_profit()}"
     s_free = session_result['free'] = f"{cls.strategy.get_free_assets(mode='free', backtest=True)[2]}"
-    print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
+    if ms.LOGGING:
+        print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
+        test_time = datetime.utcnow() - cls.strategy.cycle_time
+        original_time = (cls.backtest['ticker_index_last'] - cls.backtest['ticker_index_first']) / 1000
+        original_time = timedelta(seconds=original_time)
+        print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
+    if ms.SAVE_DS:
+        _back_test_handler_ext(cls)
     loop.stop()
 
 
@@ -1715,7 +1829,7 @@ async def wss_declare(cls):
         loop.create_task(on_order_update(cls))
         loop.create_task(on_balance_update(cls))
         if ms.MODE == 'TC':
-            loop.create_task(backtest_data_control())
+            loop.create_task(backtest_control())
 
 
 async def wss_init(cls, update_max_queue_size=False):
@@ -1817,6 +1931,20 @@ def restore_state_before_backtesting(cls):
     cls.strategy.start_collect = True
 
 
+def parquet_declare(cls):
+    """
+    pyarrow and parquet declare
+    """
+    raw_path = Path(cls.session_root, "raw")
+    schema = pa.schema([("key", pa.int64()), ("row", pa.binary())])
+    cls.strategy.s_ticker['writer'] = pq.ParquetWriter(Path(raw_path, TICKER_PRKT), schema=schema)
+    cls.strategy.s_order_book['writer'] = pq.ParquetWriter(Path(raw_path, ORDER_BOOK_PRKT), schema=schema)
+    for i in KLINES_INIT:
+        cls.strategy.candles[f"writer_{i.value}"] = pq.ParquetWriter(Path(
+            raw_path, f"candles_{i.value}.parquet"), schema=schema
+        )
+
+
 async def main(_symbol):
     cls = StrategyBase
     cls.strategy = ms.Strategy()
@@ -1830,7 +1958,6 @@ async def main(_symbol):
             else:
                 print(f"ID_EXCHANGE = {ms.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
                 raise SystemExit(1)
-            print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
             session = Trade(channel_options=CHANNEL_OPTIONS,
                             account_name=account_name,
                             rate_limiter=cls.rate_limiter,
@@ -1841,9 +1968,11 @@ async def main(_symbol):
             await session.get_client()
             update_class_var(session)
             send_request = session.send_request
-            print(f"main.exchange: {cls.exchange}")
-            print(f"main.client_id: {cls.client_id}")
-            print(f"main.srv_version: {session.client.srv_version}")
+            if ms.LOGGING:
+                print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
+                print(f"main.exchange: {cls.exchange}")
+                print(f"main.client_id: {cls.client_id}")
+                print(f"main.srv_version: {session.client.srv_version}")
             #
             if ms.MODE in ('T', 'TC'):
                 # Check and Cancel ALL ACTIVE ORDER
@@ -1877,19 +2006,17 @@ async def main(_symbol):
                             status_code = ex.code()
                             print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
             # Init section
-            _exchange_info_symbol = await send_request(cls.stub.FetchExchangeInfoSymbol,
-                                                       api_pb2.MarketRequest,
-                                                       symbol=_symbol)
-            exchange_info_symbol = json_format.MessageToDict(_exchange_info_symbol)
-            # print("\n".join(f"{k}\t{v}" for k, v in exchange_info_symbol.items()))
-            filters = exchange_info_symbol.get('filters')
-            for _filter in filters:
-                print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
+            loop.create_task(get_exchange_info(cls, send_request, _symbol))
+            while not cls.info_symbol:
+                await asyncio.sleep(0.1)
+            # print("\n".join(f"{k}\t{v}" for k, v in cls.info_symbol.items()))
+            if ms.LOGGING:
+                filters = cls.info_symbol.get('filters')
+                for _filter in filters:
+                    print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
             # init Strategy class var
-            cls.info_symbol = exchange_info_symbol
-            cls.tcm = TradingCapabilityManager(exchange_info_symbol, ms.PRICE_LIMIT_RULES)
-            cls.base_asset = exchange_info_symbol.get('baseAsset')
-            cls.quote_asset = exchange_info_symbol.get('quoteAsset')
+            cls.base_asset = cls.info_symbol.get('baseAsset')
+            cls.quote_asset = cls.info_symbol.get('quoteAsset')
             if ms.MODE in ('T', 'TC'):
                 # region Get and processing Order book
                 _order_book = await cls.send_request(cls.stub.FetchOrderBook, api_pb2.MarketRequest, symbol=_symbol)
@@ -1899,7 +2026,7 @@ async def main(_symbol):
                                                     symbol=_symbol)
                     price = json_format.MessageToDict(_price)
                     print(f"Not bids or asks for pair {price.get('symbol')}, last known price is {price.get('price')}")
-                    amount = exchange_info_symbol['filters']['lotSize']['minQty']
+                    amount = cls.info_symbol['filters']['lotSize']['minQty']
                     cls.order_book['bids'] = cls.order_book['bids'] or [[price['price'], amount]]
                     cls.order_book['asks'] = cls.order_book['asks'] or [[price['price'], amount]]
                 # endregion
@@ -1918,8 +2045,7 @@ async def main(_symbol):
             if ms.MODE in ('TC', 'S'):
                 cls.session_root = Path(BACKTEST_PATH, f"{cls.exchange}_{cls.symbol}")
                 raw_path = Path(cls.session_root, "raw")
-                if ms.SAVED_STATE:
-                    cls.state_file = Path(cls.session_root, "saved_state.json")
+                cls.state_file = Path(cls.session_root, "saved_state.json")
             #
             if ms.MODE == 'TC':
                 BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
@@ -1928,17 +2054,11 @@ async def main(_symbol):
                 raw_path.mkdir(parents=True, exist_ok=True)
                 #
                 copy(ms.PARAMS, Path(cls.session_root, Path(ms.PARAMS).name))
-                # pyarrow and parquet declare
-                schema = pa.schema([("key", pa.int64()), ("row", pa.binary())])
-                cls.strategy.s_ticker['writer'] = pq.ParquetWriter(Path(raw_path, TICKER_PRKT), schema=schema)
-                cls.strategy.s_order_book['writer'] = pq.ParquetWriter(Path(raw_path, ORDER_BOOK_PRKT), schema=schema)
-                for i in KLINES_INIT:
-                    cls.strategy.candles[f"writer_{i.value}"] = pq.ParquetWriter(Path(
-                        raw_path, f"candles_{i.value}.parquet"), schema=schema
-                    )
+                parquet_declare(cls)
         #
         else:
             # Init class atr for reuse in next backtest cycle
+            raw_path = Path(cls.session_root, "raw")
             cls.reset_class_var()
         #
         if ms.MODE == 'S':
@@ -1990,7 +2110,7 @@ async def main(_symbol):
                 await wss_init(cls)
                 cls.strategy.start()
             else:
-                if ms.SAVED_STATE and cls.state_file.exists():
+                if cls.state_file.exists():
                     cls.strategy.init(check_funds=False)
                 else:
                     cls.strategy.init()
@@ -2000,8 +2120,7 @@ async def main(_symbol):
                 cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
                 cls.start_time_ms = int(cls.strategy.get_time() * 1000)
                 cls.strategy.cycle_time = datetime.utcnow()
-
-                if ms.SAVED_STATE and cls.state_file.exists():
+                if cls.state_file.exists():
                     restore_state_before_backtesting(cls)
                 else:
                     cls.strategy.start()

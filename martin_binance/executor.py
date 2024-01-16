@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc1"
+__version__ = "2.1.0rc16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -68,7 +68,6 @@ GRID_ONLY = bool()
 LOG_LEVEL_NO_PRINT = []
 HOLD_TP_ORDER_TIMEOUT = 30
 COLLECT_ASSETS = bool()
-SAVE_TRADE_HISTORY = False
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()
@@ -103,9 +102,10 @@ INLINE_BOT = True
 # Backtesting
 MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 1000  # Time accelerator
-SAVE_DS = True  # Save session result data (ticker, orders) for compare
+SAVE_DS = False  # Save session result data (ticker, orders) for compare
 SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
-SAVED_STATE = False  # Use saved state for backtesting
+LOGGING = True
+SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
 # endregion
 
 
@@ -313,7 +313,8 @@ class Strategy(StrategyBase):
 
     def __init__(self):
         super().__init__()
-        print(f"Init Strategy, ver: {HEAD_VERSION} + {__version__} + {msb_ver}")
+        if LOGGING:
+            print(f"Init Strategy, ver: {HEAD_VERSION} + {__version__} + {msb_ver}")
         self.cycle_buy = not START_ON_BUY if REVERSE else START_ON_BUY  # + Direction (Buy/Sell) for current cycle
         self.orders_grid = Orders()  # + List of grid orders
         self.orders_init = Orders()  # - List of initial grid orders
@@ -435,6 +436,8 @@ class Strategy(StrategyBase):
         self.message_log(f"This is {'Trade' if MODE == 'T' else ('Trade & Collect' if MODE == 'TC' else 'Simulate')}"
                          f" mode",
                          color=Style.B_WHITE if MODE == 'T' else (Style.B_RED if MODE == 'TC' else Style.GREEN))
+        if MODE == 'TC' and SELF_OPTIMIZATION:
+            self.message_log("Auto update parameters mode!", log_level=LogLevel.WARNING, color=Style.B_RED)
         # Calculate round float multiplier
         self.round_base = ROUND_BASE or str(tcm.round_amount(f2d(1.123456789), ROUND_FLOOR))
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
@@ -795,7 +798,8 @@ class Strategy(StrategyBase):
             self.tp_part_amount_second = f2d(json.loads(strategy_state.get('tp_part_amount_second')))
             self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
             self.tp_order = eval(json.loads(strategy_state.get('tp_order')))
-            self.tp_order = self.tp_order[:3] + (self.get_time(),)
+            if self.tp_order:
+                self.tp_order = self.tp_order[:3] + (self.get_time(),)
             self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id'))
             self.restore_orders = json.loads(strategy_state.get('restore_orders', 'false'))
             self.tp_part_free = json.loads(strategy_state.get('tp_part_free', 'false'))
@@ -829,7 +833,7 @@ class Strategy(StrategyBase):
             #
             self.message_log("Restored, go work", tlg=True)
 
-    def start(self, profit_f: Decimal = f2d(0), profit_s: Decimal = f2d(0)) -> None:
+    def start(self, profit_f: Decimal = O_DEC, profit_s: Decimal = O_DEC) -> None:
         self.message_log('Start')
         if self.command == 'stopped':
             self.message_log('Strategy stopped, waiting manual action')
@@ -915,7 +919,7 @@ class Strategy(StrategyBase):
                         print('Send data to .db t_funds')
                         self.queue_to_db.put(data_to_db)
                 self.save_init_assets(ff, fs)
-                if COLLECT_ASSETS:
+                if COLLECT_ASSETS and MODE != 'S':
                     _ff, _fs = self.collect_assets()
                     ff -= _ff
                     fs -= _fs
@@ -993,7 +997,7 @@ class Strategy(StrategyBase):
                 self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
                                  color=Style.B_WHITE)
             self.debug_output()
-            if self.start_collect is None:
+            if MODE in ('TC', 'S') and self.start_collect is None:
                 self.start_collect = True
             self.first_run = False
             self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
@@ -1283,9 +1287,16 @@ class Strategy(StrategyBase):
                 if mode == 'total':
                     ff = _ff.total_for_currency
                     fs = _fs.total_for_currency
-                elif mode in ('available', 'free'):
+                elif mode == 'available':
                     ff = _ff.available
                     fs = _fs.available
+                elif mode == 'free':
+                    if self.tp_order_id or self.tp_wait_id:
+                        ff = _ff.available
+                        fs = _fs.available
+                    else:
+                        ff = max(O_DEC, _ff.available - self.sum_amount_first)
+                        fs = max(O_DEC, _fs.available - self.sum_amount_second)
                 elif mode == 'reserved':
                     ff = _ff.reserved
                     fs = _fs.reserved
@@ -1302,8 +1313,7 @@ class Strategy(StrategyBase):
         ff = self.round_truncate(ff, base=True)
         fs = self.round_truncate(fs, base=False)
         ft = ff * self.avg_rate + fs
-        assets = f"{mode.capitalize()}: First: {ff}, Second: {fs}"
-        return ff, fs, ft, assets
+        return ff, fs, ft, f"{mode.capitalize()}: First: {ff}, Second: {fs}"
 
     def round_truncate(self, _x: Decimal, base: bool = None, fee=False, _rounding=ROUND_FLOOR) -> Decimal:
         if fee:
@@ -1573,11 +1583,13 @@ class Strategy(StrategyBase):
             'orders': orders
         }
 
-    def grid_update(self):
+    def grid_update(self, force=False):
         do_it = False
         depo_remaining = self.depo_unused() / (self.deposit_second if self.cycle_buy else self.deposit_first)
 
-        if self.reverse and depo_remaining >= f2d(0.65):
+        if force and self.check_min_amount(amount=depo_remaining, for_tp=False):
+            do_it = False
+        elif self.reverse and depo_remaining >= f2d(0.65):
             if self.get_time() - self.ts_grid_update > GRID_UPDATE_INTERVAL:
                 do_it = True
         elif not self.reverse and depo_remaining >= f2d(0.35):
@@ -1610,7 +1622,9 @@ class Strategy(StrategyBase):
                 elif delta < 0 and frequency == 'low':
                     do_it = -1 * delta > 3
         if do_it:
-            if self.reverse:
+            if force:
+                self.message_log("Force update grid", color=Style.B_WHITE)
+            elif self.reverse:
                 self.message_log("Update grid in Reverse cycle", color=Style.B_WHITE)
             else:
                 # noinspection PyUnboundLocalVariable
@@ -1830,7 +1844,7 @@ class Strategy(StrategyBase):
                         min_delta: Decimal,
                         amount_first_grid: Decimal,
                         amount_min: Decimal,
-                        over_price_previous: Decimal = f2d(0)) -> Decimal:
+                        over_price_previous: Decimal = O_DEC) -> Decimal:
         """
         Calculate over price for depo refund after Reverse cycle
         :param buy_side:
@@ -2058,7 +2072,7 @@ class Strategy(StrategyBase):
             self.reverse_init_amount = O_DEC
             self.initial_reverse_first = self.initial_reverse_second = O_DEC
             self.command = 'stop' if REVERSE_STOP and REVERSE else self.command
-            if (self.cycle_buy and self.profit_first <= 0) or (not self.cycle_buy and self.profit_second <= 0):
+            if (self.cycle_buy and self.profit_first < 0) or (not self.cycle_buy and self.profit_second < 0):
                 self.message_log("Strategy have a negative cycle result, STOP", log_level=LogLevel.CRITICAL)
                 self.command = 'end'
         else:
@@ -2382,10 +2396,8 @@ class Strategy(StrategyBase):
 
     def check_min_amount(self, amount=O_DEC, price=O_DEC, for_tp=True) -> bool:
         _price = price or self.avg_rate
-
         if not _price:
             return False
-
         _amount = amount
         tcm = self.get_trading_capability_manager()
         if self.cycle_buy:
@@ -2396,7 +2408,6 @@ class Strategy(StrategyBase):
             min_trade_amount = tcm.get_min_buy_amount(_price)
             if not _amount:
                 _amount = (self.sum_amount_second / _price) if for_tp else self.deposit_first
-
         _amount = self.round_truncate(_amount, base=True)
         return _amount >= min_trade_amount
 
@@ -2849,16 +2860,20 @@ class Strategy(StrategyBase):
                     self.message_log('Continue remove grid orders', color=Style.B_WHITE)
                     self.cancel_grid_hold = False
                     self.cancel_grid()
-                waiting_order_id = self.place_limit_order_check(
-                    _order['buy'],
-                    _order['amount'],
-                    _order['price'],
-                    check=True,
-                    price_limit_rules=True
-                )
-                if waiting_order_id:
-                    _order['id'] = waiting_order_id
-                    self.orders_init.orders_list.append(_order)
+                if self.check_min_amount(_order['amount'], _order['price'], for_tp=False):
+                    waiting_order_id = self.place_limit_order_check(
+                        _order['buy'],
+                        _order['amount'],
+                        _order['price'],
+                        check=True,
+                        price_limit_rules=True
+                    )
+                    if waiting_order_id:
+                        _order['id'] = waiting_order_id
+                        self.orders_init.orders_list.append(_order)
+                else:
+                    self.message_log(f"Too small amount for order: {place_order_id}", color=Style.B_WHITE)
+                    self.grid_update(force=True)
             elif place_order_id == self.tp_wait_id:
                 self.tp_wait_id = None
                 self.tp_error = True
