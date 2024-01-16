@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc16"
+__version__ = "2.1.0rc17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -19,7 +19,6 @@ import sqlite3
 import random
 import traceback
 import pandas as pd
-import shutil
 import csv
 import queue
 import pyarrow as pa
@@ -1186,15 +1185,15 @@ async def buffered_orders():
                                                              str(int(datetime.now().strftime("%S%M")) * 1000)))
                 cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
                 cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
+                orders_keys = cls.orders.keys()
                 for _id in exch_orders:
-                    if _id not in cls.orders.keys():
-                        _order = next((_o for _o in orders if int(_o["orderId"]) == _id), None)
-                        if _order:
-                            cls.strategy.message_log(f"Was restored order {_id}({_order['clientOrderId']})"
-                                                     f" from exchange data",
-                                                     log_level=LogLevel.WARNING,
-                                                     color=Style.YELLOW)
-                            cls.orders[_id] = Order(_order)
+                    if _id not in orders_keys:
+                        _order = next((_o for _o in orders if int(_o["orderId"]) == _id))
+                        cls.orders[_id] = Order(_order)
+                        cls.strategy.message_log(f"Was restored order {_id}({_order['clientOrderId']})"
+                                                 f" from exchange data",
+                                                 log_level=LogLevel.WARNING,
+                                                 color=Style.YELLOW)
                 [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                 #
                 cls.strategy.restore_strategy_state(cls.last_state, restore=False)

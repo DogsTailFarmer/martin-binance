@@ -63,7 +63,7 @@ ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
 ex.STATUS_DELAY = 5  # Minute between sending Tlg message about current status, 0 - disable
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
 ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list member
-ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for STANDALONE mode on subaccount only
+ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for subaccount only
 # Parameter for calculate grid over price and grid orders quantity in set_trade_condition()
 # If ADAPTIVE_TRADE_CONDITION = True, ORDER_Q / OVER_PRICE determines the density of grid orders
 ex.ADAPTIVE_TRADE_CONDITION = True
@@ -87,9 +87,9 @@ ex.REVERSE_INIT_AMOUNT = Decimal('0')
 ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 # Backtest mode parameters
 ex.MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
-ex.SAVE_DS = True  # Save session result data (ticker, orders) for compare
+ex.SAVE_DS = False  # Save session result data (ticker, orders) for compare
 ex.SAVE_PERIOD = 24 * 60 * 60  # sec, timetable for save data portion
-ex.SAVED_STATE = False  # Use saved state for backtesting
+ex.SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
 ################################################################
 #                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
