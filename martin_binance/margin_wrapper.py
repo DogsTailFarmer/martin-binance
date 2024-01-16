@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc18"
+__version__ = "2.1.0rc19"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -696,7 +696,10 @@ def load_from_csv() -> []:
         row_count = len(pd.read_csv(file_name, usecols=[0]).index)
         with open(file_name, "r") as csvfile:
             reader = csv.reader(csvfile)
-            [next(reader) for _ in range(row_count - TRADES_LIST_LIMIT)]
+            try:
+                [next(reader) for _ in range(row_count - TRADES_LIST_LIMIT)]
+            except StopIteration:
+                pass
             for row in reader:
                 if row[0] in ('TRADE', 'TRADE_BY_MARKET'):
                     trade = {
