@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc16"
+__version__ = "2.1.0rc20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -106,6 +106,7 @@ SAVE_DS = False  # Save session result data (ticker, orders) for compare
 SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
 LOGGING = True
 SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
+N_TRIALS = 250  # Number of optimization cycles for optuna study
 # endregion
 
 
@@ -1715,7 +1716,7 @@ class Strategy(StrategyBase):
             amount_first_grid = self.round_truncate(amount_first_grid, base=True, _rounding=ROUND_CEILING)
             if amount_first_grid >= depo_c:
                 raise UserWarning(f"Amount first grid order: {amount_first_grid} is greater than depo:"
-                                  f" {float(depo_c):f}. Increase depo amount.")
+                                  f" {float(depo_c):f}. Increase depo amount or PROFIT parameter.")
         else:
             amount_first_grid = amount_min
         if self.reverse:
@@ -1896,21 +1897,21 @@ class Strategy(StrategyBase):
             if FEE_BNB_IN_PAIR:
                 if self.cycle_buy:
                     amount_first -= self.round_fee(fee, amount_first, base=True)
-                    message = f"For grid order First - fee: {float(amount_first):f}"
+                    message = f"For grid order First - fee: {any2str(amount_first)}"
                 else:
                     amount_first += self.round_fee(fee, amount_first, base=True)
-                    message = f"For grid order First + fee: {float(amount_first):f}"
+                    message = f"For grid order First + fee: {any2str(amount_first)}"
             else:
                 if self.cycle_buy:
                     if FEE_SECOND:
                         amount_second += self.round_fee(fee, amount_second, base=False)
-                        message = f"For grid order Second + fee: {float(amount_second):f}"
+                        message = f"For grid order Second + fee: {any2str(amount_second)}"
                     else:
                         amount_first -= self.round_fee(fee, amount_first, base=True)
-                        message = f"For grid order First - fee: {float(amount_first):f}"
+                        message = f"For grid order First - fee: {any2str(amount_first)}"
                 else:
                     amount_second -= self.round_fee(fee, amount_second, base=False)
-                    message = f"For grid order Second - fee: {float(amount_second):f}"
+                    message = f"For grid order Second - fee: {any2str(amount_second)}"
         if print_info and message:
             self.message_log(message, log_level=LogLevel.DEBUG)
         return self.round_truncate(amount_first, fee=True), self.round_truncate(amount_second, fee=True)
@@ -2609,13 +2610,16 @@ class Strategy(StrategyBase):
         self.message_log(f"Order {update.original_order.id}: {update.status}", color=Style.B_WHITE)
         result_trades = update.resulting_trades
         amount_first = amount_second = O_DEC
+        by_market = False
         if update.status == OrderUpdate.PARTIALLY_FILLED:
             # Get last trade row
             if result_trades:
                 i = result_trades[-1]
                 amount_first = i.amount
                 amount_second = i.amount * i.price
-                self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
+                by_market = not bool(i.is_maker)
+                self.message_log(f"trade id={i.id}, first: {any2str(i.amount)}, price: {any2str(i.price)},"
+                                 f" by_market: {by_market}", log_level=LogLevel.DEBUG)
             else:
                 self.message_log(f"No records for {update.original_order.id}", log_level=LogLevel.WARNING)
         else:
@@ -2623,9 +2627,12 @@ class Strategy(StrategyBase):
                 # Calculate sum trade amount for both currency
                 amount_first += i.amount
                 amount_second += i.amount * i.price
-                self.message_log(f"trade id={i.id}, first: {i.amount}, price: {i.price}", log_level=LogLevel.DEBUG)
+                by_market = by_market or not bool(i.is_maker)
+                self.message_log(f"trade id={i.id}, first: {any2str(i.amount)}, price: {any2str(i.price)},"
+                                 f" by_market: {by_market}", log_level=LogLevel.DEBUG)
         self.avg_rate = amount_second / amount_first
-        self.message_log(f"Executed amount: First: {amount_first}, Second: {amount_second}, price: {self.avg_rate}")
+        self.message_log(f"Executed amount: First: {any2str(amount_first)}, Second: {any2str(amount_second)},"
+                         f" price: {any2str(self.avg_rate)}")
         if update.status in (OrderUpdate.FILLED, OrderUpdate.ADAPTED_AND_FILLED):
             if not GRID_ONLY:
                 self.shift_grid_threshold = None
@@ -2638,6 +2645,7 @@ class Strategy(StrategyBase):
                         self.restore_orders = False
                 self.grid_handler(_amount_first=amount_first,
                                   _amount_second=amount_second,
+                                  by_market=by_market,
                                   after_full_fill=True,
                                   order_id=update.original_order.id)
             elif self.tp_order_id == update.original_order.id:
@@ -2651,7 +2659,7 @@ class Strategy(StrategyBase):
                     self.update_sum_amount(- self.tp_part_amount_first, - self.tp_part_amount_second)
                     self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                     self.tp_part_free = False
-                self.tp_was_filled = (amount_first, amount_second, False)
+                self.tp_was_filled = (amount_first, amount_second, by_market)
                 # print(f"on_order_update.was_filled_tp: {self.tp_was_filled}")
                 if self.tp_hold:
                     # After place but before execute TP was filled some grid
@@ -2659,7 +2667,7 @@ class Strategy(StrategyBase):
                     self.after_filled_tp(one_else_grid=True)
                 elif self.tp_cancel_from_grid_handler:
                     self.tp_cancel_from_grid_handler = False
-                    self.grid_handler()
+                    self.grid_handler(by_market=by_market)
                 else:
                     self.restore_orders = False
                     self.grid_remove = None
@@ -2669,7 +2677,7 @@ class Strategy(StrategyBase):
         elif update.status == OrderUpdate.PARTIALLY_FILLED:
             if self.tp_order_id == update.original_order.id:
                 self.message_log("Take profit partially filled", color=Style.B_WHITE)
-                amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second)
+                amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second, by_market=by_market)
                 # Calculate profit for filled part TP
                 _profit_first = _profit_second = O_DEC
                 if self.cycle_buy:
@@ -2732,7 +2740,7 @@ class Strategy(StrategyBase):
                     # Get min trade amount
                     if self.check_min_amount():
                         self.shift_grid_threshold = None
-                        self.grid_handler(after_full_fill=False)
+                        self.grid_handler(by_market=by_market, after_full_fill=False)
                     else:
                         self.last_shift_time = self.get_time() + 2 * SHIFT_GRID_DELAY
                         self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
@@ -2747,93 +2755,44 @@ class Strategy(StrategyBase):
 
     def on_place_order_success(self, place_order_id: int, order: Order) -> None:
         # print(f"on_place_order_success.place_order_id: {place_order_id}")
-        if order.amount > order.received_amount > 0:
-            self.message_log(f"Order {place_order_id} was partially filled", color=Style.B_WHITE)
-            self.shift_grid_threshold = None
-        if order.remaining_amount == 0:
-            self.shift_grid_threshold = None
-            # Get actual parameter of last trade order
-            market_order = self.get_buffered_completed_trades()
-            amount_first = amount_second = O_DEC
-            self.message_log(f"Order {place_order_id} executed by market", color=Style.B_WHITE)
-            for o in market_order:
-                if o.order_id == order.id:
-                    amount_first += o.amount
-                    amount_second += o.amount * o.price
-            if not amount_first:
-                amount_first += order.amount
-                amount_second += order.amount * order.price
-            self.avg_rate = amount_second / amount_first
-            self.message_log(f"For {order.id} first: {float(amount_first):f},"
-                             f" second: {float(amount_second):f}, price: {float(self.avg_rate):f}")
-            if self.orders_init.exist(place_order_id):
-                self.ts_grid_update = self.get_time()
-                self.message_log(f"Grid order {order.id} execute by market")
-                self.orders_init.remove(place_order_id)
-                self.message_log(f"Waiting order count is: {len(self.orders_init)}, hold: {len(self.orders_hold)}")
-                # Place take profit order
-                self.grid_handler(
-                    _amount_first=amount_first,
-                    _amount_second=amount_second,
-                    by_market=True,
-                    after_full_fill=True
-                )
-            elif place_order_id == self.tp_wait_id:
-                # Take profit order execute by market, restart
-                self.tp_wait_id = None
-                if self.reverse_hold:
-                    self.cancel_reverse_hold()
-                self.message_log(f"Take profit order {order.id} execute by market")
-                self.tp_was_filled = (amount_first, amount_second, True)
-                if self.tp_hold or self.tp_cancel_from_grid_handler:
-                    self.tp_cancel_from_grid_handler = False
-                    self.tp_hold = False
-                    # After place but before accept TP was filled some grid
-                    self.after_filled_tp(one_else_grid=True)
-                else:
-                    self.restore_orders = False
-                    self.grid_remove = None
-                    self.cancel_grid(cancel_all=True)
-            else:
-                self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR,
-                                 color=Style.B_RED)
-        else:
-            if self.orders_init.exist(place_order_id):
-                self.ts_grid_update = self.get_time()
-                self.orders_grid.append_order(order.id, order.buy, order.amount, order.price)
-                self.orders_grid.sort(self.cycle_buy)
-                self.orders_init.remove(place_order_id)
-                if not self.orders_init:
-                    self.last_shift_time = self.get_time()
-                    if GRID_ONLY and self.orders_hold:
-                        # Place next part of grid orders
-                        self.place_grid_part()
-                    else:
-                        if self.grid_place_flag or not self.orders_hold:
-                            if self.orders_hold:
-                                self.message_log(f"Part of grid orders are placed. Left: {len(self.orders_hold)}",
-                                                 color=Style.B_WHITE)
-                            else:
-                                self.order_q_placed = True
-                                self.message_log('All grid orders place successfully', color=Style.B_WHITE)
-                        elif not self.order_q_placed and not self.shift_grid_threshold:
-                            self.place_grid_part()
-                        if self.cancel_grid_hold:
-                            self.message_log('Continue remove grid orders', color=Style.B_WHITE)
-                            self.cancel_grid_hold = False
-                            self.cancel_grid()
-            elif place_order_id == self.tp_wait_id:
-                self.tp_wait_id = None
-                self.tp_order_id = order.id
-                if self.tp_hold or self.tp_cancel or self.tp_cancel_from_grid_handler:
-                    self.cancel_order_id = self.tp_order_id
-                    self.cancel_order_exp(self.tp_order_id)
-                else:
+        if self.orders_init.exist(place_order_id):
+            if order.remaining_amount == 0 or order.amount > order.received_amount > 0:
+                self.shift_grid_threshold = None
+            self.ts_grid_update = self.get_time()
+            self.orders_grid.append_order(order.id, order.buy, order.amount, order.price)
+            self.orders_grid.sort(self.cycle_buy)
+            self.orders_init.remove(place_order_id)
+            if not self.orders_init:
+                self.last_shift_time = self.get_time()
+                if GRID_ONLY and self.orders_hold:
                     # Place next part of grid orders
-                    if self.orders_hold and not self.order_q_placed and not self.orders_init:
+                    self.place_grid_part()
+                else:
+                    if self.grid_place_flag or not self.orders_hold:
+                        if self.orders_hold:
+                            self.message_log(f"Part of grid orders are placed. Left: {len(self.orders_hold)}",
+                                             color=Style.B_WHITE)
+                        else:
+                            self.order_q_placed = True
+                            self.message_log('All grid orders place successfully', color=Style.B_WHITE)
+                    elif not self.order_q_placed and not self.shift_grid_threshold:
                         self.place_grid_part()
+                    if self.cancel_grid_hold:
+                        self.message_log('Continue remove grid orders', color=Style.B_WHITE)
+                        self.cancel_grid_hold = False
+                        self.cancel_grid()
+        elif place_order_id == self.tp_wait_id:
+            self.tp_wait_id = None
+            self.tp_order_id = order.id
+            if self.tp_hold or self.tp_cancel or self.tp_cancel_from_grid_handler:
+                self.cancel_order_id = self.tp_order_id
+                self.cancel_order_exp(self.tp_order_id)
             else:
-                self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR)
+                # Place next part of grid orders
+                if self.orders_hold and not self.order_q_placed and not self.orders_init:
+                    self.place_grid_part()
+        else:
+            self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR)
 
     def on_place_order_error_string(self, place_order_id: int, error: str) -> None:
         # Check all orders on exchange if exists required

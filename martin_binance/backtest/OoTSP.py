@@ -18,6 +18,8 @@ from inquirer.themes import GreenPassion
 from martin_binance import BACKTEST_PATH
 from optimizer import optimize
 
+SKIP_LOG = True
+
 vis = optuna.visualization
 ii_params = []
 
@@ -55,7 +57,14 @@ def main():
         except StopIteration:
             raise UserWarning(f"Can't find cli_*.py in {Path(BACKTEST_PATH, study_name)}")
 
-        study = optimize(study_name, strategy, int(answers.get('n_trials', '0')), storage_name)
+        study = optimize(
+            study_name,
+            strategy,
+            int(answers.get('n_trials', '0')),
+            storage_name,
+            skip_log=SKIP_LOG,
+            show_progress_bar=SKIP_LOG
+        )
         print_study_result(study)
         print(f"Study instance saved to {storage_name} for later use")
     elif answers.get('mode') == 'Analise saved study session':

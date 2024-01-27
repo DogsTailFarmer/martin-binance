@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc19"
+__version__ = "2.1.0rc20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -165,20 +165,27 @@ def order_trades_sum(_order_id: int) -> Decimal:
 
 
 class PrivateTrade:
-    __slots__ = ("amount", "buy", "id", "order_id", "price", "timestamp")
+    __slots__ = (
+        "amount",
+        "buy",
+        "is_maker",
+        "id",
+        "order_id",
+        "price",
+        "commission",
+        "commission_asset",
+        "timestamp"
+    )
 
     def __init__(self, _trade: {}) -> None:
-        # Amount of the trade.
         self.amount = Decimal(_trade["qty"])
-        # True, if the trade was a buy.
         self.buy = _trade.get('isBuyer', False)
-        # id of the trade.
+        self.is_maker = _trade.get('isMaker', False)
         self.id = _trade["id"]
-        # id of the order that the trade belongs to.
         self.order_id = int(_trade["orderId"])
-        # Price at which the trade was executed.
         self.price = Decimal(_trade["price"])
-        # Timestamp of the trade.
+        self.commission = Decimal(_trade.get('commission', "0"))
+        self.commission_asset = _trade.get('commissionAsset', "")
         self.timestamp = int(_trade["time"])
 
     def __call__(self):
@@ -546,7 +553,7 @@ class StrategyBase:
 
     @classmethod
     def order_exist(cls, _id) -> bool:
-        return bool(cls.orders.get(_id))
+        return bool(cls.orders.get(int(_id)))
 
     def get_trading_capability_manager(self) -> TradingCapabilityManager:
         return self.tcm
@@ -705,6 +712,7 @@ def load_from_csv() -> []:
                     trade = {
                         "time": row[1],
                         "isBuyer": row[2] == 'BUY',
+                        "isMaker": row[0] == 'TRADE',
                         "orderId": row[3],
                         "id": row[5],
                         "qty": row[10],
@@ -1001,7 +1009,12 @@ async def backtest_control():
             if ms.SELF_OPTIMIZATION and cls.strategy.command != 'stopped':
                 _ts = datetime.utcnow()
                 try:
-                    _res = await run_optimize(OPTIMIZER, cls.session_root, Path(cls.session_root, Path(ms.PARAMS).name))
+                    _res = await run_optimize(
+                        OPTIMIZER,
+                        cls.session_root,
+                        Path(cls.session_root, Path(ms.PARAMS).name),
+                        str(ms.N_TRIALS)
+                    )
                     _res = orjson.loads(_res.splitlines()[0])
                 except (asyncio.CancelledError, KeyboardInterrupt):
                     break
@@ -1017,10 +1030,12 @@ async def backtest_control():
                             setattr(
                                 ms, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
                             )
-                cls.strategy.message_log(f"Strategy parameters are optimal now."
-                                         f" Optimization cycle duration {str(datetime.utcnow() - _ts).rsplit('.')[0]}",
-                                         color=Style.B_WHITE, tlg=True)
-                parquet_declare(cls)
+                if cls.strategy.command != 'stopped':
+                    cls.strategy.message_log(f"Strategy parameters are optimal now."
+                                             f" Optimization cycle duration"
+                                             f" {str(datetime.utcnow() - _ts).rsplit('.')[0]}",
+                                             color=Style.B_WHITE, tlg=True)
+                    parquet_declare(cls)
                 # Refresh klines init
                 for i in KLINES_INIT:
                     try:
@@ -1323,25 +1338,54 @@ async def on_order_update(cls):
 
 
 async def on_order_update_handler(cls, ed):
-    if (
-            cls.symbol != ed['symbol']
-            or not cls.order_exist(ed['order_id'])
-            or ed['order_status'] not in ('FILLED', 'PARTIALLY_FILLED')
-    ):
+    if cls.symbol != ed['symbol']:
         return
+    elif not cls.order_exist(ed['order_id']) and ed["client_order_id"].isnumeric():
+        _ed = {
+            "symbol": ed['symbol'],
+            "orderId": ed['order_id'],
+            "orderListId": -1,
+            "clientOrderId": ed["client_order_id"],
+            "transactTime": ed["transaction_time"],
+            "price": ed['order_price'],
+            "origQty": ed['order_quantity'],
+            "executedQty": ed["cumulative_filled_quantity"],
+            "cummulativeQuoteQty": ed["quote_asset_transacted"],
+            "status": ed['order_status'],
+            "timeInForce": ed['time_in_force'],
+            "type": ed['order_type'],
+            "side": ed['side'],
+            "workingTime": ed['order_creation_time'],
+            "selfTradePreventionMode": "NONE"
+        }
+        await create_order_handler(int(ed["client_order_id"]), _ed)
+
+    if not Decimal(ed["cumulative_filled_quantity"]):
+        return
+
     if ed['order_quantity'] == '0':
         # Get data from saved order
         so = cls.orders.get(ed['order_id'])
         ed['order_quantity'] = str(so.amount)
         ed['order_price'] = str(so.price)
-        last_quantity = Decimal(ed['last_executed_quantity'])
-        if so.received_amount + last_quantity < so.amount:
-            ed['cumulative_filled_quantity'] = str(so.received_amount + last_quantity)
-        else:
-            ed['cumulative_filled_quantity'] = str(so.amount)
-            ed['order_status'] = 'FILLED'
         ed['quote_order_quantity'] = str(so.amount * so.price)
-        ed['quote_asset_transacted'] = str(Decimal(ed['cumulative_filled_quantity']) * so.price)
+
+    if trade_not_exist(ed['order_id'], ed['trade_id']):
+        _on_order_update_handler_ext(ed, cls)
+        await save_trade_queue.put(
+            ["TRADE" if ed['is_maker_side'] else "TRADE_BY_MARKET",
+             ed["transaction_time"],
+             ed["side"],
+             ed["order_id"],
+             ed["client_order_id"],
+             ed["trade_id"],
+             ed["order_quantity"],
+             ed["order_price"],
+             ed["cumulative_filled_quantity"],
+             ed["quote_asset_transacted"],
+             ed["last_executed_quantity"],
+             ed["last_executed_price"]]
+        )
 
     if ed['order_status'] == 'FILLED':
         # Remove from orders dict
@@ -1366,47 +1410,42 @@ async def on_order_update_handler(cls, ed):
         }
         cls.orders |= {ed['order_id']: Order(_order)}
 
-    if trade_not_exist(ed['order_id'], ed['trade_id']):
-        _on_order_update_handler_ext(ed, cls)
-        await save_trade_queue.put(
-            ["TRADE",
-             ed["transaction_time"],
-             ed["side"],
-             ed["order_id"],
-             ed["client_order_id"],
-             ed["trade_id"],
-             ed["order_quantity"],
-             ed["order_price"],
-             ed["cumulative_filled_quantity"],
-             ed["quote_asset_transacted"],
-             ed["last_executed_quantity"],
-             ed["last_executed_price"]]
-        )
-
 
 def _on_order_update_handler_ext(ed, cls):
     trade = {
         "qty": ed['last_executed_quantity'],
         "isBuyer": ed['side'] == 'BUY',
+        "isMaker": ed['is_maker_side'],
         "id": ed['trade_id'],
         "orderId": ed['order_id'],
         "price": ed['last_executed_price'],
+        "commission": ed['commission_amount'],
+        "commissionAsset": ed['commission_asset'],
         "time": ed['transaction_time'],
     }
+
     #  Append to trades list
     cls.trades.append(PrivateTrade(trade))
     # noinspection PyStatementEffect
     cls.trades[-TRADES_LIST_LIMIT:]
+
     cumulative_quantity = Decimal(ed['cumulative_filled_quantity'])
     saved_filled_quantity = order_trades_sum(ed['order_id'])
-    if ed['order_status'] == 'FILLED' and saved_filled_quantity != cumulative_quantity:
-        cls.strategy.message_log(f"Order: {ed['order_id']} was missed partially filling event",
+
+    if ((ed['order_status'] == 'FILLED' and saved_filled_quantity > Decimal(ed['order_quantity']))
+            or saved_filled_quantity != cumulative_quantity):
+        cls.strategy.message_log(f"Order: {ed['order_id']} was incorrect partially filling event",
                                  log_level=LogLevel.INFO)
         # Remove trades associated with order from list
         remove_from_trades_lists(ed['order_id'])
         # Update current trade
         price = str(Decimal(ed['quote_asset_transacted']) / cumulative_quantity)
-        trade |= {"qty": ed['cumulative_filled_quantity'], "price": price}
+        trade |= {
+            "id": -1,
+            "qty": ed['cumulative_filled_quantity'],
+            "price": price,
+            "isMaker": False
+        }
         # cls.strategy.message_log(f"on_order_update.trade: {trade}",
         #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
         # Append to list
@@ -1461,47 +1500,30 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
 async def create_order_handler(_id, result):
     # print(f"create_order_handler.result: {result}")
     cls = StrategyBase
-    order = Order(result)
-    if cls.orders.get(order.id) is None or (result.get('status') == 'FILLED' and order_trades_sum(_id) == 0):
+    if _id in cls.wait_order_id and not cls.order_exist(result['orderId']):
+        cls.wait_order_id.remove(_id)
+        order = Order(result)
         cls.strategy.message_log(
             f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
-            f" {any2str(order.amount)} by {any2str(order.price)}"
-            f" Remaining amount {any2str(order.remaining_amount)}",
+            f" {any2str(order.amount)} by {any2str(order.price)} = {any2str(order.amount * order.price)}",
             color=Style.GREEN)
-        orig_qty = Decimal(result['origQty'])
-        executed_qty = Decimal(result['executedQty'])
-        cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
-        if executed_qty > 0 and ms.MODE == 'TC' and cls.strategy.start_collect and cls.strategy.s_ticker['pylist']:
-            s_tic = cls.strategy.s_ticker['pylist'].pop()
-            s_tic_row = orjson.loads(s_tic['row'])
-            s_tic_row['lastPrice'] = str(cummulative_quote_qty / executed_qty)
-            s_tic['row'] = orjson.dumps(s_tic_row)
-            cls.strategy.s_ticker['pylist'].append(s_tic)
-        if executed_qty < orig_qty:
-            cls.orders[order.id] = order
-        else:
-            await save_trade_queue.put(
-                ["TRADE_BY_MARKET",
-                 int(time.time() * 1000),
-                 result["side"],
-                 result["orderId"],
-                 result["clientOrderId"],
-                 '-1',
-                 result["origQty"],
-                 result["price"],
-                 result["executedQty"],
-                 result["cummulativeQuoteQty"],
-                 result["executedQty"],
-                 result["price"]]
-            )
-        if ms.MODE == 'TC' and ms.SAVE_DS and cls.strategy.start_collect:
-            cls.strategy.open_orders_snapshot()
-        elif ms.MODE == 'S':
-            await on_funds_update(cls)
-        cls.strategy.on_place_order_success(_id, order)
+        cls.orders[order.id] = order
 
-    if _id in cls.wait_order_id:
-        cls.wait_order_id.remove(_id)
+        if ms.MODE == 'S':
+            await on_funds_update(cls)
+        elif ms.MODE == 'TC' and cls.strategy.start_collect:
+            executed_qty = Decimal(result['executedQty'])
+            cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
+            if executed_qty > 0 and cls.strategy.s_ticker['pylist']:
+                s_tic = cls.strategy.s_ticker['pylist'].pop()
+                s_tic_row = orjson.loads(s_tic['row'])
+                s_tic_row['lastPrice'] = str(cummulative_quote_qty / executed_qty)
+                s_tic['row'] = orjson.dumps(s_tic_row)
+                cls.strategy.s_ticker['pylist'].append(s_tic)
+            if ms.SAVE_DS:
+                cls.strategy.open_orders_snapshot()
+
+        cls.strategy.on_place_order_success(_id, order)
 
 
 async def place_limit_order_timeout(_id):
@@ -1556,6 +1578,8 @@ async def cancel_order_call(_id: int, cancel_all=False, count=0):
             res = await fetch_order(_id)
             if res.get('status') == 'CANCELED':
                 await cancel_order_handler(_id, cancel_all)
+            elif res.get('status') == 'FILLED' and _id in cls.canceled_order_id:
+                cls.canceled_order_id.remove(_id)
             elif not res or res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
                 await asyncio.sleep(HEARTBEAT * count)
                 if count <= TRY_LIMIT:
