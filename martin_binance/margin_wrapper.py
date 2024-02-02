@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc20"
+__version__ = "2.1.0rc24"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1234,7 +1234,7 @@ async def buffered_orders():
                                          f" checking it", log_level=LogLevel.WARNING, tlg=False)
                 for _id in diff_id:
                     res = await fetch_order(_id, _filled_update_call=True)
-                    if res.get('status') == 'CANCELED':
+                    if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                         await cancel_order_handler(_id, cancel_all=False)
 
             if cls.last_state:
@@ -1370,7 +1370,7 @@ async def on_order_update_handler(cls, ed):
         ed['order_price'] = str(so.price)
         ed['quote_order_quantity'] = str(so.amount * so.price)
 
-    if trade_not_exist(ed['order_id'], ed['trade_id']):
+    if order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
         _on_order_update_handler_ext(ed, cls)
         await save_trade_queue.put(
             ["TRADE" if ed['is_maker_side'] else "TRADE_BY_MARKET",
@@ -1429,17 +1429,13 @@ def _on_order_update_handler_ext(ed, cls):
     # noinspection PyStatementEffect
     cls.trades[-TRADES_LIST_LIMIT:]
 
-    cumulative_quantity = Decimal(ed['cumulative_filled_quantity'])
-    saved_filled_quantity = order_trades_sum(ed['order_id'])
-
-    if ((ed['order_status'] == 'FILLED' and saved_filled_quantity > Decimal(ed['order_quantity']))
-            or saved_filled_quantity != cumulative_quantity):
+    if ed['order_status'] == 'FILLED' and order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
         cls.strategy.message_log(f"Order: {ed['order_id']} was incorrect partially filling event",
                                  log_level=LogLevel.INFO)
         # Remove trades associated with order from list
         remove_from_trades_lists(ed['order_id'])
         # Update current trade
-        price = str(Decimal(ed['quote_asset_transacted']) / cumulative_quantity)
+        price = str(Decimal(ed['quote_asset_transacted']) / Decimal(ed['cumulative_filled_quantity']))
         trade |= {
             "id": -1,
             "qty": ed['cumulative_filled_quantity'],

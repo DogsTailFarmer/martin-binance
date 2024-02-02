@@ -5,14 +5,14 @@ After=syslog.target
 After=network.target
 
 [Service]
-Type=forking
+Type=simple
 User=ubuntu
 Environment=DISPLAY=:0
 ExecStart=/usr/bin/tmux new-session -d
 
 ExecStop=/bin/bash home/ubuntu/.tmux/plugins/tmux-resurrect/scripts/save.sh
 ExecStop=/usr/bin/tmux kill-server
-KillMode=none
+KillMode=mixed
 
 RestartSec=2
 

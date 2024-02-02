@@ -1,3 +1,7 @@
+## 2.1.0rc25 - 2024-02-02
+### Update
+* Up requirements for exchanges-wrapper==1.4.8
+
 ## 2.1.0rc20 - 2024-01-27
 ### Fix
 * An order that was `PARTIALLY FILLED` at the time of creation was counted as `FILLED`
@@ -9,6 +13,7 @@
 * executor: remove parameters `SAVE_TRADE_HISTORY` and `SAVED_STATE`, already use for saving/restore trade events
 * comprehensive improvement of the internal accounting and recovery system
 * Up requirements for exchanges-wrapper==1.4.7
+* Dependency: Up requirements for Python>=3.9
 
 ### Added for new features
 * Per 10 mins update trade rules for pair
