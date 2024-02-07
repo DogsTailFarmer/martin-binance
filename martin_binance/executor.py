@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc20"
+__version__ = "2.1.0rc27"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -12,7 +12,7 @@ import sys
 import gc
 import statistics
 import traceback
-from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING
+from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
 from threading import Thread
 import queue
 import math
@@ -1523,7 +1523,6 @@ class Strategy(StrategyBase):
                 price_k = f2d(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
             price = base_price - i * delta_price * price_k if buy_side else base_price + i * delta_price * price_k
             price = tcm.round_price(price, ROUND_HALF_EVEN)
-
             if buy_side and i and price_prev - price < min_delta:
                 price = price_prev - min_delta
             elif not buy_side and i and price - price_prev < min_delta:
@@ -1815,7 +1814,7 @@ class Strategy(StrategyBase):
             target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             amount = target = target_amount_first
             # Calculate depo amount in second
-            amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_FLOOR)
+            amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_HALF_DOWN)
             price = tcm.round_price(amount_s / target_amount_first, ROUND_FLOOR)
         else:
             step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
@@ -1828,7 +1827,7 @@ class Strategy(StrategyBase):
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
-            price = tcm.round_price(target_amount_second / amount, ROUND_CEILING)
+            price = tcm.round_price(target_amount_second / amount, ROUND_HALF_UP)
             target = amount * price
         # Calc real margin for TP
         profit = (100 * (target - self.tp_amount) / self.tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)

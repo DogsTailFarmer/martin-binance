@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc24"
+__version__ = "2.1.0rc27"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -25,7 +25,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from colorama import init as color_init
-from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING
+from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_EVEN
 from pathlib import Path
 from datetime import datetime, timedelta
 from tqdm import tqdm
@@ -103,7 +103,7 @@ class Style:
 
 
 def any2str(_x) -> str:
-    return f"{_x:.8f}".rstrip('0').rstrip('.')
+    return f"{_x:.10f}".rstrip('0').rstrip('.')
 
 
 def write_log(level: LogLevel, message: str) -> None:
@@ -406,13 +406,16 @@ class OrderBook:
     order_book.asks[0].amount
     """
 
-    def __init__(self, _order_book) -> None:
+    def __init__(self, _order_book, _tcm=None) -> None:
         class _OrderBookRow:
             __slots__ = ("price", "amount")
 
-            def __init__(self, _order) -> None:
+            def __init__(self, _order, _tcm=_tcm) -> None:
                 self.price = Decimal(_order[0])
                 self.amount = Decimal(_order[1])
+                if _tcm:
+                    self.price = _tcm.round_price(self.price, ROUND_HALF_EVEN)
+                    self.amount = _tcm.round_amount(self.amount, ROUND_HALF_EVEN)
 
         self.asks = []
         # List of asks ordered by price in ascending order.
@@ -578,7 +581,7 @@ class StrategyBase:
 
     def get_buffered_order_book(self) -> OrderBook:
         # print(f"get_buffered_order_book.order_book: {self.order_book}")
-        return OrderBook(self.order_book)
+        return OrderBook(self.order_book, _tcm=StrategyBase.tcm)
 
     def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal) -> int:
         cls = StrategyBase
@@ -1207,8 +1210,11 @@ async def buffered_orders():
                 for _id in exch_orders:
                     if _id not in orders_keys:
                         _order = next((_o for _o in orders if int(_o["orderId"]) == _id))
+
+                        print(f"Restoring order {_id}({_order})")
+
                         cls.orders[_id] = Order(_order)
-                        cls.strategy.message_log(f"Was restored order {_id}({_order['clientOrderId']})"
+                        cls.strategy.message_log(f"Was restored order {_id}({_order.get('clientOrderId')})"
                                                  f" from exchange data",
                                                  log_level=LogLevel.WARNING,
                                                  color=Style.YELLOW)
@@ -1570,12 +1576,12 @@ async def cancel_order_call(_id: int, cancel_all=False, count=0):
             _fetch_order = True
     finally:
         if _fetch_order:
-            await asyncio.sleep(HEARTBEAT)
-            res = await fetch_order(_id)
+            res = await fetch_order(_id, _filled_update_call=True)
             if res.get('status') == 'CANCELED':
                 await cancel_order_handler(_id, cancel_all)
-            elif res.get('status') == 'FILLED' and _id in cls.canceled_order_id:
-                cls.canceled_order_id.remove(_id)
+            elif res.get('status') == 'FILLED':
+                if _id in cls.canceled_order_id:
+                    cls.canceled_order_id.remove(_id)
             elif not res or res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
                 await asyncio.sleep(HEARTBEAT * count)
                 if count <= TRY_LIMIT:
@@ -1587,8 +1593,8 @@ async def cancel_order_handler(_id, cancel_all):
     cls = StrategyBase
     if _id in cls.canceled_order_id:
         cls.canceled_order_id.remove(_id)
+        cls.strategy.message_log(f"Cancel order {_id} success", color=Style.GREEN)
     remove_from_orders_lists([_id])
-    cls.strategy.message_log(f"Cancel order {_id} success", color=Style.GREEN)
     cls.strategy.on_cancel_order_success(_id, cancel_all=cancel_all)
     if ms.MODE == 'TC' and ms.SAVE_DS and cls.strategy.start_collect:
         cls.strategy.open_orders_snapshot()
@@ -1647,7 +1653,7 @@ async def transfer2master(symbol: str, amount: str):
             cls.strategy.message_log(f"Sent {amount} {symbol} to main account", log_level=LogLevel.INFO)
         else:
             cls.strategy.message_log(f"Not sent {amount} {symbol} to main account\n,{res.result}",
-                                     log_level=LogLevel.ERROR)
+                                     log_level=LogLevel.WARNING)
 
 
 def remove_from_orders_lists(_order_id_list: []) -> None:
@@ -1863,13 +1869,13 @@ async def wss_init(cls, update_max_queue_size=False):
         market_stream_count=5
         These values directly depend on the number of market ws streams used in the strategy and declared above
         '''
+        cls.wss_fire_up = False
         try:
             await cls.send_request(cls.stub.StartStream,
                                    api_pb2.StartStreamRequest,
                                    symbol=cls.symbol,
                                    market_stream_count=5,
                                    update_max_queue_size=update_max_queue_size)
-            cls.wss_fire_up = False
         except UserWarning:
             cls.strategy.message_log("Start WSS failed, retry", log_level=LogLevel.WARNING)
             cls.wss_fire_up = True
@@ -2129,7 +2135,10 @@ async def main(_symbol):
             if ms.MODE in ('T', 'TC'):
                 cls.strategy.init()
                 input('Press Enter for Start or Ctrl-Z for Cancel\n')
+                print('Waiting for WSS to initialize...')
                 await wss_init(cls)
+                while not cls.operational_status:
+                    await asyncio.sleep(HEARTBEAT)
                 cls.strategy.start()
             else:
                 if cls.state_file.exists():

@@ -1,3 +1,8 @@
+## 2.1.0rc27 - 2024-02-07
+### Update
+* 'relaunch.py': improved
+* Up requirements for exchanges-wrapper==1.4.9b5 (test grpc 1.60.1)
+
 ## 2.1.0rc25 - 2024-02-02
 ### Update
 * Up requirements for exchanges-wrapper==1.4.8
