@@ -1346,7 +1346,7 @@ async def on_order_update(cls):
 async def on_order_update_handler(cls, ed):
     if cls.symbol != ed['symbol']:
         return
-    elif not cls.order_exist(ed['order_id']) and ed["client_order_id"].isnumeric():
+    if not cls.order_exist(ed['order_id']) and ed["client_order_id"].isnumeric():
         _ed = {
             "symbol": ed['symbol'],
             "orderId": ed['order_id'],

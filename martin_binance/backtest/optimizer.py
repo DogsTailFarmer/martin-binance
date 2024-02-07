@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc20"
+__version__ = "2.1.0rc28"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -32,7 +32,7 @@ def try_trade(mbs, skip_log, **kwargs):
         setattr(mbs.ex, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}"))
     mbs.ex.MODE = 'S'
     mbs.ex.SAVE_DS = False
-    mbs.ex.LOGGING = False if skip_log else True
+    mbs.ex.LOGGING = not skip_log
     mbs.trade()
     return float(mbs.session_result.get('profit', 0)) + float(mbs.session_result.get('free', 0))
 

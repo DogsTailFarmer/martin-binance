@@ -1,3 +1,7 @@
+## 2.1.0rc28 - 2024-02-07
+### Update
+* Up requirements for exchanges-wrapper==1.4.9
+
 ## 2.1.0rc27 - 2024-02-07
 ### Update
 * 'relaunch.py': improved
