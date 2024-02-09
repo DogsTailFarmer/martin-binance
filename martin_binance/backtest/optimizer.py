@@ -61,7 +61,7 @@ def optimize(study_name, strategy, n_trials, storage_name=None, skip_log=True, s
     try:
         _study.optimize(objective, n_trials=n_trials, gc_after_trial=True, show_progress_bar=show_progress_bar)
     except KeyboardInterrupt:
-        pass
+        pass  # ignore
     return _study
 
 

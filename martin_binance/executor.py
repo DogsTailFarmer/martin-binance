@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc27"
+__version__ = "2.1.0rc29"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1794,14 +1794,16 @@ class Strategy(StrategyBase):
             profit = PROFIT + fee
         return profit.quantize(Decimal("1.0123"), rounding=ROUND_CEILING)
 
-    def calc_profit_order(self, buy_side: bool, by_market: bool = False) -> Dict[str, Decimal]:
+    def calc_profit_order(self, buy_side: bool, by_market=False, out=True) -> Dict[str, Decimal]:
         """
         Calculation based on amount value
         :param buy_side: for take profit order, inverse to current cycle
         :param by_market:
+        :param out:
         :return:
         """
-        self.message_log(f"calc_profit_order: buy_side: {buy_side}, by_market: {by_market}", LogLevel.DEBUG)
+        if out:
+            self.message_log(f"calc_profit_order: buy_side: {buy_side}, by_market: {by_market}", LogLevel.DEBUG)
         tcm = self.get_trading_capability_manager()
         step_size_f = tcm.get_minimal_amount_change()
         if buy_side:
@@ -1831,9 +1833,10 @@ class Strategy(StrategyBase):
             target = amount * price
         # Calc real margin for TP
         profit = (100 * (target - self.tp_amount) / self.tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
-        self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount},"
-                         f" target {'first' if buy_side else 'second'}: {target}",
-                         log_level=LogLevel.DEBUG)
+        if out:
+            self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount},"
+                             f" target {'first' if buy_side else 'second'}: {target}",
+                             log_level=LogLevel.DEBUG)
         return {'price': price, 'amount': amount, 'profit': profit, 'target': target}
 
     def calc_over_price(self,
@@ -2394,7 +2397,7 @@ class Strategy(StrategyBase):
         else:
             self.grid_remove = None
 
-    def check_min_amount(self, amount=O_DEC, price=O_DEC, for_tp=True) -> bool:
+    def check_min_amount(self, amount=O_DEC, price=O_DEC, for_tp=True, by_market=False) -> bool:
         _price = price or self.avg_rate
         if not _price:
             return False
@@ -2407,7 +2410,13 @@ class Strategy(StrategyBase):
         else:
             min_trade_amount = tcm.get_min_buy_amount(_price)
             if not _amount:
-                _amount = (self.sum_amount_second / _price) if for_tp else self.deposit_first
+                if for_tp:
+                    _tp = self.calc_profit_order(not self.cycle_buy, by_market=by_market, out=False)
+                    if _tp['target'] * _tp['price'] < tcm.min_notional:
+                        return False
+                    _amount = _tp['amount']
+                else:
+                    _amount = self.deposit_first
         _amount = self.round_truncate(_amount, base=True)
         return _amount >= min_trade_amount
 
@@ -2737,7 +2746,7 @@ class Strategy(StrategyBase):
                         self.initial_second += amount_second_fee
                 else:
                     # Get min trade amount
-                    if self.check_min_amount():
+                    if self.check_min_amount(by_market=by_market):
                         self.shift_grid_threshold = None
                         self.grid_handler(by_market=by_market, after_full_fill=False)
                     else:

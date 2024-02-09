@@ -1,3 +1,8 @@
+## 2.1.0rc29 - 2024-02-09
+### Update
+* `check_min_amount()`: refine check min trade amount for SELL cycle
+* Up requirements for exchanges-wrapper==1.4.10
+
 ## 2.1.0rc28 - 2024-02-07
 ### Update
 * Up requirements for exchanges-wrapper==1.4.9
