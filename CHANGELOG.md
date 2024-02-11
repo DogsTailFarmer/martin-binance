@@ -1,3 +1,10 @@
+## 2.1.0rc31 - 2024-02-11
+### Fix
+* `check_min_amount()`: `self.tp_amount`
+
+### Update
+* Up requirements for exchanges-wrapper==1.4.11
+
 ## 2.1.0rc29 - 2024-02-09
 ### Update
 * `check_min_amount()`: refine check min trade amount for SELL cycle

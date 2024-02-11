@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc29"
+__version__ = "2.1.0rc31"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1769,7 +1769,7 @@ class Strategy(StrategyBase):
             self.over_price = max(over_price, OVER_PRICE)
         return amount_first_grid
 
-    def set_profit(self, amount: Decimal, by_market: bool) -> Decimal:
+    def set_profit(self, tp_amount: Decimal, amount: Decimal, by_market: bool) -> Decimal:
         fee = FEE_TAKER if by_market else FEE_MAKER
         fee = fee if FEE_IN_PAIR else fee + FEE_MAKER
         tbb = None
@@ -1786,33 +1786,31 @@ class Strategy(StrategyBase):
                 bbb = bb.get('bbb', O_DEC)
         if tbb and bbb:
             if self.cycle_buy:
-                profit = 100 * (tbb * amount - self.tp_amount) / self.tp_amount
+                profit = 100 * (tbb * amount - tp_amount) / tp_amount
             else:
-                profit = 100 * (amount / bbb - self.tp_amount) / self.tp_amount
+                profit = 100 * (amount / bbb - tp_amount) / tp_amount
             profit = min(max(profit, PROFIT + fee), PROFIT_MAX)
         else:
             profit = PROFIT + fee
         return profit.quantize(Decimal("1.0123"), rounding=ROUND_CEILING)
 
-    def calc_profit_order(self, buy_side: bool, by_market=False, out=True) -> Dict[str, Decimal]:
+    def calc_profit_order(self, buy_side: bool, by_market=False, log_output=True) -> Dict[str, Decimal]:
         """
         Calculation based on amount value
         :param buy_side: for take profit order, inverse to current cycle
         :param by_market:
-        :param out:
+        :param log_output:
         :return:
         """
-        if out:
-            self.message_log(f"calc_profit_order: buy_side: {buy_side}, by_market: {by_market}", LogLevel.DEBUG)
         tcm = self.get_trading_capability_manager()
         step_size_f = tcm.get_minimal_amount_change()
         if buy_side:
             # Calculate target amount for first
-            self.tp_amount = self.sum_amount_first
-            profit = self.set_profit(self.sum_amount_second, by_market)
+            tp_amount = self.sum_amount_first
+            profit = self.set_profit(tp_amount, self.sum_amount_second, by_market)
             target_amount_first = self.sum_amount_first + profit * self.sum_amount_first / 100
-            if target_amount_first - self.tp_amount < step_size_f:
-                target_amount_first = self.tp_amount + step_size_f
+            if target_amount_first - tp_amount < step_size_f:
+                target_amount_first = tp_amount + step_size_f
             target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
             amount = target = target_amount_first
             # Calculate depo amount in second
@@ -1821,21 +1819,23 @@ class Strategy(StrategyBase):
         else:
             step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
             # Calculate target amount for second
-            self.tp_amount = self.sum_amount_second
-            profit = self.set_profit(self.sum_amount_first, by_market)
+            tp_amount = self.sum_amount_second
+            profit = self.set_profit(tp_amount, self.sum_amount_first, by_market)
             target_amount_second = self.sum_amount_second + profit * self.sum_amount_second / 100
-            if target_amount_second - self.tp_amount < step_size_s:
-                target_amount_second = self.tp_amount + step_size_s
+            if target_amount_second - tp_amount < step_size_s:
+                target_amount_second = tp_amount + step_size_s
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
             price = tcm.round_price(target_amount_second / amount, ROUND_HALF_UP)
             target = amount * price
         # Calc real margin for TP
-        profit = (100 * (target - self.tp_amount) / self.tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
-        if out:
+        profit = (100 * (target - tp_amount) / tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
+        if log_output:
+            self.tp_amount = tp_amount
             self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount},"
-                             f" target {'first' if buy_side else 'second'}: {target}",
+                             f" target {'first' if buy_side else 'second'}: {target},"
+                             f" buy_side: {buy_side}, by_market: {by_market}",
                              log_level=LogLevel.DEBUG)
         return {'price': price, 'amount': amount, 'profit': profit, 'target': target}
 
@@ -2411,7 +2411,7 @@ class Strategy(StrategyBase):
             min_trade_amount = tcm.get_min_buy_amount(_price)
             if not _amount:
                 if for_tp:
-                    _tp = self.calc_profit_order(not self.cycle_buy, by_market=by_market, out=False)
+                    _tp = self.calc_profit_order(not self.cycle_buy, by_market=by_market, log_output=False)
                     if _tp['target'] * _tp['price'] < tcm.min_notional:
                         return False
                     _amount = _tp['amount']
@@ -2690,25 +2690,30 @@ class Strategy(StrategyBase):
                 _profit_first = _profit_second = O_DEC
                 if self.cycle_buy:
                     _, target_fee = self.fee_for_tp(O_DEC, self.tp_target, log_output=False)
-                    _profit_second = self.round_truncate(((target_fee - self.tp_amount) * amount_second_fee /
-                                                          target_fee), base=False)
+                    _profit_second = (target_fee - self.tp_amount) * amount_second_fee / target_fee
                     self.part_profit_second += _profit_second
-                    self.message_log(f"Part profit second {self.part_profit_second}", log_level=LogLevel.DEBUG)
+                    self.message_log(f"Part profit second: {any2str(_profit_second)},"
+                                     f" sum={any2str(self.part_profit_second)}",
+                                     log_level=LogLevel.DEBUG)
                 else:
                     target_fee, _ = self.fee_for_tp(self.tp_target, O_DEC, log_output=False)
-                    _profit_first = self.round_truncate(((target_fee - self.tp_amount) * amount_first_fee /
-                                                         target_fee), base=True)
+                    _profit_first = (target_fee - self.tp_amount) * amount_first_fee / target_fee
                     self.part_profit_first += _profit_first
-                    self.message_log(f"Part profit first {self.part_profit_first}", log_level=LogLevel.DEBUG)
-                self.tp_part_amount_first += amount_first_fee - _profit_first
-                self.tp_part_amount_second += amount_second_fee - _profit_second
+                    self.message_log(f"Part profit first: {any2str(_profit_first)},"
+                                     f" sum={any2str(self.part_profit_first)}",
+                                     log_level=LogLevel.DEBUG)
+                first_fee_profit = self.round_truncate(amount_first_fee - _profit_first, base=True)
+                second_fee_profit = self.round_truncate(amount_second_fee - _profit_second, base=False)
+                self.tp_part_amount_first += first_fee_profit
+                self.tp_part_amount_second += second_fee_profit
                 self.tp_part_free = True
-                self.update_sum_amount(amount_first_fee - _profit_first, amount_second_fee - _profit_second)
+                self.update_sum_amount(first_fee_profit, second_fee_profit)
                 if self.reverse_hold:
                     self.start_reverse_time = self.get_time()
                     if self.convert_tp(self.tp_part_amount_first,
                                        self.tp_part_amount_second,
                                        _update_sum_amount=False):
+                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                         self.cancel_reverse_hold()
                         self.tp_part_free = False
                         self.message_log("Part filled TP was converted to grid", tlg=True)
@@ -2897,8 +2902,8 @@ class Strategy(StrategyBase):
                     self.tp_part_free = False
                 self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                 # Save part profit
-                self.profit_first += self.part_profit_first
-                self.profit_second += self.part_profit_second
+                self.profit_first += self.round_truncate(self.part_profit_first, base=True)
+                self.profit_second += self.round_truncate(self.part_profit_second, base=False)
                 self.part_profit_first = self.part_profit_second = O_DEC
             if self.tp_hold:
                 self.tp_hold = False
