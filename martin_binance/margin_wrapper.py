@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc27"
+__version__ = "2.1.0rc32"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1196,35 +1196,14 @@ async def buffered_orders():
                 raise UserWarning("Can't fetch open orders")
 
             orders = json_format.MessageToDict(_orders).get('items', [])
-            for order in orders:
-                exch_orders.append(int(order['orderId']))
+            [exch_orders.append(int(_o['orderId'])) for _o in orders]
+
+            if restore:
+                cls.strategy.message_log("Trying restore saved state after lost connection to host", color=Style.GREEN)
 
             if cls.last_state:
                 cls.strategy.message_log("Trying restore saved state after restart", color=Style.GREEN)
-                # Restore StrategyBase class var
-                cls.order_id = json.loads(cls.last_state.pop(MS_ORDER_ID,
-                                                             str(int(datetime.now().strftime("%S%M")) * 1000)))
-                cls.start_time_ms = json.loads(cls.last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
-                cls.orders = jsonpickle.decode(cls.last_state.pop(MS_ORDERS, '{}'), keys=True)
-                orders_keys = cls.orders.keys()
-                for _id in exch_orders:
-                    if _id not in orders_keys:
-                        _order = next((_o for _o in orders if int(_o["orderId"]) == _id))
-
-                        print(f"Restoring order {_id}({_order})")
-
-                        cls.orders[_id] = Order(_order)
-                        cls.strategy.message_log(f"Was restored order {_id}({_order.get('clientOrderId')})"
-                                                 f" from exchange data",
-                                                 log_level=LogLevel.WARNING,
-                                                 color=Style.YELLOW)
-                [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
-                #
-                cls.strategy.restore_strategy_state(cls.last_state, restore=False)
-
-            if restore:
-                cls.strategy.message_log("Trying restore saved state after lost connection to host",
-                                         color=Style.GREEN)
+                cls.strategy.restore_strategy_state(restore=True)
 
             for order in orders:
                 _id = int(order['orderId'])
@@ -1242,9 +1221,6 @@ async def buffered_orders():
                     res = await fetch_order(_id, _filled_update_call=True)
                     if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                         await cancel_order_handler(_id, cancel_all=False)
-
-            if cls.last_state:
-                cls.strategy.restore_strategy_state(restore=True)
 
             if cls.last_state and ms.MODE == 'TC':
                 last_state = cls.strategy.save_strategy_state(return_only=True)
@@ -1978,6 +1954,8 @@ async def main(_symbol):
     cls.strategy = ms.Strategy()
     restore_state = None
     last_state = {}
+    active_orders = []
+    exch_orders_ids = []
     try:
         if cls.session is None:
             cls.symbol = _symbol
@@ -2004,7 +1982,6 @@ async def main(_symbol):
             #
             if ms.MODE in ('T', 'TC'):
                 # Check and Cancel ALL ACTIVE ORDER
-                active_orders = None
                 try:
                     _active_orders = await send_request(cls.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=_symbol)
                 except Exception as ex:
@@ -2033,6 +2010,8 @@ async def main(_symbol):
                         except grpc.RpcError as ex:
                             status_code = ex.code()
                             print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
+                    else:
+                        [exch_orders_ids.append(int(_o['orderId'])) for _o in active_orders]
             # Init section
             loop.create_task(get_exchange_info(cls, send_request, _symbol))
             while not cls.info_symbol:
@@ -2124,6 +2103,26 @@ async def main(_symbol):
             if ms.LOAD_LAST_STATE or answer.lower() == 'y':
                 cls.last_state = last_state
                 try:
+                    cls.strategy.message_log("Load saved state after restart", color=Style.GREEN)
+                    # Restore StrategyBase class var
+                    cls.order_id = json.loads(last_state.pop(MS_ORDER_ID,
+                                                             str(int(datetime.now().strftime("%S%M")) * 1000)))
+                    cls.start_time_ms = json.loads(last_state.pop('ms_start_time_ms', str(int(time.time() * 1000))))
+                    cls.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
+                    orders_keys = cls.orders.keys()
+                    for _id in exch_orders_ids:
+                        if _id not in orders_keys:
+                            _order = next((_o for _o in active_orders if int(_o["orderId"]) == _id))
+                            print(f"Restoring order {_id}({_order})")
+                            cls.orders[_id] = Order(_order)
+                            cls.strategy.message_log(f"Was restored order {_id}({_order.get('clientOrderId')})"
+                                                     f" from exchange data",
+                                                     log_level=LogLevel.WARNING,
+                                                     color=Style.YELLOW)
+                    [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
+                    #
+                    cls.strategy.restore_strategy_state(last_state, restore=False)
+                    #
                     await wss_init(cls)
                     cls.strategy.init(check_funds=False)
                 except Exception as ex:

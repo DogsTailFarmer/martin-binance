@@ -1,3 +1,7 @@
+## 2.1.0rc32 - 2024-02-11
+### Fix
+* Event updates arrived before the saved state was restored
+
 ## 2.1.0rc31 - 2024-02-11
 ### Fix
 * `check_min_amount()`: `self.tp_amount`
