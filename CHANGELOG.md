@@ -1,3 +1,7 @@
+## 2.1.0rc33 - 2024-02-11
+### Update
+* Some minor updates
+
 ## 2.1.0rc32 - 2024-02-11
 ### Fix
 * Event updates arrived before the saved state was restored
