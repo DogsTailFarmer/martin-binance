@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc32"
+__version__ = "2.1.0rc36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1195,6 +1195,8 @@ async def buffered_orders():
             if _orders is None:
                 raise UserWarning("Can't fetch open orders")
 
+            StrategyBase.rate_limiter = max(StrategyBase.rate_limiter, _orders.rate_limiter)
+
             orders = json_format.MessageToDict(_orders).get('items', [])
             [exch_orders.append(int(_o['orderId'])) for _o in orders]
 
@@ -1209,7 +1211,6 @@ async def buffered_orders():
                 _id = int(order['orderId'])
                 if order.get('status') == 'PARTIALLY_FILLED' and order_trades_sum(_id) < Decimal(order['executedQty']):
                     diff_id.add(_id)
-            StrategyBase.rate_limiter = max(StrategyBase.rate_limiter, _orders.rate_limiter)
 
             # Missed fill event list
             diff_id.update(set(cls.orders).difference(set(exch_orders)))
@@ -1345,14 +1346,7 @@ async def on_order_update_handler(cls, ed):
     if not Decimal(ed["cumulative_filled_quantity"]):
         return
 
-    if ed['order_quantity'] == '0':
-        # Get data from saved order
-        so = cls.orders.get(ed['order_id'])
-        ed['order_quantity'] = str(so.amount)
-        ed['order_price'] = str(so.price)
-        ed['quote_order_quantity'] = str(so.amount * so.price)
-
-    if order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
+    if trade_not_exist(ed["order_id"], ed["trade_id"]):
         _on_order_update_handler_ext(ed, cls)
         await save_trade_queue.put(
             ["TRADE" if ed['is_maker_side'] else "TRADE_BY_MARKET",
@@ -1368,6 +1362,11 @@ async def on_order_update_handler(cls, ed):
              ed["last_executed_quantity"],
              ed["last_executed_price"]]
         )
+
+    if ed['order_status'] == 'FILLED' and order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
+        cls.strategy.message_log(f"Order: {ed['order_id']} was missed partially filling event",
+                                 log_level=LogLevel.INFO)
+        ed['order_status'] = 'PARTIALLY_FILLED'
 
     if ed['order_status'] == 'FILLED':
         # Remove from orders dict
@@ -1405,29 +1404,10 @@ def _on_order_update_handler_ext(ed, cls):
         "commissionAsset": ed['commission_asset'],
         "time": ed['transaction_time'],
     }
-
     #  Append to trades list
     cls.trades.append(PrivateTrade(trade))
     # noinspection PyStatementEffect
     cls.trades[-TRADES_LIST_LIMIT:]
-
-    if ed['order_status'] == 'FILLED' and order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
-        cls.strategy.message_log(f"Order: {ed['order_id']} was incorrect partially filling event",
-                                 log_level=LogLevel.INFO)
-        # Remove trades associated with order from list
-        remove_from_trades_lists(ed['order_id'])
-        # Update current trade
-        price = str(Decimal(ed['quote_asset_transacted']) / Decimal(ed['cumulative_filled_quantity']))
-        trade |= {
-            "id": -1,
-            "qty": ed['cumulative_filled_quantity'],
-            "price": price,
-            "isMaker": False
-        }
-        # cls.strategy.message_log(f"on_order_update.trade: {trade}",
-        #                                  log_level=LogLevel.DEBUG, color=ms.Style.YELLOW)
-        # Append to list
-        cls.trades.append(PrivateTrade(trade))
     cls.strategy.on_order_update(OrderUpdate(ed))
 
 

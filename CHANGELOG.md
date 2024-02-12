@@ -1,3 +1,10 @@
+## 2.1.0rc36 - 2024-02-11
+### Fix
+* `on_order_update_handler`: refine
+
+### Update
+* Up requirements for exchanges-wrapper==1.4.12
+
 ## 2.1.0rc33 - 2024-02-11
 ### Update
 * Some minor updates

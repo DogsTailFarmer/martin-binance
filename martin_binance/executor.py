@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc31"
+__version__ = "2.1.0rc36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1669,7 +1669,7 @@ class Strategy(StrategyBase):
                                           'by_market': by_market,
                                           'timestamp': self.get_time()}
                     self.message_log(f"Hold take profit order for Buy {amount} {self.f_currency} by {price},"
-                                     f" wait {amount * price} {self.s_currency}, exist: {fund}")
+                                     f" wait {amount * price} {self.s_currency}, exist: {any2str(fund)}")
                 elif not buy_side and amount > fund:
                     # Save take profit order and wait update balance
                     self.tp_order_hold = {'buy_side': buy_side,
@@ -1677,7 +1677,7 @@ class Strategy(StrategyBase):
                                           'by_market': by_market,
                                           'timestamp': self.get_time()}
                     self.message_log(f"Hold take profit order for Sell {amount} {self.f_currency}"
-                                     f" by {price}, exist {fund}")
+                                     f" by {price}, exist {any2str(fund)}")
                 else:
                     # Create take profit order
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"
@@ -1833,7 +1833,7 @@ class Strategy(StrategyBase):
         profit = (100 * (target - tp_amount) / tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
         if log_output:
             self.tp_amount = tp_amount
-            self.message_log(f"calc_profit_order: Initial depo for TP: {self.tp_amount},"
+            self.message_log(f"Calc TP: Initial depo: {self.tp_amount},"
                              f" target {'first' if buy_side else 'second'}: {target},"
                              f" buy_side: {buy_side}, by_market: {by_market}",
                              log_level=LogLevel.DEBUG)
