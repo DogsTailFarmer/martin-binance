@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc28"
+__version__ = "2.1.0rc37"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -19,12 +19,10 @@ import sys
 import ujson as json
 from pathlib import Path
 import stat
-import logging
 
 OPTIMIZER = Path(__file__).absolute()
 OPTIMIZER.chmod(OPTIMIZER.stat().st_mode | stat.S_IEXEC)
 PARAMS_FLOAT = ['KBB']
-logger = logging.getLogger('logger')
 
 
 def try_trade(mbs, skip_log, **kwargs):
@@ -72,21 +70,16 @@ async def run_optimize(*args):
         stderr=asyncio.subprocess.PIPE
     )
     stdout, stderr = await process.communicate()
-    logger.info(stderr.decode().strip())
-    return stdout
+    return stdout.splitlines()[0], stderr.decode().strip()
 
 
 if __name__ == "__main__":
-    try:
-        study = optimize(sys.argv[1], sys.argv[2], int(sys.argv[3]))
-        # study = optimize("test", "/home/ubuntu/.MartinBinance/back_test/binance_ETHTUSD", 15)
-    except KeyboardInterrupt:
-        pass
+    study = optimize(sys.argv[1], sys.argv[2], int(sys.argv[3]))
+    new_value = study.best_value
+    _value = study.get_trials()[0].value
+    if new_value > _value:
+        res = study.best_params
+        res |= {'new_value': new_value, '_value': _value}
+        print(json.dumps(res))
     else:
-        new_value = study.best_value
-        _value = study.get_trials()[0].value
-        logger.info(f"Best trial: {study.best_trial}, new_value: {new_value}, _value: {_value}")
-        if new_value > _value:
-            res = study.best_params
-            print(json.dumps(res.update({'new_value': new_value, '_value': _value})))
-    print(json.dumps({}))
+        print(json.dumps({}))

@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc36"
+__version__ = "2.1.0rc37"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1012,17 +1012,18 @@ async def backtest_control():
             if ms.SELF_OPTIMIZATION and cls.strategy.command != 'stopped':
                 _ts = datetime.utcnow()
                 try:
-                    _res = await run_optimize(
+                    _res, _err = await run_optimize(
                         OPTIMIZER,
                         cls.session_root,
                         Path(cls.session_root, Path(ms.PARAMS).name),
                         str(ms.N_TRIALS)
                     )
-                    _res = orjson.loads(_res.splitlines()[0])
+                    logger.info(f"Backtest control stderr response: {_err}")
+                    _res = orjson.loads(_res)
                 except (asyncio.CancelledError, KeyboardInterrupt):
                     break
-                except orjson.JSONDecodeError as err:
-                    logger.warning(f"backtest_control: {err}")
+                except Exception as err:
+                    logger.warning(f"Backtest control: {err}")
                 else:
                     if _res:
                         cls.strategy.message_log(f"Updating strategy parameters from backtest optimal."
@@ -1033,12 +1034,12 @@ async def backtest_control():
                             setattr(
                                 ms, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
                             )
-                if cls.strategy.command != 'stopped':
-                    cls.strategy.message_log(f"Strategy parameters are optimal now."
-                                             f" Optimization cycle duration"
-                                             f" {str(datetime.utcnow() - _ts).rsplit('.')[0]}",
-                                             color=Style.B_WHITE, tlg=True)
-                    parquet_declare(cls)
+                    cls.strategy.message_log(
+                        f"Strategy parameters are optimal now. Optimization cycle duration"
+                        f" {str(datetime.utcnow() - _ts + timedelta(seconds=ms.SAVE_PERIOD)).rsplit('.')[0]}",
+                        color=Style.B_WHITE, tlg=True
+                    )
+                parquet_declare(cls)
                 # Refresh klines init
                 for i in KLINES_INIT:
                     try:
@@ -1061,7 +1062,7 @@ async def backtest_control():
             else:
                 break
         await asyncio.sleep(delay)
-    cls.strategy.message_log("Backtest and optimize session ended", tlg=True)
+    cls.strategy.message_log("Backtest data collect and optimize session ended", tlg=True)
 
 
 async def buffered_candle(cls):
@@ -1503,7 +1504,10 @@ async def cancel_order_call(_id: int, cancel_all=False, count=0):
         if ms.MODE in ('T', 'TC'):
             if cancel_all:
                 if _id not in cls.bulk_orders_cancel:
-                    res = await cls.send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=cls.symbol)
+                    res = await asyncio.wait_for(
+                        cls.send_request(cls.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=cls.symbol),
+                        timeout=ORDER_TIMEOUT - 5
+                    )
                     [cls.bulk_orders_cancel.update({v['orderId']: v}) for v in ast.literal_eval(json.loads(res.result))]
                 result = cls.bulk_orders_cancel.pop(_id, None)
             else:
@@ -1515,6 +1519,9 @@ async def cancel_order_call(_id: int, cancel_all=False, count=0):
             result = cls.strategy.account.cancel_order(order_id=_id, ts=int(cls.strategy.get_time() * 1000))
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error.
+    except asyncio.TimeoutError:
+        _fetch_order = True
+        cls.strategy.message_log(f"Timeout on cancel order {_id}")
     except grpc.RpcError as ex:
         _fetch_order = True
         cls.strategy.message_log(f"Exception on cancel order {_id}: {ex.code().name}, {ex.details()}")
@@ -1542,7 +1549,7 @@ async def cancel_order_call(_id: int, cancel_all=False, count=0):
                 await asyncio.sleep(HEARTBEAT * count)
                 if count <= TRY_LIMIT:
                     await cancel_order_call(_id, cancel_all=False, count=count + 1)
-                cls.strategy.on_cancel_order_error_string(_id, 'Cancel order timeout')
+                cls.strategy.on_cancel_order_error_string(_id, 'Cancel order try limit exceeded')
 
 
 async def cancel_order_handler(_id, cancel_all):

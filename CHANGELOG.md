@@ -1,3 +1,9 @@
+### Update
+* `cancel_order_call`: added timeout handler
+
+### Added for new features
+* Complete cyclic optimization of strategy parameters
+
 ## 2.1.0rc36 - 2024-02-11
 ### Fix
 * `on_order_update_handler`: refine
