@@ -64,17 +64,19 @@ def optimize(study_name, strategy, n_trials, storage_name=None, skip_log=True, s
 
 
 async def run_optimize(*args):
-    process = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
-    stdout, stderr = await process.communicate()
-    return stdout.splitlines()[0], stderr.decode().strip()
+    process = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE)
+    stdout, _ = await process.communicate()
+    return stdout.splitlines()[0]
 
 
 if __name__ == "__main__":
-    study = optimize(sys.argv[1], sys.argv[2], int(sys.argv[3]))
+    # study = optimize(sys.argv[1], sys.argv[2], int(sys.argv[3]), storage_name=sys.argv[4])
+    study = optimize(
+        'binance_BTCUSDT',
+        '/home/ubuntu/.MartinBinance/back_test/binance_BTCUSDT/cli_7_BTCUSDT.py',
+        1,
+        skip_log=False
+    )
     new_value = study.best_value
     _value = study.get_trials()[0].value
     if new_value > _value:

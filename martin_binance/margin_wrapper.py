@@ -666,6 +666,8 @@ class StrategyBase:
                     msg = self.tlg_header + msg
                     self.status_time = self.get_time()
                     self.queue_to_tlg.put(msg)
+        elif log_level in (logging.ERROR, logging.CRITICAL):
+            write_log(log_level, msg)
 
 
 async def save_to_csv() -> None:
@@ -1011,20 +1013,22 @@ async def backtest_control():
             cls.strategy.reset_var()
             if ms.SELF_OPTIMIZATION and cls.strategy.command != 'stopped':
                 _ts = datetime.utcnow()
+                storage_name = Path(cls.session_root, "_study.db")
                 try:
-                    _res, _err = await run_optimize(
+                    _res = await run_optimize(
                         OPTIMIZER,
-                        cls.session_root,
+                        f"{cls.exchange}_{cls.symbol}",
                         Path(cls.session_root, Path(ms.PARAMS).name),
-                        str(ms.N_TRIALS)
+                        str(ms.N_TRIALS),
+                        f"sqlite:///{storage_name}"
                     )
-                    logger.info(f"Backtest control stderr response: {_err}")
                     _res = orjson.loads(_res)
                 except (asyncio.CancelledError, KeyboardInterrupt):
                     break
                 except Exception as err:
                     logger.warning(f"Backtest control: {err}")
                 else:
+                    storage_name.replace(storage_name.with_name('study.db'))
                     if _res:
                         cls.strategy.message_log(f"Updating strategy parameters from backtest optimal."
                                                  f" Value {_res.pop('new_value')} vs {_res.pop('_value')}",

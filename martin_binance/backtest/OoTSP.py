@@ -18,7 +18,7 @@ from inquirer.themes import GreenPassion
 from martin_binance import BACKTEST_PATH
 from optimizer import optimize
 
-SKIP_LOG = True
+SKIP_LOG = False
 
 vis = optuna.visualization
 ii_params = []
@@ -38,7 +38,7 @@ def main():
         ),
         inquirer.Text(
             "n_trials",
-            message="Enter number of cycles, from 50 to 1000",
+            message="Enter number of cycles, from 10 to 1000",
             ignore=lambda x: x["mode"] == "Analise saved study session",
             default='150',
             validate=lambda _, c: 10 <= int(c) <= 1000,
@@ -48,10 +48,10 @@ def main():
     answers = inquirer.prompt(questions, theme=GreenPassion())
 
     study_name = answers.get('path')  # Unique identifier of the study
-    storage_name = f"sqlite:///{Path(BACKTEST_PATH, study_name, f'{study_name}.db')}"
+    storage_name = f"sqlite:///{Path(BACKTEST_PATH, study_name, 'study.db')}"
 
     if answers.get('mode') == 'New':
-        Path(BACKTEST_PATH, study_name, f'{study_name}.db').unlink(missing_ok=True)
+        Path(BACKTEST_PATH, study_name, 'study.db').unlink(missing_ok=True)
         try:
             strategy = next(Path(BACKTEST_PATH, study_name).glob("cli_*.py"))
         except StopIteration:
@@ -70,8 +70,8 @@ def main():
     elif answers.get('mode') == 'Analise saved study session':
         study = optuna.load_study(study_name=study_name, storage=storage_name)
 
-        print(study.best_value)
-        print(study.get_trials()[0].value)
+        print(f"Best value: {study.best_value}")
+        print(f"Original value: {study.get_trials()[0].value}")
 
         while 1:
             questions = [
