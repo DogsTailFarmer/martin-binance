@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc37"
+__version__ = "2.1.0rc40"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1442,8 +1442,17 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
     except asyncio.CancelledError:
         pass  # Task cancellation should not be logged as an error
     except grpc.RpcError as ex:
-        _fetch_order = True
-        cls.strategy.message_log(f"Exception creating order {_id}: {ex.code().name}, {ex.details()}")
+        status_code = ex.code()
+        if status_code == grpc.StatusCode.FAILED_PRECONDITION:
+            if _id in cls.wait_order_id:
+                # Supress call strategy handler
+                cls.wait_order_id.remove(_id)
+            _level = LogLevel.CRITICAL
+        else:
+            _fetch_order = True
+            _level = LogLevel.ERROR
+        cls.strategy.message_log(f"Exception creating order {_id}: {status_code.name}, {ex.details()}",
+                                 log_level=_level)
     except Exception as _ex:
         _fetch_order = True
         cls.strategy.message_log(f"Exception creating order {_id}: {_ex}")

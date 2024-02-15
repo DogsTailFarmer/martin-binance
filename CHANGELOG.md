@@ -1,5 +1,8 @@
 ### Update
 * `cancel_order_call`: added timeout handler
+* Utilised partially filled TP amount during grid update
+* `create_limit_order`: Supress call strategy handler for `grpc.StatusCode.FAILED_PRECONDITION` exception,
+fire tlg message only. As a result, there are no attempts to re-place the order.
 
 ### Added for new features
 * Complete cyclic optimization of strategy parameters

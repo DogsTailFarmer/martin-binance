@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc36"
+__version__ = "2.1.0rc40"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2386,6 +2386,12 @@ class Strategy(StrategyBase):
                     else:
                         _reverse_target_amount = O_DEC
 
+                    if self.tp_part_amount_first:
+                        self.tp_part_free = False
+                        self.message_log(f"Partially filled TP order amount was utilised:"
+                                         f" first: {self.tp_part_amount_first}, second: {self.tp_part_amount_second}")
+                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
+
                     self.place_grid(self.cycle_buy,
                                     _depo,
                                     _reverse_target_amount,
@@ -2901,10 +2907,10 @@ class Strategy(StrategyBase):
                     self.convert_tp(self.tp_part_amount_first, self.tp_part_amount_second, _update_sum_amount=False)
                     self.tp_part_free = False
                 self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-                # Save part profit
-                self.profit_first += self.round_truncate(self.part_profit_first, base=True)
-                self.profit_second += self.round_truncate(self.part_profit_second, base=False)
-                self.part_profit_first = self.part_profit_second = O_DEC
+            # Save part profit
+            self.profit_first += self.round_truncate(self.part_profit_first, base=True)
+            self.profit_second += self.round_truncate(self.part_profit_second, base=False)
+            self.part_profit_first = self.part_profit_second = O_DEC
             if self.tp_hold:
                 self.tp_hold = False
                 self.place_profit_order()
