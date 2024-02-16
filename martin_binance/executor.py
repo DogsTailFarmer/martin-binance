@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -825,12 +825,12 @@ class Strategy(StrategyBase):
             if not grid_open_orders_len and self.orders_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                 self.place_grid_part()
-            if not GRID_ONLY and self.shift_grid_threshold is None and not tp_order:
-                self.message_log("Restore, no TP order, replace", tlg=True)
-                self.place_profit_order()
             if not self.orders_grid and not self.orders_hold and not self.orders_save and not self.tp_order_id:
                 self.message_log("Restore, Restart", tlg=True)
                 self.start()
+            if not GRID_ONLY and self.shift_grid_threshold is None and not tp_order:
+                self.message_log("Restore, no TP order, replace", tlg=True)
+                self.place_profit_order()
             #
             self.message_log("Restored, go work", tlg=True)
 
@@ -2404,12 +2404,12 @@ class Strategy(StrategyBase):
         else:
             min_trade_amount = tcm.get_min_buy_amount(_price)
             if not _amount:
-                if for_tp:
+                if for_tp and self.sum_amount_first:
                     _tp = self.calc_profit_order(not self.cycle_buy, by_market=by_market, log_output=False)
                     if _tp['target'] * _tp['price'] < tcm.min_notional:
                         return False
                     _amount = _tp['amount']
-                else:
+                elif not for_tp:
                     _amount = self.deposit_first
         _amount = self.round_truncate(_amount, base=True)
         return _amount >= min_trade_amount

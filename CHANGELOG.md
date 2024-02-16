@@ -1,3 +1,8 @@
+## 2.1.1 - 2024-02-16
+### Fix
+* `check_min_amount()`
+* `restore_strategy_state()`
+
 ## 2.1.0 - 2024-02-16
 ### Added for new features
 :rocket: Complete cyclic optimization of strategy parameters based on [`optuna` framework](https://optuna.readthedocs.io/en/stable/index.html)
