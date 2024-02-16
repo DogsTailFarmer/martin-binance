@@ -26,10 +26,8 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* For [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper) `v>= v1.4.0` must be updated `exch_srv_cfg.toml`
-* After updating the version to `v2.0.0`, the configuration files `cli_XX_AAABBB.py` for all running trading pairs
-should be updated
-* Lost compatibility with `margin.de` terminal.
+* After update to `2.1.0`, the configuration files `cli_XX_AAABBB.py` for all running trading pairs
+should be updated, also update the configuration files `exch_srv_cfg.toml` and `ms_cfg.toml`. Use templates for reference.
 
 * You cannot run multiple pairs with overlapping currencies on the same account!
 

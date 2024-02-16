@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc37"
+__version__ = "2.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -40,8 +40,8 @@ def optimize(study_name, strategy, n_trials, storage_name=None, skip_log=True, s
         params = {
             'GRID_MAX_COUNT': _trial.suggest_int('GRID_MAX_COUNT', 3, 5),
             'PRICE_SHIFT': _trial.suggest_float('PRICE_SHIFT', 0, 0.05, step=0.01),
-            'PROFIT': _trial.suggest_float('PROFIT', 0.05, 0.15, step=0.05),
-            'PROFIT_MAX': _trial.suggest_float('PROFIT_MAX', 0.25, 1.0, step=0.05),
+            'PROFIT': _trial.suggest_float('PROFIT', 0.05, 0.2, step=0.05),
+            'PROFIT_MAX': _trial.suggest_float('PROFIT_MAX', 0.35, 1.0, step=0.05),
             'OVER_PRICE': _trial.suggest_float('OVER_PRICE', 0.1, 1, step=0.1),
             'ORDER_Q': _trial.suggest_int('ORDER_Q', 6, 12),
             'MARTIN': _trial.suggest_float('MARTIN', 5, 15, step=1),
@@ -70,13 +70,7 @@ async def run_optimize(*args):
 
 
 if __name__ == "__main__":
-    # study = optimize(sys.argv[1], sys.argv[2], int(sys.argv[3]), storage_name=sys.argv[4])
-    study = optimize(
-        'binance_BTCUSDT',
-        '/home/ubuntu/.MartinBinance/back_test/binance_BTCUSDT/cli_7_BTCUSDT.py',
-        1,
-        skip_log=False
-    )
+    study = optimize(sys.argv[1], sys.argv[2], int(sys.argv[3]), storage_name=sys.argv[4])
     new_value = study.best_value
     _value = study.get_trials()[0].value
     if new_value > _value:

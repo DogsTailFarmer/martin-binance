@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc40"
+__version__ = "2.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1684,8 +1684,7 @@ class Strategy(StrategyBase):
                                      f" vlm: {amount}, price: {price}, profit: {profit}%")
                     self.tp_target = target
                     self.tp_order = (buy_side, amount, price, self.get_time())
-                    check = after_error or (len(self.orders_grid) + len(self.orders_hold)) > 2
-                    self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=check)
+                    self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=after_error)
         elif self.tp_order_id and self.tp_cancel:
             self.cancel_order_id = self.tp_order_id
             self.cancel_order_exp(self.tp_order_id)
@@ -2247,18 +2246,7 @@ class Strategy(StrategyBase):
             self.restore_orders_fire()
             if after_full_fill and self.orders_hold and self.order_q_placed and not self.grid_remove:
                 # PLace one hold grid order and remove it from hold list
-                _, _buy, _amount, _price = self.orders_hold.get_first()
-                check = (len(self.orders_grid) + len(self.orders_hold)) <= 2
-                waiting_order_id = self.place_limit_order_check(
-                    _buy,
-                    _amount,
-                    _price,
-                    check=check,
-                    price_limit_rules=True
-                )
-                if waiting_order_id:
-                    self.orders_init.append_order(waiting_order_id, _buy, _amount, _price)
-                    del self.orders_hold.orders_list[0]
+                self.place_grid_part()
             if self.tp_was_filled:
                 # Exist filled but non processing TP
                 self.after_filled_tp(one_else_grid=True)

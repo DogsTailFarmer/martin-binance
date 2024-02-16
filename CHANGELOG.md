@@ -1,11 +1,13 @@
+## 2.1.0 - 2024-02-16
+### Added for new features
+:rocket: Complete cyclic optimization of strategy parameters based on [`optuna` framework](https://optuna.readthedocs.io/en/stable/index.html)
+For reference see [Back testing and parameters optimization](https://github.com/DogsTailFarmer/martin-binance/wiki/Back-testing-and-parameters-optimization)
+
 ### Update
 * `cancel_order_call`: added timeout handler
 * Utilised partially filled TP amount during grid update
 * `create_limit_order`: Supress call strategy handler for `grpc.StatusCode.FAILED_PRECONDITION` exception,
-fire tlg message only. As a result, there are no attempts to re-place the order.
-
-### Added for new features
-* Complete cyclic optimization of strategy parameters
+fire tlg message only. As a result, there are no attempts to re-place the order with incorrect condition.
 
 ## 2.1.0rc36 - 2024-02-11
 ### Fix

@@ -18,7 +18,7 @@ from inquirer.themes import GreenPassion
 from martin_binance import BACKTEST_PATH
 from optimizer import optimize
 
-SKIP_LOG = False
+SKIP_LOG = True
 
 vis = optuna.visualization
 ii_params = []

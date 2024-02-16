@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0rc40"
+__version__ = "2.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1030,11 +1030,11 @@ async def backtest_control():
                 else:
                     storage_name.replace(storage_name.with_name('study.db'))
                     if _res:
-                        cls.strategy.message_log(f"Updating strategy parameters from backtest optimal."
-                                                 f" Value {_res.pop('new_value')} vs {_res.pop('_value')}",
+                        cls.strategy.message_log(f"Updating strategy parameters from backtest optimal,"
+                                                 f" predicted value {_res.pop('_value')} -> {_res.pop('new_value')}",
                                                  color=Style.B_WHITE, tlg=True)
                         for key, value in _res.items():
-                            cls.strategy.message_log(f"{key}: new: {value}, old: {getattr(ms, key)}")
+                            cls.strategy.message_log(f"{key}: {getattr(ms, key)} -> {value}")
                             setattr(
                                 ms, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
                             )
@@ -1562,7 +1562,8 @@ async def cancel_order_call(_id: int, cancel_all=False, count=0):
                 await asyncio.sleep(HEARTBEAT * count)
                 if count <= TRY_LIMIT:
                     await cancel_order_call(_id, cancel_all=False, count=count + 1)
-                cls.strategy.on_cancel_order_error_string(_id, 'Cancel order try limit exceeded')
+                else:
+                    cls.strategy.on_cancel_order_error_string(_id, 'Cancel order try limit exceeded')
 
 
 async def cancel_order_handler(_id, cancel_all):
@@ -2113,12 +2114,12 @@ async def main(_symbol):
                     for _id in exch_orders_ids:
                         if _id not in orders_keys:
                             _order = next((_o for _o in active_orders if int(_o["orderId"]) == _id))
-                            print(f"Restoring order {_id}({_order})")
                             cls.orders[_id] = Order(_order)
-                            cls.strategy.message_log(f"Was restored order {_id}({_order.get('clientOrderId')})"
-                                                     f" from exchange data",
-                                                     log_level=LogLevel.WARNING,
-                                                     color=Style.YELLOW)
+                            cls.strategy.message_log(
+                                f"Was restored order {_id}({_order.get('clientOrderId')}) from exchange data",
+                                log_level=LogLevel.WARNING,
+                                color=Style.YELLOW
+                            )
                     [cls.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                     #
                     cls.strategy.restore_strategy_state(last_state, restore=False)

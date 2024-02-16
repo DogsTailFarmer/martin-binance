@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "1.3.4"
+__version__ = "2.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -137,6 +137,7 @@ class Account:
         "grid_buy",
         "grid_sell",
         "ticker_last",
+        "market_ids",
     )
 
     def __init__(self, save_ds: bool):
@@ -152,6 +153,7 @@ class Account:
         self.grid_buy = {}
         self.grid_sell = {}
         self.ticker_last = Decimal('0')
+        self.market_ids = []
 
     def create_order(
             self,
@@ -172,37 +174,22 @@ class Account:
                       price=price,
                       lt=lt)
 
+        if buy:
+            self.orders_buy.at[order_id] = Decimal(price)
+            if self.save_ds:
+                self.grid_buy[lt] = self.orders_buy
+        else:
+            self.orders_sell.at[order_id] = Decimal(price)
+            if self.save_ds:
+                self.grid_sell[lt] = self.orders_sell
+            #
+        self.funds.on_order_created(buy=buy, amount=amount, price=price)
+        self.orders[order_id] = order
+
         if self.ticker_last and ((buy and Decimal(price) >= self.ticker_last) or
                                  (not buy and Decimal(price) <= self.ticker_last)):
             # Market event
-            order.transact_time = lt
-            order.executed_qty = order.orig_qty
-            order.cummulative_quote_qty = str(Decimal(order.orig_qty) * Decimal(order.price))
-            order.status = 'FILLED'
-            order.event_time = order.transact_time
-            order.last_executed_quantity = order.orig_qty
-            order.cumulative_filled_quantity = order.orig_qty
-            order.last_executed_price = order.price
-            order.trade_id = self.trade_id = self.trade_id + 1
-            order.quote_asset_transacted = order.cummulative_quote_qty
-            order.last_quote_asset_transacted = order.cummulative_quote_qty
-            order.quote_order_quantity = order.cummulative_quote_qty
-            #
-            self.funds.on_order_created(buy=buy, amount=amount, price=price)
-            self.funds.on_order_filled(order.side, order.orig_qty, order.last_executed_price, self.fee_taker)
-        else:
-            if buy:
-                self.orders_buy.at[order_id] = Decimal(price)
-                if self.save_ds:
-                    self.grid_buy[lt] = self.orders_buy
-            else:
-                self.orders_sell.at[order_id] = Decimal(price)
-                if self.save_ds:
-                    self.grid_sell[lt] = self.orders_sell
-            #
-            self.funds.on_order_created(buy=buy, amount=amount, price=price)
-
-        self.orders[order_id] = order
+            self.market_ids.append(order_id)
 
         # print(f"create_order.order: {vars(order)}")
         return {'symbol': order.symbol,
@@ -263,19 +250,16 @@ class Account:
         self.ticker_last = Decimal(ticker['lastPrice'])
 
         orders_id = []
+        if self.market_ids:
+            orders_id.extend(self.market_ids)
+            self.market_ids.clear()
 
         _i = self.orders_buy[self.orders_buy >= self.ticker_last].index
-        try:
-            self.orders_buy = self.orders_buy.drop(_i.values)
-        except Exception as ex:
-            print(ex)
+        self.orders_buy = self.orders_buy.drop(_i.values)
         orders_id.extend(_i.values)
 
         _i = self.orders_sell[self.orders_sell <= self.ticker_last].index
-        try:
-            self.orders_sell = self.orders_sell.drop(_i.values)
-        except Exception as ex:
-            print(ex)
+        self.orders_sell = self.orders_sell.drop(_i.values)
         orders_id.extend(_i.values)
 
         if self.save_ds:

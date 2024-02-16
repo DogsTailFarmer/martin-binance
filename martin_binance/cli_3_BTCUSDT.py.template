@@ -53,8 +53,8 @@ ex.PRICE_LIMIT_RULES = Decimal('3')  # +-% from last ticker price. Use on Bybit 
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()
-ex.PROFIT = Decimal('0.1')  # 0.1 - 0.85
-ex.PROFIT_MAX = Decimal('0.5')  # If set it is maximum adapted cycle profit
+ex.PROFIT = Decimal('0.15')  # recommended FEE_MAKER*2<PROFIT<=0.85
+ex.PROFIT_MAX = Decimal('0.85')  # If set it is maximum adapted cycle profit, PROFIT<PROFIT_MAX<=1.0
 ex.OVER_PRICE = Decimal('0.6')  # Overlap price in one direction
 ex.ORDER_Q = 11  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
@@ -90,6 +90,7 @@ ex.MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 ex.SAVE_DS = False  # Save session result data (ticker, orders) for compare
 ex.SAVE_PERIOD = 24 * 60 * 60  # sec, timetable for save data portion
 ex.SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
+ex.N_TRIALS = 500  # Number of optimization cycles for optuna study in self optimization mode
 ################################################################
 #                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
@@ -115,7 +116,7 @@ def trade():
     # For autoload last state
     ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
     #
-    log_file = Path(LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
+    log_file = Path(LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}{'_S' if ex.MODE == 'S' else ''}.log")
     ex.LAST_STATE_FILE = Path(LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
     #
     _logger = logging.getLogger('logger')
