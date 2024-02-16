@@ -694,7 +694,7 @@ async def save_to_csv() -> None:
     """
     cls = StrategyBase
     file_name = Path(LAST_STATE_PATH, f"{ms.ID_EXCHANGE}_{ms.SYMBOL}.csv")
-    with open(file_name, mode="a", buffering=1) as csvfile:
+    with open(file_name, mode="a", buffering=1, newline='') as csvfile:
         writer = csv.writer(csvfile)
         while cls.strategy:
             writer.writerow(await save_trade_queue.get())
