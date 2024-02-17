@@ -1,12 +1,18 @@
+## 2.1.2 - 2024-02-17
+### Fix
+* Create limit order error handler
+* Start simulate mode from saved state
+
 ## 2.1.1 - 2024-02-16
 ### Fix
 * `check_min_amount()`
 * `restore_strategy_state()`
+* Fix issue with csv empty lines on windows (#71)
 
 ## 2.1.0 - 2024-02-16
 ### Added for new features
 :rocket: Complete cyclic optimization of strategy parameters based on [`optuna` framework](https://optuna.readthedocs.io/en/stable/index.html)
-For reference see [Back testing and parameters optimization](https://github.com/DogsTailFarmer/martin-binance/wiki/Back-testing-and-parameters-optimization)
+For reference see [Parameters optimization](https://github.com/DogsTailFarmer/martin-binance/wiki/Back-testing-and-parameters-optimization#parameters-optimization)
 
 ### Update
 * `cancel_order_call`: added timeout handler

@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.1"
+__version__ = "2.1.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2801,48 +2801,21 @@ class Strategy(StrategyBase):
         else:
             self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR)
 
-    def on_place_order_error_string(self, place_order_id: int, error: str) -> None:
+    def on_place_order_error(self, place_order_id: int, error: str) -> None:
         # Check all orders on exchange if exists required
         self.message_log(f"On place order {place_order_id} error: {error}", LogLevel.ERROR, tlg=True)
-        open_orders = self.get_buffered_open_orders()
-        order = None
         if self.orders_init.exist(place_order_id):
-            order = self.orders_init.find_order(open_orders, place_order_id)
+            _order = self.orders_init.get_by_id(place_order_id)
+            self.orders_init.remove(place_order_id)
+            self.orders_hold.orders_list.append(_order)
+            self.orders_hold.sort(self.cycle_buy)
+            if self.cancel_grid_hold:
+                self.message_log('Continue remove grid orders', color=Style.B_WHITE)
+                self.cancel_grid_hold = False
+                self.cancel_grid()
         elif place_order_id == self.tp_wait_id:
-            for k, o in enumerate(open_orders):
-                if (o.buy == self.tp_order[0] and
-                        o.amount == self.tp_order[1] and
-                        o.price == self.tp_order[2]):
-                    order = open_orders[k]
-        if order:
-            self.message_log(f"Order {place_order_id} placed", tlg=True)
-            self.on_place_order_success(place_order_id, order)
-        else:
-            self.message_log(f"Trying place order {place_order_id} one more time", tlg=True)
-            if self.orders_init.exist(place_order_id):
-                _order = self.orders_init.get_by_id(place_order_id)
-                self.orders_init.remove(place_order_id)
-                if self.cancel_grid_hold:
-                    self.message_log('Continue remove grid orders', color=Style.B_WHITE)
-                    self.cancel_grid_hold = False
-                    self.cancel_grid()
-                if self.check_min_amount(_order['amount'], _order['price'], for_tp=False):
-                    waiting_order_id = self.place_limit_order_check(
-                        _order['buy'],
-                        _order['amount'],
-                        _order['price'],
-                        check=True,
-                        price_limit_rules=True
-                    )
-                    if waiting_order_id:
-                        _order['id'] = waiting_order_id
-                        self.orders_init.orders_list.append(_order)
-                else:
-                    self.message_log(f"Too small amount for order: {place_order_id}", color=Style.B_WHITE)
-                    self.grid_update(force=True)
-            elif place_order_id == self.tp_wait_id:
-                self.tp_wait_id = None
-                self.tp_error = True
+            self.tp_wait_id = None
+            self.tp_error = True
 
     def on_cancel_order_success(self, order_id: int, cancel_all=False) -> None:
         if order_id == self.cancel_grid_order_id:

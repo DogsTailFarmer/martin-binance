@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0"
+__version__ = "2.1.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -23,6 +23,7 @@ import csv
 import queue
 import pyarrow as pa
 import pyarrow.parquet as pq
+from shutil import rmtree
 
 from colorama import init as color_init
 from decimal import Decimal, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_EVEN
@@ -1447,12 +1448,14 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
             if _id in cls.wait_order_id:
                 # Supress call strategy handler
                 cls.wait_order_id.remove(_id)
+
             _level = LogLevel.CRITICAL
         else:
             _fetch_order = True
             _level = LogLevel.ERROR
-        cls.strategy.message_log(f"Exception creating order {_id}: {status_code.name}, {ex.details()}",
-                                 log_level=_level)
+
+        cls.strategy.on_place_order_error(_id, f"{status_code.name}, {ex.details()}")
+
     except Exception as _ex:
         _fetch_order = True
         cls.strategy.message_log(f"Exception creating order {_id}: {_ex}")
@@ -1503,7 +1506,7 @@ async def place_limit_order_timeout(_id):
     await asyncio.sleep(ORDER_TIMEOUT)
     if _id in cls.wait_order_id:
         cls.wait_order_id.remove(_id)
-        cls.strategy.on_place_order_error_string(_id, 'Place order timeout')
+        cls.strategy.on_place_order_error(_id, 'Place order timeout')
 
 
 async def cancel_order_call(_id: int, cancel_all=False, count=0):
@@ -1750,7 +1753,8 @@ def _back_test_handler_ext(cls):
     df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
     df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
     copy(ms.PARAMS, Path(session_path, Path(ms.PARAMS).name))
-    print(f"Session data saved to: {session_path}")
+    if ms.LOGGING:
+        print(f"Session data saved to: {session_path}")
 
 
 def order_book_prepare(_order_book: {}) -> {}:
@@ -2057,6 +2061,7 @@ async def main(_symbol):
             #
             if ms.MODE == 'TC':
                 BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
+                rmtree(cls.session_root, ignore_errors=True)
                 cls.session_root.mkdir(parents=True, exist_ok=True)
                 # noinspection PyUnboundLocalVariable
                 raw_path.mkdir(parents=True, exist_ok=True)
@@ -2153,8 +2158,7 @@ async def main(_symbol):
                 cls.strategy.cycle_time = datetime.utcnow()
                 if cls.state_file.exists():
                     restore_state_before_backtesting(cls)
-                else:
-                    cls.strategy.start()
+                cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(cls.session))
             loop.create_task(save_to_csv())
