@@ -25,6 +25,10 @@ OPTIMIZER.chmod(OPTIMIZER.stat().st_mode | stat.S_IEXEC)
 PARAMS_FLOAT = ['KBB']
 
 
+def any2str(_x) -> str:
+    return f"{_x:.6f}".rstrip('0').rstrip('.')
+
+
 def try_trade(mbs, skip_log, **kwargs):
     for key, value in kwargs.items():
         setattr(mbs.ex, key, value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}"))
@@ -75,7 +79,7 @@ if __name__ == "__main__":
     _value = study.get_trials()[0].value
     if new_value > _value:
         res = study.best_params
-        res |= {'new_value': new_value, '_value': _value}
+        res |= {'new_value': any2str(new_value), '_value': any2str(_value)}
         print(json.dumps(res))
     else:
         print(json.dumps({}))

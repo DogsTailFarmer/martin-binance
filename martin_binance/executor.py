@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.2"
+__version__ = "2.1.3.b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1681,7 +1681,7 @@ class Strategy(StrategyBase):
                 else:
                     # Create take profit order
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"
-                                     f" vlm: {amount}, price: {price}, profit: {profit}%")
+                                     f" vlm: {amount}, price: {price}, profit (incl.fee): {profit}%")
                     self.tp_target = target
                     self.tp_order = (buy_side, amount, price, self.get_time())
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=after_error)
@@ -1807,10 +1807,10 @@ class Strategy(StrategyBase):
             # Calculate target amount for first
             tp_amount = self.sum_amount_first
             profit = self.set_profit(tp_amount, self.sum_amount_second, by_market)
-            target_amount_first = self.sum_amount_first + profit * self.sum_amount_first / 100
+            target_amount_first = tp_amount + profit * tp_amount / 100
             if target_amount_first - tp_amount < step_size_f:
                 target_amount_first = tp_amount + step_size_f
-            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_FLOOR)
+            target_amount_first = self.round_truncate(target_amount_first, base=True, _rounding=ROUND_CEILING)
             amount = target = target_amount_first
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_HALF_DOWN)
@@ -1820,7 +1820,7 @@ class Strategy(StrategyBase):
             # Calculate target amount for second
             tp_amount = self.sum_amount_second
             profit = self.set_profit(tp_amount, self.sum_amount_first, by_market)
-            target_amount_second = self.sum_amount_second + profit * self.sum_amount_second / 100
+            target_amount_second = tp_amount + profit * tp_amount / 100
             if target_amount_second - tp_amount < step_size_s:
                 target_amount_second = tp_amount + step_size_s
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)

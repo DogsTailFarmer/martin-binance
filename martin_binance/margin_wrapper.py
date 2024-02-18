@@ -1448,14 +1448,9 @@ async def create_limit_order(_id: int, buy: bool, amount: str, price: str) -> No
             if _id in cls.wait_order_id:
                 # Supress call strategy handler
                 cls.wait_order_id.remove(_id)
-
-            _level = LogLevel.CRITICAL
         else:
             _fetch_order = True
-            _level = LogLevel.ERROR
-
         cls.strategy.on_place_order_error(_id, f"{status_code.name}, {ex.details()}")
-
     except Exception as _ex:
         _fetch_order = True
         cls.strategy.message_log(f"Exception creating order {_id}: {_ex}")

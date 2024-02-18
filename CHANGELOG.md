@@ -1,3 +1,9 @@
+### Fix
+* `calc_profit_order()`: rounding for `target_amount_first`
+
+### Update
+* Some minor updates
+
 ## 2.1.2 - 2024-02-17
 ### Fix
 * Create limit order error handler
