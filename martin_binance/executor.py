@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.3.b2"
+__version__ = "2.1.3.b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -801,13 +801,13 @@ class Strategy(StrategyBase):
             self.restore_orders = json.loads(strategy_state.get('restore_orders', 'false'))
             self.tp_part_free = json.loads(strategy_state.get('tp_part_free', 'false'))
             self.first_run = False
-            self.start_after_shift = False
         #
         if restore:
             self.start_process()
             if self.command == 'stopped':
                 self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
                 return
+            self.start_after_shift = False
             self.avg_rate = self.get_buffered_ticker().last_price
             #
             open_orders = self.get_buffered_open_orders()
@@ -825,7 +825,7 @@ class Strategy(StrategyBase):
             if not grid_open_orders_len and self.orders_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                 self.place_grid_part()
-            if not self.orders_grid and not self.orders_hold and not self.orders_save and not self.tp_order_id:
+            elif not self.orders_grid and not self.orders_hold and not self.orders_save and not self.tp_order_id:
                 self.message_log("Restore, Restart", tlg=True)
                 self.start()
             if not GRID_ONLY and self.shift_grid_threshold is None and not tp_order:
