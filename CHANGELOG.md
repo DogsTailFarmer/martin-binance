@@ -1,5 +1,6 @@
 ### Fix
 * `calc_profit_order()`: rounding for `target_amount_first`
+* `restore_strategy_state()`: restore Tlg control thread
 
 ### Update
 * Some minor updates

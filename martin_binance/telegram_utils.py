@@ -14,6 +14,9 @@ import sqlite3
 import queue
 from requests.adapters import HTTPAdapter, Retry
 
+import logging
+logger = logging.getLogger('logger')
+
 
 def telegram(queue_to_tlg, _bot_id, url, token, channel_id, db_file, stop_tlg, inline_bot):
     url += token
@@ -41,9 +44,9 @@ def telegram(queue_to_tlg, _bot_id, url, token, channel_id, db_file, stop_tlg, i
         try:
             _res = session.post(_method, data=_data)
         except requests.exceptions.RetryError as _exc:
-            print(f"Telegram: {_exc}")
+            logger.error(f"Telegram: {_exc}")
         except Exception as _exc:
-            print(f"Telegram: {_exc}")
+            logger.error(f"Telegram: {_exc}")
         return _res
 
     def parse_query(update_inner):
@@ -131,7 +134,7 @@ def telegram(queue_to_tlg, _bot_id, url, token, channel_id, db_file, stop_tlg, i
                                        (update_inner['message_id'], msg_in, in_bot_id, None))
             connection_control.commit()
         except sqlite3.Error as ex:
-            print(f"telegram: insert into t_control: {ex}")
+            logger.error(f"telegram: insert into t_control: {ex}")
         else:
             # Send receipt
             post_text = f"Received '{msg_in}' command, OK"
@@ -154,8 +157,8 @@ def telegram(queue_to_tlg, _bot_id, url, token, channel_id, db_file, stop_tlg, i
             ])
         }
         res = requests_post(f'{url}/setMyCommands', _data=_commands, session=s)
-        print(f"Set or update command menu for Telegram bot: code: {res.status_code}, result: {res.json()}, "
-              f"restart Telegram bot by /start command for update it")
+        logger.info(f"Set or update command menu for Telegram bot: code: {res.status_code}, result: {res.json()},"
+                    f" restart Telegram bot by /start command for update it")
 
     connection_control = sqlite3.connect(db_file)
     offset_id = None

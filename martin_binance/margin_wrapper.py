@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.2"
+__version__ = "2.1.3b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1369,11 +1369,6 @@ async def on_order_update_handler(cls, ed):
              ed["last_executed_price"]]
         )
 
-    if ed['order_status'] == 'FILLED' and order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
-        cls.strategy.message_log(f"Order: {ed['order_id']} was missed partially filling event",
-                                 log_level=LogLevel.INFO)
-        ed['order_status'] = 'PARTIALLY_FILLED'
-
     if ed['order_status'] == 'FILLED':
         # Remove from orders dict
         remove_from_orders_lists([ed['order_id']])
@@ -1410,10 +1405,13 @@ def _on_order_update_handler_ext(ed, cls):
         "commissionAsset": ed['commission_asset'],
         "time": ed['transaction_time'],
     }
-    #  Append to trades list
     cls.trades.append(PrivateTrade(trade))
     # noinspection PyStatementEffect
     cls.trades[-TRADES_LIST_LIMIT:]
+    if ed['order_status'] == 'FILLED' and order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
+        cls.strategy.message_log(f"Order: {ed['order_id']} was missed partially filling event",
+                                 log_level=LogLevel.INFO)
+        ed['order_status'] = 'PARTIALLY_FILLED'
     cls.strategy.on_order_update(OrderUpdate(ed))
 
 

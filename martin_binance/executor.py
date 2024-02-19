@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.3.b1"
+__version__ = "2.1.3.b2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -745,10 +745,6 @@ class Strategy(StrategyBase):
             self.message_log("\n".join(f"{k}\t{v}" for k, v in strategy_state.items()), log_level=LogLevel.DEBUG)
             #
             self.command = json.loads(strategy_state.get('command'))
-            self.start_process()
-            if self.command == 'stopped':
-                self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
-                return
             #
             self.cycle_buy = json.loads(strategy_state.get('cycle_buy'))
             self.cycle_buy_count = json.loads(strategy_state.get('cycle_buy_count'))
@@ -808,6 +804,10 @@ class Strategy(StrategyBase):
             self.start_after_shift = False
         #
         if restore:
+            self.start_process()
+            if self.command == 'stopped':
+                self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
+                return
             self.avg_rate = self.get_buffered_ticker().last_price
             #
             open_orders = self.get_buffered_open_orders()
@@ -1096,7 +1096,7 @@ class Strategy(StrategyBase):
                 sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
         )
         # Create processes for save to .db and send Telegram message
-        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,))
+        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,), daemon=True)
         self.pr_tlg = Thread(
             target=telegram,
             args=(
@@ -1108,7 +1108,8 @@ class Strategy(StrategyBase):
                 DB_FILE,
                 STOP_TLG,
                 INLINE_BOT,
-            )
+            ),
+            daemon=True
         )
         if not self.pr_db.is_alive():
             self.message_log('Start process for .db save')
@@ -1832,7 +1833,7 @@ class Strategy(StrategyBase):
         profit = (100 * (target - tp_amount) / tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
         if log_output:
             self.tp_amount = tp_amount
-            self.message_log(f"Calc TP: Initial depo: {self.tp_amount},"
+            self.message_log(f"Calc TP: depo: {self.tp_amount},"
                              f" target {'first' if buy_side else 'second'}: {target},"
                              f" buy_side: {buy_side}, by_market: {by_market}",
                              log_level=LogLevel.DEBUG)
@@ -2677,41 +2678,7 @@ class Strategy(StrategyBase):
             else:
                 self.message_log('Wild order, do not know it', tlg=True)
         elif update.status == OrderUpdate.PARTIALLY_FILLED:
-            if self.tp_order_id == update.original_order.id:
-                self.message_log("Take profit partially filled", color=Style.B_WHITE)
-                amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second, by_market=by_market)
-                # Calculate profit for filled part TP
-                _profit_first = _profit_second = O_DEC
-                if self.cycle_buy:
-                    _, target_fee = self.fee_for_tp(O_DEC, self.tp_target, log_output=False)
-                    _profit_second = (target_fee - self.tp_amount) * amount_second_fee / target_fee
-                    self.part_profit_second += _profit_second
-                    self.message_log(f"Part profit second: {any2str(_profit_second)},"
-                                     f" sum={any2str(self.part_profit_second)}",
-                                     log_level=LogLevel.DEBUG)
-                else:
-                    target_fee, _ = self.fee_for_tp(self.tp_target, O_DEC, log_output=False)
-                    _profit_first = (target_fee - self.tp_amount) * amount_first_fee / target_fee
-                    self.part_profit_first += _profit_first
-                    self.message_log(f"Part profit first: {any2str(_profit_first)},"
-                                     f" sum={any2str(self.part_profit_first)}",
-                                     log_level=LogLevel.DEBUG)
-                first_fee_profit = self.round_truncate(amount_first_fee - _profit_first, base=True)
-                second_fee_profit = self.round_truncate(amount_second_fee - _profit_second, base=False)
-                self.tp_part_amount_first += first_fee_profit
-                self.tp_part_amount_second += second_fee_profit
-                self.tp_part_free = True
-                self.update_sum_amount(first_fee_profit, second_fee_profit)
-                if self.reverse_hold:
-                    self.start_reverse_time = self.get_time()
-                    if self.convert_tp(self.tp_part_amount_first,
-                                       self.tp_part_amount_second,
-                                       _update_sum_amount=False):
-                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-                        self.cancel_reverse_hold()
-                        self.tp_part_free = False
-                        self.message_log("Part filled TP was converted to grid", tlg=True)
-            else:
+            if self.orders_grid.exist(update.original_order.id):
                 self.message_log("Grid order partially filled", color=Style.B_WHITE)
                 self.ts_grid_update = self.get_time()
                 amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
@@ -2751,6 +2718,42 @@ class Strategy(StrategyBase):
                     else:
                         self.last_shift_time = self.get_time() + 2 * SHIFT_GRID_DELAY
                         self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
+            elif self.tp_order_id == update.original_order.id:
+                self.message_log("Take profit partially filled", color=Style.B_WHITE)
+                amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second, by_market=by_market)
+                # Calculate profit for filled part TP
+                _profit_first = _profit_second = O_DEC
+                if self.cycle_buy:
+                    _, target_fee = self.fee_for_tp(O_DEC, self.tp_target, log_output=False)
+                    _profit_second = (target_fee - self.tp_amount) * amount_second_fee / target_fee
+                    self.part_profit_second += _profit_second
+                    self.message_log(f"Part profit second: {any2str(_profit_second)},"
+                                     f" sum={any2str(self.part_profit_second)}",
+                                     log_level=LogLevel.DEBUG)
+                else:
+                    target_fee, _ = self.fee_for_tp(self.tp_target, O_DEC, log_output=False)
+                    _profit_first = (target_fee - self.tp_amount) * amount_first_fee / target_fee
+                    self.part_profit_first += _profit_first
+                    self.message_log(f"Part profit first: {any2str(_profit_first)},"
+                                     f" sum={any2str(self.part_profit_first)}",
+                                     log_level=LogLevel.DEBUG)
+                first_fee_profit = self.round_truncate(amount_first_fee - _profit_first, base=True)
+                second_fee_profit = self.round_truncate(amount_second_fee - _profit_second, base=False)
+                self.tp_part_amount_first += first_fee_profit
+                self.tp_part_amount_second += second_fee_profit
+                self.tp_part_free = True
+                self.update_sum_amount(first_fee_profit, second_fee_profit)
+                if self.reverse_hold:
+                    self.start_reverse_time = self.get_time()
+                    if self.convert_tp(self.tp_part_amount_first,
+                                       self.tp_part_amount_second,
+                                       _update_sum_amount=False):
+                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
+                        self.cancel_reverse_hold()
+                        self.tp_part_free = False
+                        self.message_log("Part filled TP was converted to grid", tlg=True)
+            else:
+                self.message_log('Wild order, do not know it', tlg=True)
 
     def cancel_reverse_hold(self):
         self.reverse_hold = False
