@@ -4,15 +4,18 @@ Functions for managing and saving data to a SQLite database from martin-binance 
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0"
+__version__ = "2.1.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import contextlib
 import sqlite3
 from datetime import datetime
+import logging
 
 from martin_binance import DB_FILE
+
+logger = logging.getLogger('logger')
 
 
 def db_management(exchange) -> None:
@@ -36,7 +39,7 @@ def db_management(exchange) -> None:
             conn.execute('ALTER TABLE t_funds ADD COLUMN active BOOLEAN DEFAULT 0')
             conn.commit()
         except sqlite3.Error as ex:
-            print(f"ALTER table t_funds failed: {ex}")
+            logger.error(f"ALTER table t_funds failed: {ex}")
     #
     cursor = conn.cursor()
     # Compliance check t_exchange and EXCHANGE() = exchange() from ms_cfg.toml
@@ -46,18 +49,18 @@ def db_management(exchange) -> None:
     row_n = len(row)
     for i, exch in enumerate(exchange):
         if i >= row_n:
-            print(f"save_to_db: Add exchange {i}, {exch}")
+            logger.info(f"save_to_db: Add exchange {i}, {exch}")
             try:
                 conn.execute("INSERT into t_exchange values(?,?)", (i, exch))
                 conn.commit()
             except sqlite3.Error as err:
-                print(f"INSERT into t_exchange: {err}")
+                logger.error(f"INSERT into t_exchange: {err}")
     #
     try:
         conn.execute('UPDATE t_funds SET active = 0 WHERE active = 1')
         conn.commit()
     except sqlite3.Error as ex:
-        print(f"Initialise t_funds failed: {ex}")
+        logger.error(f"Initialise t_funds failed: {ex}")
     conn.close()
 
 
@@ -73,7 +76,7 @@ def save_to_db(queue_to_db) -> None:
         if data is None or data.get('stop_signal'):
             break
         if data.get('destination') == 't_funds':
-            # print("save_to_db: Record row into t_funds")
+            # logger.info("save_to_db: Record row into t_funds")
             try:
                 connection_analytic.execute("INSERT INTO t_funds values(\
                                              ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -104,11 +107,11 @@ def save_to_db(queue_to_db) -> None:
                 connection_analytic.commit()
             except sqlite3.Error as err:
                 result = False
-                print(f"For save data into t_funds: {err}, retry")
+                logger.error(f"For save data into t_funds: {err}, retry")
             else:
                 result = True
         elif data.get('destination') == 't_orders':
-            # print("save_to_db: Record row into t_orders")
+            # logger.info("save_to_db: Record row into t_orders")
             try:
                 connection_analytic.execute("INSERT INTO t_orders VALUES(:id_exchange,\
                                                                          :f_currency,\
@@ -131,7 +134,7 @@ def save_to_db(queue_to_db) -> None:
                                              'order_hold': data.get('order_hold')})
                 connection_analytic.commit()
             except sqlite3.Error as err:
-                print(f"INSERT into t_orders: {err}")
+                logger.error(f"INSERT into t_orders: {err}")
         elif data.get('destination') == 't_funds.active update':
             cursor_analytic = connection_analytic.cursor()
             try:
@@ -150,9 +153,9 @@ def save_to_db(queue_to_db) -> None:
             except sqlite3.Error as err:
                 cursor_analytic.close()
                 row_active = (2,)
-                print(f"SELECT from t_funds: {err}")
+                logger.error(f"SELECT from t_funds: {err}")
             if row_active is None:
-                # print("save_to_db: UPDATE t_funds set active=1")
+                # logger.info("save_to_db: UPDATE t_funds set active=1")
                 try:
                     connection_analytic.execute('UPDATE t_funds SET active = 1\
                                                  WHERE id=(SELECT max(id) FROM t_funds\
@@ -166,5 +169,5 @@ def save_to_db(queue_to_db) -> None:
                                                 )
                     connection_analytic.commit()
                 except sqlite3.Error as err:
-                    print(f"save_to_db: UPDATE t_funds: {err}")
+                    logger.error(f"save_to_db: UPDATE t_funds: {err}")
     connection_analytic.commit()

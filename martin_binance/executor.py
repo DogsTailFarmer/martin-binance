@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.3.b3"
+__version__ = "2.1.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1669,7 +1669,7 @@ class Strategy(StrategyBase):
                                           'amount': amount * price,
                                           'by_market': by_market,
                                           'timestamp': self.get_time()}
-                    self.message_log(f"Hold take profit order for Buy {amount} {self.f_currency} by {price},"
+                    self.message_log(f"Hold TP order for Buy {amount} {self.f_currency} by {price},"
                                      f" wait {amount * price} {self.s_currency}, exist: {any2str(fund)}")
                 elif not buy_side and amount > fund:
                     # Save take profit order and wait update balance
@@ -1677,7 +1677,7 @@ class Strategy(StrategyBase):
                                           'amount': amount,
                                           'by_market': by_market,
                                           'timestamp': self.get_time()}
-                    self.message_log(f"Hold take profit order for Sell {amount} {self.f_currency}"
+                    self.message_log(f"Hold TP order for Sell {amount} {self.f_currency}"
                                      f" by {price}, exist {any2str(fund)}")
                 else:
                     # Create take profit order

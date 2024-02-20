@@ -1,9 +1,12 @@
+## 2.1.3 - 2024-02-20
 ### Fix
 * `calc_profit_order()`: rounding for `target_amount_first`
-* `restore_strategy_state()`: restore Tlg control thread
+* `restore_strategy_state()`: Tlg control thread
 
 ### Update
 * Some minor updates
+* Up requirements for exchanges-wrapper==1.4.14
+* Running `*_utils.py` modules as daemon
 
 ## 2.1.2 - 2024-02-17
 ### Fix

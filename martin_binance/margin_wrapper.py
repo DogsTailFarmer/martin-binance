@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.3b2"
+__version__ = "2.1.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
