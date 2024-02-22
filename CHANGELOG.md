@@ -1,3 +1,11 @@
+## 2.1.4 - 2024-02-22
+### Fix
+* `on_new_funds()`
+
+### Update
+* Refine initialization backtesting
+* Up requirements for exchanges-wrapper==1.4.15
+
 ## 2.1.3 - 2024-02-20
 ### Fix
 * `calc_profit_order()`: rounding for `target_amount_first`

@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0"
+__version__ = "2.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -27,44 +27,35 @@ class Funds:
         self.quote = {}
 
     def get_funds(self):
-        return [self.base, self.quote]
+        base = self.base.copy()
+        base |= {'free': str(base['free']), 'locked': str(base['locked'])}
+        quote = self.quote.copy()
+        quote |= {'free': str(quote['free']), 'locked': str(quote['locked'])}
+        return [base, quote]
 
-    def on_order_created(self, buy: bool, amount: str, price: str):
+    def on_order_created(self, buy: bool, amount: Decimal, price: Decimal):
         if buy:
-            self.quote['free'] = str(Decimal(self.quote.get('free', 0)) - Decimal(amount) * Decimal(price))
-            self.quote['locked'] = str(Decimal(self.quote.get('locked', 0)) + Decimal(amount) * Decimal(price))
+            self.quote['free'] -= amount * price
+            self.quote['locked'] += amount * price
         else:
-            self.base['free'] = str(Decimal(self.base.get('free', 0)) - Decimal(amount))
-            self.base['locked'] = str(Decimal(self.base.get('locked', 0)) + Decimal(amount))
+            self.base['free'] -= amount
+            self.base['locked'] += amount
 
-    def on_order_canceled(self, side: str, amount: str, price: str):
+    def on_order_canceled(self, side: str, amount: Decimal, price: Decimal):
         if side == 'BUY':
-            self.quote['free'] = str(Decimal(self.quote.get('free', 0)) + Decimal(amount) * Decimal(price))
-            self.quote['locked'] = str(Decimal(self.quote.get('locked', 0)) - Decimal(amount) * Decimal(price))
+            self.quote['free'] += amount * price
+            self.quote['locked'] -= amount * price
         else:
-            self.base['free'] = str(Decimal(self.base.get('free', 0)) + Decimal(amount))
-            self.base['locked'] = str(Decimal(self.base.get('locked', 0)) - Decimal(amount))
+            self.base['free'] += amount
+            self.base['locked'] -= amount
 
-    def on_order_filled(self, side: str, amount: str, price: str, fee: Decimal):
-        _amount = Decimal(amount)
-        _price = Decimal(price)
-
-        base_free = Decimal(self.base.get('free', 0))
-        base_locked = Decimal(self.base.get('locked', 0))
-
-        quote_free = Decimal(self.quote.get('free', 0))
-        quote_locked = Decimal(self.quote.get('locked', 0))
-
+    def on_order_filled(self, side: str, amount: Decimal, price: Decimal, fee: Decimal):
         if side == 'BUY':
-            quote_locked -= _amount * _price
-            base_free += _amount - fee * _amount / 100
-            self.quote['locked'] = str(quote_locked)
-            self.base['free'] = str(base_free)
+            self.base['free'] += amount - fee * amount / 100
+            self.quote['locked'] -= amount * price
         else:
-            base_locked -= _amount
-            quote_free += _amount * _price - fee * (_amount * _price) / 100
-            self.base['locked'] = str(base_locked)
-            self.quote['free'] = str(quote_free)
+            self.base['locked'] -= amount
+            self.quote['free'] += amount * price - fee * (amount * price) / 100
 
 
 class Order:
@@ -183,7 +174,7 @@ class Account:
             if self.save_ds:
                 self.grid_sell[lt] = self.orders_sell
             #
-        self.funds.on_order_created(buy=buy, amount=amount, price=price)
+        self.funds.on_order_created(buy=buy, amount=Decimal(amount), price=Decimal(price))
         self.orders[order_id] = order
 
         if self.ticker_last and ((buy and Decimal(price) >= self.ticker_last) or
@@ -226,7 +217,7 @@ class Account:
             raise UserWarning(f"Order {order_id} not active: {ex}") from ex
         else:
             self.orders[order_id] = order
-            self.funds.on_order_canceled(order.side, order.orig_qty, order.price)
+            self.funds.on_order_canceled(order.side, Decimal(order.orig_qty), Decimal(order.price))
             return {'symbol': order.symbol,
                     'origClientOrderId': order.client_order_id,
                     'orderId': order.order_id,
@@ -322,11 +313,23 @@ class Account:
                        'quote_order_quantity': order.quote_order_quantity}
                 #
                 orders_filled.append(res)
-                self.funds.on_order_filled(order.side, order.orig_qty, order.last_executed_price, self.fee_maker)
+                self.funds.on_order_filled(
+                    order.side,
+                    Decimal(order.orig_qty),
+                    Decimal(order.last_executed_price),
+                    self.fee_maker
+                )
             #
         return orders_filled
 
-    def restore_state(self, symbol: str, lt: int, orders: [], tp=()):
+    def restore_state(self, symbol: str, lt: int, orders: [], sum_amount: ()):
+        if sum_amount[0]:
+            self.funds.base['free'] += sum_amount[1]
+            self.funds.quote['free'] -= sum_amount[2]
+        else:
+            self.funds.base['free'] -= sum_amount[1]
+            self.funds.quote['free'] += sum_amount[2]
+
         for order in orders:
             self.create_order(
                 symbol=symbol,
@@ -337,12 +340,3 @@ class Account:
                 lt=lt,
                 order_id=order['id']
             )
-
-            if tp:
-                funds = self.funds
-                if order['buy']:
-                    funds.base['free'] = str(Decimal(funds.base.get('free', 0)) - tp[0])
-                    funds.quote['free'] = str(Decimal(funds.quote.get('free', 0)) + tp[1])
-                else:
-                    funds.base['free'] = str(Decimal(funds.base.get('free', 0)) + tp[0])
-                    funds.quote['free'] = str(Decimal(funds.quote.get('free', 0)) - tp[1])

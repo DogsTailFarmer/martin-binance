@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.3"
+__version__ = "2.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1007,6 +1007,7 @@ async def backtest_control():
     cls = StrategyBase
     delay = HEARTBEAT * 30  # 1 min
     ts = time.time()
+    restart = False
     while 1:
         if cls.strategy.start_collect and time.time() - ts > ms.SAVE_PERIOD:
             cls.strategy.start_collect = False
@@ -1044,28 +1045,33 @@ async def backtest_control():
                         f" {str(datetime.utcnow() - _ts + timedelta(seconds=ms.SAVE_PERIOD)).rsplit('.')[0]}",
                         color=Style.B_WHITE, tlg=True
                     )
-                parquet_declare(cls)
-                # Refresh klines init
-                for i in KLINES_INIT:
-                    try:
-                        res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
-                                                     symbol=cls.symbol,
-                                                     interval=i.value,
-                                                     limit=KLINES_LIM)
-                    except Exception as ex:
-                        logger.warning(f"FetchKlines: {ex}")
-                    else:
-                        cls.strategy.klines[i.value] = json_format.MessageToDict(res)
-                # Save current strategy state for backtesting
-                last_state = cls.strategy.save_strategy_state(return_only=True)
-                last_state_update(cls, last_state)
-                with cls.state_file.open(mode='w') as outfile:
-                    json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-                #
-                cls.strategy.start_collect = True
-                ts = time.time()
+                    restart = True
             else:
                 break
+
+        if restart and not cls.strategy.part_amount and not cls.strategy.tp_part_amount_first:
+            restart = False
+            parquet_declare(cls)
+            # Refresh klines init
+            for i in KLINES_INIT:
+                try:
+                    res = await cls.send_request(cls.stub.FetchKlines, api_pb2.FetchKlinesRequest,
+                                                 symbol=cls.symbol,
+                                                 interval=i.value,
+                                                 limit=KLINES_LIM)
+                except Exception as ex:
+                    logger.warning(f"FetchKlines: {ex}")
+                else:
+                    cls.strategy.klines[i.value] = json_format.MessageToDict(res)
+            # Save current strategy state for backtesting
+            last_state = cls.strategy.save_strategy_state(return_only=True)
+            last_state_update(cls, last_state)
+            with cls.state_file.open(mode='w') as outfile:
+                json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+            #
+            cls.strategy.start_collect = True
+            ts = time.time()
+            cls.strategy.message_log("Start data collect", tlg=True)
         await asyncio.sleep(delay)
     cls.strategy.message_log("Backtest data collect and optimize session ended", tlg=True)
 
@@ -1128,7 +1134,8 @@ async def on_klines_update(cls, _klines: {str: StrategyBase.Klines}):
                         {"key": int(time.time() * 1000), "row": orjson.dumps(candle)}
                     )
         except Exception as ex:
-            logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}\n{traceback.format_exc()}")
+            logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}")
+            logger.debug(f"Exception traceback: {traceback.format_exc()}")
             cls.wss_fire_up = True
     else:
         for i in _intervals:
@@ -1282,12 +1289,12 @@ async def on_funds_update(cls):
                     on_funds_update_handler(cls, funds)
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_funds_update loop closed: {ex}")
+            logger.debug(f"Exception traceback: {traceback.format_exc()}")
             cls.wss_fire_up = True
     else:
         funds = {}
         _funds = cls.strategy.account.funds.get_funds()
         [funds.update({d.get('asset'): {'free': d.get('free'), 'locked': d.get('locked')}}) for d in _funds]
-        # print(f"on_funds_update.funds: {funds}")
         on_funds_update_handler(cls, funds)
 
 
@@ -1312,6 +1319,7 @@ async def on_balance_update(cls):
             cls.strategy.on_balance_update(_res)
     except Exception as ex:
         logger.warning(f"Exception on WSS, on_balance_update loop closed: {ex}")
+        logger.debug(f"Exception traceback: {traceback.format_exc()}")
         cls.wss_fire_up = True
 
 
@@ -1322,7 +1330,8 @@ async def on_order_update(cls):
             ed = ast.literal_eval(json.loads(event.result))
             await on_order_update_handler(cls, ed)
     except Exception as ex:
-        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}\n{traceback.format_exc()}")
+        logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
+        logger.debug(f"Exception traceback: {traceback.format_exc()}")
         cls.wss_fire_up = True
 
 
@@ -1694,6 +1703,7 @@ async def on_ticker_update(cls):
                         cls.strategy.open_orders_snapshot(ts=ts)
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
+            logger.debug(f"Exception traceback: {traceback.format_exc()}")
             cls.wss_fire_up = True
     else:
         if ms.LOGGING:
@@ -1785,6 +1795,7 @@ async def on_order_book_update(cls):
                     )
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
+            logger.debug(f"Exception traceback: {traceback.format_exc()}")
             cls.wss_fire_up = True
     else:
         async for row in loop_ds(cls.backtest['order_book']):
@@ -1874,33 +1885,16 @@ def restore_state_before_backtesting(cls):
     saved_state = load_file(cls.state_file)
     cls.order_id = json.loads(saved_state.pop(MS_ORDER_ID, "0"))
     cls.orders = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
-    orders = json.loads(saved_state.get('orders'))
-    # Restore initial state
     cls.strategy.cycle_buy = json.loads(saved_state.get('cycle_buy'))
     cls.strategy.reverse = json.loads(saved_state.get('reverse'))
     cls.strategy.deposit_first = ms.f2d(json.loads(saved_state.get('deposit_first')))
     cls.strategy.deposit_second = ms.f2d(json.loads(saved_state.get('deposit_second')))
-    if cls.strategy.reverse:
-        cls.strategy.initial_reverse_first = ms.f2d(json.loads(saved_state.get('initial_reverse_first')))
-        cls.strategy.initial_reverse_second = ms.f2d(json.loads(saved_state.get('initial_reverse_second')))
-        cls.strategy.account.funds.base = {'asset': cls.base_asset,
-                                           'free': cls.strategy.initial_reverse_first,
-                                           'locked': '0.0'}
-        cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
-                                            'free': cls.strategy.initial_reverse_second,
-                                            'locked': '0.0'}
-    elif cls.strategy.cycle_buy:
-        cls.strategy.initial_second = cls.strategy.deposit_second
-    else:
-        cls.strategy.initial_first = cls.strategy.deposit_first
-    cls.strategy.account.restore_state(cls.symbol, cls.start_time_ms, orders)
     cls.strategy.last_shift_time = json.loads(saved_state.get('last_shift_time')) or cls.strategy.get_time()
     cls.strategy.order_q = json.loads(saved_state.get('order_q'))
     cls.strategy.orders_grid.restore(json.loads(saved_state.get('orders')))
     cls.strategy.orders_hold.restore(json.loads(saved_state.get('orders_hold')))
     cls.strategy.orders_save.restore(json.loads(saved_state.get('orders_save')))
     cls.strategy.over_price = json.loads(saved_state.get('over_price'))
-    cls.strategy.part_amount = eval(json.loads(saved_state.get('part_amount')))
     cls.strategy.reverse_hold = json.loads(saved_state.get('reverse_hold'))
     cls.strategy.reverse_init_amount = ms.f2d(json.loads(saved_state.get('reverse_init_amount')))
     cls.strategy.reverse_price = json.loads(saved_state.get('reverse_price'))
@@ -1912,25 +1906,44 @@ def restore_state_before_backtesting(cls):
     cls.strategy.sum_amount_second = ms.f2d(json.loads(saved_state.get('sum_amount_second')))
     cls.strategy.tp_amount = ms.f2d(json.loads(saved_state.get('tp_amount')))
     cls.strategy.tp_order_id = json.loads(saved_state.get('tp_order_id'))
-    cls.strategy.tp_part_amount_first = ms.f2d(json.loads(saved_state.get('tp_part_amount_first')))
-    cls.strategy.tp_part_amount_second = ms.f2d(json.loads(saved_state.get('tp_part_amount_second')))
     cls.strategy.tp_target = ms.f2d(json.loads(saved_state.get('tp_target')))
     cls.strategy.tp_order = eval(json.loads(saved_state.get('tp_order')))
     cls.strategy.tp_wait_id = json.loads(saved_state.get('tp_wait_id'))
-    # Restore TP order
-    tp_order = [
-        {"id": cls.strategy.tp_order_id,
-         "buy": cls.strategy.tp_order[0],
-         "amount": cls.strategy.tp_order[1],
-         "price": cls.strategy.tp_order[2]}
-    ]
+
+    if cls.strategy.reverse:
+        if cls.strategy.cycle_buy:
+            free_f = cls.strategy.initial_reverse_first = Decimal()
+            free_s = cls.strategy.initial_reverse_second = cls.strategy.deposit_second
+        else:
+            free_f = cls.strategy.initial_reverse_first = cls.strategy.deposit_first
+            free_s = cls.strategy.initial_reverse_second = Decimal()
+    else:
+        if cls.strategy.cycle_buy:
+            free_f = cls.strategy.initial_first = Decimal()
+            free_s = cls.strategy.initial_second = cls.strategy.deposit_second
+        else:
+            free_f = cls.strategy.initial_first = cls.strategy.deposit_first
+            free_s = cls.strategy.initial_second = Decimal()
+
+    cls.strategy.account.funds.base = {'asset': cls.base_asset, 'free': free_f, 'locked': Decimal()}
+    cls.strategy.account.funds.quote = {'asset': cls.quote_asset, 'free': free_s, 'locked': Decimal()}
+
+    # Restore orders
+    orders = json.loads(saved_state.get('orders'))
+    orders.append(
+        {
+            "id": cls.strategy.tp_order_id,
+            "buy": cls.strategy.tp_order[0],
+            "amount": cls.strategy.tp_order[1],
+            "price": cls.strategy.tp_order[2]
+        }
+    )
     cls.strategy.account.restore_state(
         cls.symbol,
         cls.start_time_ms,
-        tp_order,
-        tp=(cls.strategy.sum_amount_first, cls.strategy.sum_amount_second)
+        orders,
+        sum_amount=(cls.strategy.cycle_buy, cls.strategy.sum_amount_first, cls.strategy.sum_amount_second)
     )
-    cls.strategy.start_collect = True
 
 
 def parquet_declare(cls):
@@ -2068,12 +2081,8 @@ async def main(_symbol):
             cls.reset_class_var()
         #
         if ms.MODE == 'S':
-            cls.strategy.account.funds.base = {'asset': cls.base_asset,
-                                               'free': f"{ms.AMOUNT_FIRST}",
-                                               'locked': '0.0'}
-            cls.strategy.account.funds.quote = {'asset': cls.quote_asset,
-                                                'free': f"{ms.AMOUNT_SECOND}",
-                                                'locked': '0.0'}
+            cls.strategy.account.funds.base = {'asset': cls.base_asset, 'free': ms.AMOUNT_FIRST, 'locked': Decimal()}
+            cls.strategy.account.funds.quote = {'asset': cls.quote_asset, 'free': ms.AMOUNT_SECOND, 'locked': Decimal()}
             cls.strategy.account.fee_maker = ms.FEE_MAKER
             cls.strategy.account.fee_taker = ms.FEE_TAKER
             # ticker
@@ -2139,19 +2148,20 @@ async def main(_symbol):
                     await asyncio.sleep(HEARTBEAT)
                 cls.strategy.start()
             else:
-                if cls.state_file.exists():
-                    cls.strategy.init(check_funds=False)
-                else:
-                    cls.strategy.init()
-                await wss_declare(cls)
                 # Set initial local time from backtest data
                 cls.strategy.time_operational['new'] = cls.backtest['ticker_index_first'] / 1000
                 cls.strategy.get_buffered_funds_last_time = cls.strategy.get_time()
                 cls.start_time_ms = int(cls.strategy.get_time() * 1000)
                 cls.strategy.cycle_time = datetime.utcnow()
+                #
+                await wss_declare(cls)
                 if cls.state_file.exists():
                     restore_state_before_backtesting(cls)
-                cls.strategy.start()
+                    cls.strategy.init(check_funds=False)
+                    cls.strategy.start_collect = True
+                else:
+                    cls.strategy.init()
+                    cls.strategy.start()
         if restored:
             loop.create_task(heartbeat(cls.session))
             loop.create_task(save_to_csv())

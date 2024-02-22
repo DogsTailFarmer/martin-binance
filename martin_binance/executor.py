@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.3"
+__version__ = "2.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2565,16 +2565,15 @@ class Strategy(StrategyBase):
             self.cancel_grid(cancel_all=True)
 
     def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
-        # print(f"on_new_funds.funds: {funds}")
         ff = funds.get(self.f_currency, O_DEC)
         fs = funds.get(self.s_currency, O_DEC)
         if self.wait_refunding_for_start:
-            ff = ff.total_for_currency if ff else O_DEC
-            fs = fs.total_for_currency if fs else O_DEC
             if self.cycle_buy:
-                go_trade = fs >= (self.initial_reverse_second if self.reverse else self.initial_second)
+                tf = fs.total_for_currency if fs else O_DEC
+                go_trade = tf >= (self.initial_reverse_second if self.reverse else self.initial_second)
             else:
-                go_trade = ff >= (self.initial_reverse_first if self.reverse else self.initial_first)
+                tf = ff.total_for_currency if ff else O_DEC
+                go_trade = tf >= (self.initial_reverse_first if self.reverse else self.initial_first)
             if go_trade:
                 self.message_log("Started after receipt of funds")
                 self.start()
