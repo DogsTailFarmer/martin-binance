@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.4"
+__version__ = "2.2.0.b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -370,7 +370,7 @@ class Strategy(StrategyBase):
         self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
         self.command = None  # + External input command from Telegram
         self.start_after_shift = False  # - Flag set before shift, clear after place grid
-        self.queue_to_db = queue.Queue()  # - Queue for save data to .db
+        self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
         self.pr_db = None  # - Process for save data to .db
         self.pr_tlg = None  # - Process for sending message to Telegram
         self.pr_tlg_control = None  # - Process for get command from Telegram
@@ -1005,8 +1005,10 @@ class Strategy(StrategyBase):
 
     def stop(self) -> None:
         self.message_log('Stop')
-        self.queue_to_db.put({'stop_signal': True})
-        self.queue_to_tlg.put(STOP_TLG)
+        if self.queue_to_db:
+            self.queue_to_db.put({'stop_signal': True})
+        if self.queue_to_tlg:
+            self.queue_to_tlg.put(STOP_TLG)
         if self.connection_analytic:
             try:
                 self.connection_analytic.execute("DELETE FROM t_orders\
@@ -1021,18 +1023,6 @@ class Strategy(StrategyBase):
                 self.message_log(f"DELETE from t_order: {err}")
             self.connection_analytic.close()
         self.connection_analytic = None
-
-    def suspend(self) -> None:
-        self.message_log('Suspend')
-        self.queue_to_db.put({'stop_signal': True})
-        self.queue_to_tlg.put(STOP_TLG)
-        self.connection_analytic.commit()
-        self.connection_analytic.close()
-        self.connection_analytic = None
-
-    def unsuspend(self) -> None:
-        self.message_log('Unsuspend')
-        self.start_process()
 
     def init_warning(self, _amount_first_grid: Decimal):
         if self.cycle_buy:
@@ -1091,38 +1081,39 @@ class Strategy(StrategyBase):
 
     def start_process(self):
         # Init analytic
-        self.connection_analytic = (
-                self.connection_analytic or
-                sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
-        )
-        # Create processes for save to .db and send Telegram message
-        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,), daemon=True)
-        self.pr_tlg = Thread(
-            target=telegram,
-            args=(
-                self.queue_to_tlg,
-                self.tlg_header.split('.')[0],
-                TELEGRAM_URL,
-                TOKEN,
-                CHANNEL_ID,
-                DB_FILE,
-                STOP_TLG,
-                INLINE_BOT,
-            ),
-            daemon=True
-        )
-        if not self.pr_db.is_alive():
-            self.message_log('Start process for .db save')
-            try:
-                self.pr_db.start()
-            except AssertionError as error:
-                self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
-        if not self.pr_tlg.is_alive():
-            self.message_log('Start process for Telegram')
-            try:
-                self.pr_tlg.start()
-            except AssertionError as error:
-                self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
+        if MODE != 'S':
+            self.connection_analytic = (
+                    self.connection_analytic or
+                    sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
+            )
+            self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,), daemon=True)
+            if not self.pr_db.is_alive():
+                self.message_log('Start process for .db save')
+                try:
+                    self.pr_db.start()
+                except AssertionError as error:
+                    self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
+        if TOKEN and MODE != 'S':
+            self.pr_tlg = Thread(
+                target=telegram,
+                args=(
+                    self.queue_to_tlg,
+                    self.tlg_header.split('.')[0],
+                    TELEGRAM_URL,
+                    TOKEN,
+                    CHANNEL_ID,
+                    DB_FILE,
+                    STOP_TLG,
+                    INLINE_BOT,
+                ),
+                daemon=True
+            )
+            if not self.pr_tlg.is_alive():
+                self.message_log('Start process for Telegram')
+                try:
+                    self.pr_tlg.start()
+                except AssertionError as error:
+                    self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
 
     def cancel_order_exp(self, order_id: int, cancel_all=False) -> None:
         self.cancel_order(order_id, cancel_all=cancel_all)
@@ -2426,6 +2417,8 @@ class Strategy(StrategyBase):
         """
         Before place limit order check trade conditions and correct price
         """
+        if self.command == 'stopped':
+            return 0
         if price_limit_rules:
             tcm = self.get_trading_capability_manager()
             _price = self.get_buffered_ticker().last_price or self.avg_rate
@@ -2818,6 +2811,8 @@ class Strategy(StrategyBase):
         elif place_order_id == self.tp_wait_id:
             self.tp_wait_id = None
             self.tp_error = True
+        if 'FAILED_PRECONDITION' in error:
+            self.command = 'stopped'
 
     def on_cancel_order_success(self, order_id: int, cancel_all=False) -> None:
         if order_id == self.cancel_grid_order_id:

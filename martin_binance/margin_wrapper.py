@@ -4,7 +4,7 @@ Python strategy cli_X_AAABBB.py <-> <margin_wrapper> <-> exchanges-wrapper <-> E
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.4"
+__version__ = "2.2.0.b1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -483,7 +483,7 @@ class StrategyBase:
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
         self.account = backTestAccount(ms.SAVE_DS) if ms.MODE == 'S' else None
         self.get_buffered_funds_last_time = self.get_time()
-        self.queue_to_tlg = queue.Queue()  # - Queue for sending message to Telegram
+        self.queue_to_tlg = queue.Queue() if ms.TOKEN and ms.MODE != 'S' else None
         self.status_time = None  # + Last time sending status message
         self.tlg_header = ''  # - Header for Telegram message
         self.start_collect = None
@@ -2131,8 +2131,8 @@ async def main(_symbol):
                     #
                     cls.strategy.restore_strategy_state(last_state, restore=False)
                     #
-                    await wss_init(cls)
                     cls.strategy.init(check_funds=False)
+                    await wss_init(cls)
                 except Exception as ex:
                     print(f"Strategy init error: {ex}")
                     restored = False

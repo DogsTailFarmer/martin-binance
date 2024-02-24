@@ -1,3 +1,9 @@
+### Update
+* Do not send orders if was getting 'FAILED_PRECONDITION' response
+* Do not started Telegram control process for Simulate mode or if bot id is not setting
+* Do not started DB control process for Simulate mode
+* Changed initialization sequence during recovery from saved state
+
 ## 2.1.4 - 2024-02-22
 ### Fix
 * `on_new_funds()`
