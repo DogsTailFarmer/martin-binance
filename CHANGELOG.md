@@ -1,3 +1,7 @@
+## 2.1.5 - 2024-02-25
+### Fix
+* ModuleNotFoundError: No module named 'optimizer' #73
+
 ### Update
 * Do not send orders if was getting 'FAILED_PRECONDITION' response
 * Do not started Telegram control process for Simulate mode or if bot id is not setting
