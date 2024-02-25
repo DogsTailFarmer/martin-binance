@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0"
+__version__ = "2.1.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -16,7 +16,7 @@ import optuna
 import inquirer
 from inquirer.themes import GreenPassion
 from martin_binance import BACKTEST_PATH
-from optimizer import optimize
+from martin_binance.backtest.optimizer import optimize
 
 SKIP_LOG = True
 

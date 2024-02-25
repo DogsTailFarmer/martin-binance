@@ -2811,6 +2811,7 @@ class Strategy(StrategyBase):
         elif place_order_id == self.tp_wait_id:
             self.tp_wait_id = None
             self.tp_error = True
+
         if 'FAILED_PRECONDITION' in error:
             self.command = 'stopped'
 
