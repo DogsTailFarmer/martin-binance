@@ -6,13 +6,19 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b2"
+__version__ = "2.2.0.b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 from pathlib import Path
 from shutil import copy
 
+from exchanges_wrapper.definitions import Interval
+
+HEARTBEAT = 2  # Sec
+ORDER_TIMEOUT = HEARTBEAT * 15  # Sec
+KLINES_INIT = [Interval.ONE_MINUTE, Interval.FIFTY_MINUTES, Interval.ONE_HOUR]
+#
 WORK_PATH = Path(Path.home(), ".MartinBinance")
 CONFIG_PATH = Path(WORK_PATH, "config")
 CONFIG_FILE = Path(CONFIG_PATH, "ms_cfg.toml")
@@ -20,6 +26,7 @@ DB_FILE = Path(WORK_PATH, "funds_rate.db")
 LOG_PATH = Path(WORK_PATH, "log")
 LAST_STATE_PATH = Path(WORK_PATH, "last_state")
 BACKTEST_PATH = Path(WORK_PATH, "back_test")
+EQUAL_STR = "================================================================"
 
 
 def init():

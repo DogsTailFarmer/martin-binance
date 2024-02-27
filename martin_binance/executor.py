@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b1"
+__version__ = "2.2.0.b3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -12,212 +12,29 @@ import sys
 import gc
 import statistics
 import traceback
-from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
+from decimal import ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
 from threading import Thread
 import queue
 import math
 import sqlite3
-from pathlib import Path
+
 import ujson as json
 from datetime import datetime
 import os
 import psutil
 import numpy as np
-from scipy.optimize import minimize
+
+from typing import Dict
 
 from martin_binance import DB_FILE
 from martin_binance.db_utils import db_management, save_to_db
-from martin_binance.margin_wrapper import __version__ as msb_ver, any2str, Dict, LogLevel, StrategyConfig
-from martin_binance.margin_wrapper import StrategyBase, Style, OrderUpdate, Ticker, OrderBook, FundsEntry, Order
 from martin_binance.telegram_utils import telegram
+from martin_binance.strategy_base import (f2d, any2str, StrategyBase, Style, OrderUpdate, Ticker, OrderBook,
+                                          FundsEntry, Order, Orders, LogLevel, solve, __version__ as msb_ver)
+from martin_binance.params import *
+
 
 O_DEC = Decimal()
-
-# region SetParameters
-SYMBOL = str()
-EXCHANGE = ()
-# Exchange setup
-ID_EXCHANGE = int()
-FEE_IN_PAIR = bool()
-FEE_MAKER = Decimal()
-FEE_TAKER = Decimal()
-FEE_SECOND = bool()
-FEE_BNB_IN_PAIR = bool()
-GRID_MAX_COUNT = int()
-# Trade parameter
-START_ON_BUY = bool()
-AMOUNT_FIRST = Decimal()
-USE_ALL_FUND = bool()
-AMOUNT_SECOND = Decimal()
-PRICE_SHIFT = Decimal()
-PRICE_LIMIT_RULES = Decimal()
-# Round pattern
-ROUND_BASE = str()
-ROUND_QUOTE = str()
-#
-PROFIT = Decimal()
-PROFIT_MAX = Decimal()
-OVER_PRICE = Decimal()
-ORDER_Q = int()
-MARTIN = Decimal()
-SHIFT_GRID_DELAY = int()
-GRID_UPDATE_INTERVAL = 60 * 60  # sec between grid update in Reverse cycle
-# Other
-STATUS_DELAY = int()
-GRID_ONLY = bool()
-LOG_LEVEL_NO_PRINT = []
-HOLD_TP_ORDER_TIMEOUT = 30
-COLLECT_ASSETS = bool()
-#
-ADAPTIVE_TRADE_CONDITION = bool()
-BB_CANDLE_SIZE_IN_MINUTES = int()
-BB_NUMBER_OF_CANDLES = int()
-KBB = float()
-#
-LINEAR_GRID_K = int()
-#
-ADX_CANDLE_SIZE_IN_MINUTES = int()
-ADX_NUMBER_OF_CANDLES = int()
-ADX_PERIOD = int()
-ADX_THRESHOLD = int()
-ADX_PRICE_THRESHOLD = float()
-# Reverse cycle
-REVERSE = bool()
-REVERSE_TARGET_AMOUNT = Decimal()
-REVERSE_INIT_AMOUNT = Decimal()
-REVERSE_STOP = bool()
-# Config variables
-HEAD_VERSION = str()
-LOAD_LAST_STATE = int()
-# Path and files name
-LAST_STATE_FILE: Path
-VPS_NAME = str()
-PARAMS: Path
-# Telegram
-TELEGRAM_URL = str()
-TOKEN = str()
-CHANNEL_ID = str()
-STOP_TLG = 'stop_signal_QWE#@!'
-INLINE_BOT = True
-# Backtesting
-MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
-XTIME = 1000  # Time accelerator
-SAVE_DS = False  # Save session result data (ticker, orders) for compare
-SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
-LOGGING = True
-SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
-N_TRIALS = 250  # Number of optimization cycles for optuna study
-# endregion
-
-
-def f2d(_f: float) -> Decimal:
-    return Decimal(str(_f))
-
-
-def solve(fn, value: Decimal, x: Decimal, **kwargs) -> (Decimal, str):
-    def _fn(_x):
-        return abs(float(value) - fn(_x, **kwargs))
-    res = minimize(_fn, x0=np.array([float(x)]), method='Nelder-Mead')
-    if res.success:
-        _res = f2d(res.x[0])
-        n = 0
-        while f2d(fn(_res, **kwargs)) - value < 0:
-            _res += f2d(0.1)
-            n += 1
-            if n > 200:  # cycle limit check
-                return O_DEC, "Number of cycles exceeded"
-        return _res, f"{res.message} Number of iterations: {res.nit}, correction: +{n*0.1:.2f}"
-    return O_DEC, res.message
-
-
-class Orders:
-    __slots__ = ("orders_list",)
-
-    def __init__(self):
-        self.orders_list = []
-
-    def __iter__(self):
-        yield from self.orders_list
-
-    def __len__(self):
-        return len(self.orders_list)
-
-    def append_order(self, _id: int, buy: bool, amount: Decimal, price: Decimal):
-        self.orders_list.append({'id': _id, 'buy': buy, 'amount': amount, 'price': price})
-
-    def remove(self, _id: int):
-        self.orders_list[:] = [i for i in self.orders_list if i['id'] != _id]
-
-    def find_order(self, in_orders: [], place_order_id: int):
-        """
-        Find equal order in_orders[] and self.orders_list[] where in_orders[].id == place_order_id
-        If exist return order: Order
-        """
-        order = None
-        for i in self.orders_list:
-            if i['id'] == place_order_id:
-                for k, o in enumerate(in_orders):
-                    if o.buy == i['buy'] and o.amount == i['amount'] and o.price == i['price']:
-                        order = in_orders[k]
-                        break
-            if order:
-                break
-        return order
-
-    def get_by_id(self, _id: int) -> {}:
-        return next((i for i in self.orders_list if i['id'] == _id), None)
-
-    def exist(self, _id: int) -> bool:
-        return any(i['id'] == _id for i in self.orders_list)
-
-    def get(self) -> []:
-        """
-        Get List of Dict for orders
-        :return: []
-        """
-        return self.orders_list
-
-    def get_id_list(self) -> []:
-        """
-        Get List of orders id
-        :return: []
-        """
-        return [i['id'] for i in self.orders_list]
-
-    def get_first(self) -> ():
-        """
-        Get first order as tuple
-        :return: (id, buy, amount, price)
-        """
-        return tuple(self.orders_list[0].values())
-
-    def get_last(self) -> ():
-        """
-        Get last order as tuple
-        :return: (id, buy, amount, price)
-        """
-        return tuple(self.orders_list[-1].values())
-
-    def restore(self, order_list: []):
-        self.orders_list.clear()
-        for i in order_list:
-            i_dec = {'id': i.get('id'),
-                     'buy': i.get('buy'),
-                     'amount': f2d(i.get('amount')),
-                     'price': f2d(i.get('price'))}
-            self.orders_list.append(i_dec)
-
-    def sort(self, cycle_buy: bool):
-        if cycle_buy:
-            self.orders_list.sort(key=lambda x: x['price'], reverse=True)
-        else:
-            self.orders_list.sort(key=lambda x: x['price'], reverse=False)
-
-    def sum_amount(self, cycle_buy: bool) -> Decimal:
-        _sum = O_DEC
-        for i in self.orders_list:
-            _sum += i['amount'] * (i['price'] if cycle_buy else 1)
-        return _sum
 
 
 class Strategy(StrategyBase):
@@ -467,15 +284,6 @@ class Strategy(StrategyBase):
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
             raise SystemExit(1)
-
-    @staticmethod
-    def get_strategy_config() -> StrategyConfig:
-        s = StrategyConfig()
-        s.required_data_updates = {StrategyConfig.ORDER_BOOK,
-                                   StrategyConfig.FUNDS,
-                                   StrategyConfig.TICKER}
-        s.normalize_exchange_buy_amounts = True
-        return s
 
     def save_strategy_state(self, return_only=False) -> Dict[str, str]:
         if not return_only:

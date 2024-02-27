@@ -18,7 +18,6 @@ requires-python = ">=3.9"
 
 dependencies = [
     "exchanges-wrapper~=1.4.16",
-    "margin-strategy-sdk==0.0.11",
     "jsonpickle==3.0.2",
     "psutil==5.9.6",
     "requests==2.31.0",
