@@ -6,19 +6,20 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0"
+__version__ = "2.2.0.b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 
-import importlib.util as iu
-from decimal import Decimal
-import optuna
 import asyncio
-import sys
-import ujson as json
-from pathlib import Path
+import importlib.util as iu
 import stat
+import sys
+from decimal import Decimal
+from pathlib import Path
+
+import optuna
+import ujson as json
 
 OPTIMIZER = Path(__file__).absolute()
 OPTIMIZER.chmod(OPTIMIZER.stat().st_mode | stat.S_IEXEC)
@@ -36,7 +37,7 @@ def try_trade(mbs, skip_log, **kwargs):
     mbs.ex.SAVE_DS = False
     mbs.ex.LOGGING = not skip_log
     mbs.trade()
-    return float(mbs.session_result.get('profit', 0)) + float(mbs.session_result.get('free', 0))
+    return float(mbs.SESSION_RESULT.get('profit', 0)) + float(mbs.SESSION_RESULT.get('free', 0))
 
 
 def optimize(study_name, strategy, n_trials, storage_name=None, skip_log=True, show_progress_bar=False):

@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b5"
+__version__ = "2.2.0.b6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -29,108 +29,15 @@ from typing import Dict
 from martin_binance import DB_FILE
 from martin_binance.db_utils import db_management, save_to_db
 from martin_binance.telegram_utils import telegram
-from martin_binance.strategy_base import (f2d, any2str, StrategyBase, Style, OrderUpdate, Ticker, OrderBook,
-                                          FundsEntry, Order, Orders, LogLevel, solve, __version__ as msb_ver)
+from martin_binance.strategy_base import StrategyBase, __version__ as msb_ver
+from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, LogLevel, any2str, Order, OrderUpdate, Orders, \
+    f2d, solve
 from martin_binance.params import *
-
 
 O_DEC = Decimal()
 
 
 class Strategy(StrategyBase):
-    ##############################################################
-    # strategy control methods
-    ##############################################################
-
-    """
-    __slots__ = (
-
-        "orders_grid",
-        "orders_init",
-        "orders_hold",
-        "orders_save",
-        # Take profit variables
-        "tp_order_id",
-        "tp_wait_id",
-        "tp_order",
-        "tp_error",
-        "tp_order_hold",
-        "tp_hold",
-        "tp_cancel",
-        "tp_cancel_from_grid_handler",
-        "tp_hold_additional",
-        "tp_target",
-        "tp_amount",
-        "part_profit_first",
-        "part_profit_second",
-        "tp_was_filled",
-        "tp_part_amount_first",
-        "tp_part_amount_second",
-        #
-        "sum_amount_first",
-        "sum_amount_second",
-        #
-
-        "sum_profit_first",
-        "sum_profit_second",
-        "cycle_buy_count",
-        "cycle_sell_count",
-        "shift_grid_threshold",
-        "f_currency",
-        "s_currency",
-        "connection_analytic",
-
-        "avg_rate",
-        #
-        "grid_hold",
-        "cancel_grid_hold",
-        "initial_first",
-        "initial_second",
-        "initial_reverse_first",
-        "initial_reverse_second",
-        "wait_refunding_for_start",
-        #
-        "cancel_order_id",
-        "cancel_grid_order_id",
-        "over_price",
-        "grid_place_flag",
-        "part_amount",
-        "command",
-        "start_after_shift",
-        "queue_to_db",
-        "pr_db",
-        "pr_tlg",
-        "pr_tlg_control",
-        "restart",
-        "profit_first",
-        "profit_second",
-
-        "cycle_time_reverse",
-
-        "reverse_target_amount",
-        "reverse_init_amount",
-        "reverse_hold",
-        "reverse_price",
-        "round_base",
-        "round_quote",
-
-        "order_q_placed",
-        "martin",
-        "first_run",
-        "grid_remove",
-        "heartbeat_counter",
-        "cycle_status",
-        "grid_update_started",
-        "start_reverse_time",
-        "last_ticker_update",
-        "grid_only_restart",
-        "wait_wss_refresh",
-        "restore_orders",
-        "ts_grid_update",
-        "tp_part_free"
-    )
-    """
-
     def __init__(self):
         super().__init__()
         if LOGGING:
@@ -184,7 +91,6 @@ class Strategy(StrategyBase):
         self.cancel_grid_order_id = None  # - id individual canceled grid order
         self.over_price = None  # + Adaptive over price
         self.grid_place_flag = False  # - Flag when placed next part of grid orders
-
         self.start_after_shift = False  # - Flag set before shift, clear after place grid
         self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
         self.pr_db = None  # - Process for save data to .db

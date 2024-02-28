@@ -1,3 +1,13 @@
+"""
+martin-binance strategy parameters
+"""
+__author__ = "Jerry Fedorenko"
+__copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
+__license__ = "MIT"
+__version__ = "2.2.0.b5"
+__maintainer__ = "Jerry Fedorenko"
+__contact__ = "https://github.com/DogsTailFarmer"
+
 from decimal import Decimal
 from pathlib import Path
 
