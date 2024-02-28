@@ -41,8 +41,10 @@ class Strategy(StrategyBase):
     ##############################################################
     # strategy control methods
     ##############################################################
+
+    """
     __slots__ = (
-        "cycle_buy",
+
         "orders_grid",
         "orders_init",
         "orders_hold",
@@ -68,8 +70,7 @@ class Strategy(StrategyBase):
         "sum_amount_first",
         "sum_amount_second",
         #
-        "deposit_first",
-        "deposit_second",
+
         "sum_profit_first",
         "sum_profit_second",
         "cycle_buy_count",
@@ -78,7 +79,7 @@ class Strategy(StrategyBase):
         "f_currency",
         "s_currency",
         "connection_analytic",
-        "last_shift_time",
+
         "avg_rate",
         #
         "grid_hold",
@@ -103,16 +104,16 @@ class Strategy(StrategyBase):
         "restart",
         "profit_first",
         "profit_second",
-        "cycle_time",
+
         "cycle_time_reverse",
-        "reverse",
+
         "reverse_target_amount",
         "reverse_init_amount",
         "reverse_hold",
         "reverse_price",
         "round_base",
         "round_quote",
-        "order_q",
+
         "order_q_placed",
         "martin",
         "first_run",
@@ -128,6 +129,7 @@ class Strategy(StrategyBase):
         "ts_grid_update",
         "tp_part_free",
     )
+    """
 
     def __init__(self):
         super().__init__()
@@ -194,7 +196,7 @@ class Strategy(StrategyBase):
         self.restart = None  # - Set after execute take profit order and restart cycle
         self.profit_first = O_DEC  # + Cycle profit
         self.profit_second = O_DEC  # + Cycle profit
-        self.cycle_time = None  # + Cycle start time
+
         self.cycle_time_reverse = None  # + Reverse cycle start time
         self.reverse = REVERSE  # + Current cycle is Reverse
         self.reverse_target_amount = REVERSE_TARGET_AMOUNT if REVERSE else O_DEC  # + Amount for reverse cycle
@@ -2310,7 +2312,7 @@ class Strategy(StrategyBase):
     # private update methods
     ##############################################################
 
-    def on_balance_update(self, balance: Dict) -> None:
+    def on_balance_update_ex(self, balance: Dict) -> None:
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
         restart = False
@@ -2400,7 +2402,7 @@ class Strategy(StrategyBase):
                                 self.grid_hold['additional_grid'],
                                 self.grid_hold['grid_update'])
 
-    def on_order_update(self, update: OrderUpdate) -> None:
+    def on_order_update_ex(self, update: OrderUpdate) -> None:
         # self.message_log(f"Order {update.original_order.id}: {update.status}", log_level=LogLevel.DEBUG)
         if update.status in [OrderUpdate.ADAPTED,
                              OrderUpdate.NO_CHANGE,
@@ -2693,3 +2695,64 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
+
+    def restore_state_before_backtesting_ex(self, saved_state):
+        self.cycle_buy = json.loads(saved_state.get('cycle_buy'))
+        self.reverse = json.loads(saved_state.get('reverse'))
+        self.deposit_first = f2d(json.loads(saved_state.get('deposit_first')))
+        self.deposit_second = f2d(json.loads(saved_state.get('deposit_second')))
+        self.last_shift_time = json.loads(saved_state.get('last_shift_time')) or self.get_time()
+        self.order_q = json.loads(saved_state.get('order_q'))
+        self.orders_grid.restore(json.loads(saved_state.get('orders')))
+        self.orders_hold.restore(json.loads(saved_state.get('orders_hold')))
+        self.orders_save.restore(json.loads(saved_state.get('orders_save')))
+        self.over_price = json.loads(saved_state.get('over_price'))
+        self.reverse_hold = json.loads(saved_state.get('reverse_hold'))
+        self.reverse_init_amount = f2d(json.loads(saved_state.get('reverse_init_amount')))
+        self.reverse_price = json.loads(saved_state.get('reverse_price'))
+        self.reverse_target_amount = f2d(json.loads(saved_state.get('reverse_target_amount')))
+        self.shift_grid_threshold = json.loads(saved_state.get('shift_grid_threshold'))
+        if self.shift_grid_threshold:
+            self.shift_grid_threshold = f2d(self.shift_grid_threshold)
+        self.sum_amount_first = f2d(json.loads(saved_state.get('sum_amount_first')))
+        self.sum_amount_second = f2d(json.loads(saved_state.get('sum_amount_second')))
+        self.tp_amount = f2d(json.loads(saved_state.get('tp_amount')))
+        self.tp_order_id = json.loads(saved_state.get('tp_order_id'))
+        self.tp_target = f2d(json.loads(saved_state.get('tp_target')))
+        self.tp_order = eval(json.loads(saved_state.get('tp_order')))
+        self.tp_wait_id = json.loads(saved_state.get('tp_wait_id'))
+
+        if self.reverse:
+            if self.cycle_buy:
+                free_f = self.initial_reverse_first = Decimal()
+                free_s = self.initial_reverse_second = self.deposit_second
+            else:
+                free_f = self.initial_reverse_first = self.deposit_first
+                free_s = self.initial_reverse_second = Decimal()
+        else:
+            if self.cycle_buy:
+                free_f = self.initial_first = Decimal()
+                free_s = self.initial_second = self.deposit_second
+            else:
+                free_f = self.initial_first = self.deposit_first
+                free_s = self.initial_second = Decimal()
+
+        self.account.funds.base = {'asset': self.base_asset, 'free': free_f, 'locked': Decimal()}
+        self.account.funds.quote = {'asset': self.quote_asset, 'free': free_s, 'locked': Decimal()}
+
+        # Restore orders
+        orders = json.loads(saved_state.get('orders'))
+        orders.append(
+            {
+                "id": self.tp_order_id,
+                "buy": self.tp_order[0],
+                "amount": self.tp_order[1],
+                "price": self.tp_order[2]
+            }
+        )
+        self.account.restore_state(
+            self.symbol,
+            self.start_time_ms,
+            orders,
+            sum_amount=(self.cycle_buy, self.sum_amount_first, self.sum_amount_second)
+        )
