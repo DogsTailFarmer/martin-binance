@@ -4,7 +4,7 @@ martin-binance class and method definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b3"
+__version__ = "2.2.0.b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -699,6 +699,10 @@ class StrategyBase:
         self.reset_backtest_vars()
         # 
         self.cycle_time = None  # + Cycle start time
+        self.command = None  # + External input command from Telegram
+        self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
+        self.tp_part_amount_first = O_DEC  # + Sum partially filled TP
+        self.tp_part_amount_second = O_DEC  # + Sum partially filled TP
 
     def __call__(self):
         return self
@@ -969,11 +973,16 @@ class StrategyBase:
                 if cancel_all:
                     if _id not in self.bulk_orders_cancel:
                         res = await asyncio.wait_for(
-                            self.send_request(self.stub.CancelAllOrders, api_pb2.MarketRequest, symbol=self.symbol),
+                            self.send_request(
+                                self.stub.CancelAllOrders,
+                                api_pb2.MarketRequest,
+                                symbol=self.symbol
+                            ),
                             timeout=ORDER_TIMEOUT - 5
                         )
-                        [self.bulk_orders_cancel.update({v['orderId']: v}) 
-                         for v in ast.literal_eval(json.loads(res.result))]
+                        if res:
+                            for v in ast.literal_eval(json.loads(res.result)):
+                                self.bulk_orders_cancel.update({v['orderId']: v})
                     result = self.bulk_orders_cancel.pop(_id, None)
                 else:
                     res = await self.send_request(self.stub.CancelOrder, api_pb2.CancelOrderRequest,
@@ -2072,7 +2081,7 @@ class StrategyBase:
         pass
 
     @abstractmethod
-    def save_strategy_state(self):
+    def save_strategy_state(self, *args, **kwargs):
         pass
 
     @abstractmethod
@@ -2080,7 +2089,7 @@ class StrategyBase:
         pass
 
     @abstractmethod
-    def on_new_funds(self):
+    def on_new_funds(self, *args):
         pass
 
     @abstractmethod
@@ -2088,7 +2097,7 @@ class StrategyBase:
         pass
 
     @abstractmethod
-    def on_cancel_order_success(self, *args):
+    def on_cancel_order_success(self, *args, **kwargs):
         pass
 
     @abstractmethod
@@ -2109,6 +2118,30 @@ class StrategyBase:
 
     @abstractmethod
     def on_new_ticker(self, *args):
+        pass
+
+    @abstractmethod
+    def get_sum_profit(self):
+        pass
+
+    @abstractmethod
+    def get_free_assets(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def on_new_order_book(self, *args):
+        pass
+
+    @abstractmethod
+    def restore_strategy_state(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def start(self, *args):
+        pass
+
+    @abstractmethod
+    def init(self, *args, **kwargs):
         pass
 
 

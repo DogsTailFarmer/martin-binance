@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b3"
+__version__ = "2.2.0.b5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -127,7 +127,7 @@ class Strategy(StrategyBase):
         "wait_wss_refresh",
         "restore_orders",
         "ts_grid_update",
-        "tp_part_free",
+        "tp_part_free"
     )
     """
 
@@ -155,8 +155,6 @@ class Strategy(StrategyBase):
         self.part_profit_first = O_DEC  # +
         self.part_profit_second = O_DEC  # +
         self.tp_was_filled = ()  # - Exist incomplete processing filled TP
-        self.tp_part_amount_first = O_DEC  # + Sum partially filled TP
-        self.tp_part_amount_second = O_DEC  # + Sum partially filled TP
         #
         self.sum_amount_first = O_DEC  # Sum buy/sell in first currency for current cycle
         self.sum_amount_second = O_DEC  # Sum buy/sell in second currency for current cycle
@@ -186,8 +184,7 @@ class Strategy(StrategyBase):
         self.cancel_grid_order_id = None  # - id individual canceled grid order
         self.over_price = None  # + Adaptive over price
         self.grid_place_flag = False  # - Flag when placed next part of grid orders
-        self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
-        self.command = None  # + External input command from Telegram
+
         self.start_after_shift = False  # - Flag set before shift, clear after place grid
         self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
         self.pr_db = None  # - Process for save data to .db
@@ -196,7 +193,6 @@ class Strategy(StrategyBase):
         self.restart = None  # - Set after execute take profit order and restart cycle
         self.profit_first = O_DEC  # + Cycle profit
         self.profit_second = O_DEC  # + Cycle profit
-
         self.cycle_time_reverse = None  # + Reverse cycle start time
         self.reverse = REVERSE  # + Current cycle is Reverse
         self.reverse_target_amount = REVERSE_TARGET_AMOUNT if REVERSE else O_DEC  # + Amount for reverse cycle
