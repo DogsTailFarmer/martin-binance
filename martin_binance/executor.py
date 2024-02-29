@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b6"
+__version__ = "2.2.0.b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -75,7 +75,6 @@ class Strategy(StrategyBase):
         self.shift_grid_threshold = None  # - Price level of shift grid threshold for current cycle
         self.f_currency = ''  # - First currency name
         self.s_currency = ''  # - Second currency name
-        self.connection_analytic = None  # - Connection to .db
         self.last_shift_time = None  # +
         self.avg_rate = O_DEC  # - Flow average rate for trading pair
         #
@@ -561,7 +560,7 @@ class Strategy(StrategyBase):
             self.tp_cancel = True
             if not self.cancel_order_id:
                 self.cancel_order_id = self.tp_order_id
-                self.cancel_order_exp(self.tp_order_id)
+                self.cancel_order(self.tp_order_id)
             return
         if self.tp_wait_id:
             # Wait tp order and cancel in on_cancel_order_success and restart
@@ -776,21 +775,6 @@ class Strategy(StrategyBase):
             self.initial_first = ff
             self.initial_second = fs
 
-    def collect_assets(self) -> ():
-        ff, fs, _, _ = self.get_free_assets(mode='free')
-        tcm = self.get_trading_capability_manager()
-        if ff >= f2d(tcm.min_qty):
-            self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.f_currency, any2str(ff))
-        else:
-            ff = O_DEC
-        if fs >= f2d(tcm.min_notional):
-            self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.s_currency, any2str(fs))
-        else:
-            fs = O_DEC
-        return ff, fs
-
     def start_process(self):
         # Init analytic
         if MODE != 'S':
@@ -826,9 +810,6 @@ class Strategy(StrategyBase):
                     self.pr_tlg.start()
                 except AssertionError as error:
                     self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
-
-    def cancel_order_exp(self, order_id: int, cancel_all=False) -> None:
-        self.cancel_order(order_id, cancel_all=cancel_all)
 
     ##############################################################
     # Technical analysis
@@ -946,6 +927,21 @@ class Strategy(StrategyBase):
     ##############################################################
     # supplementary methods
     ##############################################################
+    def collect_assets(self) -> ():
+        ff, fs, _, _ = self.get_free_assets(mode='free')
+        tcm = self.get_trading_capability_manager()
+        if ff >= f2d(tcm.min_qty):
+            self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
+            self.transfer_to_master(self.f_currency, any2str(ff))
+        else:
+            ff = O_DEC
+        if fs >= f2d(tcm.min_notional):
+            self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
+            self.transfer_to_master(self.s_currency, any2str(fs))
+        else:
+            fs = O_DEC
+        return ff, fs
+
     def get_sum_profit(self):
         return self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second, base=False)
 
@@ -1348,7 +1344,7 @@ class Strategy(StrategyBase):
                 # Cancel take profit order, place new
                 self.tp_hold = True
                 self.cancel_order_id = self.tp_order_id
-                self.cancel_order_exp(self.tp_order_id)
+                self.cancel_order(self.tp_order_id)
                 self.message_log('Hold take profit order, replace existing', color=Style.B_WHITE)
             else:
                 buy_side = not self.cycle_buy
@@ -1391,7 +1387,7 @@ class Strategy(StrategyBase):
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=after_error)
         elif self.tp_order_id and self.tp_cancel:
             self.cancel_order_id = self.tp_order_id
-            self.cancel_order_exp(self.tp_order_id)
+            self.cancel_order(self.tp_order_id)
             self.message_log('Try cancel TP, then Start', color=Style.B_WHITE)
 
     def set_trade_conditions(self,
@@ -1925,7 +1921,7 @@ class Strategy(StrategyBase):
                 self.tp_cancel_from_grid_handler = True
                 if not self.cancel_order_id:
                     self.cancel_order_id = self.tp_order_id
-                    self.cancel_order_exp(self.tp_order_id)
+                    self.cancel_order(self.tp_order_id)
                 return
             if self.tp_wait_id:
                 # Wait tp order and cancel in on_cancel_order_success and restart
@@ -2057,7 +2053,7 @@ class Strategy(StrategyBase):
                 if not cancel_all:
                     self.orders_save.orders_list.append(self.orders_grid.get_by_id(_id))
                 self.message_log(f"cancel_grid order: {_id}", log_level=LogLevel.DEBUG)
-                self.cancel_order_exp(_id, cancel_all=cancel_all)
+                self.cancel_order(_id, cancel_all=cancel_all)
             else:
                 self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
                 self.orders_save.orders_list.clear()
@@ -2500,7 +2496,7 @@ class Strategy(StrategyBase):
             self.tp_order_id = order.id
             if self.tp_hold or self.tp_cancel or self.tp_cancel_from_grid_handler:
                 self.cancel_order_id = self.tp_order_id
-                self.cancel_order_exp(self.tp_order_id)
+                self.cancel_order(self.tp_order_id)
             else:
                 # Place next part of grid orders
                 if self.orders_hold and not self.order_q_placed and not self.orders_init:

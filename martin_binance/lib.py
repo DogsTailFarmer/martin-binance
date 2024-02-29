@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b5"
+__version__ = "2.2.0.b7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -12,8 +12,10 @@ import logging
 import time
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN
 from enum import Enum
+from pathlib import Path
 
 import numpy as np
+import ujson as json
 from scipy.optimize import minimize
 
 logger = logging.getLogger('logger')
@@ -73,6 +75,33 @@ def convert_from_minute(m: int) -> str:
     if 4320 <= m < 10080:
         return '3d'
     return '1w' if 10080 <= m < 44640 else '1m'
+
+
+def load_file(name: Path) -> {}:
+    _res = {}
+    if name.exists():
+        try:
+            with name.open() as state_file:
+                _last_state = json.load(state_file)
+        except json.JSONDecodeError as er:
+            print(f"Exception on decode last state file: {er}")
+        else:
+            if _last_state.get('ms_start_time_ms', None):
+                _res = _last_state
+    return _res
+
+
+def load_last_state(last_state_file) -> {}:
+    res = {}
+    if last_state_file.exists():
+        res = load_file(last_state_file)
+        if not res:
+            print("Can't load last state, try load previous saved state")
+            res = load_file(last_state_file.with_suffix('.prev'))
+        if res:
+            with last_state_file.with_suffix('.bak').open(mode='w') as outfile:
+                json.dump(res, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+    return res
 
 
 class LogLevel(Enum):
