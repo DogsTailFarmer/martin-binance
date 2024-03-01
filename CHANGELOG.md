@@ -1,5 +1,11 @@
+## 2.2.x - 2024-02-xx
 ### Fix
+# TODO * `cancel_order_call()`: not raised asyncio.TimeoutError on timeout
 * `on_balance_update_ex()`: don't update direct initial asset values in Reverse cycle
+
+## 2.1.5 - 2024-02-25
+### Fix
+* ModuleNotFoundError: No module named 'optimizer' #73
 
 ### Update
 * Do not send orders if was getting 'FAILED_PRECONDITION' response

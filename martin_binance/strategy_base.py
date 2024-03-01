@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b8"
+__version__ = "2.2.0.b9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -37,7 +37,7 @@ from exchanges_wrapper import api_pb2, api_pb2_grpc
 from google.protobuf import json_format
 from tqdm import tqdm
 
-import martin_binance.params as par
+import martin_binance.params as prm
 from martin_binance import LAST_STATE_PATH, BACKTEST_PATH, HEARTBEAT, KLINES_INIT, EQUAL_STR, ORDER_TIMEOUT
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 from martin_binance.backtest.optimizer import run_optimize, OPTIMIZER, PARAMS_FLOAT
@@ -58,7 +58,7 @@ CHANNEL_OPTIONS = [
 
 RATE_LIMITER = HEARTBEAT * 5
 KLINES_LIM = 50  # Number of candles must be <= 1000
-CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and ms.LOAD_LAST_STATE = 0
+CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and par.LOAD_LAST_STATE = 0
 TRADES_LIST_LIMIT = 50
 TRY_LIMIT = 30
 PYARROW_BATCH_BUFFER_SIZE = 20480  # Rows
@@ -101,18 +101,14 @@ class StrategyBase:
         self.backtest = {}
         self.delay_ordering_s = 0.5
         self.bulk_orders_cancel = {}
-        if par.MODE in ('TC', 'S'):
-            self.session_root = Path(BACKTEST_PATH, f"{self.exchange}_{self.symbol}")
-            self.state_file = Path(self.session_root, "saved_state.json")
-        else:
-            self.session_root = None
-            self.state_file = None
+        self.session_root = None
+        self.state_file = None
         self.operational_status = None
         #
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
-        self.account = backTestAccount(par.SAVE_DS) if par.MODE == 'S' else None
+        self.account = backTestAccount(prm.SAVE_DS) if prm.MODE == 'S' else None
         self.get_buffered_funds_last_time = self.get_time()
-        self.queue_to_tlg = queue.Queue() if par.TOKEN and par.MODE != 'S' else None
+        self.queue_to_tlg = queue.Queue() if prm.TOKEN and prm.MODE != 'S' else None
         self.status_time = None  # + Last time sending status message
         self.tlg_header = ''  # - Header for Telegram message
         self.start_collect = None
@@ -137,10 +133,10 @@ class StrategyBase:
         return self
 
     def reset_backtest_vars(self):
-        self.s_ticker: dict[str, pq.ParquetWriter | list] = {'pylist': []} if par.MODE in ('TC', 'S') else None
-        self.s_order_book: dict[str, pq.ParquetWriter | list] = {'pylist': []} if par.MODE in ('TC', 'S') else None
+        self.s_ticker: dict[str, pq.ParquetWriter | list] = {'pylist': []} if prm.MODE in ('TC', 'S') else None
+        self.s_order_book: dict[str, pq.ParquetWriter | list] = {'pylist': []} if prm.MODE in ('TC', 'S') else None
         self.klines = {}  # KLines snapshot
-        if par.MODE in ('TC', 'S'):
+        if prm.MODE in ('TC', 'S'):
             self.candles = {}
             for i in KLINES_INIT:
                 self.candles.update({f"pylist_{i.value}": []})
@@ -238,7 +234,7 @@ class StrategyBase:
         return last
 
     def transfer_to_master(self, symbol: str, amount: str):
-        if par.MODE in ('T', 'TC'):
+        if prm.MODE in ('T', 'TC'):
             loop.create_task(self.transfer2master(symbol, amount))
 
     def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal) -> int:
@@ -257,19 +253,19 @@ class StrategyBase:
         loop.create_task(self.cancel_order_call(order_id, cancel_all))
 
     def message_log(self, msg: str, log_level=LogLevel.INFO, tlg=False, color=Style.WHITE) -> None:
-        if par.LOGGING:
+        if prm.LOGGING:
             if tlg and color == Style.WHITE:
                 color = Style.B_WHITE
             if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
                 tlg = True
                 color = Style.B_RED
             color_msg = color + msg + Style.RESET if color else msg
-            if log_level not in par.LOG_LEVEL_NO_PRINT:
-                if par.MODE in ('T', 'TC'):
+            if log_level not in prm.LOG_LEVEL_NO_PRINT:
+                if prm.MODE in ('T', 'TC'):
                     print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
                 else:
                     tqdm.write(f"{datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')[:-3]} {color_msg}")
-            if par.MODE in ('T', 'TC'):
+            if prm.MODE in ('T', 'TC'):
                 write_log(log_level, msg)
                 if tlg and self.queue_to_tlg:
                     msg = self.tlg_header + msg
@@ -310,19 +306,19 @@ class StrategyBase:
         ts = time.time()
         restart = False
         while 1:
-            if self.start_collect and time.time() - ts > par.SAVE_PERIOD:
+            if self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
                 self.start_collect = False
                 self.session_data_handler()
                 self.reset_backtest_vars()
-                if par.SELF_OPTIMIZATION and self.command != 'stopped':
+                if prm.SELF_OPTIMIZATION and self.command != 'stopped':
                     _ts = datetime.utcnow()
                     storage_name = Path(self.session_root, "_study.db")
                     try:
                         _res = await run_optimize(
                             OPTIMIZER,
                             f"{self.exchange}_{self.symbol}",
-                            Path(self.session_root, Path(par.PARAMS).name),
-                            str(par.N_TRIALS),
+                            Path(self.session_root, Path(prm.PARAMS).name),
+                            str(prm.N_TRIALS),
                             f"sqlite:///{storage_name}"
                         )
                         _res = orjson.loads(_res)
@@ -338,14 +334,14 @@ class StrategyBase:
                                              f" {_res.pop('new_value')}",
                                              color=Style.B_WHITE, tlg=True)
                             for key, value in _res.items():
-                                self.message_log(f"{key}: {getattr(par, key)} -> {value}")
+                                self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
                                 setattr(
-                                    par, key,
+                                    prm, key,
                                     value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
                                 )
                         self.message_log(
                             f"Strategy parameters are optimal now. Optimization cycle duration"
-                            f" {str(datetime.utcnow() - _ts + timedelta(seconds=par.SAVE_PERIOD)).rsplit('.')[0]}",
+                            f" {str(datetime.utcnow() - _ts + timedelta(seconds=prm.SAVE_PERIOD)).rsplit('.')[0]}",
                             color=Style.B_WHITE, tlg=True
                         )
                         restart = True
@@ -412,7 +408,7 @@ class StrategyBase:
                 self.candles[f"pylist_{i.value}"].clear()
             self.candles[f"writer_{i.value}"].close()
 
-        if par.SAVE_DS:
+        if prm.SAVE_DS:
             # Save session detail for analytics
             session_data = Path(self.session_root, "snapshot")
             session_data.mkdir(parents=True, exist_ok=True)
@@ -445,13 +441,13 @@ class StrategyBase:
         # Test result handler
         s_profit = SESSION_RESULT['profit'] = f"{self.get_sum_profit()}"
         s_free = SESSION_RESULT['free'] = f"{self.get_free_assets(mode='free', backtest=True)[2]}"
-        if par.LOGGING:
+        if prm.LOGGING:
             print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
             test_time = datetime.utcnow() - self.cycle_time
             original_time = (self.backtest['ticker_index_last'] - self.backtest['ticker_index_first']) / 1000
             original_time = timedelta(seconds=original_time)
             print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
-        if par.SAVE_DS:
+        if prm.SAVE_DS:
             self._back_test_handler_ext()
         loop.stop()
 
@@ -470,8 +466,8 @@ class StrategyBase:
         ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
         df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
         df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
-        copy(par.PARAMS, Path(session_path, Path(par.PARAMS).name))
-        if par.LOGGING:
+        copy(prm.PARAMS, Path(session_path, Path(prm.PARAMS).name))
+        if prm.LOGGING:
             print(f"Session data saved to: {session_path}")
 
     def restore_state_before_backtesting(self):
@@ -488,12 +484,12 @@ class StrategyBase:
         while 1:
             try:
                 last_state = self.save_strategy_state()
-                if par.MODE in ('T', 'TC'):
+                if prm.MODE in ('T', 'TC'):
                     self.last_state_update(last_state)
                     # print(f"heartbeat.last_state: {last_state}")
-                    if par.LAST_STATE_FILE.exists():
-                        par.LAST_STATE_FILE.replace(par.LAST_STATE_FILE.with_suffix('.prev'))
-                    with par.LAST_STATE_FILE.open(mode='w') as outfile:
+                    if prm.LAST_STATE_FILE.exists():
+                        prm.LAST_STATE_FILE.replace(prm.LAST_STATE_FILE.with_suffix('.prev'))
+                    with prm.LAST_STATE_FILE.open(mode='w') as outfile:
                         json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     #
                     update_max_queue_size = False
@@ -567,7 +563,7 @@ class StrategyBase:
                 cursor = connection_analytic.cursor()
                 try:
                     cursor.execute('SELECT 1 FROM t_asset WHERE id_exchange=:id_exchange AND use=:use',
-                                   {'id_exchange': par.ID_EXCHANGE, 'use': 1})
+                                   {'id_exchange': prm.ID_EXCHANGE, 'use': 1})
                     main_active = cursor.fetchone()
                     cursor.close()
                 except sqlite3.Error as err:
@@ -595,7 +591,7 @@ class StrategyBase:
                         total = assets_fw.pop(balance['asset'], Decimal('0.0'))
                     else:
                         total = Decimal('0.0')
-                    if balance['asset'] not in (self.base_asset, self.quote_asset) or par.GRID_ONLY:
+                    if balance['asset'] not in (self.base_asset, self.quote_asset) or prm.GRID_ONLY:
                         total += Decimal(balance['free']) + Decimal(balance['locked'])
                     assets[balance['asset']] = float(total)
                 cursor_analytic = connection_analytic.cursor()
@@ -603,7 +599,7 @@ class StrategyBase:
                     cursor_analytic.execute('SELECT id_exchange, currency, value, use, timestamp\
                                              FROM t_asset\
                                              WHERE id_exchange=:id_exchange',
-                                            {'id_exchange': par.ID_EXCHANGE})
+                                            {'id_exchange': prm.ID_EXCHANGE})
                     rows = cursor_analytic.fetchall()
                     cursor_analytic.close()
                 except sqlite3.Error as err:
@@ -616,7 +612,7 @@ class StrategyBase:
                                     FROM t_asset\
                                     WHERE id_exchange=:id_exchange\
                                     and use=:use',
-                                   {'id_exchange': par.ID_EXCHANGE, 'use': 0})
+                                   {'id_exchange': prm.ID_EXCHANGE, 'use': 0})
                     for row in rows:
                         if row[1] in (self.base_asset, self.quote_asset) and main_active == (1,):
                             amount = float(assets.pop(row[1], 0))
@@ -624,10 +620,10 @@ class StrategyBase:
                                             WHERE id_exchange=:id_exchange\
                                             and currency=:currency',
                                            {
-                                               'value': amount if par.GRID_ONLY else 0,
+                                               'value': amount if prm.GRID_ONLY else 0,
                                                'timestamp': int(time.time()),
                                                'use': 1,
-                                               'id_exchange': par.ID_EXCHANGE,
+                                               'id_exchange': prm.ID_EXCHANGE,
                                                'currency': row[1]}
                                            )
                         elif row[3]:
@@ -636,17 +632,17 @@ class StrategyBase:
                                 cursor.execute('DELETE FROM t_asset\
                                                 WHERE id_exchange=:id_exchange\
                                                 and currency=:currency',
-                                               {'id_exchange': par.ID_EXCHANGE, 'currency': row[1]})
+                                               {'id_exchange': prm.ID_EXCHANGE, 'currency': row[1]})
                             assets.pop(row[1], None)
                     if assets:
                         for key, value in assets.items():
                             use = 1 if key in (self.base_asset, self.quote_asset) else 0
                             cursor.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
-                                           (par.ID_EXCHANGE, key, value, use, int(time.time())))
+                                           (prm.ID_EXCHANGE, key, value, use, int(time.time())))
                     if assets_fw:
                         for key, value in assets_fw.items():
                             cursor.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
-                                           (par.ID_EXCHANGE, key, float(value), 0, int(time.time())))
+                                           (prm.ID_EXCHANGE, key, float(value), 0, int(time.time())))
                     cursor.execute('COMMIT')
                     cursor.close()
                 except sqlite3.Error as err:
@@ -658,14 +654,14 @@ class StrategyBase:
     async def ask_exit(self):
         self.message_log("Got signal for exit", color=Style.MAGENTA)
         self.operational_status = False
-        if par.MODE in ('T', 'TC'):
+        if prm.MODE in ('T', 'TC'):
             await asyncio.sleep(HEARTBEAT)
             try:
                 await self.send_request(self.stub.StopStream, api_pb2.MarketRequest, symbol=self.symbol)
             except Exception as ex:
                 logger.warning(f"ask_exit: {ex}")
 
-            if par.MODE == 'TC' and self.start_collect:
+            if prm.MODE == 'TC' and self.start_collect:
                 # Save stream data for backtesting
                 self.start_collect = False
                 self.session_data_handler()
@@ -673,15 +669,15 @@ class StrategyBase:
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
         await asyncio.gather(*tasks, return_exceptions=True)
-        if par.LOGGING:
+        if prm.LOGGING:
             print(f"Cancelling {len(tasks)} outstanding tasks")
         try:
             self.stop()
         except Exception as _err:
             print(f"ask_exit.strategy.stop: {_err}")
         await self.channel.close()
-        if par.MODE in ('T', 'TC') and par.LAST_STATE_FILE.exists():
-            print(f"Current state saved into {par.LAST_STATE_FILE}")
+        if prm.MODE in ('T', 'TC') and prm.LAST_STATE_FILE.exists():
+            print(f"Current state saved into {prm.LAST_STATE_FILE}")
 
     async def fetch_order(self, _id: int, _client_order_id: str = None, _filled_update_call=False):
         try:
@@ -708,7 +704,7 @@ class StrategyBase:
             return {}
 
     async def on_funds_update(self):
-        if par.MODE in ('T', 'TC'):
+        if prm.MODE in ('T', 'TC'):
             try:
                 async for _funds in self.for_request(
                         self.stub.OnFundsUpdate, api_pb2.OnFundsUpdateRequest,
@@ -753,7 +749,7 @@ class StrategyBase:
                     delay = index - self.get_time()
 
                 if delay > 0:
-                    delay /= par.XTIME
+                    delay /= prm.XTIME
                     await asyncio.sleep(delay)
                 yield orjson.loads(row['row'])
         if ticker:
@@ -782,7 +778,7 @@ class StrategyBase:
             self.canceled_order_id.remove(_id)
         _fetch_order = False
         try:
-            if par.MODE in ('T', 'TC'):
+            if prm.MODE in ('T', 'TC'):
                 if cancel_all:
                     if _id not in self.bulk_orders_cancel:
                         res = await asyncio.wait_for(
@@ -846,9 +842,9 @@ class StrategyBase:
             self.message_log(f"Cancel order {_id} success", color=Style.GREEN)
         self.remove_from_orders_lists([_id])
         self.on_cancel_order_success(_id, cancel_all=cancel_all)
-        if par.MODE == 'TC' and par.SAVE_DS and self.start_collect:
+        if prm.MODE == 'TC' and prm.SAVE_DS and self.start_collect:
             self.open_orders_snapshot()
-        elif par.MODE == 'S':
+        elif prm.MODE == 'S':
             await self.on_funds_update()
     
     async def cancel_order_timeout(self, _id):
@@ -881,7 +877,7 @@ class StrategyBase:
 
     async def buffered_funds(self, print_info: bool = True):
         try:
-            if par.MODE in ('T', 'TC'):
+            if prm.MODE in ('T', 'TC'):
                 res = await self.send_request(self.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
                 balances = json_format.MessageToDict(res).get('balances', [])
             else:
@@ -902,7 +898,7 @@ class StrategyBase:
             funds = {self.base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
                      self.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
             self.funds = funds
-            if print_info and par.LOGGING:
+            if print_info and prm.LOGGING:
                 print(EQUAL_STR)
                 print(f"Base asset balance: {balance_f}")
                 print(f"Quote asset balance: {balance_s}")
@@ -933,17 +929,17 @@ class StrategyBase:
                 self.message_log(f"Exception get_exchange_info: {_ex}")
             else:
                 self.info_symbol = json_format.MessageToDict(_exchange_info_symbol)
-                self.tcm = TradingCapabilityManager(self.info_symbol, par.PRICE_LIMIT_RULES)
+                self.tcm = TradingCapabilityManager(self.info_symbol, prm.PRICE_LIMIT_RULES)
             await asyncio.sleep(600)
 
     async def buffered_candle(self):
         Klines.klines_lim = KLINES_LIM
         klines = {}
         klines_from_file = {}
-        if par.MODE == 'S':
+        if prm.MODE == 'S':
             klines_from_file = json.load(open(Path(self.session_root, "raw/klines.json")))
         for i in KLINES_INIT:
-            if par.MODE in ('T', 'TC'):
+            if prm.MODE in ('T', 'TC'):
                 try:
                     res = await self.send_request(
                         self.stub.FetchKlines, api_pb2.FetchKlinesRequest,
@@ -956,7 +952,7 @@ class StrategyBase:
                     logger.warning(f"FetchKlines: {ex}")
                 else:
                     kline = json_format.MessageToDict(res)
-                    if par.MODE == 'TC' and (self.start_collect or self.start_collect is None):
+                    if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         self.klines[i.value] = kline
             else:
                 kline = klines_from_file.get(i.value, {})
@@ -977,14 +973,14 @@ class StrategyBase:
     
     async def on_klines_update(self, _klines: {str: Klines}):
         _intervals = list(_klines.keys())
-        if par.MODE in ('T', 'TC'):
+        if prm.MODE in ('T', 'TC'):
             try:
                 async for res in self.for_request(self.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
                                                   symbol=self.symbol,
                                                   interval=json.dumps(_intervals)):
                     candle = json.loads(res.candle)
                     _klines.get(res.interval).refresh(candle)
-                    if par.MODE == 'TC' and (self.start_collect or self.start_collect is None):
+                    if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         if len(self.candles[f"pylist_{res.interval}"]) > PYARROW_BATCH_BUFFER_SIZE:
                             self.candles[f"writer_{res.interval}"].write_batch(
                                 pa.RecordBatch.from_pylist(mapping=self.candles[f"pylist_{res.interval}"])
@@ -1006,7 +1002,7 @@ class StrategyBase:
         self.wait_order_id.append(_id)
         _fetch_order = False
         try:
-            if par.MODE in ('T', 'TC'):
+            if prm.MODE in ('T', 'TC'):
                 ts = time.time()
                 res = await self.send_request(
                     self.stub.CreateLimitOrder, api_pb2.CreateLimitOrderRequest,
@@ -1019,7 +1015,7 @@ class StrategyBase:
                 result = json_format.MessageToDict(res)
                 self.delay_ordering_s = time.time() - ts
             else:
-                await asyncio.sleep(self.delay_ordering_s / par.XTIME)
+                await asyncio.sleep(self.delay_ordering_s / prm.XTIME)
                 result = self.account.create_order(
                     symbol=self.symbol,
                     client_order_id=str(_id),
@@ -1065,9 +1061,9 @@ class StrategyBase:
                 color=Style.GREEN)
             self.orders[order.id] = order
     
-            if par.MODE == 'S':
+            if prm.MODE == 'S':
                 await self.on_funds_update()
-            elif par.MODE == 'TC' and self.start_collect:
+            elif prm.MODE == 'TC' and self.start_collect:
                 executed_qty = Decimal(result['executedQty'])
                 cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
                 if executed_qty > 0 and self.s_ticker['pylist']:
@@ -1076,7 +1072,7 @@ class StrategyBase:
                     s_tic_row['lastPrice'] = str(cummulative_quote_qty / executed_qty)
                     s_tic['row'] = orjson.dumps(s_tic_row)
                     self.s_ticker['pylist'].append(s_tic)
-                if par.SAVE_DS:
+                if prm.SAVE_DS:
                     self.open_orders_snapshot()
     
             self.on_place_order_success(_id, order)
@@ -1154,12 +1150,12 @@ class StrategyBase:
         if ed['order_status'] == 'FILLED':
             # Remove from orders dict
             self.remove_from_orders_lists([ed['order_id']])
-            if par.MODE == 'TC' and self.start_collect and self.s_ticker['pylist']:
+            if prm.MODE == 'TC' and self.start_collect and self.s_ticker['pylist']:
                 s_tic = self.s_ticker['pylist'].pop()
                 s_tic_row = orjson.loads(s_tic['row'])
                 s_tic_row['lastPrice'] = ed['last_executed_price']
                 s_tic['row'] = orjson.dumps(s_tic_row)
-                if par.SAVE_DS:
+                if prm.SAVE_DS:
                     self.open_orders_snapshot()
         elif ed['order_status'] == 'PARTIALLY_FILLED':
             # Update order in orders dict
@@ -1199,7 +1195,7 @@ class StrategyBase:
         row = {'openPrice': '26923.97000000', 'lastPrice': '26882.51000000', 'closeTime': 1684572464013}
         :return:
         """
-        if par.MODE in ('T', 'TC'):
+        if prm.MODE in ('T', 'TC'):
             try:
                 async for ticker in self.for_request(
                         self.stub.OnTickerUpdate,
@@ -1213,7 +1209,7 @@ class StrategyBase:
                     # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                     self.on_new_ticker(Ticker(self.ticker))
                     #
-                    if par.MODE == 'TC' and self.start_collect:
+                    if prm.MODE == 'TC' and self.start_collect:
                         ts = int(time.time() * 1000)
                         if len(self.s_ticker['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
                             self.s_ticker['writer'].write_batch(
@@ -1223,14 +1219,14 @@ class StrategyBase:
                         ticker_24h['delay'] = self.delay_ordering_s
                         # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
                         self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(ticker_24h)})
-                        if par.SAVE_DS:
+                        if prm.SAVE_DS:
                             self.open_orders_snapshot(ts=ts)
             except Exception as ex:
                 logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
                 logger.debug(f"Exception traceback: {traceback.format_exc()}")
                 self.wss_fire_up = True
         else:
-            if par.LOGGING:
+            if prm.LOGGING:
                 pbar = tqdm(total=self.backtest['ticker'].metadata.num_rows)
             async for row in self.loop_ds(self.backtest['ticker'], ticker=True):
                 self.delay_ordering_s = row.pop('delay', 0)
@@ -1240,16 +1236,16 @@ class StrategyBase:
                 for _res in res:
                     await self.on_order_update_handler(_res)
                     await self.on_funds_update()
-                if par.LOGGING:
+                if prm.LOGGING:
                     # noinspection PyUnboundLocalVariable
                     pbar.update()
-            if par.LOGGING:
+            if prm.LOGGING:
                 pbar.close()
             self.message_log("Backtest *** ticker *** timeSeries ended")
             self.back_test_handler()
 
     async def on_order_book_update(self):
-        if par.MODE in ('T', 'TC'):
+        if prm.MODE in ('T', 'TC'):
             try:
                 async for _order_book in self.for_request(
                         self.stub.OnOrderBookUpdate,
@@ -1259,7 +1255,7 @@ class StrategyBase:
                     order_book = order_book_prepare(_order_book)
                     self.order_book = order_book
                     self.on_new_order_book(OrderBook(self.order_book))
-                    if par.MODE == 'TC' and self.start_collect:
+                    if prm.MODE == 'TC' and self.start_collect:
                         order_book['bids'] = order_book['bids'][:1]
                         order_book['asks'] = order_book['asks'][:1]
                         if len(self.s_order_book['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
@@ -1333,7 +1329,7 @@ class StrategyBase:
                         if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                             await self.cancel_order_handler(_id, cancel_all=False)
     
-                if self.last_state and par.MODE == 'TC':
+                if self.last_state and prm.MODE == 'TC':
                     last_state = self.save_strategy_state(return_only=True)
                     self.last_state_update(last_state)
                     with self.state_file.open(mode='w') as outfile:
@@ -1377,12 +1373,12 @@ class StrategyBase:
         loop.create_task(self.on_ticker_update())
         await self.buffered_candle()
         loop.create_task(self.on_order_book_update())
-        if par.MODE in ('T', 'TC'):
+        if prm.MODE in ('T', 'TC'):
             # User Stream
             loop.create_task(self.on_funds_update())
             loop.create_task(self.on_order_update())
             loop.create_task(self.on_balance_update())
-            if par.MODE == 'TC':
+            if prm.MODE == 'TC':
                 loop.create_task(self.backtest_control())
 
     async def wss_init(self, update_max_queue_size=False):
@@ -1417,10 +1413,10 @@ class StrategyBase:
         try:
             if self.session is None:
                 self.symbol = _symbol
-                if len(par.EXCHANGE) > par.ID_EXCHANGE:
-                    account_name = par.EXCHANGE[par.ID_EXCHANGE]
+                if len(prm.EXCHANGE) > prm.ID_EXCHANGE:
+                    account_name = prm.EXCHANGE[prm.ID_EXCHANGE]
                 else:
-                    print(f"ID_EXCHANGE = {par.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
+                    print(f"ID_EXCHANGE = {prm.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
                     raise SystemExit(1)
                 session = Trade(channel_options=CHANNEL_OPTIONS,
                                 account_name=account_name,
@@ -1432,13 +1428,13 @@ class StrategyBase:
                 await session.get_client()
                 self.update_vars(session)
                 send_request = session.send_request
-                if par.LOGGING:
+                if prm.LOGGING:
                     print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
                     print(f"main.exchange: {self.exchange}")
                     print(f"main.client_id: {self.client_id}")
                     print(f"main.srv_version: {session.client.srv_version}")
                 #
-                if par.MODE in ('T', 'TC'):
+                if prm.MODE in ('T', 'TC'):
                     # Check and Cancel ALL ACTIVE ORDER
                     try:
                         _active_orders = await send_request(
@@ -1452,10 +1448,10 @@ class StrategyBase:
                         active_orders = json_format.MessageToDict(_active_orders).get('items', [])
                         # print(f"main.active_orders: {active_orders}")
                     # Try load last strategy state from saved files
-                    last_state = load_last_state(par.LAST_STATE_FILE)
+                    last_state = load_last_state(prm.LAST_STATE_FILE)
                     restore_state = bool(last_state)
                     print(f"main.restore_state: {restore_state}")
-                    if CANCEL_ALL_ORDERS and active_orders and not par.LOAD_LAST_STATE:
+                    if CANCEL_ALL_ORDERS and active_orders and not prm.LOAD_LAST_STATE:
                         answer = input('Are you want cancel all active order for this pair? Y:\n')
                         if answer.lower() == 'y':
                             restore_state = False
@@ -1483,14 +1479,14 @@ class StrategyBase:
                 while not self.info_symbol:
                     await asyncio.sleep(0.1)
                 # print("\n".join(f"{k}\t{v}" for k, v in self.info_symbol.items()))
-                if par.LOGGING:
+                if prm.LOGGING:
                     filters = self.info_symbol.get('filters')
                     for _filter in filters:
                         print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
                 # init Strategy class var
                 self.base_asset = self.info_symbol.get('baseAsset')
                 self.quote_asset = self.info_symbol.get('quoteAsset')
-                if par.MODE in ('T', 'TC'):
+                if prm.MODE in ('T', 'TC'):
                     # region Get and processing Order book
                     _order_book = await self.send_request(
                         self.stub.FetchOrderBook,
@@ -1516,23 +1512,24 @@ class StrategyBase:
                                                       symbol=_symbol)
                     self.ticker = json_format.MessageToDict(_ticker)
                     # Save first order_book and ticker raw's
-                    if par.MODE == 'TC':
+                    if prm.MODE == 'TC':
                         ts = int(time.time() * 1000)
                         self.s_order_book['pylist'].append({"key": ts, "row": orjson.dumps(self.order_book)})
                         self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(self.ticker)})
                     #
                     loop.create_task(self.save_asset())
-
                 #
-                if par.MODE in ('TC', 'S'):
+                if prm.MODE in ('TC', 'S'):
+                    self.session_root = Path(BACKTEST_PATH, f"{self.exchange}_{self.symbol}")
+                    self.state_file = Path(self.session_root, "saved_state.json")
                     raw_path = Path(self.session_root, "raw")
-                    if par.MODE == 'TC':
+                    if prm.MODE == 'TC':
                         BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
                         rmtree(self.session_root, ignore_errors=True)
                         self.session_root.mkdir(parents=True, exist_ok=True)
                         raw_path.mkdir(parents=True, exist_ok=True)
                         #
-                        copy(par.PARAMS, Path(self.session_root, Path(par.PARAMS).name))
+                        copy(prm.PARAMS, Path(self.session_root, Path(prm.PARAMS).name))
                         self.parquet_declare(raw_path)
             #
             else:
@@ -1540,19 +1537,19 @@ class StrategyBase:
                 raw_path = Path(self.session_root, "raw")
                 self.reset_vars()
             #
-            if par.MODE == 'S':
+            if prm.MODE == 'S':
                 self.account.funds.base = {
                     'asset': self.base_asset,
-                    'free': par.AMOUNT_FIRST,
+                    'free': prm.AMOUNT_FIRST,
                     'locked': Decimal()
                 }
                 self.account.funds.quote = {
                     'asset': self.quote_asset,
-                    'free': par.AMOUNT_SECOND,
+                    'free': prm.AMOUNT_SECOND,
                     'locked': Decimal()
                 }
-                self.account.fee_maker = par.FEE_MAKER
-                self.account.fee_taker = par.FEE_TAKER
+                self.account.fee_maker = prm.FEE_MAKER
+                self.account.fee_taker = prm.FEE_TAKER
                 # ticker
                 # noinspection PyUnboundLocalVariable
                 self.backtest['ticker'] = pq.ParquetFile(Path(raw_path, TICKER_PRKT))
@@ -1575,9 +1572,9 @@ class StrategyBase:
                 if last_state.get("command", None) == '"stopped"':
                     input('Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n')
                     last_state["command"] = 'null'
-                if not par.LOAD_LAST_STATE:
+                if not prm.LOAD_LAST_STATE:
                     answer = input('Restore saved state after restart? Y:\n')
-                if par.LOAD_LAST_STATE or answer.lower() == 'y':
+                if prm.LOAD_LAST_STATE or answer.lower() == 'y':
                     self.last_state = last_state
                     try:
                         self.message_log("Load saved state after restart", color=Style.GREEN)
@@ -1608,10 +1605,10 @@ class StrategyBase:
                     except Exception as ex:
                         print(f"Strategy init error: {ex}")
                         restored = False
-            if par.MODE in ('T', 'TC'):
+            if prm.MODE in ('T', 'TC'):
                 loop.create_task(self.buffered_orders())
-            if not restore_state or (not par.LOAD_LAST_STATE and answer.lower() != 'y'):
-                if par.MODE in ('T', 'TC'):
+            if not restore_state or (not prm.LOAD_LAST_STATE and answer.lower() != 'y'):
+                if prm.MODE in ('T', 'TC'):
                     self.init()
                     input('Press Enter for Start or Ctrl-Z for Cancel\n')
                     print('Waiting for WSS to initialize...')
@@ -1733,7 +1730,7 @@ async def save_to_csv() -> None:
              ]
     :return:
     """
-    file_name = Path(LAST_STATE_PATH, f"{par.ID_EXCHANGE}_{par.SYMBOL}.csv")
+    file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
     with open(file_name, mode="a", buffering=1, newline='') as csvfile:
         writer = csv.writer(csvfile)
         while 1:
@@ -1742,7 +1739,7 @@ async def save_to_csv() -> None:
 
 
 def load_from_csv() -> []:
-    file_name = Path(LAST_STATE_PATH, f"{par.ID_EXCHANGE}_{par.SYMBOL}.csv")
+    file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
     trades = []
     if file_name.exists() and file_name.stat().st_size:
         row_count = len(pd.read_csv(file_name, usecols=[0]).index)

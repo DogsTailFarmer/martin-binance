@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b7"
+__version__ = "2.2.0.b9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -86,41 +86,41 @@ class Strategy(StrategyBase):
         self.initial_reverse_second = O_DEC  # + Use if balance replenishment delay
         self.wait_refunding_for_start = False  # -
         #
-        self.cancel_order_id = None  # - Exist canceled not confirmed order
         self.cancel_grid_order_id = None  # - id individual canceled grid order
-        self.over_price = None  # + Adaptive over price
+        self.cancel_order_id = None  # - Exist canceled not confirmed order
+        self.cycle_status = ()  # - Operational status for current cycle, orders count
+        self.cycle_time_reverse = None  # + Reverse cycle start time
+        self.first_run = True  # -
+        self.grid_only_restart = None  # -
         self.grid_place_flag = False  # - Flag when placed next part of grid orders
-        self.start_after_shift = False  # - Flag set before shift, clear after place grid
-        self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
+        self.grid_remove = None  # - Flag when starting cancel grid orders
+        self.grid_update_started = None  # - Flag when grid update process started
+        self.heartbeat_counter = 0  # -
+        self.last_ticker_update = 0  # -
+        self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
+        self.order_q = None  # + Adaptive order quantity
+        self.order_q_placed = False  # - Flag initial number of orders placed
+        self.over_price = None  # + Adaptive over price
         self.pr_db = None  # - Process for save data to .db
         self.pr_tlg = None  # - Process for sending message to Telegram
         self.pr_tlg_control = None  # - Process for get command from Telegram
-        self.restart = None  # - Set after execute take profit order and restart cycle
         self.profit_first = O_DEC  # + Cycle profit
         self.profit_second = O_DEC  # + Cycle profit
-        self.cycle_time_reverse = None  # + Reverse cycle start time
+        self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
+        self.restart = None  # - Set after execute take profit order and restart cycle
         self.reverse = REVERSE  # + Current cycle is Reverse
-        self.reverse_target_amount = REVERSE_TARGET_AMOUNT if REVERSE else O_DEC  # + Amount for reverse cycle
-        self.reverse_init_amount = REVERSE_INIT_AMOUNT if REVERSE else O_DEC  # + Actual amount of initial cycle
         self.reverse_hold = False  # + Exist unreleased reverse state
+        self.reverse_init_amount = REVERSE_INIT_AMOUNT if REVERSE else O_DEC  # + Actual amount of initial cycle
         self.reverse_price = None  # + Price when execute last grid order and hold reverse cycle
+        self.reverse_target_amount = REVERSE_TARGET_AMOUNT if REVERSE else O_DEC  # + Amount for reverse cycle
+        self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
         self.round_base = '1.0123456789'  # - Round pattern for 0.00000 = 0.00
         self.round_quote = '1.0123456789'  # - Round pattern for 0.00000 = 0.00
-        self.order_q = None  # + Adaptive order quantity
-        self.order_q_placed = False  # - Flag initial number of orders placed
-        self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
-        self.first_run = True  # -
-        self.grid_remove = None  # - Flag when starting cancel grid orders
-        self.heartbeat_counter = 0  # -
-        self.cycle_status = ()  # - Operational status for current cycle, orders count
-        self.grid_update_started = None  # - Flag when grid update process started
+        self.start_after_shift = False  # - Flag set before shift, clear after place grid
         self.start_reverse_time = None  # -
-        self.last_ticker_update = 0  # -
-        self.grid_only_restart = None  # -
-        self.wait_wss_refresh = {}  # -
-        self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
-        self.ts_grid_update = self.get_time()  # - When updated grid
         self.tp_part_free = False  # + Can use TP part amount for converting to grid orders
+        self.ts_grid_update = self.get_time()  # - When updated grid
+        self.wait_wss_refresh = {}  # -
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
