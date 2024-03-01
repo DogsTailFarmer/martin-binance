@@ -1,3 +1,6 @@
+### Fix
+* `on_balance_update_ex()`: don't update direct initial asset values in Reverse cycle
+
 ### Update
 * Do not send orders if was getting 'FAILED_PRECONDITION' response
 * Do not started Telegram control process for Simulate mode or if bot id is not setting

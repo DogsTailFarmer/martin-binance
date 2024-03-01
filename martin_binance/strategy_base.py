@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b7"
+__version__ = "2.2.0.b8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -13,6 +13,7 @@ import asyncio
 import csv
 import logging
 import queue
+import os
 import random
 import sqlite3
 import time
@@ -42,7 +43,7 @@ from martin_binance.backtest.exchange_simulator import Account as backTestAccoun
 from martin_binance.backtest.optimizer import run_optimize, OPTIMIZER, PARAMS_FLOAT
 from martin_binance.client import Trade
 from martin_binance.lib import Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, LogLevel, \
-    any2str, PrivateTrade, Order, convert_from_minute, write_log, OrderUpdate, load_file, load_last_state
+    any2str, PrivateTrade, Order, convert_from_minute, write_log, OrderUpdate, load_file, load_last_state, Klines
 
 logger = logging.getLogger('logger')
 loop = asyncio.get_event_loop()
@@ -71,33 +72,6 @@ SESSION_RESULT = {}
 
 
 class StrategyBase:
-    class Klines:
-        klines_series = {}
-        klines_lim = int()
-
-        def __init__(self, _interval):
-            self.interval = _interval
-            self.kline = []
-            self.klines_series[_interval] = self.kline
-
-        def refresh(self, _candle):
-            candle = Candle(_candle)
-            # print(f"refresh.interval: {self.interval}, candle: {candle.min_time}")
-            new_time = candle.min_time
-            last_time = self.kline[-1].min_time if self.kline else 0
-            if new_time >= last_time:
-                if new_time == last_time:
-                    self.kline[-1] = candle
-                else:
-                    self.kline.append(candle)
-                    if len(self.kline) > self.klines_lim:
-                        del self.kline[0]
-                self.klines_series[self.interval] = self.kline
-
-        @classmethod
-        def get_kline(cls, _interval) -> []:
-            return cls.klines_series.get(_interval, [])
-
     def __init__(self):
         self.session = None
         self.client: api_pb2.OpenClientConnectionId = None
@@ -130,6 +104,9 @@ class StrategyBase:
         if par.MODE in ('TC', 'S'):
             self.session_root = Path(BACKTEST_PATH, f"{self.exchange}_{self.symbol}")
             self.state_file = Path(self.session_root, "saved_state.json")
+        else:
+            self.session_root = None
+            self.state_file = None
         self.operational_status = None
         #
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
@@ -236,10 +213,14 @@ class StrategyBase:
     def get_buffered_open_order(self, _id) -> Order:
         return self.orders.get(_id)
 
-    def get_buffered_recent_candles(self, candle_size_in_minutes: int, number_of_candles: int = 50,
-                                    include_current_building_candle: bool = False) -> List[Candle]:
+    @staticmethod
+    def get_buffered_recent_candles(
+            candle_size_in_minutes: int,
+            number_of_candles: int = 50,
+            include_current_building_candle: bool = False
+    ) -> List[Candle]:
         size = convert_from_minute(candle_size_in_minutes)
-        kline = self.Klines.get_kline(size)
+        kline = Klines.get_kline(size)
         if len(kline) > number_of_candles + 1:
             return kline[-number_of_candles - (0 if include_current_building_candle else 1):
                          None if include_current_building_candle else -1]
@@ -826,6 +807,7 @@ class StrategyBase:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error.
         except asyncio.TimeoutError:
+            # TODO timeout event not raised exception
             _fetch_order = True
             self.message_log(f"Timeout on cancel order {_id}")
         except grpc.RpcError as ex:
@@ -955,7 +937,7 @@ class StrategyBase:
             await asyncio.sleep(600)
 
     async def buffered_candle(self):
-        self.Klines.klines_lim = KLINES_LIM
+        Klines.klines_lim = KLINES_LIM
         klines = {}
         klines_from_file = {}
         if par.MODE == 'S':
@@ -980,7 +962,7 @@ class StrategyBase:
                 kline = klines_from_file.get(i.value, {})
     
             if candles := kline.get('klines'):
-                kline_i = self.Klines(i.value)
+                kline_i = Klines(i.value)
                 for candle in candles:
                     kline_i.refresh(json.loads(candle))
                     # print(f"buffered_candle.candle: {candle}")

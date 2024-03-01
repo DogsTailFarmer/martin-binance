@@ -2235,9 +2235,10 @@ class Strategy(StrategyBase):
                         self.deposit_second += delta
                     self.initial_second += delta
             elif asset == self.f_currency and not GRID_ONLY:
-                self.initial_first += delta
                 if self.reverse:
                     self.initial_reverse_first += delta
+                else:
+                    self.initial_first += delta
         else:
             if asset == self.f_currency:
                 restart = True
@@ -2254,9 +2255,10 @@ class Strategy(StrategyBase):
                         self.deposit_first += delta
                     self.initial_first += delta
             elif asset == self.s_currency and not GRID_ONLY:
-                self.initial_second += delta
                 if self.reverse:
                     self.initial_reverse_second += delta
+                else:
+                    self.initial_second += delta
         self.message_log(f"Was {'depositing' if delta > 0 else 'transferring (withdrawing)'} {delta} {asset}",
                          color=Style.UNDERLINE, tlg=True)
         if (self.grid_only_restart or (GRID_ONLY and USE_ALL_FUND)) and restart:

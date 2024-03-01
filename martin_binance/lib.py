@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b7"
+__version__ = "2.2.0.b8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -339,7 +339,7 @@ class OrderUpdate:
 class Order:
     __slots__ = ("amount", "buy", "id", "order_type", "price", "received_amount", "remaining_amount", "timestamp")
 
-    def __init__(self, order: {}) -> None:
+    def __init__(self, order: {}):
         # Overall amount of the order.
         self.amount = Decimal(order['origQty'])
         # True if the order is a buy order.
@@ -368,7 +368,7 @@ class Order:
 class Candle:
     __slots__ = ("min_time", "open", "high", "low", "close", "volume", "max_time", "trade_number", "vwap")
 
-    def __init__(self, _candle: []) -> None:
+    def __init__(self, _candle: []):
         # Start time of the candle.
         self.min_time = int(_candle[0])
         # Price of the first trade in the candle.
@@ -532,3 +532,32 @@ class OrderBook:
 
     def __call__(self):
         return self
+
+
+class Klines:
+    klines_series = {}
+    klines_lim = int()
+
+    def __init__(self, _interval):
+        self.interval = _interval
+        self.kline = []
+        self.klines_series[_interval] = self.kline
+
+    def refresh(self, _candle):
+        candle = Candle(_candle)
+        # print(f"refresh.interval: {self.interval}, candle: {candle.min_time}")
+        new_time = candle.min_time
+        last_time = self.kline[-1].min_time if self.kline else 0
+        if new_time >= last_time:
+            if new_time == last_time:
+                self.kline[-1] = candle
+            else:
+                self.kline.append(candle)
+                if len(self.kline) > self.klines_lim:
+                    del self.kline[0]
+            self.klines_series[self.interval] = self.kline
+
+    @classmethod
+    def get_kline(cls, _interval) -> []:
+        return cls.klines_series.get(_interval, [])
+
