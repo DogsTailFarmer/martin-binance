@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc1"
+__version__ = "3.0.0rc2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -29,7 +29,7 @@ STRATEGY = None
 
 
 def notify_exception(*args):
-    pass
+    pass  # Supress message from sys.excepthook
 
 
 def any2str(_x) -> str:

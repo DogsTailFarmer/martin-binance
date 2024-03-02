@@ -13,7 +13,6 @@ import asyncio
 import csv
 import logging
 import queue
-import os
 import random
 import sqlite3
 import time
@@ -1338,7 +1337,7 @@ class StrategyBase:
                 diff_id.clear()
                 self.last_state = None
                 restore = False
-    
+
             except asyncio.CancelledError:
                 # print("buffered_orders.Cancelled")
                 self.operational_status = False
@@ -1633,11 +1632,10 @@ class StrategyBase:
             if restored:
                 loop.create_task(self.heartbeat(self.session))
                 loop.create_task(save_to_csv())
-        except (KeyboardInterrupt, SystemExit):
-            # noinspection PyProtectedMember, PyUnresolvedReferences
-            os._exit(1)
+        except SystemExit as e:
+            raise e
 
-    #
+    # region AbstractMethod
     @abstractmethod
     def restore_state_before_backtesting_ex(self, *args):
         pass
@@ -1705,6 +1703,8 @@ class StrategyBase:
     @abstractmethod
     def init(self, *args, **kwargs):
         pass
+
+    # endregion
 
 
 async def save_to_csv() -> None:
