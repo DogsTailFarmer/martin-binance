@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b6"
+__version__ = "2.2.0.b10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -37,7 +37,7 @@ def try_trade(mbs, skip_log, **kwargs):
     mbs.ex.SAVE_DS = False
     mbs.ex.LOGGING = not skip_log
     mbs.trade()
-    return float(mbs.SESSION_RESULT.get('profit', 0)) + float(mbs.SESSION_RESULT.get('free', 0))
+    return float(mbs.ex.SESSION_RESULT.get('profit', 0)) + float(mbs.ex.SESSION_RESULT.get('free', 0))
 
 
 def optimize(study_name, strategy, n_trials, storage_name=None, skip_log=True, show_progress_bar=False):

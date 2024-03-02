@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b9"
+__version__ = "2.2.0.b10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -68,7 +68,6 @@ MS_ORDER_ID = 'ms.order_id'
 MS_ORDERS = 'ms.orders'
 O_DEC = Decimal()
 SAVE_TRADE_QUEUE = asyncio.Queue()
-SESSION_RESULT = {}
 
 
 class StrategyBase:
@@ -439,8 +438,8 @@ class StrategyBase:
 
     def back_test_handler(self):
         # Test result handler
-        s_profit = SESSION_RESULT['profit'] = f"{self.get_sum_profit()}"
-        s_free = SESSION_RESULT['free'] = f"{self.get_free_assets(mode='free', backtest=True)[2]}"
+        s_profit = prm.SESSION_RESULT['profit'] = f"{self.get_sum_profit()}"
+        s_free = prm.SESSION_RESULT['free'] = f"{self.get_free_assets(mode='free', backtest=True)[2]}"
         if prm.LOGGING:
             print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
             test_time = datetime.utcnow() - self.cycle_time
@@ -1418,21 +1417,21 @@ class StrategyBase:
                 else:
                     print(f"ID_EXCHANGE = {prm.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
                     raise SystemExit(1)
-                session = Trade(channel_options=CHANNEL_OPTIONS,
-                                account_name=account_name,
-                                rate_limiter=self.rate_limiter,
-                                symbol=_symbol)
+                self.session = Trade(
+                    channel_options=CHANNEL_OPTIONS,
+                    account_name=account_name,
+                    rate_limiter=self.rate_limiter,
+                    symbol=_symbol
+                )
                 #
-                self.session = session
-                #
-                await session.get_client()
-                self.update_vars(session)
-                send_request = session.send_request
+                await self.session.get_client()
+                self.update_vars(self.session)
+                send_request = self.session.send_request
                 if prm.LOGGING:
                     print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
                     print(f"main.exchange: {self.exchange}")
                     print(f"main.client_id: {self.client_id}")
-                    print(f"main.srv_version: {session.client.srv_version}")
+                    print(f"main.srv_version: {self.session.client.srv_version}")
                 #
                 if prm.MODE in ('T', 'TC'):
                     # Check and Cancel ALL ACTIVE ORDER

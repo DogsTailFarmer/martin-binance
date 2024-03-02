@@ -2,6 +2,7 @@
 ### Fix
 # TODO * `cancel_order_call()`: not raised asyncio.TimeoutError on timeout
 * `on_balance_update_ex()`: don't update direct initial asset values in Reverse cycle
+* Partially filled TP in Hold reverse cycle
 
 ## 2.1.5 - 2024-02-25
 ### Fix

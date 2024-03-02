@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.0"
+__version__ = "2.2.0.b10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -20,8 +20,7 @@ from exchanges_wrapper import api_pb2, api_pb2_grpc
 logger = logging.getLogger('logger.client')
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-stream_handler.setLevel(logging.INFO)
-# stream_handler.setLevel(logging.DEBUG)
+stream_handler.setLevel(logging.WARNING)
 logger.addHandler(stream_handler)
 
 
@@ -66,7 +65,7 @@ class Trade:
             logger.error(f"Exception on register client: {status_code.name}, {ex.details()}")
             if status_code == grpc.StatusCode.FAILED_PRECONDITION:
                 raise SystemExit(1) from ex
-            logger.info('Restart gRPC client session')
+            logger.warning('Restart gRPC client session')
             await asyncio.sleep(random.randint(5, 15))
             raise UserWarning from ex
         else:
@@ -101,7 +100,6 @@ class Trade:
             logger.debug(f"Exception on send request {_request}: {status_code.name}, {ex.details()}")
             raise
         else:
-            # logger.info(f"send_request.res: {res}")
             if res is None:
                 self.client = None
                 asyncio.create_task(self.get_client())

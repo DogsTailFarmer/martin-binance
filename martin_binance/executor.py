@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b9"
+__version__ = "2.2.0.b10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1957,13 +1957,19 @@ class Strategy(StrategyBase):
         self.cancel_grid_hold = False
         if self.orders_save:
             self.grid_remove = False
-            Strategy.bulk_orders_cancel.clear()
+            self.bulk_orders_cancel.clear()
             self.restore_orders = True
             self.message_log("Restore canceled grid orders")
         else:
             self.grid_remove = None
 
-    def convert_tp(self, _amount_f: Decimal, _amount_s: Decimal, _update_sum_amount=True) -> bool:
+    def convert_tp(
+            self,
+            _amount_f: Decimal,
+            _amount_s: Decimal,
+            _update_sum_amount=True,
+            replace_tp=True
+    ) -> bool:
         self.message_log(f"Converted TP amount to grid: first: {_amount_f}, second: {_amount_s}")
         if _update_sum_amount:
             # Correction sum_amount
@@ -1990,9 +1996,11 @@ class Strategy(StrategyBase):
                          f"{' Reverse' if self.reverse else ''} grid amount: {amount}",
                          tlg=True)
         if self.check_min_amount(amount=_amount_f):
-            self.message_log("Place additional grid orders and replace TP", tlg=True)
+            self.message_log("Place additional grid orders", tlg=True)
             self.restore_orders_fire()
-            self.tp_hold_additional = True
+            if replace_tp:
+                self.tp_hold_additional = True
+                self.message_log("Replace TP", tlg=True)
             self.place_grid(self.cycle_buy,
                             amount,
                             reverse_target_amount,
@@ -2362,8 +2370,8 @@ class Strategy(StrategyBase):
                     self.cancel_reverse_hold()
                 if self.tp_part_amount_first:
                     self.update_sum_amount(- self.tp_part_amount_first, - self.tp_part_amount_second)
-                    self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                     self.tp_part_free = False
+                    self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                 self.tp_was_filled = (amount_first, amount_second, by_market)
                 # print(f"on_order_update.was_filled_tp: {self.tp_was_filled}")
                 if self.tp_hold:
@@ -2449,10 +2457,10 @@ class Strategy(StrategyBase):
                     self.start_reverse_time = self.get_time()
                     if self.convert_tp(self.tp_part_amount_first,
                                        self.tp_part_amount_second,
-                                       _update_sum_amount=False):
-                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-                        self.cancel_reverse_hold()
+                                       _update_sum_amount=False,
+                                       replace_tp=False):
                         self.tp_part_free = False
+                        self.cancel_reverse_hold()
                         self.message_log("Part filled TP was converted to grid", tlg=True)
             else:
                 self.message_log('Wild order, do not know it', tlg=True)
@@ -2642,14 +2650,15 @@ class Strategy(StrategyBase):
 
         # Restore orders
         orders = json.loads(saved_state.get('orders'))
-        orders.append(
-            {
-                "id": self.tp_order_id,
-                "buy": self.tp_order[0],
-                "amount": self.tp_order[1],
-                "price": self.tp_order[2]
-            }
-        )
+        if self.tp_order_id:
+            orders.append(
+                {
+                    "id": self.tp_order_id,
+                    "buy": self.tp_order[0],
+                    "amount": self.tp_order[1],
+                    "price": self.tp_order[2]
+                }
+            )
         self.account.restore_state(
             self.symbol,
             self.start_time_ms,
