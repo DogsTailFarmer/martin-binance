@@ -1638,71 +1638,71 @@ class StrategyBase:
     # region AbstractMethod
     @abstractmethod
     def restore_state_before_backtesting_ex(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def save_strategy_state(self, *args, **kwargs):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def stop(self):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_new_funds(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_cancel_order_error_string(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_cancel_order_success(self, *args, **kwargs):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_place_order_error(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_place_order_success(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_balance_update_ex(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_order_update_ex(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_new_ticker(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_sum_profit(self):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def get_free_assets(self, *args, **kwargs):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def on_new_order_book(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def restore_strategy_state(self, *args, **kwargs):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def start(self, *args):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def init(self, *args, **kwargs):
-        pass
+        raise NotImplementedError
 
     # endregion
 
