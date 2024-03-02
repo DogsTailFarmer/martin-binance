@@ -4,7 +4,7 @@ martin-binance strategy parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.2.0.b10"
+__version__ = "3.0.0rc1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -80,7 +80,7 @@ INLINE_BOT = True
 MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 1000  # Time accelerator
 SAVE_DS = False  # Save session result data (ticker, orders) for compare
-SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
+SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion
 LOGGING = True
 SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
 N_TRIALS = 250  # Number of optimization cycles for optuna study

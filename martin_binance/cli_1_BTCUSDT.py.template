@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.0"
+__version__ = "3.0.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -26,9 +26,9 @@ import sys
 import asyncio
 from pathlib import Path
 import toml
-import martin_binance.executor as ex
+
 from martin_binance import CONFIG_FILE, LOG_PATH, LAST_STATE_PATH
-from martin_binance.margin_wrapper import main, ask_exit, LogLevel, session_result  # noqa
+import martin_binance.params as ex
 ################################################################
 # Exchange setup and parameter settings
 ################################################################
@@ -90,7 +90,7 @@ ex.MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 ex.SAVE_DS = False  # Save session result data (ticker, orders) for compare
 ex.SAVE_PERIOD = 24 * 60 * 60  # sec, timetable for save data portion
 ex.SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
-ex.N_TRIALS = 500  # Number of optimization cycles for optuna study in self optimization mode
+ex.N_TRIALS = 250  # Number of optimization cycles for optuna study in self optimization mode
 ################################################################
 #                 DO NOT EDIT UNDER THIS LINE                ###
 ################################################################
@@ -110,9 +110,8 @@ for tlg in telegram:
         break
 
 
-def trade():
+def trade(strategy=None):
     import logging.handlers
-    loop = asyncio.get_event_loop()
     # For autoload last state
     ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
     #
@@ -126,14 +125,18 @@ def trade():
     _logger.addHandler(handler)
     _logger.propagate = False
     #
+    if strategy is None:
+        from martin_binance.executor import Strategy
+        strategy = Strategy()
+    loop = asyncio.get_event_loop()
     try:
-        loop.create_task(main(ex.SYMBOL))
+        loop.create_task(strategy.main(ex.SYMBOL))
         loop.run_forever()
     except KeyboardInterrupt:
         pass
     finally:
         try:
-            loop.run_until_complete(ask_exit())
+            loop.run_until_complete(strategy.ask_exit())
         except asyncio.CancelledError:
             pass
         except Exception as _err:
@@ -141,6 +144,7 @@ def trade():
         loop.run_until_complete(loop.shutdown_asyncgens())
         if ex.MODE in ('T', 'TC'):
             loop.close()
+    return strategy
 
 
 if __name__ == "__main__":
