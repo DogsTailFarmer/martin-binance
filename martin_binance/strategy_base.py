@@ -833,7 +833,7 @@ class StrategyBase:
                         await self.cancel_order_call(_id, cancel_all=False, count=count + 1)
                     else:
                         self.on_cancel_order_error_string(_id, 'Cancel order try limit exceeded')
-    
+
     async def cancel_order_handler(self, _id, cancel_all):
         if _id in self.canceled_order_id:
             self.canceled_order_id.remove(_id)
@@ -844,7 +844,7 @@ class StrategyBase:
             self.open_orders_snapshot()
         elif prm.MODE == 'S':
             await self.on_funds_update()
-    
+
     async def cancel_order_timeout(self, _id):
         await asyncio.sleep(ORDER_TIMEOUT)
         if _id in self.canceled_order_id:
@@ -954,21 +954,21 @@ class StrategyBase:
                         self.klines[i.value] = kline
             else:
                 kline = klines_from_file.get(i.value, {})
-    
+
             if candles := kline.get('klines'):
                 kline_i = Klines(i.value)
                 for candle in candles:
                     kline_i.refresh(json.loads(candle))
                     # print(f"buffered_candle.candle: {candle}")
                 klines[i.value] = kline_i
-    
+
         if len(klines) == len(KLINES_INIT):
             loop.create_task(self.on_klines_update(klines))
         else:
             logger.info("Init buffered candle failed. try one else...")
             await asyncio.sleep(random.uniform(1, 5))
             self.wss_fire_up = True
-    
+
     async def on_klines_update(self, _klines: {str: Klines}):
         _intervals = list(_klines.keys())
         if prm.MODE in ('T', 'TC'):
@@ -984,7 +984,7 @@ class StrategyBase:
                                 pa.RecordBatch.from_pylist(mapping=self.candles[f"pylist_{res.interval}"])
                             )
                             self.candles[f"pylist_{res.interval}"].clear()
-    
+
                         self.candles[f"pylist_{res.interval}"].append(
                             {"key": int(time.time() * 1000), "row": orjson.dumps(candle)}
                         )
@@ -1058,7 +1058,7 @@ class StrategyBase:
                 f" {any2str(order.amount)} by {any2str(order.price)} = {any2str(order.amount * order.price)}",
                 color=Style.GREEN)
             self.orders[order.id] = order
-    
+
             if prm.MODE == 'S':
                 await self.on_funds_update()
             elif prm.MODE == 'TC' and self.start_collect:
@@ -1072,7 +1072,7 @@ class StrategyBase:
                     self.s_ticker['pylist'].append(s_tic)
                 if prm.SAVE_DS:
                     self.open_orders_snapshot()
-    
+
             self.on_place_order_success(_id, order)
 
     async def on_balance_update(self):
@@ -1124,10 +1124,10 @@ class StrategyBase:
                 "selfTradePreventionMode": "NONE"
             }
             await self.create_order_handler(int(ed["client_order_id"]), _ed)
-    
+
         if not Decimal(ed["cumulative_filled_quantity"]):
             return
-    
+
         if self.trade_not_exist(ed["order_id"], ed["trade_id"]):
             self._on_order_update_handler_ext(ed)
             await SAVE_TRADE_QUEUE.put(
@@ -1144,7 +1144,7 @@ class StrategyBase:
                  ed["last_executed_quantity"],
                  ed["last_executed_price"]]
             )
-    
+
         if ed['order_status'] == 'FILLED':
             # Remove from orders dict
             self.remove_from_orders_lists([ed['order_id']])
@@ -1293,32 +1293,32 @@ class StrategyBase:
                 if res is None or not res.success:
                     self.wss_fire_up = True
                     raise UserWarning(f"Not active WSS for {self.symbol} on {self.exchange}, restart request sent")
-    
+
                 _orders = await self.send_request(self.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=self.symbol)
                 if _orders is None:
                     raise UserWarning("Can't fetch open orders")
-    
+
                 self.rate_limiter = max(self.rate_limiter, _orders.rate_limiter)
-    
+
                 orders = json_format.MessageToDict(_orders).get('items', [])
                 [exch_orders.append(int(_o['orderId'])) for _o in orders]
-    
+
                 if restore:
                     self.message_log("Trying restore saved state after lost connection to host", color=Style.GREEN)
-    
+
                 if self.last_state:
                     self.message_log("Trying restore saved state after restart", color=Style.GREEN)
                     self.restore_strategy_state(restore=True)
-    
+
                 for order in orders:
                     _id = int(order['orderId'])
                     if (order.get('status') == 'PARTIALLY_FILLED' and
                             self.order_trades_sum(_id) < Decimal(order['executedQty'])):
                         diff_id.add(_id)
-    
+
                 # Missed fill event list
                 diff_id.update(set(self.orders).difference(set(exch_orders)))
-    
+
                 if diff_id:
                     self.message_log(f"Perhaps was missed event for order(s): {diff_id},"
                                      f" checking it", log_level=LogLevel.WARNING, tlg=False)
@@ -1326,7 +1326,7 @@ class StrategyBase:
                         res = await self.fetch_order(_id, _filled_update_call=True)
                         if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                             await self.cancel_order_handler(_id, cancel_all=False)
-    
+
                 if self.last_state and prm.MODE == 'TC':
                     last_state = self.save_strategy_state(return_only=True)
                     self.last_state_update(last_state)
