@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc1"
+__version__ = "3.0.0rc3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -119,7 +119,7 @@ class StrategyBase:
         self.grid_sell = None
         #
         self.reset_backtest_vars()
-        # 
+        #
         self.cycle_time = None  # + Cycle start time
         self.command = None  # + External input command from Telegram
         self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
