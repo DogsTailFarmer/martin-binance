@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.5"
+__version__ = "3.0.0rc1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -12,306 +12,32 @@ import sys
 import gc
 import statistics
 import traceback
-from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
+from decimal import ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
 from threading import Thread
 import queue
 import math
 import sqlite3
-from pathlib import Path
+
 import ujson as json
 from datetime import datetime
 import os
 import psutil
 import numpy as np
-from scipy.optimize import minimize
+
+from typing import Dict
 
 from martin_binance import DB_FILE
 from martin_binance.db_utils import db_management, save_to_db
-from martin_binance.margin_wrapper import __version__ as msb_ver, any2str, Dict, LogLevel, StrategyConfig
-from martin_binance.margin_wrapper import StrategyBase, Style, OrderUpdate, Ticker, OrderBook, FundsEntry, Order
 from martin_binance.telegram_utils import telegram
+from martin_binance.strategy_base import StrategyBase, __version__ as msb_ver
+from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, LogLevel, any2str, Order, OrderUpdate, Orders, \
+    f2d, solve
+from martin_binance.params import *
 
 O_DEC = Decimal()
 
-# region SetParameters
-SYMBOL = str()
-EXCHANGE = ()
-# Exchange setup
-ID_EXCHANGE = int()
-FEE_IN_PAIR = bool()
-FEE_MAKER = Decimal()
-FEE_TAKER = Decimal()
-FEE_SECOND = bool()
-FEE_BNB_IN_PAIR = bool()
-GRID_MAX_COUNT = int()
-# Trade parameter
-START_ON_BUY = bool()
-AMOUNT_FIRST = Decimal()
-USE_ALL_FUND = bool()
-AMOUNT_SECOND = Decimal()
-PRICE_SHIFT = Decimal()
-PRICE_LIMIT_RULES = Decimal()
-# Round pattern
-ROUND_BASE = str()
-ROUND_QUOTE = str()
-#
-PROFIT = Decimal()
-PROFIT_MAX = Decimal()
-OVER_PRICE = Decimal()
-ORDER_Q = int()
-MARTIN = Decimal()
-SHIFT_GRID_DELAY = int()
-GRID_UPDATE_INTERVAL = 60 * 60  # sec between grid update in Reverse cycle
-# Other
-STATUS_DELAY = int()
-GRID_ONLY = bool()
-LOG_LEVEL_NO_PRINT = []
-HOLD_TP_ORDER_TIMEOUT = 30
-COLLECT_ASSETS = bool()
-#
-ADAPTIVE_TRADE_CONDITION = bool()
-BB_CANDLE_SIZE_IN_MINUTES = int()
-BB_NUMBER_OF_CANDLES = int()
-KBB = float()
-#
-LINEAR_GRID_K = int()
-#
-ADX_CANDLE_SIZE_IN_MINUTES = int()
-ADX_NUMBER_OF_CANDLES = int()
-ADX_PERIOD = int()
-ADX_THRESHOLD = int()
-ADX_PRICE_THRESHOLD = float()
-# Reverse cycle
-REVERSE = bool()
-REVERSE_TARGET_AMOUNT = Decimal()
-REVERSE_INIT_AMOUNT = Decimal()
-REVERSE_STOP = bool()
-# Config variables
-HEAD_VERSION = str()
-LOAD_LAST_STATE = int()
-# Path and files name
-LAST_STATE_FILE: Path
-VPS_NAME = str()
-PARAMS: Path
-# Telegram
-TELEGRAM_URL = str()
-TOKEN = str()
-CHANNEL_ID = str()
-STOP_TLG = 'stop_signal_QWE#@!'
-INLINE_BOT = True
-# Backtesting
-MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
-XTIME = 1000  # Time accelerator
-SAVE_DS = False  # Save session result data (ticker, orders) for compare
-SAVE_PERIOD = 1 * 60 * 60  # sec, timetable for save data portion, but memory limitation consider also matter
-LOGGING = True
-SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
-N_TRIALS = 250  # Number of optimization cycles for optuna study
-# endregion
-
-
-def f2d(_f: float) -> Decimal:
-    return Decimal(str(_f))
-
-
-def solve(fn, value: Decimal, x: Decimal, **kwargs) -> (Decimal, str):
-    def _fn(_x):
-        return abs(float(value) - fn(_x, **kwargs))
-    res = minimize(_fn, x0=np.array([float(x)]), method='Nelder-Mead')
-    if res.success:
-        _res = f2d(res.x[0])
-        n = 0
-        while f2d(fn(_res, **kwargs)) - value < 0:
-            _res += f2d(0.1)
-            n += 1
-            if n > 200:  # cycle limit check
-                return O_DEC, "Number of cycles exceeded"
-        return _res, f"{res.message} Number of iterations: {res.nit}, correction: +{n*0.1:.2f}"
-    return O_DEC, res.message
-
-
-class Orders:
-    __slots__ = ("orders_list",)
-
-    def __init__(self):
-        self.orders_list = []
-
-    def __iter__(self):
-        yield from self.orders_list
-
-    def __len__(self):
-        return len(self.orders_list)
-
-    def append_order(self, _id: int, buy: bool, amount: Decimal, price: Decimal):
-        self.orders_list.append({'id': _id, 'buy': buy, 'amount': amount, 'price': price})
-
-    def remove(self, _id: int):
-        self.orders_list[:] = [i for i in self.orders_list if i['id'] != _id]
-
-    def find_order(self, in_orders: [], place_order_id: int):
-        """
-        Find equal order in_orders[] and self.orders_list[] where in_orders[].id == place_order_id
-        If exist return order: Order
-        """
-        order = None
-        for i in self.orders_list:
-            if i['id'] == place_order_id:
-                for k, o in enumerate(in_orders):
-                    if o.buy == i['buy'] and o.amount == i['amount'] and o.price == i['price']:
-                        order = in_orders[k]
-                        break
-            if order:
-                break
-        return order
-
-    def get_by_id(self, _id: int) -> {}:
-        return next((i for i in self.orders_list if i['id'] == _id), None)
-
-    def exist(self, _id: int) -> bool:
-        return any(i['id'] == _id for i in self.orders_list)
-
-    def get(self) -> []:
-        """
-        Get List of Dict for orders
-        :return: []
-        """
-        return self.orders_list
-
-    def get_id_list(self) -> []:
-        """
-        Get List of orders id
-        :return: []
-        """
-        return [i['id'] for i in self.orders_list]
-
-    def get_first(self) -> ():
-        """
-        Get first order as tuple
-        :return: (id, buy, amount, price)
-        """
-        return tuple(self.orders_list[0].values())
-
-    def get_last(self) -> ():
-        """
-        Get last order as tuple
-        :return: (id, buy, amount, price)
-        """
-        return tuple(self.orders_list[-1].values())
-
-    def restore(self, order_list: []):
-        self.orders_list.clear()
-        for i in order_list:
-            i_dec = {'id': i.get('id'),
-                     'buy': i.get('buy'),
-                     'amount': f2d(i.get('amount')),
-                     'price': f2d(i.get('price'))}
-            self.orders_list.append(i_dec)
-
-    def sort(self, cycle_buy: bool):
-        if cycle_buy:
-            self.orders_list.sort(key=lambda x: x['price'], reverse=True)
-        else:
-            self.orders_list.sort(key=lambda x: x['price'], reverse=False)
-
-    def sum_amount(self, cycle_buy: bool) -> Decimal:
-        _sum = O_DEC
-        for i in self.orders_list:
-            _sum += i['amount'] * (i['price'] if cycle_buy else 1)
-        return _sum
-
 
 class Strategy(StrategyBase):
-    ##############################################################
-    # strategy control methods
-    ##############################################################
-    __slots__ = (
-        "cycle_buy",
-        "orders_grid",
-        "orders_init",
-        "orders_hold",
-        "orders_save",
-        # Take profit variables
-        "tp_order_id",
-        "tp_wait_id",
-        "tp_order",
-        "tp_error",
-        "tp_order_hold",
-        "tp_hold",
-        "tp_cancel",
-        "tp_cancel_from_grid_handler",
-        "tp_hold_additional",
-        "tp_target",
-        "tp_amount",
-        "part_profit_first",
-        "part_profit_second",
-        "tp_was_filled",
-        "tp_part_amount_first",
-        "tp_part_amount_second",
-        #
-        "sum_amount_first",
-        "sum_amount_second",
-        #
-        "deposit_first",
-        "deposit_second",
-        "sum_profit_first",
-        "sum_profit_second",
-        "cycle_buy_count",
-        "cycle_sell_count",
-        "shift_grid_threshold",
-        "f_currency",
-        "s_currency",
-        "connection_analytic",
-        "last_shift_time",
-        "avg_rate",
-        #
-        "grid_hold",
-        "cancel_grid_hold",
-        "initial_first",
-        "initial_second",
-        "initial_reverse_first",
-        "initial_reverse_second",
-        "wait_refunding_for_start",
-        #
-        "cancel_order_id",
-        "cancel_grid_order_id",
-        "over_price",
-        "grid_place_flag",
-        "part_amount",
-        "command",
-        "start_after_shift",
-        "queue_to_db",
-        "pr_db",
-        "pr_tlg",
-        "pr_tlg_control",
-        "restart",
-        "profit_first",
-        "profit_second",
-        "cycle_time",
-        "cycle_time_reverse",
-        "reverse",
-        "reverse_target_amount",
-        "reverse_init_amount",
-        "reverse_hold",
-        "reverse_price",
-        "round_base",
-        "round_quote",
-        "order_q",
-        "order_q_placed",
-        "martin",
-        "first_run",
-        "grid_remove",
-        "heartbeat_counter",
-        "cycle_status",
-        "grid_update_started",
-        "start_reverse_time",
-        "last_ticker_update",
-        "grid_only_restart",
-        "wait_wss_refresh",
-        "restore_orders",
-        "ts_grid_update",
-        "tp_part_free",
-    )
-
     def __init__(self):
         super().__init__()
         if LOGGING:
@@ -336,8 +62,6 @@ class Strategy(StrategyBase):
         self.part_profit_first = O_DEC  # +
         self.part_profit_second = O_DEC  # +
         self.tp_was_filled = ()  # - Exist incomplete processing filled TP
-        self.tp_part_amount_first = O_DEC  # + Sum partially filled TP
-        self.tp_part_amount_second = O_DEC  # + Sum partially filled TP
         #
         self.sum_amount_first = O_DEC  # Sum buy/sell in first currency for current cycle
         self.sum_amount_second = O_DEC  # Sum buy/sell in second currency for current cycle
@@ -351,7 +75,6 @@ class Strategy(StrategyBase):
         self.shift_grid_threshold = None  # - Price level of shift grid threshold for current cycle
         self.f_currency = ''  # - First currency name
         self.s_currency = ''  # - Second currency name
-        self.connection_analytic = None  # - Connection to .db
         self.last_shift_time = None  # +
         self.avg_rate = O_DEC  # - Flow average rate for trading pair
         #
@@ -363,44 +86,41 @@ class Strategy(StrategyBase):
         self.initial_reverse_second = O_DEC  # + Use if balance replenishment delay
         self.wait_refunding_for_start = False  # -
         #
-        self.cancel_order_id = None  # - Exist canceled not confirmed order
         self.cancel_grid_order_id = None  # - id individual canceled grid order
-        self.over_price = None  # + Adaptive over price
+        self.cancel_order_id = None  # - Exist canceled not confirmed order
+        self.cycle_status = ()  # - Operational status for current cycle, orders count
+        self.cycle_time_reverse = None  # + Reverse cycle start time
+        self.first_run = True  # -
+        self.grid_only_restart = None  # -
         self.grid_place_flag = False  # - Flag when placed next part of grid orders
-        self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
-        self.command = None  # + External input command from Telegram
-        self.start_after_shift = False  # - Flag set before shift, clear after place grid
-        self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
+        self.grid_remove = None  # - Flag when starting cancel grid orders
+        self.grid_update_started = None  # - Flag when grid update process started
+        self.heartbeat_counter = 0  # -
+        self.last_ticker_update = 0  # -
+        self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
+        self.order_q = None  # + Adaptive order quantity
+        self.order_q_placed = False  # - Flag initial number of orders placed
+        self.over_price = None  # + Adaptive over price
         self.pr_db = None  # - Process for save data to .db
         self.pr_tlg = None  # - Process for sending message to Telegram
         self.pr_tlg_control = None  # - Process for get command from Telegram
-        self.restart = None  # - Set after execute take profit order and restart cycle
         self.profit_first = O_DEC  # + Cycle profit
         self.profit_second = O_DEC  # + Cycle profit
-        self.cycle_time = None  # + Cycle start time
-        self.cycle_time_reverse = None  # + Reverse cycle start time
+        self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
+        self.restart = None  # - Set after execute take profit order and restart cycle
         self.reverse = REVERSE  # + Current cycle is Reverse
-        self.reverse_target_amount = REVERSE_TARGET_AMOUNT if REVERSE else O_DEC  # + Amount for reverse cycle
-        self.reverse_init_amount = REVERSE_INIT_AMOUNT if REVERSE else O_DEC  # + Actual amount of initial cycle
         self.reverse_hold = False  # + Exist unreleased reverse state
+        self.reverse_init_amount = REVERSE_INIT_AMOUNT if REVERSE else O_DEC  # + Actual amount of initial cycle
         self.reverse_price = None  # + Price when execute last grid order and hold reverse cycle
+        self.reverse_target_amount = REVERSE_TARGET_AMOUNT if REVERSE else O_DEC  # + Amount for reverse cycle
+        self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
         self.round_base = '1.0123456789'  # - Round pattern for 0.00000 = 0.00
         self.round_quote = '1.0123456789'  # - Round pattern for 0.00000 = 0.00
-        self.order_q = None  # + Adaptive order quantity
-        self.order_q_placed = False  # - Flag initial number of orders placed
-        self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
-        self.first_run = True  # -
-        self.grid_remove = None  # - Flag when starting cancel grid orders
-        self.heartbeat_counter = 0  # -
-        self.cycle_status = ()  # - Operational status for current cycle, orders count
-        self.grid_update_started = None  # - Flag when grid update process started
+        self.start_after_shift = False  # - Flag set before shift, clear after place grid
         self.start_reverse_time = None  # -
-        self.last_ticker_update = 0  # -
-        self.grid_only_restart = None  # -
-        self.wait_wss_refresh = {}  # -
-        self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
-        self.ts_grid_update = self.get_time()  # - When updated grid
         self.tp_part_free = False  # + Can use TP part amount for converting to grid orders
+        self.ts_grid_update = self.get_time()  # - When updated grid
+        self.wait_wss_refresh = {}  # -
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
@@ -467,15 +187,6 @@ class Strategy(StrategyBase):
         else:
             self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
             raise SystemExit(1)
-
-    @staticmethod
-    def get_strategy_config() -> StrategyConfig:
-        s = StrategyConfig()
-        s.required_data_updates = {StrategyConfig.ORDER_BOOK,
-                                   StrategyConfig.FUNDS,
-                                   StrategyConfig.TICKER}
-        s.normalize_exchange_buy_amounts = True
-        return s
 
     def save_strategy_state(self, return_only=False) -> Dict[str, str]:
         if not return_only:
@@ -849,7 +560,7 @@ class Strategy(StrategyBase):
             self.tp_cancel = True
             if not self.cancel_order_id:
                 self.cancel_order_id = self.tp_order_id
-                self.cancel_order_exp(self.tp_order_id)
+                self.cancel_order(self.tp_order_id)
             return
         if self.tp_wait_id:
             # Wait tp order and cancel in on_cancel_order_success and restart
@@ -1064,21 +775,6 @@ class Strategy(StrategyBase):
             self.initial_first = ff
             self.initial_second = fs
 
-    def collect_assets(self) -> ():
-        ff, fs, _, _ = self.get_free_assets(mode='free')
-        tcm = self.get_trading_capability_manager()
-        if ff >= f2d(tcm.min_qty):
-            self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.f_currency, any2str(ff))
-        else:
-            ff = O_DEC
-        if fs >= f2d(tcm.min_notional):
-            self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
-            self.transfer_to_master(self.s_currency, any2str(fs))
-        else:
-            fs = O_DEC
-        return ff, fs
-
     def start_process(self):
         # Init analytic
         if MODE != 'S':
@@ -1114,9 +810,6 @@ class Strategy(StrategyBase):
                     self.pr_tlg.start()
                 except AssertionError as error:
                     self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
-
-    def cancel_order_exp(self, order_id: int, cancel_all=False) -> None:
-        self.cancel_order(order_id, cancel_all=cancel_all)
 
     ##############################################################
     # Technical analysis
@@ -1234,6 +927,21 @@ class Strategy(StrategyBase):
     ##############################################################
     # supplementary methods
     ##############################################################
+    def collect_assets(self) -> ():
+        ff, fs, _, _ = self.get_free_assets(mode='free')
+        tcm = self.get_trading_capability_manager()
+        if ff >= f2d(tcm.min_qty):
+            self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE, tlg=True)
+            self.transfer_to_master(self.f_currency, any2str(ff))
+        else:
+            ff = O_DEC
+        if fs >= f2d(tcm.min_notional):
+            self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE, tlg=True)
+            self.transfer_to_master(self.s_currency, any2str(fs))
+        else:
+            fs = O_DEC
+        return ff, fs
+
     def get_sum_profit(self):
         return self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second, base=False)
 
@@ -1636,7 +1344,7 @@ class Strategy(StrategyBase):
                 # Cancel take profit order, place new
                 self.tp_hold = True
                 self.cancel_order_id = self.tp_order_id
-                self.cancel_order_exp(self.tp_order_id)
+                self.cancel_order(self.tp_order_id)
                 self.message_log('Hold take profit order, replace existing', color=Style.B_WHITE)
             else:
                 buy_side = not self.cycle_buy
@@ -1679,7 +1387,7 @@ class Strategy(StrategyBase):
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=after_error)
         elif self.tp_order_id and self.tp_cancel:
             self.cancel_order_id = self.tp_order_id
-            self.cancel_order_exp(self.tp_order_id)
+            self.cancel_order(self.tp_order_id)
             self.message_log('Try cancel TP, then Start', color=Style.B_WHITE)
 
     def set_trade_conditions(self,
@@ -2213,7 +1921,7 @@ class Strategy(StrategyBase):
                 self.tp_cancel_from_grid_handler = True
                 if not self.cancel_order_id:
                     self.cancel_order_id = self.tp_order_id
-                    self.cancel_order_exp(self.tp_order_id)
+                    self.cancel_order(self.tp_order_id)
                 return
             if self.tp_wait_id:
                 # Wait tp order and cancel in on_cancel_order_success and restart
@@ -2249,13 +1957,19 @@ class Strategy(StrategyBase):
         self.cancel_grid_hold = False
         if self.orders_save:
             self.grid_remove = False
-            Strategy.bulk_orders_cancel.clear()
+            self.bulk_orders_cancel.clear()
             self.restore_orders = True
             self.message_log("Restore canceled grid orders")
         else:
             self.grid_remove = None
 
-    def convert_tp(self, _amount_f: Decimal, _amount_s: Decimal, _update_sum_amount=True) -> bool:
+    def convert_tp(
+            self,
+            _amount_f: Decimal,
+            _amount_s: Decimal,
+            _update_sum_amount=True,
+            replace_tp=True
+    ) -> bool:
         self.message_log(f"Converted TP amount to grid: first: {_amount_f}, second: {_amount_s}")
         if _update_sum_amount:
             # Correction sum_amount
@@ -2282,9 +1996,11 @@ class Strategy(StrategyBase):
                          f"{' Reverse' if self.reverse else ''} grid amount: {amount}",
                          tlg=True)
         if self.check_min_amount(amount=_amount_f):
-            self.message_log("Place additional grid orders and replace TP", tlg=True)
+            self.message_log("Place additional grid orders", tlg=True)
             self.restore_orders_fire()
-            self.tp_hold_additional = True
+            if replace_tp:
+                self.tp_hold_additional = True
+                self.message_log("Replace TP", tlg=True)
             self.place_grid(self.cycle_buy,
                             amount,
                             reverse_target_amount,
@@ -2345,7 +2061,7 @@ class Strategy(StrategyBase):
                 if not cancel_all:
                     self.orders_save.orders_list.append(self.orders_grid.get_by_id(_id))
                 self.message_log(f"cancel_grid order: {_id}", log_level=LogLevel.DEBUG)
-                self.cancel_order_exp(_id, cancel_all=cancel_all)
+                self.cancel_order(_id, cancel_all=cancel_all)
             else:
                 self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
                 self.orders_save.orders_list.clear()
@@ -2502,7 +2218,7 @@ class Strategy(StrategyBase):
     # private update methods
     ##############################################################
 
-    def on_balance_update(self, balance: Dict) -> None:
+    def on_balance_update_ex(self, balance: Dict) -> None:
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
         restart = False
@@ -2527,9 +2243,10 @@ class Strategy(StrategyBase):
                         self.deposit_second += delta
                     self.initial_second += delta
             elif asset == self.f_currency and not GRID_ONLY:
-                self.initial_first += delta
                 if self.reverse:
                     self.initial_reverse_first += delta
+                else:
+                    self.initial_first += delta
         else:
             if asset == self.f_currency:
                 restart = True
@@ -2546,9 +2263,10 @@ class Strategy(StrategyBase):
                         self.deposit_first += delta
                     self.initial_first += delta
             elif asset == self.s_currency and not GRID_ONLY:
-                self.initial_second += delta
                 if self.reverse:
                     self.initial_reverse_second += delta
+                else:
+                    self.initial_second += delta
         self.message_log(f"Was {'depositing' if delta > 0 else 'transferring (withdrawing)'} {delta} {asset}",
                          color=Style.UNDERLINE, tlg=True)
         if (self.grid_only_restart or (GRID_ONLY and USE_ALL_FUND)) and restart:
@@ -2592,7 +2310,7 @@ class Strategy(StrategyBase):
                                 self.grid_hold['additional_grid'],
                                 self.grid_hold['grid_update'])
 
-    def on_order_update(self, update: OrderUpdate) -> None:
+    def on_order_update_ex(self, update: OrderUpdate) -> None:
         # self.message_log(f"Order {update.original_order.id}: {update.status}", log_level=LogLevel.DEBUG)
         if update.status in [OrderUpdate.ADAPTED,
                              OrderUpdate.NO_CHANGE,
@@ -2652,8 +2370,8 @@ class Strategy(StrategyBase):
                     self.cancel_reverse_hold()
                 if self.tp_part_amount_first:
                     self.update_sum_amount(- self.tp_part_amount_first, - self.tp_part_amount_second)
-                    self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                     self.tp_part_free = False
+                    self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                 self.tp_was_filled = (amount_first, amount_second, by_market)
                 # print(f"on_order_update.was_filled_tp: {self.tp_was_filled}")
                 if self.tp_hold:
@@ -2739,10 +2457,10 @@ class Strategy(StrategyBase):
                     self.start_reverse_time = self.get_time()
                     if self.convert_tp(self.tp_part_amount_first,
                                        self.tp_part_amount_second,
-                                       _update_sum_amount=False):
-                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-                        self.cancel_reverse_hold()
+                                       _update_sum_amount=False,
+                                       replace_tp=False):
                         self.tp_part_free = False
+                        self.cancel_reverse_hold()
                         self.message_log("Part filled TP was converted to grid", tlg=True)
             else:
                 self.message_log('Wild order, do not know it', tlg=True)
@@ -2788,7 +2506,7 @@ class Strategy(StrategyBase):
             self.tp_order_id = order.id
             if self.tp_hold or self.tp_cancel or self.tp_cancel_from_grid_handler:
                 self.cancel_order_id = self.tp_order_id
-                self.cancel_order_exp(self.tp_order_id)
+                self.cancel_order(self.tp_order_id)
             else:
                 # Place next part of grid orders
                 if self.orders_hold and not self.order_q_placed and not self.orders_init:
@@ -2885,3 +2603,65 @@ class Strategy(StrategyBase):
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
+
+    def restore_state_before_backtesting_ex(self, saved_state):
+        self.cycle_buy = json.loads(saved_state.get('cycle_buy'))
+        self.reverse = json.loads(saved_state.get('reverse'))
+        self.deposit_first = f2d(json.loads(saved_state.get('deposit_first')))
+        self.deposit_second = f2d(json.loads(saved_state.get('deposit_second')))
+        self.last_shift_time = json.loads(saved_state.get('last_shift_time')) or self.get_time()
+        self.order_q = json.loads(saved_state.get('order_q'))
+        self.orders_grid.restore(json.loads(saved_state.get('orders')))
+        self.orders_hold.restore(json.loads(saved_state.get('orders_hold')))
+        self.orders_save.restore(json.loads(saved_state.get('orders_save')))
+        self.over_price = json.loads(saved_state.get('over_price'))
+        self.reverse_hold = json.loads(saved_state.get('reverse_hold'))
+        self.reverse_init_amount = f2d(json.loads(saved_state.get('reverse_init_amount')))
+        self.reverse_price = json.loads(saved_state.get('reverse_price'))
+        self.reverse_target_amount = f2d(json.loads(saved_state.get('reverse_target_amount')))
+        self.shift_grid_threshold = json.loads(saved_state.get('shift_grid_threshold'))
+        if self.shift_grid_threshold:
+            self.shift_grid_threshold = f2d(self.shift_grid_threshold)
+        self.sum_amount_first = f2d(json.loads(saved_state.get('sum_amount_first')))
+        self.sum_amount_second = f2d(json.loads(saved_state.get('sum_amount_second')))
+        self.tp_amount = f2d(json.loads(saved_state.get('tp_amount')))
+        self.tp_order_id = json.loads(saved_state.get('tp_order_id'))
+        self.tp_target = f2d(json.loads(saved_state.get('tp_target')))
+        self.tp_order = eval(json.loads(saved_state.get('tp_order')))
+        self.tp_wait_id = json.loads(saved_state.get('tp_wait_id'))
+
+        if self.reverse:
+            if self.cycle_buy:
+                free_f = self.initial_reverse_first = Decimal()
+                free_s = self.initial_reverse_second = self.deposit_second
+            else:
+                free_f = self.initial_reverse_first = self.deposit_first
+                free_s = self.initial_reverse_second = Decimal()
+        else:
+            if self.cycle_buy:
+                free_f = self.initial_first = Decimal()
+                free_s = self.initial_second = self.deposit_second
+            else:
+                free_f = self.initial_first = self.deposit_first
+                free_s = self.initial_second = Decimal()
+
+        self.account.funds.base = {'asset': self.base_asset, 'free': free_f, 'locked': Decimal()}
+        self.account.funds.quote = {'asset': self.quote_asset, 'free': free_s, 'locked': Decimal()}
+
+        # Restore orders
+        orders = json.loads(saved_state.get('orders'))
+        if self.tp_order_id:
+            orders.append(
+                {
+                    "id": self.tp_order_id,
+                    "buy": self.tp_order[0],
+                    "amount": self.tp_order[1],
+                    "price": self.tp_order[2]
+                }
+            )
+        self.account.restore_state(
+            self.symbol,
+            self.start_time_ms,
+            orders,
+            sum_amount=(self.cycle_buy, self.sum_amount_first, self.sum_amount_second)
+        )
