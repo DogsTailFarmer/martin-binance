@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc3"
+__version__ = "3.0.0rc5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -13,6 +13,7 @@ import asyncio
 import csv
 import logging
 import queue
+import os
 import random
 import sqlite3
 import time
@@ -44,7 +45,10 @@ from martin_binance.client import Trade
 from martin_binance.lib import Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, LogLevel, \
     any2str, PrivateTrade, Order, convert_from_minute, write_log, OrderUpdate, load_file, load_last_state, Klines
 
-logger = logging.getLogger('logger')
+if prm.MODE == 'S':
+    logger = logging.getLogger('logger_S')
+else:
+    logger = logging.getLogger('logger')
 loop = asyncio.get_event_loop()
 color_init()
 
@@ -317,7 +321,8 @@ class StrategyBase:
                             f"{self.exchange}_{self.symbol}",
                             Path(self.session_root, Path(prm.PARAMS).name),
                             str(prm.N_TRIALS),
-                            f"sqlite:///{storage_name}"
+                            f"sqlite:///{storage_name}",
+                            f"{prm.ID_EXCHANGE}_{prm.SYMBOL}_S.log"
                         )
                         _res = orjson.loads(_res)
                     except (asyncio.CancelledError, KeyboardInterrupt):
@@ -327,7 +332,7 @@ class StrategyBase:
                     else:
                         storage_name.replace(storage_name.with_name('study.db'))
                         if _res:
-                            self.message_log(f"Updating strategy parameters from backtest optimal,"
+                            self.message_log(f"Updating parameters from backtest,"
                                              f" predicted value {_res.pop('_value')} ->"
                                              f" {_res.pop('new_value')}",
                                              color=Style.B_WHITE, tlg=True)
@@ -822,7 +827,7 @@ class StrategyBase:
         finally:
             if _fetch_order:
                 res = await self.fetch_order(_id, _filled_update_call=True)
-                if res.get('status') == 'CANCELED':
+                if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                     await self.cancel_order_handler(_id, cancel_all)
                 elif res.get('status') == 'FILLED':
                     if _id in self.canceled_order_id:
@@ -1632,8 +1637,9 @@ class StrategyBase:
             if restored:
                 loop.create_task(self.heartbeat(self.session))
                 loop.create_task(save_to_csv())
-        except SystemExit as e:
-            raise e
+        except (KeyboardInterrupt, SystemExit):
+            # noinspection PyProtectedMember, PyUnresolvedReferences
+            os._exit(1)
 
     # region AbstractMethod
     @abstractmethod

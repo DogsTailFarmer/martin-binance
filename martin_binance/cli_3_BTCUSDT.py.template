@@ -87,8 +87,8 @@ ex.REVERSE_INIT_AMOUNT = Decimal('0')
 ex.REVERSE_STOP = False  # Stop after ending reverse cycle
 # Backtest mode parameters
 ex.MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
-ex.SAVE_DS = False  # Save session result data (ticker, orders) for compare
-ex.SAVE_PERIOD = 24 * 60 * 60  # sec, timetable for save data portion
+ex.SAVE_DS = True  # Save session result data (ticker, orders) for compare
+ex.SAVE_PERIOD = 4 * 60 * 60  # sec, timetable for save data portion
 ex.SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
 ex.N_TRIALS = 250  # Number of optimization cycles for optuna study in self optimization mode
 ################################################################
@@ -114,15 +114,17 @@ def trade(strategy=None):
     import logging.handlers
     # For autoload last state
     ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
-    #
-    log_file = Path(LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}{'_S' if ex.MODE == 'S' else ''}.log")
     ex.LAST_STATE_FILE = Path(LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
     #
-    _logger = logging.getLogger('logger')
-    _logger.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
-    handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-    _logger.addHandler(handler)
+    if ex.MODE == 'S':
+        _logger = logging.getLogger('logger_S')
+    else:
+        log_file = Path(LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
+        _logger = logging.getLogger('logger')
+        _logger.setLevel(logging.DEBUG)
+        handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
+        handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
+        _logger.addHandler(handler)
     _logger.propagate = False
     #
     if strategy is None:

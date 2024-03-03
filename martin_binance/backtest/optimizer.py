@@ -6,13 +6,14 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc2"
+__version__ = "3.0.0rc4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 
 import asyncio
 import importlib.util as iu
+import logging.handlers
 import stat
 import sys
 from decimal import Decimal
@@ -21,6 +22,7 @@ from pathlib import Path
 import optuna
 import ujson as json
 
+from martin_binance import LOG_PATH
 
 OPTIMIZER = Path(__file__).absolute()
 OPTIMIZER.chmod(OPTIMIZER.stat().st_mode | stat.S_IEXEC)
@@ -84,7 +86,17 @@ async def run_optimize(*args):
 
 
 if __name__ == "__main__":
+    logger = logging.getLogger('logger_S')
+    logger.level = logging.INFO
+    formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
+    #
+    fh = logging.handlers.RotatingFileHandler(Path(LOG_PATH, sys.argv[5]), maxBytes=500000, backupCount=5)
+    fh.setFormatter(formatter)
+    fh.setLevel(logging.INFO)
+    logger.addHandler(fh)
+    #
     study = optimize(sys.argv[1], sys.argv[2], int(sys.argv[3]), storage_name=sys.argv[4])
+    logger.info(f"Optimal parameters: {study.best_params} for get {study.best_value}")
     new_value = study.best_value
     _value = study.get_trials()[0].value
     if new_value > _value:
