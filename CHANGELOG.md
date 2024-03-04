@@ -1,9 +1,10 @@
-## 3.0.0rc5 - 2024-03-03
+## 3.0.0rcX - 2024-03-xx
 ### Fix
 * logging for Simulate mode
 
 ### Update
 * Binance: handling `EXPIRED_IN_MATCH`
+* `WSS`: check and restart
 
 ## 3.0.0rc1 - 2024-03-02
 ### Fix

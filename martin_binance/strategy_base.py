@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc5"
+__version__ = "3.0.0rc6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -106,6 +106,7 @@ class StrategyBase:
         self.session_root = None
         self.state_file = None
         self.operational_status = None
+        self.tasks_list = []
         #
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
         self.account = backTestAccount(prm.SAVE_DS) if prm.MODE == 'S' else None
@@ -307,7 +308,8 @@ class StrategyBase:
         delay = HEARTBEAT * 30  # 1 min
         ts = time.time()
         restart = False
-        while 1:
+        await self.wait_wss_init()
+        while self.operational_status:
             if self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
                 self.start_collect = False
                 self.session_data_handler()
@@ -484,7 +486,7 @@ class StrategyBase:
     async def heartbeat(self, _session):
         # print(f"tik-tak:' {int(time.time() * 1000)}")
         last_exec_time = time.time()
-        while 1:
+        while True:
             try:
                 last_state = self.save_strategy_state()
                 if prm.MODE in ('T', 'TC'):
@@ -496,7 +498,11 @@ class StrategyBase:
                         json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     #
                     update_max_queue_size = False
-                    if self.operational_status and (time.time() - last_exec_time > HEARTBEAT * 30):
+                    if (
+                        not self.wss_fire_up
+                        and self.operational_status
+                        and (time.time() - last_exec_time > HEARTBEAT * 30)
+                    ):
                         last_exec_time = time.time()
                         try:
                             res = await self.send_request(
@@ -663,6 +669,8 @@ class StrategyBase:
                 await self.send_request(self.stub.StopStream, api_pb2.MarketRequest, symbol=self.symbol)
             except Exception as ex:
                 logger.warning(f"ask_exit: {ex}")
+
+            self.task_cancel()
 
             if prm.MODE == 'TC' and self.start_collect:
                 # Save stream data for backtesting
@@ -921,7 +929,7 @@ class StrategyBase:
         """
         Refresh trading rules for pair every 10 mins
         """
-        while 1:
+        while True:
             try:
                 _exchange_info_symbol = await _request(self.stub.FetchExchangeInfoSymbol,
                                                        api_pb2.MarketRequest,
@@ -968,7 +976,7 @@ class StrategyBase:
                 klines[i.value] = kline_i
 
         if len(klines) == len(KLINES_INIT):
-            loop.create_task(self.on_klines_update(klines))
+            self.tasks_list.append(asyncio.ensure_future(self.on_klines_update(klines)))
         else:
             logger.info("Init buffered candle failed. try one else...")
             await asyncio.sleep(random.uniform(1, 5))
@@ -1283,21 +1291,14 @@ class StrategyBase:
         exch_orders = []
         diff_id = set()
         restore = False
-        while not self.operational_status:
-            try:
-                res = await self.send_request(self.stub.CheckStream, api_pb2.MarketRequest, symbol=self.symbol)
-            except Exception as ex_1:
-                logger.warning(f"Exception on Check WSS: {ex_1}")
-            else:
-                if res.success:
-                    self.operational_status = True
-            await asyncio.sleep(HEARTBEAT)
+        await self.wait_wss_init()
         while self.operational_status:
             try:
-                res = await self.send_request(self.stub.CheckStream, api_pb2.MarketRequest, symbol=self.symbol)
-                if res is None or not res.success:
-                    self.wss_fire_up = True
-                    raise UserWarning(f"Not active WSS for {self.symbol} on {self.exchange}, restart request sent")
+                if not self.wss_fire_up:
+                    res = await self.send_request(self.stub.CheckStream, api_pb2.MarketRequest, symbol=self.symbol)
+                    if res is None or not res.success:
+                        self.wss_fire_up = True
+                        self.message_log(f"Not active WSS for {self.symbol} on {self.exchange}, restart request sent")
 
                 _orders = await self.send_request(self.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=self.symbol)
                 if _orders is None:
@@ -1371,29 +1372,40 @@ class StrategyBase:
                 restore = True
             await asyncio.sleep(self.rate_limiter)
 
+    async def wait_wss_init(self):
+        while not self.operational_status:
+            await asyncio.sleep(HEARTBEAT)
+            try:
+                res = await self.send_request(self.stub.CheckStream, api_pb2.MarketRequest, symbol=self.symbol)
+            except Exception as ex_1:
+                logger.warning(f"Exception on Check WSS: {ex_1}")
+            else:
+                if res.success:
+                    self.operational_status = True
+
     async def wss_declare(self):
         # Market stream
-        loop.create_task(self.on_ticker_update())
+        self.tasks_list.append(asyncio.ensure_future(self.on_ticker_update()))
         await self.buffered_candle()
-        loop.create_task(self.on_order_book_update())
+        self.tasks_list.append(asyncio.ensure_future(self.on_order_book_update()))
         if prm.MODE in ('T', 'TC'):
             # User Stream
-            loop.create_task(self.on_funds_update())
-            loop.create_task(self.on_order_update())
-            loop.create_task(self.on_balance_update())
+            self.tasks_list.append(asyncio.ensure_future(self.on_funds_update()))
+            self.tasks_list.append(asyncio.ensure_future(self.on_order_update()))
+            self.tasks_list.append(asyncio.ensure_future(self.on_balance_update()))
             if prm.MODE == 'TC':
-                loop.create_task(self.backtest_control())
+                self.tasks_list.append(asyncio.ensure_future(self.backtest_control()))
 
     async def wss_init(self, update_max_queue_size=False):
         self.message_log(f"Init WSS, client_id: {self.client_id}")
         if self.client_id:
+            self.task_cancel()
             await self.wss_declare()
             # WSS start
             '''
             market_stream_count=5
             These values directly depend on the number of market ws streams used in the strategy and declared above
             '''
-            self.wss_fire_up = False
             try:
                 await self.send_request(self.stub.StartStream,
                                         api_pb2.StartStreamRequest,
@@ -1403,10 +1415,16 @@ class StrategyBase:
             except UserWarning:
                 self.message_log("Start WSS failed, retry", log_level=LogLevel.WARNING)
                 self.wss_fire_up = True
+            else:
+                self.wss_fire_up = False
         else:
             self.message_log("Init WSS failed, retry", log_level=LogLevel.WARNING)
             await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))
             self.wss_fire_up = True
+
+    def task_cancel(self):
+        [task.cancel() for task in self.tasks_list if not task.done()]
+        self.tasks_list.clear()
 
     async def main(self, _symbol):
         restore_state = None
@@ -1738,7 +1756,7 @@ async def save_to_csv() -> None:
     file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
     with open(file_name, mode="a", buffering=1, newline='') as csvfile:
         writer = csv.writer(csvfile)
-        while 1:
+        while True:
             writer.writerow(await SAVE_TRADE_QUEUE.get())
             SAVE_TRADE_QUEUE.task_done()
 
