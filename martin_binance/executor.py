@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc1"
+__version__ = "3.0.0rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -30,7 +30,7 @@ from martin_binance import DB_FILE
 from martin_binance.db_utils import db_management, save_to_db
 from martin_binance.telegram_utils import telegram
 from martin_binance.strategy_base import StrategyBase, __version__ as msb_ver
-from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, LogLevel, any2str, Order, OrderUpdate, Orders, \
+from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, any2str, Order, OrderUpdate, Orders, \
     f2d, solve
 from martin_binance.params import *
 
@@ -135,7 +135,7 @@ class Strategy(StrategyBase):
         else:
             init_params_error = None
         if init_params_error:
-            self.message_log(f"Incorrect value for {init_params_error}", log_level=LogLevel.ERROR)
+            self.message_log(f"Incorrect value for {init_params_error}", log_level=logging.ERROR)
             raise SystemExit(1)
         db_management(EXCHANGE)
         tcm = self.get_trading_capability_manager()
@@ -158,7 +158,7 @@ class Strategy(StrategyBase):
                          f" mode",
                          color=Style.B_WHITE if MODE == 'T' else (Style.B_RED if MODE == 'TC' else Style.GREEN))
         if MODE == 'TC' and SELF_OPTIMIZATION:
-            self.message_log("Auto update parameters mode!", log_level=LogLevel.WARNING, color=Style.B_RED)
+            self.message_log("Auto update parameters mode!", log_level=logging.WARNING, color=Style.B_RED)
         # Calculate round float multiplier
         self.round_base = ROUND_BASE or str(tcm.round_amount(f2d(1.123456789), ROUND_FLOOR))
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
@@ -185,7 +185,7 @@ class Strategy(StrategyBase):
                         self.message_log('Not enough first coin for Sell cycle!', color=Style.B_RED)
                         raise SystemExit(1)
         else:
-            self.message_log("Can't get actual price, initialization checks stopped", log_level=LogLevel.CRITICAL)
+            self.message_log("Can't get actual price, initialization checks stopped", log_level=logging.CRITICAL)
             raise SystemExit(1)
 
     def save_strategy_state(self, return_only=False) -> Dict[str, str]:
@@ -256,7 +256,7 @@ class Strategy(StrategyBase):
                         self.connection_analytic.commit()
                     except sqlite3.Error as err:
                         print(f"UPDATE t_control: {err}")
-                # self.message_log(f"save_strategy_state.command: {self.command}", log_level=LogLevel.DEBUG)
+                # self.message_log(f"save_strategy_state.command: {self.command}", log_level=logging.DEBUG)
             if self.command == 'stopped':
                 if isinstance(self.start_collect, int):
                     if self.start_collect < 5:
@@ -274,7 +274,7 @@ class Strategy(StrategyBase):
                 if self.cycle_time:
                     ct = str(datetime.utcnow() - self.cycle_time).rsplit('.')[0]
                 else:
-                    self.message_log("save_strategy_state: cycle_time is None!", log_level=LogLevel.DEBUG)
+                    self.message_log("save_strategy_state: cycle_time is None!", log_level=logging.DEBUG)
                     ct = str(datetime.utcnow()).rsplit('.')[0]
                 if self.command == 'stopped':
                     self.message_log("Strategy stopped. Need manual action", tlg=True)
@@ -452,8 +452,8 @@ class Strategy(StrategyBase):
     def restore_strategy_state(self, strategy_state: Dict[str, str] = None, restore=True) -> None:
         if strategy_state:
             # Restore from file if lose state only
-            self.message_log("restore_strategy_state from saved state:", log_level=LogLevel.DEBUG)
-            self.message_log("\n".join(f"{k}\t{v}" for k, v in strategy_state.items()), log_level=LogLevel.DEBUG)
+            self.message_log("restore_strategy_state from saved state:", log_level=logging.DEBUG)
+            self.message_log("\n".join(f"{k}\t{v}" for k, v in strategy_state.items()), log_level=logging.DEBUG)
             #
             self.command = json.loads(strategy_state.get('command'))
             #
@@ -743,19 +743,19 @@ class Strategy(StrategyBase):
         if ADAPTIVE_TRADE_CONDITION:
             if self.first_run and self.order_q < 3:
                 self.message_log(f"Depo amount {depo} not enough to set the grid with 3 or more orders",
-                                 log_level=LogLevel.ERROR)
+                                 log_level=logging.ERROR)
                 raise SystemExit(1)
             _amount_first_grid = (_amount_first_grid * self.avg_rate) if self.cycle_buy else _amount_first_grid
             if _amount_first_grid > 80 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} too large for"
-                                 f" a small deposit {self.deposit_second}", log_level=LogLevel.ERROR)
+                                 f" a small deposit {self.deposit_second}", log_level=logging.ERROR)
                 if self.first_run:
                     raise SystemExit(1)
             if _amount_first_grid > 20 * depo / 100:
                 self.message_log(f"Recommended size of the first grid order {_amount_first_grid:f} it is rather"
                                  f" big for a small deposit"
                                  f" {self.deposit_second if self.cycle_buy else self.deposit_first}",
-                                 log_level=LogLevel.WARNING)
+                                 log_level=logging.WARNING)
         else:
             first_order_vlm = depo * 1 * (1 - self.martin) / (1 - self.martin ** ORDER_Q)
 
@@ -788,7 +788,7 @@ class Strategy(StrategyBase):
                 try:
                     self.pr_db.start()
                 except AssertionError as error:
-                    self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
+                    self.message_log(str(error), log_level=logging.ERROR, color=Style.B_RED)
         if TOKEN and MODE != 'S':
             self.pr_tlg = Thread(
                 target=telegram,
@@ -809,7 +809,7 @@ class Strategy(StrategyBase):
                 try:
                     self.pr_tlg.start()
                 except AssertionError as error:
-                    self.message_log(str(error), log_level=LogLevel.ERROR, color=Style.B_RED)
+                    self.message_log(str(error), log_level=logging.ERROR, color=Style.B_RED)
 
     ##############################################################
     # Technical analysis
@@ -921,7 +921,7 @@ class Strategy(StrategyBase):
         bbb = sma - KBB * st_dev
         min_price = self.get_trading_capability_manager().get_minimal_price_change()
         bbb = max(bbb, min_price)
-        # self.message_log(f"bollinger_band: tbb={tbb:f}, bbb={bbb:f}", log_level=LogLevel.DEBUG)
+        # self.message_log(f"bollinger_band: tbb={tbb:f}, bbb={bbb:f}", log_level=logging.DEBUG)
         return {'tbb': f2d(tbb), 'bbb': f2d(bbb)}
 
     ##############################################################
@@ -967,7 +967,7 @@ class Strategy(StrategyBase):
                          f"! reverse: {self.reverse}\n"
                          f"! Profit: {self.get_sum_profit()}\n"
                          f"! ======================================",
-                         log_level=LogLevel.DEBUG)
+                         log_level=logging.DEBUG)
 
     def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total', backtest=False) -> ():
         """
@@ -1047,7 +1047,7 @@ class Strategy(StrategyBase):
                          f" reverse_target_amount: {reverse_target_amount},"
                          f" allow_grid_shift: {allow_grid_shift},"
                          f" additional_grid: {additional_grid},"
-                         f" grid_update: {grid_update}", log_level=LogLevel.DEBUG)
+                         f" grid_update: {grid_update}", log_level=logging.DEBUG)
         self.grid_hold.clear()
         self.last_shift_time = None
         self.wait_wss_refresh = {}
@@ -1093,7 +1093,7 @@ class Strategy(StrategyBase):
                                                                   grid_update=grid_update)
                 except statistics.StatisticsError as ex:
                     self.message_log(f"Can't set trade conditions: {ex}, waiting for WSS data update",
-                                     log_level=LogLevel.WARNING)
+                                     log_level=logging.WARNING)
                     self.wait_wss_refresh = {
                               'buy_side': buy_side,
                               'depo': depo,
@@ -1105,7 +1105,7 @@ class Strategy(StrategyBase):
                     return
                 except Exception as ex:
                     self.message_log(
-                        f"Can't set trade conditions: {ex}\n{traceback.format_exc()}", log_level=LogLevel.ERROR
+                        f"Can't set trade conditions: {ex}\n{traceback.format_exc()}", log_level=logging.ERROR
                     )
                     return
             else:
@@ -1144,7 +1144,7 @@ class Strategy(StrategyBase):
                 total_grid_amount_f = grid_calc['total_grid_amount_f']
                 total_grid_amount_s = grid_calc['total_grid_amount_s']
                 self.message_log(f"Total grid amount: first: {total_grid_amount_f}, second: {total_grid_amount_s}",
-                                 log_level=LogLevel.DEBUG, color=Style.CYAN)
+                                 log_level=logging.DEBUG, color=Style.CYAN)
             #
             for order in orders:
                 i, amount, price = order
@@ -1161,7 +1161,7 @@ class Strategy(StrategyBase):
                     try:
                         bb = self.bollinger_band(15, BB_NUMBER_OF_CANDLES)
                     except Exception as ex:
-                        self.message_log(f"Can't get BollingerBand: {ex}", log_level=LogLevel.ERROR)
+                        self.message_log(f"Can't get BollingerBand: {ex}", log_level=logging.ERROR)
                     else:
                         if buy_side:
                             self.shift_grid_threshold = bb.get('tbb')
@@ -1296,7 +1296,7 @@ class Strategy(StrategyBase):
             try:
                 bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
             except Exception as ex:
-                self.message_log(f"Can't get BB in grid update: {ex}", log_level=LogLevel.INFO)
+                self.message_log(f"Can't get BB in grid update: {ex}", log_level=logging.INFO)
             else:
                 if self.heartbeat_counter % 150 == 0:
                     frequency = 'low'
@@ -1406,9 +1406,9 @@ class Strategy(StrategyBase):
             try:
                 profit_max = min(PROFIT_MAX, max(PROFIT, 100 * self.atr() / self.get_buffered_ticker().last_price))
             except statistics.StatisticsError as ex:
-                self.message_log(f"Can't get ATR value: {ex}, use default PROFIT value", LogLevel.WARNING)
+                self.message_log(f"Can't get ATR value: {ex}, use default PROFIT value", logging.WARNING)
                 profit_max = PROFIT
-            self.message_log(f"Profit max for first order set {float(profit_max):f}%", LogLevel.DEBUG)
+            self.message_log(f"Profit max for first order set {float(profit_max):f}%", logging.DEBUG)
             k_m = 1 - profit_max / 100
             amount_first_grid = max(amount_min, (step_size * base_price / ((1 / k_m) - 1)) / base_price)
             amount_first_grid = self.round_truncate(amount_first_grid, base=True, _rounding=ROUND_CEILING)
@@ -1442,7 +1442,7 @@ class Strategy(StrategyBase):
                          f" base_price: {base_price}, reverse_target_amount: {reverse_target_amount},"
                          f" amount_min: {amount_min}, step_size: {step_size}, delta_min: {delta_min},"
                          f" amount_first_grid: {amount_first_grid:f}, coarse overprice: {float(self.over_price):f}",
-                         LogLevel.DEBUG)
+                         logging.DEBUG)
         while q_max > ORDER_Q or (GRID_ONLY and q_max > 1):
             delta_price = self.over_price * base_price / (100 * (q_max - 1))
             if LINEAR_GRID_K >= 0:
@@ -1479,7 +1479,7 @@ class Strategy(StrategyBase):
                 bb = self.bollinger_band(15, 20)
             except statistics.StatisticsError:
                 self.message_log("Set profit Exception, can't calculate BollingerBand, set profit by default",
-                                 log_level=LogLevel.WARNING)
+                                 log_level=logging.WARNING)
             else:
                 tbb = bb.get('tbb', O_DEC)
                 bbb = bb.get('bbb', O_DEC)
@@ -1535,7 +1535,7 @@ class Strategy(StrategyBase):
             self.message_log(f"Calc TP: depo: {self.tp_amount},"
                              f" target {'first' if buy_side else 'second'}: {target},"
                              f" buy_side: {buy_side}, by_market: {by_market}",
-                             log_level=LogLevel.DEBUG)
+                             log_level=logging.DEBUG)
         return {'price': price, 'amount': amount, 'profit': profit, 'target': target}
 
     def calc_over_price(self,
@@ -1576,7 +1576,7 @@ class Strategy(StrategyBase):
             over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
 
             if over_price == 0:
-                self.message_log(f"{msg}, use previous or over_price_coarse * 3", log_level=LogLevel.WARNING)
+                self.message_log(f"{msg}, use previous or over_price_coarse * 3", log_level=logging.WARNING)
                 over_price = max(over_price_previous, 3 * over_price_coarse)
             else:
                 self.message_log(msg)
@@ -1614,7 +1614,7 @@ class Strategy(StrategyBase):
                     amount_second -= self.round_fee(fee, amount_second, base=False)
                     message = f"For grid order Second - fee: {any2str(amount_second)}"
         if print_info and message:
-            self.message_log(message, log_level=LogLevel.DEBUG)
+            self.message_log(message, log_level=logging.DEBUG)
         return self.round_truncate(amount_first, fee=True), self.round_truncate(amount_second, fee=True)
 
     def fee_for_tp(self,
@@ -1646,7 +1646,7 @@ class Strategy(StrategyBase):
                         amount_first -= self.round_fee(fee, amount_first, base=True)
                         log_text = f"Take profit order First - fee: {amount_first}"
             if log_output:
-                self.message_log(log_text, log_level=LogLevel.DEBUG)
+                self.message_log(log_text, log_level=logging.DEBUG)
         return self.round_truncate(amount_first, fee=True), self.round_truncate(amount_second, fee=True)
 
     def after_filled_tp(self, one_else_grid: bool = False):
@@ -1658,7 +1658,7 @@ class Strategy(StrategyBase):
         self.message_log(f"after_filled_tp: amount_first: {float(amount_first):f},"
                          f" amount_second: {float(amount_second):f},"
                          f" by_market: {by_market}, tp_amount: {self.tp_amount}, tp_target: {self.tp_target}"
-                         f" one_else_grid: {one_else_grid}", log_level=LogLevel.DEBUG)
+                         f" one_else_grid: {one_else_grid}", log_level=logging.DEBUG)
         self.debug_output()
         amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second, by_market)
         # Calculate cycle and total profit, refresh depo
@@ -1703,7 +1703,7 @@ class Strategy(StrategyBase):
                 self.initial_second += profit_s
             self.message_log(f"after_filled_tp: new initial_funding:"
                              f" {self.initial_reverse_second if self.reverse else self.initial_second}",
-                             log_level=LogLevel.INFO)
+                             log_level=logging.INFO)
             self.cycle_buy_count += 1
         else:
             self.deposit_first += self.profit_first - transfer_sum_amount_first
@@ -1722,10 +1722,10 @@ class Strategy(StrategyBase):
                 self.initial_second += profit_s
             self.message_log(f"after_filled_tp: new initial_funding:"
                              f" {self.initial_reverse_first if self.reverse else self.initial_first}",
-                             log_level=LogLevel.INFO)
+                             log_level=logging.INFO)
             self.cycle_sell_count += 1
         if (not self.cycle_buy and self.profit_first < 0) or (self.cycle_buy and self.profit_second < 0):
-            self.message_log("Strategy have a negative cycle result, STOP", log_level=LogLevel.CRITICAL)
+            self.message_log("Strategy have a negative cycle result, STOP", log_level=logging.CRITICAL)
             self.command = 'end'
             self.tp_was_filled = ()
             self.grid_remove = None
@@ -1742,7 +1742,7 @@ class Strategy(StrategyBase):
         self.start(profit_f, profit_s)
 
     def reverse_after_grid_ending(self):
-        self.message_log("Reverse after grid ending:", log_level=LogLevel.DEBUG)
+        self.message_log("Reverse after grid ending:", log_level=logging.DEBUG)
         self.debug_output()
         profit_f = profit_s = O_DEC
         if self.reverse:
@@ -1775,7 +1775,7 @@ class Strategy(StrategyBase):
             self.initial_reverse_first = self.initial_reverse_second = O_DEC
             self.command = 'stop' if REVERSE_STOP and REVERSE else self.command
             if (self.cycle_buy and self.profit_first < 0) or (not self.cycle_buy and self.profit_second < 0):
-                self.message_log("Strategy have a negative cycle result, STOP", log_level=LogLevel.CRITICAL)
+                self.message_log("Strategy have a negative cycle result, STOP", log_level=logging.CRITICAL)
                 self.command = 'end'
         else:
             try:
@@ -1797,7 +1797,7 @@ class Strategy(StrategyBase):
                 self.reverse_init_amount = self.sum_amount_second - self.tp_part_amount_second
                 self.initial_reverse_first = self.initial_first + self.sum_amount_first
                 self.initial_reverse_second = self.initial_second - self.sum_amount_second
-                self.message_log(f"Depo for Reverse cycle first: {self.deposit_first}", log_level=LogLevel.DEBUG,
+                self.message_log(f"Depo for Reverse cycle first: {self.deposit_first}", log_level=logging.DEBUG,
                                  color=Style.B_WHITE)
             else:
                 self.deposit_second = (self.round_truncate(self.sum_amount_second, base=False)
@@ -1806,9 +1806,9 @@ class Strategy(StrategyBase):
                 self.reverse_init_amount = self.sum_amount_first - self.tp_part_amount_first
                 self.initial_reverse_first = self.initial_first - self.sum_amount_first
                 self.initial_reverse_second = self.initial_second + self.sum_amount_second
-                self.message_log(f"Depo for Reverse cycle second: {self.deposit_second}", log_level=LogLevel.DEBUG,
+                self.message_log(f"Depo for Reverse cycle second: {self.deposit_second}", log_level=logging.DEBUG,
                                  color=Style.B_WHITE)
-            self.message_log(f"Actual depo for initial cycle was: {self.reverse_init_amount}", log_level=LogLevel.DEBUG)
+            self.message_log(f"Actual depo for initial cycle was: {self.reverse_init_amount}", log_level=logging.DEBUG)
             self.message_log(f"For Reverse cycle set target return amount: {self.reverse_target_amount}"
                              f" with profit: {tp.get('profit')}%", color=Style.B_WHITE)
             self.debug_output()
@@ -1902,7 +1902,7 @@ class Strategy(StrategyBase):
             self.sum_amount_second += delta_s
             self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
                              f" Sum_amount_second: {self.sum_amount_second}",
-                             log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+                             log_level=logging.DEBUG, color=Style.MAGENTA)
             if GRID_ONLY:
                 # Correct depo and init amount
                 if self.cycle_buy:
@@ -2033,12 +2033,12 @@ class Strategy(StrategyBase):
     def update_sum_amount(self, _amount_f, _amount_s):
         self.message_log(f"Before Correction: Sum_amount_first: {self.sum_amount_first},"
                          f" Sum_amount_second: {self.sum_amount_second}",
-                         log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+                         log_level=logging.DEBUG, color=Style.MAGENTA)
         self.sum_amount_first -= _amount_f
         self.sum_amount_second -= _amount_s
         self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
                          f" Sum_amount_second: {self.sum_amount_second}",
-                         log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+                         log_level=logging.DEBUG, color=Style.MAGENTA)
 
     def cancel_grid(self, cancel_all=False):
         """
@@ -2049,7 +2049,7 @@ class Strategy(StrategyBase):
             if cancel_all:
                 self.orders_save.orders_list.clear()
                 self.orders_save.orders_list.extend(self.orders_grid)
-            self.message_log("cancel_grid: Started", log_level=LogLevel.DEBUG)
+            self.message_log("cancel_grid: Started", log_level=logging.DEBUG)
         if self.grid_remove:
             if self.orders_init:
                 # Exist not accepted grid order(s), wait msg from exchange
@@ -2060,10 +2060,10 @@ class Strategy(StrategyBase):
                 _id, _, _, _ = self.orders_grid.get_first()
                 if not cancel_all:
                     self.orders_save.orders_list.append(self.orders_grid.get_by_id(_id))
-                self.message_log(f"cancel_grid order: {_id}", log_level=LogLevel.DEBUG)
+                self.message_log(f"cancel_grid order: {_id}", log_level=logging.DEBUG)
                 self.cancel_order(_id, cancel_all=cancel_all)
             else:
-                self.message_log("cancel_grid: Ended", log_level=LogLevel.DEBUG)
+                self.message_log("cancel_grid: Ended", log_level=logging.DEBUG)
                 self.orders_save.orders_list.clear()
                 self.orders_hold.orders_list.clear()
                 self.grid_remove = None
@@ -2142,7 +2142,7 @@ class Strategy(StrategyBase):
                     (not buy and price > tcm.get_max_sell_price(_price))):
                 self.message_log(
                     f"{'Buy' if buy else 'Sell'} price {price} is out of trading range, will try later",
-                    log_level=LogLevel.WARNING,
+                    log_level=logging.WARNING,
                     color=Style.YELLOW
                 )
                 return 0
@@ -2157,7 +2157,7 @@ class Strategy(StrategyBase):
         waiting_order_id = self.place_limit_order(buy, amount, price)
         if _price != price:
             self.message_log(f"For order {waiting_order_id} price was updated from {_price} to {price}",
-                             log_level=LogLevel.WARNING)
+                             log_level=logging.WARNING)
         return waiting_order_id
 
     ##############################################################
@@ -2219,13 +2219,15 @@ class Strategy(StrategyBase):
     ##############################################################
 
     def on_balance_update_ex(self, balance: Dict) -> None:
+        # TODO Check amount and correct appropriate order volume
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
         restart = False
-        if delta > 0:
-            delta = self.round_truncate(delta, bool(asset == self.f_currency), _rounding=ROUND_FLOOR)
-        else:
-            delta = self.round_truncate(delta, bool(asset == self.f_currency), _rounding=ROUND_CEILING)
+        delta = self.round_truncate(
+            delta,
+            bool(asset == self.f_currency),
+            _rounding=ROUND_FLOOR if delta > 0 else ROUND_CEILING
+        )
         #
         if self.cycle_buy:
             if asset == self.s_currency:
@@ -2311,7 +2313,7 @@ class Strategy(StrategyBase):
                                 self.grid_hold['grid_update'])
 
     def on_order_update_ex(self, update: OrderUpdate) -> None:
-        # self.message_log(f"Order {update.original_order.id}: {update.status}", log_level=LogLevel.DEBUG)
+        # self.message_log(f"Order {update.original_order.id}: {update.status}", log_level=logging.DEBUG)
         if update.status in [OrderUpdate.ADAPTED,
                              OrderUpdate.NO_CHANGE,
                              OrderUpdate.REAPPEARED,
@@ -2332,9 +2334,9 @@ class Strategy(StrategyBase):
                 amount_second = i.amount * i.price
                 by_market = not bool(i.is_maker)
                 self.message_log(f"trade id={i.id}, first: {any2str(i.amount)}, price: {any2str(i.price)},"
-                                 f" by_market: {by_market}", log_level=LogLevel.DEBUG)
+                                 f" by_market: {by_market}", log_level=logging.DEBUG)
             else:
-                self.message_log(f"No records for {update.original_order.id}", log_level=LogLevel.WARNING)
+                self.message_log(f"No records for {update.original_order.id}", log_level=logging.WARNING)
         else:
             for i in result_trades:
                 # Calculate sum trade amount for both currency
@@ -2342,7 +2344,7 @@ class Strategy(StrategyBase):
                 amount_second += i.amount * i.price
                 by_market = by_market or not bool(i.is_maker)
                 self.message_log(f"trade id={i.id}, first: {any2str(i.amount)}, price: {any2str(i.price)},"
-                                 f" by_market: {by_market}", log_level=LogLevel.DEBUG)
+                                 f" by_market: {by_market}", log_level=logging.DEBUG)
         self.avg_rate = amount_second / amount_first
         self.message_log(f"Executed amount: First: {any2str(amount_first)}, Second: {any2str(amount_second)},"
                          f" price: {any2str(self.avg_rate)}")
@@ -2403,13 +2405,13 @@ class Strategy(StrategyBase):
                 self.sum_amount_second += amount_second_fee
                 self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
                                  f" Sum_amount_second: {self.sum_amount_second}",
-                                 log_level=LogLevel.DEBUG, color=Style.MAGENTA)
+                                 log_level=logging.DEBUG, color=Style.MAGENTA)
                 part_amount_first, part_amount_second = self.part_amount.pop(update.original_order.id, (O_DEC, O_DEC))
                 part_amount_first -= amount_first_fee
                 part_amount_second -= amount_second_fee
                 self.part_amount[update.original_order.id] = (part_amount_first, part_amount_second)
                 self.message_log(f"Part_amount_first: {part_amount_first},"
-                                 f" Part_amount_second: {part_amount_second}", log_level=LogLevel.DEBUG)
+                                 f" Part_amount_second: {part_amount_second}", log_level=logging.DEBUG)
                 if GRID_ONLY:
                     # Correct depo and init amount
                     if self.cycle_buy:
@@ -2439,14 +2441,14 @@ class Strategy(StrategyBase):
                     self.part_profit_second += _profit_second
                     self.message_log(f"Part profit second: {any2str(_profit_second)},"
                                      f" sum={any2str(self.part_profit_second)}",
-                                     log_level=LogLevel.DEBUG)
+                                     log_level=logging.DEBUG)
                 else:
                     target_fee, _ = self.fee_for_tp(self.tp_target, O_DEC, log_output=False)
                     _profit_first = (target_fee - self.tp_amount) * amount_first_fee / target_fee
                     self.part_profit_first += _profit_first
                     self.message_log(f"Part profit first: {any2str(_profit_first)},"
                                      f" sum={any2str(self.part_profit_first)}",
-                                     log_level=LogLevel.DEBUG)
+                                     log_level=logging.DEBUG)
                 first_fee_profit = self.round_truncate(amount_first_fee - _profit_first, base=True)
                 second_fee_profit = self.round_truncate(amount_second_fee - _profit_second, base=False)
                 self.tp_part_amount_first += first_fee_profit
@@ -2512,11 +2514,11 @@ class Strategy(StrategyBase):
                 if self.orders_hold and not self.order_q_placed and not self.orders_init:
                     self.place_grid_part()
         else:
-            self.message_log(f"Did not have waiting order id for {place_order_id}", LogLevel.ERROR)
+            self.message_log(f"Did not have waiting order id for {place_order_id}", logging.ERROR)
 
     def on_place_order_error(self, place_order_id: int, error: str) -> None:
         # Check all orders on exchange if exists required
-        self.message_log(f"On place order {place_order_id} error: {error}", LogLevel.ERROR, tlg=True)
+        self.message_log(f"On place order {place_order_id} error: {error}", logging.ERROR, tlg=True)
         if self.orders_init.exist(place_order_id):
             _order = self.orders_init.get_by_id(place_order_id)
             self.orders_init.remove(place_order_id)
@@ -2537,10 +2539,10 @@ class Strategy(StrategyBase):
         if order_id == self.cancel_grid_order_id:
             self.ts_grid_update = self.get_time()
             self.cancel_grid_order_id = None
-            self.message_log(f"Processing updated grid order {order_id}", log_level=LogLevel.INFO)
+            self.message_log(f"Processing updated grid order {order_id}", log_level=logging.INFO)
             self.orders_grid.remove(order_id)
         elif self.orders_grid.exist(order_id):
-            self.message_log(f"Processing canceled grid order {order_id}", log_level=LogLevel.INFO)
+            self.message_log(f"Processing canceled grid order {order_id}", log_level=logging.INFO)
             self.ts_grid_update = self.get_time()
             self.part_amount.pop(order_id, None)
             self.orders_grid.remove(order_id)
@@ -2602,7 +2604,7 @@ class Strategy(StrategyBase):
                 self.start()
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
-        self.message_log(f"On cancel order {order_id} {error}", LogLevel.ERROR)
+        self.message_log(f"On cancel order {order_id} {error}", logging.ERROR)
 
     def restore_state_before_backtesting_ex(self, saved_state):
         self.cycle_buy = json.loads(saved_state.get('cycle_buy'))

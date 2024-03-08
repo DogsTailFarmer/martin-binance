@@ -1,8 +1,9 @@
-## 3.0.0rcX - 2024-03-xx
+## 3.0.0rc8 - 2024-03-08
 ### Fix
 * logging for Simulate mode
 
 ### Update
+* :rocket: Migrate `gRPC` from [grpcio](https://grpc.io/) to [grpclib](https://github.com/vmagamedov/grpclib) + [python-betterproto](https://github.com/danielgtaylor/python-betterproto)
 * Binance: handling `EXPIRED_IN_MATCH`
 * `WSS`: check and restart
 

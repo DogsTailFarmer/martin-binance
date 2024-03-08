@@ -8,6 +8,7 @@ __version__ = "3.0.0rc1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
+import logging
 from decimal import Decimal
 from pathlib import Path
 
@@ -42,7 +43,7 @@ GRID_UPDATE_INTERVAL = 60 * 60  # sec between grid update in Reverse cycle
 # Other
 STATUS_DELAY = int()
 GRID_ONLY = bool()
-LOG_LEVEL_NO_PRINT = []
+LOG_LEVEL = logging.DEBUG  # Default level for console output
 HOLD_TP_ORDER_TIMEOUT = 30
 COLLECT_ASSETS = bool()
 #

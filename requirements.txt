@@ -1,4 +1,4 @@
-exchanges-wrapper==1.4.17.b1
+exchanges-wrapper==2.0.0.b6
 jsonpickle==3.0.2
 psutil==5.9.6
 requests==2.31.0
@@ -16,3 +16,7 @@ tqdm==4.66.1
 ujson~=5.9.0
 orjson~=3.9.15
 pyarrow~=14.0.2
+shortuuid~=1.0.11
+numpy~=1.23.4
+scipy~=1.9.3
+toml~=0.10.2

@@ -25,7 +25,6 @@ from pathlib import Path
 from shutil import rmtree, copy
 from typing import Dict, List
 
-import grpc
 import jsonpickle
 import orjson
 import pandas as pd
@@ -33,17 +32,17 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import ujson as json
 from colorama import init as color_init
-from exchanges_wrapper import api_pb2, api_pb2_grpc
-from google.protobuf import json_format
 from tqdm import tqdm
+
+from exchanges_wrapper import martin as mr, Status, GRPCError
 
 import martin_binance.params as prm
 from martin_binance import LAST_STATE_PATH, BACKTEST_PATH, HEARTBEAT, KLINES_INIT, EQUAL_STR, ORDER_TIMEOUT
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 from martin_binance.backtest.optimizer import run_optimize, OPTIMIZER, PARAMS_FLOAT
 from martin_binance.client import Trade
-from martin_binance.lib import Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, LogLevel, \
-    any2str, PrivateTrade, Order, convert_from_minute, write_log, OrderUpdate, load_file, load_last_state, Klines
+from martin_binance.lib import Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, \
+    any2str, PrivateTrade, Order, convert_from_minute, OrderUpdate, load_file, load_last_state, Klines
 
 if prm.MODE == 'S':
     logger = logging.getLogger('logger_S')
@@ -51,13 +50,6 @@ else:
     logger = logging.getLogger('logger')
 loop = asyncio.get_event_loop()
 color_init()
-
-# For more channel options, please see https://grpc.io/grpc/core/group__grpc__arg__keys.html
-CHANNEL_OPTIONS = [
-    ('grpc.lb_policy_name', 'pick_first'),
-    ('grpc.enable_retries', 0),
-    ('grpc.keepalive_timeout_ms', 10000)
-]
 
 RATE_LIMITER = HEARTBEAT * 5
 KLINES_LIM = 50  # Number of candles must be <= 1000
@@ -76,11 +68,11 @@ SAVE_TRADE_QUEUE = asyncio.Queue()
 class StrategyBase:
     def __init__(self):
         self.session = None
-        self.client: api_pb2.OpenClientConnectionId = None
+        self.client = None
         self.exchange = str()
         self.symbol = str()
         self.channel = None
-        self.stub = api_pb2_grpc.MartinStub
+        self.stub = mr.MartinStub
         self.client_id = int()
         self.info_symbol = {}
         self.base_asset = str()
@@ -255,27 +247,27 @@ class StrategyBase:
         loop.create_task(self.cancel_order_timeout(order_id))
         loop.create_task(self.cancel_order_call(order_id, cancel_all))
 
-    def message_log(self, msg: str, log_level=LogLevel.INFO, tlg=False, color=Style.WHITE) -> None:
+    def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE) -> None:
         if prm.LOGGING:
             if tlg and color == Style.WHITE:
                 color = Style.B_WHITE
-            if log_level in (LogLevel.ERROR, LogLevel.CRITICAL):
+            if log_level >= logging.ERROR:
                 tlg = True
                 color = Style.B_RED
             color_msg = color + msg + Style.RESET if color else msg
-            if log_level not in prm.LOG_LEVEL_NO_PRINT:
+            if log_level >= prm.LOG_LEVEL:
                 if prm.MODE in ('T', 'TC'):
                     print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
                 else:
                     tqdm.write(f"{datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')[:-3]} {color_msg}")
             if prm.MODE in ('T', 'TC'):
-                write_log(log_level, msg)
+                logger.log(log_level, msg)
                 if tlg and self.queue_to_tlg:
                     msg = self.tlg_header + msg
                     self.status_time = self.get_time()
                     self.queue_to_tlg.put(msg)
-        elif log_level in (logging.ERROR, logging.CRITICAL):
-            write_log(log_level, msg)
+        elif log_level >= logging.ERROR:
+            logger.log(log_level, msg)
 
     #
     def order_exist(self, _id) -> bool:
@@ -308,7 +300,8 @@ class StrategyBase:
         delay = HEARTBEAT * 30  # 1 min
         ts = time.time()
         restart = False
-        await self.wait_wss_init()
+        while not self.operational_status:
+            await asyncio.sleep(HEARTBEAT)
         while self.operational_status:
             if self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
                 self.start_collect = False
@@ -359,14 +352,14 @@ class StrategyBase:
                 # Refresh klines init
                 for i in KLINES_INIT:
                     try:
-                        res = await self.send_request(self.stub.FetchKlines, api_pb2.FetchKlinesRequest,
+                        res = await self.send_request(self.stub.fetch_klines, mr.FetchKlinesRequest,
                                                       symbol=self.symbol,
                                                       interval=i.value,
                                                       limit=KLINES_LIM)
                     except Exception as ex:
                         logger.warning(f"FetchKlines: {ex}")
                     else:
-                        self.klines[i.value] = json_format.MessageToDict(res)
+                        self.klines[i.value] = list(map(json.loads, res.items))
                 # Save current strategy state for backtesting
                 last_state = self.save_strategy_state(return_only=True)
                 self.last_state_update(last_state)
@@ -506,8 +499,8 @@ class StrategyBase:
                         last_exec_time = time.time()
                         try:
                             res = await self.send_request(
-                                self.stub.CheckStream,
-                                api_pb2.MarketRequest,
+                                self.stub.check_stream,
+                                mr.MarketRequest,
                                 symbol=self.symbol
                             )
                         except Exception as ex:
@@ -524,8 +517,8 @@ class StrategyBase:
                             if await self.session.get_client():
                                 self.update_vars(self.session)
                                 await self.send_request(
-                                    self.stub.StopStream,
-                                    api_pb2.MarketRequest,
+                                    self.stub.stop_stream,
+                                    mr.MarketRequest,
                                     symbol=self.symbol
                                 )
                                 await self.wss_init(update_max_queue_size=update_max_queue_size)
@@ -549,13 +542,13 @@ class StrategyBase:
         max_use_update = 60 * 60 * 24  # 24h if the row has not been updated that the asset is not traded
         while True:
             try:
-                res = await self.send_request(self.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
+                res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
             except asyncio.CancelledError:
                 pass
             except Exception as _ex:
                 logger.warning(f"Exception save_asset: {_ex}")
             else:
-                balances = json_format.MessageToDict(res).get('balances', [])
+                balances = list(map(json.loads, res.items))
                 # Refresh actual balance
                 try:
                     balance_f = next(item for item in balances if item["asset"] == self.base_asset)
@@ -583,13 +576,13 @@ class StrategyBase:
                 assets_fw = {}
                 if self.exchange not in ('bitfinex', 'huobi'):
                     try:
-                        res = await self.send_request(self.stub.FetchFundingWallet, api_pb2.FetchFundingWalletRequest)
+                        res = await self.send_request(self.stub.fetch_funding_wallet, mr.FetchFundingWalletRequest)
                     except asyncio.CancelledError:
                         pass
                     except Exception as _ex:
                         logger.warning(f"FetchFundingWallet: {_ex}")
                     else:
-                        funding_wallet = json_format.MessageToDict(res).get('balances', [])
+                        funding_wallet = list(map(json.loads, res.items))
                     for fw in funding_wallet:
                         assets_fw[fw['asset']] = Decimal(fw['free']) + Decimal(fw['locked']) + Decimal(fw['freeze'])
                 # Create list of cumulative asset without current pair, from SPOT wallet
@@ -666,7 +659,7 @@ class StrategyBase:
         if prm.MODE in ('T', 'TC'):
             await asyncio.sleep(HEARTBEAT)
             try:
-                await self.send_request(self.stub.StopStream, api_pb2.MarketRequest, symbol=self.symbol)
+                await self.send_request(self.stub.stop_stream, mr.MarketRequest, symbol=self.symbol)
             except Exception as ex:
                 logger.warning(f"ask_exit: {ex}")
 
@@ -677,6 +670,7 @@ class StrategyBase:
                 self.start_collect = False
                 self.session_data_handler()
 
+        self.channel.close()
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         [task.cancel() for task in tasks]
         await asyncio.gather(*tasks, return_exceptions=True)
@@ -686,44 +680,44 @@ class StrategyBase:
             self.stop()
         except Exception as _err:
             print(f"ask_exit.strategy.stop: {_err}")
-        await self.channel.close()
+
         if prm.MODE in ('T', 'TC') and prm.LAST_STATE_FILE.exists():
             print(f"Current state saved into {prm.LAST_STATE_FILE}")
 
     async def fetch_order(self, _id: int, _client_order_id: str = None, _filled_update_call=False):
         try:
             res = await self.send_request(
-                self.stub.FetchOrder, api_pb2.FetchOrderRequest,
+                self.stub.fetch_order, mr.FetchOrderRequest,
                 symbol=self.symbol,
                 order_id=_id,
                 client_order_id=_client_order_id,
                 filled_update_call=_filled_update_call
             )
-            result = json_format.MessageToDict(res)
+            result = res.to_pydict()
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error.
         except Exception as _ex:
-            self.message_log(f"Exception in fetch_order: {_ex}", log_level=LogLevel.ERROR)
+            self.message_log(f"Exception in fetch_order: {_ex}", log_level=logging.ERROR)
             return {}
         else:
             self.message_log(f"For order {_id}({_client_order_id}) fetched status is {result.get('status')}",
-                             log_level=LogLevel.INFO, color=Style.GREEN)
+                             log_level=logging.INFO, color=Style.GREEN)
             if result:
                 return result
             self.message_log(f"Can't get status for order {_id}({_client_order_id})",
-                             log_level=LogLevel.WARNING)
+                             log_level=logging.WARNING)
             return {}
 
     async def on_funds_update(self):
         if prm.MODE in ('T', 'TC'):
             try:
                 async for _funds in self.for_request(
-                        self.stub.OnFundsUpdate, api_pb2.OnFundsUpdateRequest,
+                        self.stub.on_funds_update, mr.OnFundsUpdateRequest,
                         symbol=self.symbol,
                         base_asset=self.base_asset,
                         quote_asset=self.quote_asset
                 ):
-                    funds = json.loads(json.loads(json_format.MessageToJson(_funds))['funds'])
+                    funds = json.loads(_funds.event)
                     if funds.get(self.base_asset) or funds.get(self.quote_asset):
                         self.on_funds_update_handler(funds)
             except Exception as ex:
@@ -794,8 +788,8 @@ class StrategyBase:
                     if _id not in self.bulk_orders_cancel:
                         res = await asyncio.wait_for(
                             self.send_request(
-                                self.stub.CancelAllOrders,
-                                api_pb2.MarketRequest,
+                                self.stub.cancel_all_orders,
+                                mr.MarketRequest,
                                 symbol=self.symbol
                             ),
                             timeout=ORDER_TIMEOUT - 5
@@ -805,10 +799,10 @@ class StrategyBase:
                                 self.bulk_orders_cancel.update({v['orderId']: v})
                     result = self.bulk_orders_cancel.pop(_id, None)
                 else:
-                    res = await self.send_request(self.stub.CancelOrder, api_pb2.CancelOrderRequest,
+                    res = await self.send_request(self.stub.cancel_order, mr.CancelOrderRequest,
                                                   symbol=self.symbol,
                                                   order_id=_id)
-                    result = json_format.MessageToDict(res)
+                    result = res.to_pydict()
             else:
                 result = self.account.cancel_order(order_id=_id, ts=int(self.get_time() * 1000))
         except asyncio.CancelledError:
@@ -817,9 +811,9 @@ class StrategyBase:
             # TODO timeout event not raised exception
             _fetch_order = True
             self.message_log(f"Timeout on cancel order {_id}")
-        except grpc.RpcError as ex:
+        except GRPCError as ex:
             _fetch_order = True
-            self.message_log(f"Exception on cancel order {_id}: {ex.code().name}, {ex.details()}")
+            self.message_log(f"Exception on cancel order {_id}: {ex.status.name}, {ex.message}")
         except Exception as _ex:
             _fetch_order = True
             self.message_log(f"Exception on cancel order call for {_id}: {_ex}")
@@ -867,30 +861,30 @@ class StrategyBase:
     async def transfer2master(self, symbol: str, amount: str):
         try:
             res = await self.send_request(
-                self.stub.TransferToMaster,
-                api_pb2.MarketRequest,
+                self.stub.transfer_to_master,
+                mr.MarketRequest,
                 symbol=symbol,
                 amount=amount
             )
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
-        except grpc.RpcError as ex:
-            status_code = ex.code()
-            self.message_log(f"Exception transfer {symbol} to main account: {status_code.name}, {ex.details()}")
+        except GRPCError as ex:
+            status_code = ex.status
+            self.message_log(f"Exception transfer {symbol} to main account: {status_code.name}, {ex.message}")
         except Exception as _ex:
             self.message_log(f"Exception transfer {symbol} to main account: {_ex}")
         else:
             if res.success:
-                self.message_log(f"Sent {amount} {symbol} to main account", log_level=LogLevel.INFO)
+                self.message_log(f"Sent {amount} {symbol} to main account", log_level=logging.INFO)
             else:
                 self.message_log(f"Not sent {amount} {symbol} to main account\n,{res.result}",
-                                 log_level=LogLevel.WARNING)
+                                 log_level=logging.WARNING)
 
     async def buffered_funds(self, print_info: bool = True):
         try:
             if prm.MODE in ('T', 'TC'):
-                res = await self.send_request(self.stub.FetchAccountInformation, api_pb2.OpenClientConnectionId)
-                balances = json_format.MessageToDict(res).get('balances', [])
+                res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
+                balances = list(map(json.loads, res.items))
             else:
                 balances = self.account.funds.get_funds()
         except asyncio.CancelledError:
@@ -931,15 +925,15 @@ class StrategyBase:
         """
         while True:
             try:
-                _exchange_info_symbol = await _request(self.stub.FetchExchangeInfoSymbol,
-                                                       api_pb2.MarketRequest,
+                _exchange_info_symbol = await _request(self.stub.fetch_exchange_info_symbol,
+                                                       mr.MarketRequest,
                                                        symbol=_symbol)
             except asyncio.CancelledError:
                 pass  # Task cancellation should not be logged as an error
             except Exception as _ex:
                 self.message_log(f"Exception get_exchange_info: {_ex}")
             else:
-                self.info_symbol = json_format.MessageToDict(_exchange_info_symbol)
+                self.info_symbol = _exchange_info_symbol.to_pydict()
                 self.tcm = TradingCapabilityManager(self.info_symbol, prm.PRICE_LIMIT_RULES)
             await asyncio.sleep(600)
 
@@ -953,27 +947,25 @@ class StrategyBase:
             if prm.MODE in ('T', 'TC'):
                 try:
                     res = await self.send_request(
-                        self.stub.FetchKlines, api_pb2.FetchKlinesRequest,
+                        self.stub.fetch_klines, mr.FetchKlinesRequest,
                         symbol=self.symbol,
                         interval=i.value,
                         limit=KLINES_LIM
                     )
                 except Exception as ex:
-                    kline = {}
+                    kline = []
                     logger.warning(f"FetchKlines: {ex}")
                 else:
-                    kline = json_format.MessageToDict(res)
+                    kline = list(map(json.loads, res.items))
                     if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         self.klines[i.value] = kline
             else:
-                kline = klines_from_file.get(i.value, {})
+                kline = klines_from_file.get(i.value, [])
 
-            if candles := kline.get('klines'):
-                kline_i = Klines(i.value)
-                for candle in candles:
-                    kline_i.refresh(json.loads(candle))
-                    # print(f"buffered_candle.candle: {candle}")
-                klines[i.value] = kline_i
+            kline_i = Klines(i.value)
+            for candle in kline:
+                kline_i.refresh(candle)
+            klines[i.value] = kline_i
 
         if len(klines) == len(KLINES_INIT):
             self.tasks_list.append(asyncio.ensure_future(self.on_klines_update(klines)))
@@ -986,7 +978,7 @@ class StrategyBase:
         _intervals = list(_klines.keys())
         if prm.MODE in ('T', 'TC'):
             try:
-                async for res in self.for_request(self.stub.OnKlinesUpdate, api_pb2.FetchKlinesRequest,
+                async for res in self.for_request(self.stub.on_klines_update, mr.FetchKlinesRequest,
                                                   symbol=self.symbol,
                                                   interval=json.dumps(_intervals)):
                     candle = json.loads(res.candle)
@@ -1016,14 +1008,14 @@ class StrategyBase:
             if prm.MODE in ('T', 'TC'):
                 ts = time.time()
                 res = await self.send_request(
-                    self.stub.CreateLimitOrder, api_pb2.CreateLimitOrderRequest,
+                    self.stub.create_limit_order, mr.CreateLimitOrderRequest,
                     symbol=self.symbol,
                     buy_side=buy,
                     quantity=amount,
                     price=price,
                     new_client_order_id=_id
                 )
-                result = json_format.MessageToDict(res)
+                result = res.to_pydict()
                 self.delay_ordering_s = time.time() - ts
             else:
                 await asyncio.sleep(self.delay_ordering_s / prm.XTIME)
@@ -1037,15 +1029,15 @@ class StrategyBase:
                 )
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
-        except grpc.RpcError as ex:
-            status_code = ex.code()
-            if status_code == grpc.StatusCode.FAILED_PRECONDITION:
+        except GRPCError as ex:
+            status_code = ex.status
+            if status_code == Status.FAILED_PRECONDITION:
                 if _id in self.wait_order_id:
                     # Supress call strategy handler
                     self.wait_order_id.remove(_id)
             else:
                 _fetch_order = True
-            self.on_place_order_error(_id, f"{status_code.name}, {ex.details()}")
+            self.on_place_order_error(_id, f"{status_code.name}, {ex.message}")
         except Exception as _ex:
             _fetch_order = True
             self.message_log(f"Exception creating order {_id}: {_ex}")
@@ -1090,8 +1082,8 @@ class StrategyBase:
 
     async def on_balance_update(self):
         try:
-            async for res in self.for_request(self.stub.OnBalanceUpdate, api_pb2.MarketRequest, symbol=self.symbol):
-                _res = json.loads(res.balance)
+            async for res in self.for_request(self.stub.on_balance_update, mr.MarketRequest, symbol=self.symbol):
+                _res = json.loads(res.event)
                 await SAVE_TRADE_QUEUE.put(
                     ['TRANSFER',
                      _res["event_time"],
@@ -1106,9 +1098,9 @@ class StrategyBase:
 
     async def on_order_update(self):
         try:
-            async for event in self.for_request(self.stub.OnOrderUpdate, api_pb2.MarketRequest, symbol=self.symbol):
+            async for event in self.for_request(self.stub.on_order_update, mr.MarketRequest, symbol=self.symbol):
                 # Only for registered orders on own pair
-                ed = ast.literal_eval(json.loads(event.result))
+                ed = json.loads(event.result)
                 await self.on_order_update_handler(ed)
         except Exception as ex:
             logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
@@ -1143,20 +1135,21 @@ class StrategyBase:
 
         if self.trade_not_exist(ed["order_id"], ed["trade_id"]):
             self._on_order_update_handler_ext(ed)
-            await SAVE_TRADE_QUEUE.put(
-                ["TRADE" if ed['is_maker_side'] else "TRADE_BY_MARKET",
-                 ed["transaction_time"],
-                 ed["side"],
-                 ed["order_id"],
-                 ed["client_order_id"],
-                 ed["trade_id"],
-                 ed["order_quantity"],
-                 ed["order_price"],
-                 ed["cumulative_filled_quantity"],
-                 ed["quote_asset_transacted"],
-                 ed["last_executed_quantity"],
-                 ed["last_executed_price"]]
-            )
+            if prm.MODE in ('T', 'TC'):
+                await SAVE_TRADE_QUEUE.put(
+                    ["TRADE" if ed['is_maker_side'] else "TRADE_BY_MARKET",
+                     ed["transaction_time"],
+                     ed["side"],
+                     ed["order_id"],
+                     ed["client_order_id"],
+                     ed["trade_id"],
+                     ed["order_quantity"],
+                     ed["order_price"],
+                     ed["cumulative_filled_quantity"],
+                     ed["quote_asset_transacted"],
+                     ed["last_executed_quantity"],
+                     ed["last_executed_price"]]
+                )
 
         if ed['order_status'] == 'FILLED':
             # Remove from orders dict
@@ -1197,7 +1190,7 @@ class StrategyBase:
         # noinspection PyStatementEffect
         self.trades[-TRADES_LIST_LIMIT:]
         if ed['order_status'] == 'FILLED' and self.order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
-            self.message_log(f"Order: {ed['order_id']} was missed partially filling event", log_level=LogLevel.INFO)
+            self.message_log(f"Order: {ed['order_id']} was missed partially filling event", log_level=logging.INFO)
             ed['order_status'] = 'PARTIALLY_FILLED'
         self.on_order_update_ex(OrderUpdate(ed, self.trades))
 
@@ -1208,16 +1201,12 @@ class StrategyBase:
         """
         if prm.MODE in ('T', 'TC'):
             try:
-                async for ticker in self.for_request(
-                        self.stub.OnTickerUpdate,
-                        api_pb2.MarketRequest,
+                async for _ticker in self.for_request(
+                        self.stub.on_ticker_update,
+                        mr.MarketRequest,
                         symbol=self.symbol
                 ):
-                    ticker_24h = {'openPrice': ticker.open_price,
-                                  'lastPrice': ticker.close_price,
-                                  'closeTime': ticker.event_time}
-                    self.ticker = ticker_24h
-                    # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
+                    self.ticker = _ticker.to_pydict()
                     self.on_new_ticker(Ticker(self.ticker))
                     #
                     if prm.MODE == 'TC' and self.start_collect:
@@ -1227,9 +1216,9 @@ class StrategyBase:
                                 pa.RecordBatch.from_pylist(mapping=self.s_ticker['pylist'])
                             )
                             self.s_ticker['pylist'].clear()
-                        ticker_24h['delay'] = self.delay_ordering_s
+                        self.ticker['delay'] = self.delay_ordering_s
                         # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
-                        self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(ticker_24h)})
+                        self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(self.ticker)})
                         if prm.SAVE_DS:
                             self.open_orders_snapshot(ts=ts)
             except Exception as ex:
@@ -1259,23 +1248,22 @@ class StrategyBase:
         if prm.MODE in ('T', 'TC'):
             try:
                 async for _order_book in self.for_request(
-                        self.stub.OnOrderBookUpdate,
-                        api_pb2.MarketRequest,
+                        self.stub.on_order_book_update,
+                        mr.MarketRequest,
                         symbol=self.symbol
                 ):
-                    order_book = order_book_prepare(_order_book)
-                    self.order_book = order_book
+                    self.order_book = order_book_prepare(_order_book)
                     self.on_new_order_book(OrderBook(self.order_book))
                     if prm.MODE == 'TC' and self.start_collect:
-                        order_book['bids'] = order_book['bids'][:1]
-                        order_book['asks'] = order_book['asks'][:1]
+                        self.order_book['bids'] = self.order_book['bids'][:1]
+                        self.order_book['asks'] = self.order_book['asks'][:1]
                         if len(self.s_order_book['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
                             self.s_order_book['writer'].write_batch(
                                 pa.RecordBatch.from_pylist(mapping=self.s_order_book['pylist'])
                             )
                             self.s_order_book['pylist'].clear()
                         self.s_order_book['pylist'].append(
-                            {"key": int(time.time() * 1000), "row": orjson.dumps(order_book)}
+                            {"key": int(time.time() * 1000), "row": orjson.dumps(self.order_book)}
                         )
             except Exception as ex:
                 logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
@@ -1295,18 +1283,18 @@ class StrategyBase:
         while self.operational_status:
             try:
                 if not self.wss_fire_up:
-                    res = await self.send_request(self.stub.CheckStream, api_pb2.MarketRequest, symbol=self.symbol)
+                    res = await self.send_request(self.stub.check_stream, mr.MarketRequest, symbol=self.symbol)
                     if res is None or not res.success:
                         self.wss_fire_up = True
                         self.message_log(f"Not active WSS for {self.symbol} on {self.exchange}, restart request sent")
 
-                _orders = await self.send_request(self.stub.FetchOpenOrders, api_pb2.MarketRequest, symbol=self.symbol)
+                _orders = await self.send_request(self.stub.fetch_open_orders, mr.MarketRequest, symbol=self.symbol)
                 if _orders is None:
                     raise UserWarning("Can't fetch open orders")
 
                 self.rate_limiter = max(self.rate_limiter, _orders.rate_limiter)
 
-                orders = json_format.MessageToDict(_orders).get('items', [])
+                orders = list(map(json.loads, _orders.orders))
                 [exch_orders.append(int(_o['orderId'])) for _o in orders]
 
                 if restore:
@@ -1327,7 +1315,7 @@ class StrategyBase:
 
                 if diff_id:
                     self.message_log(f"Perhaps was missed event for order(s): {diff_id},"
-                                     f" checking it", log_level=LogLevel.WARNING, tlg=False)
+                                     f" checking it", log_level=logging.WARNING, tlg=False)
                     for _id in diff_id:
                         res = await self.fetch_order(_id, _filled_update_call=True)
                         if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
@@ -1348,27 +1336,29 @@ class StrategyBase:
                 # print("buffered_orders.Cancelled")
                 self.operational_status = False
             except UserWarning as ex_2:
-                self.message_log(f"Exception buffered_orders: {ex_2}", log_level=LogLevel.WARNING)
+                self.message_log(f"Exception buffered_orders: {ex_2}", log_level=logging.WARNING)
                 restore = True
-            except grpc.RpcError as ex_3:
-                status_code = ex_3.code()
-                self.message_log(f"Exception buffered_orders: {status_code.name}, {ex_3.details()}",
-                                 log_level=LogLevel.WARNING, color=Style.B_RED, tlg=True)
-                if status_code == grpc.StatusCode.RESOURCE_EXHAUSTED:
+            except ConnectionRefusedError:
+                restore = True
+            except GRPCError as ex_3:
+                status_code = ex_3.status
+                self.message_log(f"Exception buffered_orders: {status_code.name}, {ex_3.message}",
+                                 log_level=logging.WARNING, color=Style.B_RED, tlg=True)
+                if status_code == Status.RESOURCE_EXHAUSTED:
                     # Decrease requests frequency
                     self.rate_limiter += HEARTBEAT
-                    self.message_log(f"RATE_LIMITER set to {self.rate_limiter}s", log_level=LogLevel.WARNING)
+                    self.message_log(f"RATE_LIMITER set to {self.rate_limiter}s", log_level=logging.WARNING)
                     await asyncio.sleep(ORDER_TIMEOUT)
                     try:
-                        await self.send_request(self.stub.ResetRateLimit, api_pb2.OpenClientConnectionId,
+                        await self.send_request(self.stub.reset_rate_limit, mr.OpenClientConnectionId,
                                                 rate_limiter=self.rate_limiter)
                     except Exception as ex_4:
                         logger.warning(f"Exception buffered_orders:ResetRateLimit: {ex_4}")
                 else:
                     restore = True
             except Exception as ex_5:
-                self.message_log(f"Exception buffered_orders: {ex_5}\n{traceback.format_exc()}",
-                                 log_level=LogLevel.ERROR)
+                self.message_log(f"Exception buffered_orders: {ex_5}", log_level=logging.ERROR)
+                self.message_log(traceback.format_exc(), log_level=logging.DEBUG)
                 restore = True
             await asyncio.sleep(self.rate_limiter)
 
@@ -1376,7 +1366,7 @@ class StrategyBase:
         while not self.operational_status:
             await asyncio.sleep(HEARTBEAT)
             try:
-                res = await self.send_request(self.stub.CheckStream, api_pb2.MarketRequest, symbol=self.symbol)
+                res = await self.send_request(self.stub.check_stream, mr.MarketRequest, symbol=self.symbol)
             except Exception as ex_1:
                 logger.warning(f"Exception on Check WSS: {ex_1}")
             else:
@@ -1407,18 +1397,18 @@ class StrategyBase:
             These values directly depend on the number of market ws streams used in the strategy and declared above
             '''
             try:
-                await self.send_request(self.stub.StartStream,
-                                        api_pb2.StartStreamRequest,
+                await self.send_request(self.stub.start_stream,
+                                        mr.StartStreamRequest,
                                         symbol=self.symbol,
                                         market_stream_count=5,
                                         update_max_queue_size=update_max_queue_size)
             except UserWarning:
-                self.message_log("Start WSS failed, retry", log_level=LogLevel.WARNING)
+                self.message_log("Start WSS failed, retry", log_level=logging.WARNING)
                 self.wss_fire_up = True
             else:
                 self.wss_fire_up = False
         else:
-            self.message_log("Init WSS failed, retry", log_level=LogLevel.WARNING)
+            self.message_log("Init WSS failed, retry", log_level=logging.WARNING)
             await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))
             self.wss_fire_up = True
 
@@ -1440,7 +1430,6 @@ class StrategyBase:
                     print(f"ID_EXCHANGE = {prm.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
                     raise SystemExit(1)
                 self.session = Trade(
-                    channel_options=CHANNEL_OPTIONS,
                     account_name=account_name,
                     rate_limiter=self.rate_limiter,
                     symbol=_symbol
@@ -1459,15 +1448,14 @@ class StrategyBase:
                     # Check and Cancel ALL ACTIVE ORDER
                     try:
                         _active_orders = await send_request(
-                            self.stub.FetchOpenOrders,
-                            api_pb2.MarketRequest,
+                            self.stub.fetch_open_orders,
+                            mr.MarketRequest,
                             symbol=_symbol
                         )
                     except Exception as ex:
                         print(f"Can't get active orders: {ex}")
                     else:
-                        active_orders = json_format.MessageToDict(_active_orders).get('items', [])
-                        # print(f"main.active_orders: {active_orders}")
+                        active_orders = list(map(json.loads, _active_orders.orders))
                     # Try load last strategy state from saved files
                     last_state = load_last_state(prm.LAST_STATE_FILE)
                     restore_state = bool(last_state)
@@ -1478,8 +1466,8 @@ class StrategyBase:
                             restore_state = False
                             try:
                                 res = await send_request(
-                                    self.stub.CancelAllOrders,
-                                    api_pb2.MarketRequest,
+                                    self.stub.cancel_all_orders,
+                                    mr.MarketRequest,
                                     symbol=_symbol
                                 )
                                 cancel_orders = ast.literal_eval(json.loads(res.result))
@@ -1490,9 +1478,8 @@ class StrategyBase:
                                 print(EQUAL_STR)
                             except asyncio.CancelledError:
                                 pass  # Task cancellation should not be logged as an error.
-                            except grpc.RpcError as ex:
-                                status_code = ex.code()
-                                print(f"Exception on cancel All order: {status_code.name}, {ex.details()}")
+                            except GRPCError as ex:
+                                print(f"Exception on cancel All order: {ex.status.name}, {ex.message}")
                         else:
                             [exch_orders_ids.append(int(_o['orderId'])) for _o in active_orders]
                 # Init section
@@ -1510,35 +1497,33 @@ class StrategyBase:
                 if prm.MODE in ('T', 'TC'):
                     # region Get and processing Order book
                     _order_book = await self.send_request(
-                        self.stub.FetchOrderBook,
-                        api_pb2.MarketRequest,
+                        self.stub.fetch_order_book,
+                        mr.MarketRequest,
                         symbol=_symbol
                     )
                     self.order_book = order_book_prepare(_order_book)
                     if not self.order_book['bids'] or not self.order_book['asks']:
                         _price = await self.send_request(
-                            self.stub.FetchSymbolPriceTicker,
-                            api_pb2.MarketRequest,
+                            self.stub.fetch_symbol_price_ticker,
+                            mr.MarketRequest,
                             symbol=_symbol
                         )
-                        price = json_format.MessageToDict(_price)
+                        price = _price.to_pydict()
                         print(f"Not bids or asks for pair {price.get('symbol')},"
                               f" last known price is {price.get('price')}")
                         amount = self.info_symbol['filters']['lotSize']['minQty']
                         self.order_book['bids'] = self.order_book['bids'] or [[price['price'], amount]]
                         self.order_book['asks'] = self.order_book['asks'] or [[price['price'], amount]]
                     # endregion
-                    _ticker = await self.send_request(self.stub.FetchTickerPriceChangeStatistics,
-                                                      api_pb2.MarketRequest,
+                    _ticker = await self.send_request(self.stub.fetch_ticker_price_change_statistics,
+                                                      mr.MarketRequest,
                                                       symbol=_symbol)
-                    self.ticker = json_format.MessageToDict(_ticker)
-                    # Save first order_book and ticker raw's
+                    self.ticker = _ticker.to_pydict()
                     if prm.MODE == 'TC':
+                        # Save first order_book and ticker raw's
                         ts = int(time.time() * 1000)
                         self.s_order_book['pylist'].append({"key": ts, "row": orjson.dumps(self.order_book)})
                         self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(self.ticker)})
-                    #
-                    loop.create_task(self.save_asset())
                 #
                 if prm.MODE in ('TC', 'S'):
                     self.session_root = Path(BACKTEST_PATH, f"{self.exchange}_{self.symbol}")
@@ -1614,7 +1599,7 @@ class StrategyBase:
                                 self.orders[_id] = Order(_order)
                                 self.message_log(
                                     f"Was restored order {_id}({_order.get('clientOrderId')}) from exchange data",
-                                    log_level=LogLevel.WARNING,
+                                    log_level=logging.WARNING,
                                     color=Style.YELLOW
                                 )
                         [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
@@ -1654,7 +1639,9 @@ class StrategyBase:
                         self.start()
             if restored:
                 loop.create_task(self.heartbeat(self.session))
-                loop.create_task(save_to_csv())
+                if prm.MODE in ('T', 'TC'):
+                    loop.create_task(self.save_asset())
+                    loop.create_task(save_to_csv())
         except (KeyboardInterrupt, SystemExit):
             # noinspection PyProtectedMember, PyUnresolvedReferences
             os._exit(1)
@@ -1787,12 +1774,8 @@ def load_from_csv() -> []:
     return trades
 
 
-def order_book_prepare(_order_book: {}) -> {}:
-    order_book = json_format.MessageToDict(_order_book)
-    order_book_bids = order_book.pop('bids', [])
-    order_book_asks = order_book.pop('asks', [])
-    _bids = [json.loads(bid) for bid in order_book_bids]
-    _asks = [json.loads(ask) for ask in order_book_asks]
-    order_book.update({'bids': _bids})
-    order_book.update({'asks': _asks})
+def order_book_prepare(_order_book) -> {}:
+    order_book = _order_book.to_pydict()
+    order_book['bids'] = list(map(json.loads, order_book['bids']))
+    order_book['asks'] = list(map(json.loads, order_book['asks']))
     return order_book

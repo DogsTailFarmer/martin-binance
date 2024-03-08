@@ -104,37 +104,6 @@ def load_last_state(last_state_file) -> {}:
     return res
 
 
-class LogLevel(Enum):
-    """
-    Level of logging
-    """
-    # Debug logging level
-    DEBUG = 0
-    # Info logging level
-    INFO = 1
-    # Important logging level
-    IMPORTANT = 2
-    # Warning logging level
-    WARNING = 3
-    # Error logging level
-    ERROR = 4
-    # Critical error logging level
-    CRITICAL = 5
-
-
-def write_log(level: LogLevel, message: str) -> None:
-    if level == LogLevel.DEBUG:
-        logger.debug(message)
-    elif level == LogLevel.INFO:
-        logger.info(message)
-    elif level == LogLevel.WARNING:
-        logger.warning(message)
-    elif level == LogLevel.ERROR:
-        logger.error(message)
-    elif level == LogLevel.CRITICAL:
-        logger.critical(message)
-
-
 class Style:
     __slots__ = ()
 
@@ -311,14 +280,11 @@ class OrderUpdate:
             def __init__(self, _event: {}):
                 self.id = _event['order_id']
 
-        # Original order previous to this update.
         self.original_order = OriginalOrder(event)
-        # Trades that belong to the order, if any exist so far.
         self.resulting_trades = []
         for trade in trades:
             if trade.order_id == event['order_id']:
                 self.resulting_trades.append(trade)
-        # Update status defining what happened to the order since the last update.
         if event['order_status'] == 'FILLED':
             self.status = OrderUpdate.FILLED
         elif event['order_status'] == 'PARTIALLY_FILLED':
@@ -327,9 +293,7 @@ class OrderUpdate:
             self.status = OrderUpdate.CANCELED
         else:
             self.status = OrderUpdate.OTHER_CHANGE
-        # Time of the change.
         self.timestamp = event['transaction_time']
-        # Newly updated order
         self.updated_order = None
 
     def __call__(self):
@@ -340,25 +304,17 @@ class Order:
     __slots__ = ("amount", "buy", "id", "order_type", "price", "received_amount", "remaining_amount", "timestamp")
 
     def __init__(self, order: {}):
-        # Overall amount of the order.
         self.amount = Decimal(order['origQty'])
-        # True if the order is a buy order.
         self.buy = order['side'] == 'BUY'
-        # id of the order.
         self.id = int(order['orderId'])
-        # Type of the order.
         self.order_type = order['type']
-        # Amount that has been filled already.
         self.received_amount = Decimal(order['executedQty'])
-        # Price of the order
         cummulative_quote_qty = order.get('cummulativeQuoteQty')
         if self.received_amount > 0 and cummulative_quote_qty:
             self.price = Decimal(cummulative_quote_qty) / self.received_amount
         else:
             self.price = Decimal(order['price'])
-        # Amount that has not been filled yet.
         self.remaining_amount = self.amount - self.received_amount
-        # Timestamp of the order.
         self.timestamp = int(order.get('transactTime', order.get('time', time.time())))
 
     def __call__(self):
@@ -369,23 +325,14 @@ class Candle:
     __slots__ = ("min_time", "open", "high", "low", "close", "volume", "max_time", "trade_number", "vwap")
 
     def __init__(self, _candle: []):
-        # Start time of the candle.
         self.min_time = int(_candle[0])
-        # Price of the first trade in the candle.
         self.open = float(_candle[1])
-        # Highest traded price in the candle.
         self.high = float(_candle[2])
-        # Lowest traded price in the candle.
         self.low = float(_candle[3])
-        # Price of the last trade in the candle.
         self.close = float(_candle[4])
-        # Volume traded within the candle.
         self.volume = float(_candle[5])
-        # Time of the latest trade in the candle or closing time of the candle.
         self.max_time = int(_candle[6])
-        # Number of trades included in the candle.
         self.trade_number = int(_candle[8])
-        # Value weighted average price of the candle.
         self.vwap = (float(_candle[7]) / self.volume) if self.volume else self.close
 
     def __call__(self):
@@ -437,7 +384,6 @@ class TradingCapabilityManager:
         return unrounded_price.quantize(self.tick_size, rounding=rounding_type)
 
     def get_min_sell_amount(self, price: Decimal) -> Decimal:
-        # print(f"get_min_sell_amount: price:{price}, min_qty:{self.min_qty}, min_notional:{self.min_notional}")
         return max(self.min_qty, self.round_amount(self.min_notional / price, ROUND_CEILING))
 
     def get_max_sell_amount(self, _unused_price: Decimal) -> Decimal:
@@ -447,7 +393,6 @@ class TradingCapabilityManager:
         return self.max_qty
 
     def get_min_buy_amount(self, price: Decimal) -> Decimal:
-        # print(f"get_min_buy_amount: price:{price}, min_notional:{self.min_notional}")
         return max(self.min_qty, self.round_amount(self.min_notional / price, ROUND_CEILING))
 
     def get_minimal_price_change(self) -> Decimal:
@@ -476,13 +421,9 @@ class Ticker:
     __slots__ = ("last_day_price", "last_price", "timestamp")
 
     def __init__(self, _ticker):
-        # Price of the currency pair one day ago.
         self.last_day_price = Decimal(_ticker.get('openPrice', '0'))
-        # Last traded price of the currency pair.
         self.last_price = Decimal(_ticker.get('lastPrice', '0'))
-        # Timestamp of the ticker data.
         self.timestamp = int(_ticker.get('closeTime', 0))
-        # print(f"self.last_price: {self.last_price}")
 
     def __call__(self):
         return self
@@ -492,13 +433,9 @@ class FundsEntry:
     __slots__ = ("available", "reserved", "total_for_currency")
 
     def __init__(self, _funds):
-        # The available amount for a currency.
         self.available = Decimal(_funds.get('free'))
-        # The reserved amount for a currency.
         self.reserved = Decimal(_funds.get('locked'))
-        # Total amount of a currency in the account.
         self.total_for_currency = self.available + self.reserved
-        # print(f"self.total_for_currency: {self.total_for_currency}")
 
     def __call__(self):
         return self
@@ -524,9 +461,7 @@ class OrderBook:
                     self.amount = _tcm.round_amount(self.amount, ROUND_HALF_EVEN)
 
         self.asks = []
-        # List of asks ordered by price in ascending order.
         self.bids = []
-        # List of bids ordered by price in descending order.
         self.asks.extend(_OrderBookRow(v) for v in _order_book['asks'])
         self.bids.extend(_OrderBookRow(v) for v in _order_book['bids'])
 
@@ -545,7 +480,6 @@ class Klines:
 
     def refresh(self, _candle):
         candle = Candle(_candle)
-        # print(f"refresh.interval: {self.interval}, candle: {candle.min_time}")
         new_time = candle.min_time
         last_time = self.kline[-1].min_time if self.kline else 0
         if new_time >= last_time:
