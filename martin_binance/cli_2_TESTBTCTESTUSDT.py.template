@@ -26,6 +26,7 @@ import sys
 import asyncio
 from pathlib import Path
 import toml
+import logging.handlers
 
 from martin_binance import CONFIG_FILE, LOG_PATH, LAST_STATE_PATH
 import martin_binance.params as ex
@@ -111,7 +112,6 @@ for tlg in telegram:
 
 
 def trade(strategy=None):
-    import logging.handlers
     # For autoload last state
     ex.LOAD_LAST_STATE = 1 if len(sys.argv) > 1 else 0
     ex.LAST_STATE_FILE = Path(LAST_STATE_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.json")
@@ -119,12 +119,15 @@ def trade(strategy=None):
     if ex.MODE == 'S':
         _logger = logging.getLogger('logger_S')
     else:
-        log_file = Path(LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
         _logger = logging.getLogger('logger')
-        _logger.setLevel(logging.DEBUG)
-        handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
-        handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-        _logger.addHandler(handler)
+        log_file = Path(LOG_PATH, f"{ex.ID_EXCHANGE}_{ex.SYMBOL}.log")
+        formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
+        fh = logging.handlers.RotatingFileHandler(log_file, maxBytes=1000000, backupCount=10)
+        fh.setFormatter(formatter)
+        _logger.addHandler(fh)
+        _logger.setLevel(logging.DEBUG)  # Default level for files output
+
+    logging.getLogger('hpack').setLevel(logging.INFO)
     _logger.propagate = False
     #
     if strategy is None:
