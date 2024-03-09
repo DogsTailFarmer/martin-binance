@@ -1,3 +1,8 @@
+## 3.0.0rc14 - 2024-03-09
+### Update
+* Up requirements for exchanges-wrapper==2.0.0
+* Refined logging
+
 ## 3.0.0rc8 - 2024-03-08
 ### Fix
 * logging for Simulate mode
@@ -8,8 +13,6 @@
 * `WSS`: check and restart
 
 ## 3.0.0rc1 - 2024-03-02
-### Fix
-# TODO * `cancel_order_call()`: not raised asyncio.TimeoutError on timeout
 * `on_balance_update_ex()`: don't update direct initial asset values in Reverse cycle
 * Partially filled TP in Hold reverse cycle
 

@@ -7,6 +7,8 @@ __license__ = "MIT"
 __version__ = "3.0.0rc12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
+
+import logging
 ##################################################################
 import sys
 import gc
@@ -455,7 +457,7 @@ class Strategy(StrategyBase):
     def restore_strategy_state(self, strategy_state: Dict[str, str] = None, restore=True) -> None:
         if strategy_state:
             # Restore from file if lose state only
-            self.message_log("restore_strategy_state from saved state:", log_level=logging.DEBUG)
+            self.message_log("Restore strategy state from saved state:", log_level=logging.INFO)
             self.message_log("\n".join(f"{k}\t{v}" for k, v in strategy_state.items()), log_level=logging.DEBUG)
             #
             self.command = json.loads(strategy_state.get('command'))
