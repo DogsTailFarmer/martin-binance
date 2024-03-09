@@ -38,8 +38,8 @@ ex.SYMBOL = 'BTCUSDT'
 # Exchange setup, see list of exchange in ms_cfg.toml
 ex.ID_EXCHANGE = 0  # See ms_cfg.toml Use for collection of statistics *and get client connection*
 ex.FEE_IN_PAIR = True  # Fee pays in pair
-ex.FEE_MAKER = Decimal('0.0751')  # standard exchange Fee for maker
-ex.FEE_TAKER = Decimal('0.0751')  # standard exchange Fee for taker
+ex.FEE_MAKER = Decimal('0.1')  # standard exchange Fee for maker
+ex.FEE_TAKER = Decimal('0.1')  # standard exchange Fee for taker
 ex.FEE_SECOND = False  # On KRAKEN fee always in second coin
 ex.FEE_BNB_IN_PAIR = False  # Binance fee in BNB and BNB is base asset
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
@@ -61,9 +61,9 @@ ex.ORDER_Q = 12  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
 ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
 # Other
-ex.STATUS_DELAY = 5  # Minute between sending Tlg message about current status, 0 - disable
+ex.STATUS_DELAY = 180  # Minute between sending Tlg message about current status, 0 - disable
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
-ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list member
+ex.LOG_LEVEL = logging.DEBUG  # Default level for console output
 ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for subaccount only
 # Parameter for calculate grid over price and grid orders quantity in set_trade_condition()
 # If ADAPTIVE_TRADE_CONDITION = True, ORDER_Q / OVER_PRICE determines the density of grid orders

@@ -63,7 +63,7 @@ ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
 # Other
 ex.STATUS_DELAY = 5  # Minute between sending Tlg message about current status, 0 - disable
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
-ex.LOG_LEVEL_NO_PRINT = []  # LogLevel.DEBUG Print for level over this list member
+ex.LOG_LEVEL = logging.DEBUG  # Default level for console output
 ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for subaccount only
 # Parameter for calculate grid over price and grid orders quantity in set_trade_condition()
 # If ADAPTIVE_TRADE_CONDITION = True, ORDER_Q / OVER_PRICE determines the density of grid orders
