@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc12"
+__version__ = "3.0.0rc15"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1693,7 +1693,7 @@ class StrategyBase:
         raise NotImplementedError
 
     @abstractmethod
-    def get_free_assets(self, *args, **kwargs):
+    def get_free_assets(self, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
