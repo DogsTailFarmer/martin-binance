@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc6"
+__version__ = "3.0.0rc12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -180,7 +180,6 @@ class StrategyBase:
         return self.info_symbol.get('quoteAsset')
 
     def get_buffered_ticker(self) -> Ticker:
-        # print(f"get_buffered_ticker.ticker: {self.ticker}")
         return Ticker(self.ticker)
 
     def get_buffered_funds(self) -> Dict[str, FundsEntry]:
@@ -473,8 +472,6 @@ class StrategyBase:
         self.order_id = json.loads(saved_state.pop(MS_ORDER_ID, "0"))
         self.orders = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
         self.restore_state_before_backtesting_ex(saved_state)
-
-    #
 
     async def heartbeat(self, _session):
         # print(f"tik-tak:' {int(time.time() * 1000)}")

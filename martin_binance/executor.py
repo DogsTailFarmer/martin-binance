@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc7"
+__version__ = "3.0.0rc12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -137,7 +137,10 @@ class Strategy(StrategyBase):
         if init_params_error:
             self.message_log(f"Incorrect value for {init_params_error}", log_level=logging.ERROR)
             raise SystemExit(1)
-        db_management(EXCHANGE)
+        if MODE == 'S':
+            self.sum_profit_first = self.sum_profit_second = self.profit_first = self.profit_second = O_DEC
+        else:
+            db_management(EXCHANGE)
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
         self.s_currency = self.get_second_currency()
@@ -2620,6 +2623,8 @@ class Strategy(StrategyBase):
         self.reverse_hold = json.loads(saved_state.get('reverse_hold'))
         self.reverse_init_amount = f2d(json.loads(saved_state.get('reverse_init_amount')))
         self.reverse_price = json.loads(saved_state.get('reverse_price'))
+        if self.reverse_price:
+            self.reverse_price = f2d(self.reverse_price)
         self.reverse_target_amount = f2d(json.loads(saved_state.get('reverse_target_amount')))
         self.shift_grid_threshold = json.loads(saved_state.get('shift_grid_threshold'))
         if self.shift_grid_threshold:
