@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc12"
+__version__ = "3.0.0rc17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -94,15 +94,12 @@ class Strategy(StrategyBase):
         self.cycle_time_reverse = None  # + Reverse cycle start time
         self.first_run = True  # -
         self.grid_only_restart = None  # -
-        self.grid_place_flag = False  # - Flag when placed next part of grid orders
         self.grid_remove = None  # - Flag when starting cancel grid orders
         self.grid_update_started = None  # - Flag when grid update process started
         self.heartbeat_counter = 0  # -
         self.last_ticker_update = 0  # -
         self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
         self.order_q = None  # + Adaptive order quantity
-        # TODO Change on func calc active orders num
-        self.order_q_placed = False  # - Flag initial number of orders placed
         self.over_price = None  # + Adaptive over price
         self.pr_db = None  # - Process for save data to .db
         self.pr_tlg = None  # - Process for sending message to Telegram
@@ -554,8 +551,6 @@ class Strategy(StrategyBase):
         self.tp_order_hold.clear()
         self.tp_hold = False
         self.tp_was_filled = ()
-        self.order_q_placed = False
-        self.grid_place_flag = False
         if self.tp_order_id:
             self.tp_cancel = True
             if not self.cancel_order_id:
@@ -1176,7 +1171,6 @@ class Strategy(StrategyBase):
             #
             self.start_after_shift = False
             if self.grid_update_started:
-                self.grid_place_flag = False
                 self.grid_update_started = None
         else:
             self.grid_hold = {'buy_side': buy_side,
@@ -1831,16 +1825,13 @@ class Strategy(StrategyBase):
             self.start(profit_f, profit_s)
 
     def place_grid_part(self) -> None:
-        if not self.grid_remove:
-            self.grid_place_flag = True
+        if self.orders_hold and not self.orders_init and not self.grid_remove:
             n = len(self.orders_grid) + len(self.orders_init)
             if n < ORDER_Q:
                 self.message_log(f"Place next part of grid orders, hold {len(self.orders_hold)}", color=Style.B_WHITE)
                 k = 0
                 for i in self.orders_hold:
                     if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
-                        if k + n >= ORDER_Q:
-                            self.order_q_placed = True
                         break
                     waiting_order_id = self.place_limit_order_check(
                         i['buy'],
@@ -1855,6 +1846,11 @@ class Strategy(StrategyBase):
                     else:
                         break
                 del self.orders_hold.orders_list[:k]
+                if self.orders_hold:
+                    self.message_log(f"Part of grid orders are placed. Left: {len(self.orders_hold)}",
+                                     color=Style.B_WHITE)
+                else:
+                    self.message_log('All grid orders place successfully', color=Style.B_WHITE)
 
     def grid_only_stop(self) -> None:
         tcm = self.get_trading_capability_manager()
@@ -1944,8 +1940,7 @@ class Strategy(StrategyBase):
                 self.reverse_after_grid_ending()
         else:
             self.restore_orders_fire()
-            if after_full_fill and self.orders_hold and self.order_q_placed and not self.grid_remove:
-                # PLace one hold grid order and remove it from hold list
+            if after_full_fill:
                 self.place_grid_part()
             if self.tp_was_filled:
                 # Exist filled but non processing TP
@@ -2067,7 +2062,6 @@ class Strategy(StrategyBase):
                 self.orders_save.orders_list.clear()
                 self.orders_hold.orders_list.clear()
                 self.grid_remove = None
-                self.order_q_placed = False
                 if self.tp_was_filled:
                     self.grid_update_started = None
                     self.after_filled_tp(one_else_grid=False)
@@ -2486,23 +2480,12 @@ class Strategy(StrategyBase):
             self.orders_init.remove(place_order_id)
             if not self.orders_init:
                 self.last_shift_time = self.get_time()
-                if GRID_ONLY and self.orders_hold:
-                    # Place next part of grid orders
+                if self.cancel_grid_hold:
+                    self.message_log('Continue remove grid orders', color=Style.B_WHITE)
+                    self.cancel_grid_hold = False
+                    self.cancel_grid()
+                elif GRID_ONLY or not self.shift_grid_threshold:
                     self.place_grid_part()
-                else:
-                    if self.grid_place_flag or not self.orders_hold:
-                        if self.orders_hold:
-                            self.message_log(f"Part of grid orders are placed. Left: {len(self.orders_hold)}",
-                                             color=Style.B_WHITE)
-                        else:
-                            self.order_q_placed = True
-                            self.message_log('All grid orders place successfully', color=Style.B_WHITE)
-                    elif not self.order_q_placed and not self.shift_grid_threshold:
-                        self.place_grid_part()
-                    if self.cancel_grid_hold:
-                        self.message_log('Continue remove grid orders', color=Style.B_WHITE)
-                        self.cancel_grid_hold = False
-                        self.cancel_grid()
         elif place_order_id == self.tp_wait_id:
             self.tp_wait_id = None
             self.tp_order_id = order.id
@@ -2510,9 +2493,7 @@ class Strategy(StrategyBase):
                 self.cancel_order_id = self.tp_order_id
                 self.cancel_order(self.tp_order_id)
             else:
-                # Place next part of grid orders
-                if self.orders_hold and not self.order_q_placed and not self.orders_init:
-                    self.place_grid_part()
+                self.place_grid_part()
         else:
             self.message_log(f"Did not have waiting order id for {place_order_id}", logging.ERROR)
 
@@ -2571,7 +2552,6 @@ class Strategy(StrategyBase):
                     self.restore_orders = False
                     self.orders_hold.sort(self.cycle_buy)
                     self.grid_remove = None
-                    self.order_q_placed = False
                     self.place_profit_order()
             elif self.grid_remove:
                 self.cancel_grid(cancel_all=cancel_all)

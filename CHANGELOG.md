@@ -1,3 +1,10 @@
+## 3.0.0rc17 - 2024-03-10
+### Update
+* Refine grid orders control
+
+### Added for new features
+* `Backtesting`: save session collected date to `session_root/raw_bak.zip`
+
 ## 3.0.0rc14 - 2024-03-09
 ### Update
 * Up requirements for exchanges-wrapper==2.0.0
