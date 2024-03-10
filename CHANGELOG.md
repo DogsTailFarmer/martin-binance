@@ -1,3 +1,8 @@
+## 3.0.0rc18 - 2024-03-10
+### Update
+* Added price check when calculating TP in relation to the average filling price of the last grid order.
+ Relevant for extreme volatility, was noticed on the test network.
+
 ## 3.0.0rc17 - 2024-03-10
 ### Update
 * Refine grid orders control

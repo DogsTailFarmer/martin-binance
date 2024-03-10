@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc17"
+__version__ = "3.0.0rc18"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -1508,7 +1508,7 @@ class Strategy(StrategyBase):
             amount = target = target_amount_first
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_HALF_DOWN)
-            price = tcm.round_price(amount_s / target_amount_first, ROUND_FLOOR)
+            price = tcm.round_price(min(amount_s / target_amount_first, self.avg_rate), ROUND_FLOOR)
         else:
             step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
             # Calculate target amount for second
@@ -1520,7 +1520,7 @@ class Strategy(StrategyBase):
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
-            price = tcm.round_price(target_amount_second / amount, ROUND_HALF_UP)
+            price = tcm.round_price(max(target_amount_second / amount, self.avg_rate), ROUND_HALF_UP)
             target = amount * price
         # Calc real margin for TP
         profit = (100 * (target - tp_amount) / tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
@@ -1846,11 +1846,6 @@ class Strategy(StrategyBase):
                     else:
                         break
                 del self.orders_hold.orders_list[:k]
-                if self.orders_hold:
-                    self.message_log(f"Part of grid orders are placed. Left: {len(self.orders_hold)}",
-                                     color=Style.B_WHITE)
-                else:
-                    self.message_log('All grid orders place successfully', color=Style.B_WHITE)
 
     def grid_only_stop(self) -> None:
         tcm = self.get_trading_capability_manager()
@@ -1968,7 +1963,10 @@ class Strategy(StrategyBase):
         self.message_log(f"Converted TP amount to grid: first: {_amount_f}, second: {_amount_s}")
         if _update_sum_amount:
             # Correction sum_amount
-            self.update_sum_amount(_amount_f, _amount_s)
+            self.update_sum_amount(
+                _amount_f if self.cycle_buy else self.tp_amount,
+                self.tp_amount if self.cycle_buy else _amount_s
+            )
         # Return depo in turnover without loss
         reverse_target_amount = O_DEC
         if self.cycle_buy:
@@ -2486,6 +2484,8 @@ class Strategy(StrategyBase):
                     self.cancel_grid()
                 elif GRID_ONLY or not self.shift_grid_threshold:
                     self.place_grid_part()
+            if not self.orders_hold and not self.orders_init:
+                self.message_log('All grid orders place successfully', color=Style.B_WHITE)
         elif place_order_id == self.tp_wait_id:
             self.tp_wait_id = None
             self.tp_order_id = order.id
