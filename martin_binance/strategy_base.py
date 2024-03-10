@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc15"
+__version__ = "3.0.0rc16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -15,6 +15,7 @@ import logging
 import queue
 import os
 import random
+import shutil
 import sqlite3
 import time
 import traceback
@@ -418,6 +419,7 @@ class StrategyBase:
             df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
             df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
 
+        shutil.make_archive(str(Path(self.session_root, "raw_bak")), 'zip', self.session_root, 'raw')
         self.message_log(f"Stream data for backtesting saved to {self.session_root}")
 
     def parquet_declare(self, raw_path):
@@ -431,8 +433,6 @@ class StrategyBase:
             self.candles[f"writer_{i.value}"] = pq.ParquetWriter(Path(
                 raw_path, f"candles_{i.value}.parquet"), schema=schema
             )
-
-    ###
 
     def back_test_handler(self):
         # Test result handler
@@ -1588,7 +1588,15 @@ class StrategyBase:
                         self.start_time_ms = json.loads(
                             last_state.pop('ms_start_time_ms', str(int(time.time() * 1000)))
                         )
-                        self.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
+
+                        # TODO Replace after update
+                        # self.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
+
+                        _orders = last_state.pop(MS_ORDERS, '{}')
+                        _orders = _orders.replace('margin_wrapper', 'lib')
+                        self.orders = jsonpickle.decode(_orders, keys=True)
+                        #
+
                         orders_keys = self.orders.keys()
                         for _id in exch_orders_ids:
                             if _id not in orders_keys:

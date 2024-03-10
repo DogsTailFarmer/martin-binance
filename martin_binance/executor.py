@@ -101,6 +101,7 @@ class Strategy(StrategyBase):
         self.last_ticker_update = 0  # -
         self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
         self.order_q = None  # + Adaptive order quantity
+        # TODO Change on func calc active orders num
         self.order_q_placed = False  # - Flag initial number of orders placed
         self.over_price = None  # + Adaptive over price
         self.pr_db = None  # - Process for save data to .db
@@ -140,7 +141,9 @@ class Strategy(StrategyBase):
             self.message_log(f"Incorrect value for {init_params_error}", log_level=logging.ERROR)
             raise SystemExit(1)
         if MODE == 'S':
-            self.sum_profit_first = self.sum_profit_second = self.profit_first = self.profit_second = O_DEC
+            self.profit_first = self.profit_second = O_DEC
+            self.sum_profit_first = self.sum_profit_second = O_DEC
+            self.part_profit_first = self.part_profit_second = O_DEC
         else:
             db_management(EXCHANGE)
         tcm = self.get_trading_capability_manager()
@@ -527,16 +530,8 @@ class Strategy(StrategyBase):
             self.avg_rate = self.get_buffered_ticker().last_price
             #
             open_orders = self.get_buffered_open_orders()
-            tp_order = None
-            # Separate TP order
-            if self.tp_order_id:
-                for i, o in enumerate(open_orders):
-                    if o.id == self.tp_order_id:
-                        tp_order = open_orders[i]
-                        del open_orders[i]  # skipcq: PYL-E1138
-                        break
             # Possible strategy states in compare with saved one
-            grid_open_orders_len = len(open_orders)
+            grid_open_orders_len = len(open_orders) - 1 if self.tp_order_id else 0
             #
             if not grid_open_orders_len and self.orders_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
@@ -544,7 +539,7 @@ class Strategy(StrategyBase):
             elif not self.orders_grid and not self.orders_hold and not self.orders_save and not self.tp_order_id:
                 self.message_log("Restore, Restart", tlg=True)
                 self.start()
-            if not GRID_ONLY and self.shift_grid_threshold is None and not tp_order:
+            if not GRID_ONLY and self.shift_grid_threshold is None and not self.tp_order_id:
                 self.message_log("Restore, no TP order, replace", tlg=True)
                 self.place_profit_order()
             #
@@ -1181,7 +1176,7 @@ class Strategy(StrategyBase):
             #
             self.start_after_shift = False
             if self.grid_update_started:
-                self.grid_place_flag = None
+                self.grid_place_flag = False
                 self.grid_update_started = None
         else:
             self.grid_hold = {'buy_side': buy_side,
@@ -2072,7 +2067,7 @@ class Strategy(StrategyBase):
                 self.orders_save.orders_list.clear()
                 self.orders_hold.orders_list.clear()
                 self.grid_remove = None
-                self.order_q_placed = None
+                self.order_q_placed = False
                 if self.tp_was_filled:
                     self.grid_update_started = None
                     self.after_filled_tp(one_else_grid=False)
