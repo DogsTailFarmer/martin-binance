@@ -11,6 +11,8 @@ __contact__ = "https://github.com/DogsTailFarmer"
 import asyncio
 import random
 import logging
+
+import grpclib.exceptions
 import shortuuid
 
 from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
@@ -86,7 +88,9 @@ class Trade:
         try:
             res = await _request(_request_type(**kwargs))
         except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error.
+            pass  # Task cancellation should not be logged as an error
+        except grpclib.exceptions.StreamTerminatedError:
+            logger.warning("Have not connection to gRPC server")
         except GRPCError as ex:
             status_code = ex.status
             if (
@@ -120,7 +124,9 @@ class Trade:
             async for res in _request(_request_type(**kwargs)):
                 yield res
         except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error.
+            pass  # Task cancellation should not be logged as an error
+        except grpclib.exceptions.StreamTerminatedError:
+            logger.warning("WSS connection to gRPC server was terminated")
         except GRPCError as ex:
             status_code = ex.status
             logger.warning(f"Exception on WSS loop: {status_code.name}, {ex.message}")

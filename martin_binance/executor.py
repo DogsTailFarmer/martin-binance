@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc18"
+__version__ = "3.0.0rc19"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -53,7 +53,6 @@ class Strategy(StrategyBase):
         self.tp_order_id = None  # + Take profit order id
         self.tp_wait_id = None  # -
         self.tp_order = ()  # - (id, buy, amount, price, local_time()) Placed take profit order
-        self.tp_error = False  # Flag when can't place tp
         self.tp_order_hold = {}  # - Save unreleased take profit order
         self.tp_hold = False  # - Flag for replace take profit order
         self.tp_cancel = False  # - Wanted cancel tp order after successes place and Start()
@@ -77,7 +76,7 @@ class Strategy(StrategyBase):
         self.shift_grid_threshold = None  # - Price level of shift grid threshold for current cycle
         self.f_currency = ''  # - First currency name
         self.s_currency = ''  # - Second currency name
-        self.last_shift_time = None  # +
+        self.last_shift_time = None  # -
         self.avg_rate = O_DEC  # - Flow average rate for trading pair
         #
         self.grid_hold = {}  # - Save for later create grid orders
@@ -383,9 +382,6 @@ class Strategy(StrategyBase):
                         self.queue_to_db.put(data_to_db)
             if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
                 self.get_buffered_funds()
-            if self.tp_error:
-                self.tp_error = False
-                self.place_profit_order(after_error=True)
             if self.reverse_hold:
                 if self.start_reverse_time:
                     if self.get_time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
@@ -418,7 +414,6 @@ class Strategy(StrategyBase):
                     'cycle_time_reverse': json.dumps(self.cycle_time_reverse, default=str),
                     'deposit_first': json.dumps(self.deposit_first),
                     'deposit_second': json.dumps(self.deposit_second),
-                    'last_shift_time': json.dumps(self.last_shift_time),
                     'martin': json.dumps(self.martin),
                     'order_q': json.dumps(self.order_q),
                     'orders': json.dumps(self.orders_grid.get()),
@@ -476,7 +471,6 @@ class Strategy(StrategyBase):
                 )
             self.deposit_first = f2d(json.loads(strategy_state.get('deposit_first')))
             self.deposit_second = f2d(json.loads(strategy_state.get('deposit_second')))
-            self.last_shift_time = json.loads(strategy_state.get('last_shift_time')) or self.get_time()
             self.martin = f2d(json.loads(strategy_state.get('martin')))
             self.order_q = json.loads(strategy_state.get('order_q'))
             self.orders_grid.restore(json.loads(strategy_state.get('orders')))
@@ -524,6 +518,7 @@ class Strategy(StrategyBase):
                 self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
                 return
             self.start_after_shift = False
+            self.last_shift_time = self.get_time()
             self.avg_rate = self.get_buffered_ticker().last_price
             #
             open_orders = self.get_buffered_open_orders()
@@ -944,11 +939,12 @@ class Strategy(StrategyBase):
         self.message_log(f"\n"
                          f"! =======================================\n"
                          f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
-                         f"! sum_amount_first: {self.sum_amount_first}, sum_amount_second: {self.sum_amount_second}\n"
-                         f"! part_amount: {self.part_amount}\n"
+                         f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
                          f"! initial_first: {self.initial_first}, initial_second: {self.initial_second}\n"
                          f"! initial_reverse_first: {self.initial_reverse_first},"
                          f" initial_reverse_second: {self.initial_reverse_second}\n"
+                         f"! sum_amount_first: {self.sum_amount_first}, sum_amount_second: {self.sum_amount_second}\n"
+                         f"! part_amount: {self.part_amount}\n"
                          f"! reverse_init_amount: {self.reverse_init_amount}\n"
                          f"! reverse_target_amount: {self.reverse_target_amount}\n"
                          f"! tp_order: {self.tp_order}\n"
@@ -957,7 +953,6 @@ class Strategy(StrategyBase):
                          f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
                          f"! part_profit_first: {self.part_profit_first},"
                          f" part_profit_second: {self.part_profit_second}\n"
-                         f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
                          f"! command: {self.command}\n"
                          f"! reverse: {self.reverse}\n"
                          f"! Profit: {self.get_sum_profit()}\n"
@@ -1342,7 +1337,6 @@ class Strategy(StrategyBase):
                 self.message_log('Hold take profit order, replace existing', color=Style.B_WHITE)
             else:
                 buy_side = not self.cycle_buy
-                # Calculate take profit order
                 tp = self.calc_profit_order(buy_side, by_market=by_market)
                 price = tp.get('price')
                 amount = tp.get('amount')
@@ -1357,7 +1351,6 @@ class Strategy(StrategyBase):
                     fund = funds.get(self.f_currency, O_DEC)
                     fund = fund.available if fund else O_DEC
                 if buy_side and amount * price > fund:
-                    # Save take profit order and wait update balance
                     self.tp_order_hold = {'buy_side': buy_side,
                                           'amount': amount * price,
                                           'by_market': by_market,
@@ -1365,7 +1358,6 @@ class Strategy(StrategyBase):
                     self.message_log(f"Hold TP order for Buy {amount} {self.f_currency} by {price},"
                                      f" wait {amount * price} {self.s_currency}, exist: {any2str(fund)}")
                 elif not buy_side and amount > fund:
-                    # Save take profit order and wait update balance
                     self.tp_order_hold = {'buy_side': buy_side,
                                           'amount': amount,
                                           'by_market': by_market,
@@ -1373,7 +1365,6 @@ class Strategy(StrategyBase):
                     self.message_log(f"Hold TP order for Sell {amount} {self.f_currency}"
                                      f" by {price}, exist {any2str(fund)}")
                 else:
-                    # Create take profit order
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"
                                      f" vlm: {amount}, price: {price}, profit (incl.fee): {profit}%")
                     self.tp_target = target
@@ -1508,7 +1499,7 @@ class Strategy(StrategyBase):
             amount = target = target_amount_first
             # Calculate depo amount in second
             amount_s = self.round_truncate(self.sum_amount_second, base=False, _rounding=ROUND_HALF_DOWN)
-            price = tcm.round_price(min(amount_s / target_amount_first, self.avg_rate), ROUND_FLOOR)
+            price = tcm.round_price(amount_s / target_amount_first, ROUND_FLOOR)
         else:
             step_size_s = self.round_truncate((step_size_f * self.avg_rate), base=False, _rounding=ROUND_CEILING)
             # Calculate target amount for second
@@ -1520,7 +1511,7 @@ class Strategy(StrategyBase):
             target_amount_second = self.round_truncate(target_amount_second, base=False, _rounding=ROUND_CEILING)
             # Calculate depo amount in first
             amount = self.round_truncate(self.sum_amount_first, base=True, _rounding=ROUND_FLOOR)
-            price = tcm.round_price(max(target_amount_second / amount, self.avg_rate), ROUND_HALF_UP)
+            price = tcm.round_price(target_amount_second / amount, ROUND_HALF_UP)
             target = amount * price
         # Calc real margin for TP
         profit = (100 * (target - tp_amount) / tp_amount).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
@@ -2341,9 +2332,9 @@ class Strategy(StrategyBase):
         self.message_log(f"Executed amount: First: {any2str(amount_first)}, Second: {any2str(amount_second)},"
                          f" price: {any2str(self.avg_rate)}")
         if update.status in (OrderUpdate.FILLED, OrderUpdate.ADAPTED_AND_FILLED):
-            if not GRID_ONLY:
-                self.shift_grid_threshold = None
             if self.orders_grid.exist(update.original_order.id):
+                if not GRID_ONLY:
+                    self.shift_grid_threshold = None
                 self.ts_grid_update = self.get_time()
                 self.orders_grid.remove(update.original_order.id)
                 if self.orders_save:
@@ -2511,7 +2502,7 @@ class Strategy(StrategyBase):
                 self.cancel_grid()
         elif place_order_id == self.tp_wait_id:
             self.tp_wait_id = None
-            self.tp_error = True
+            self.place_profit_order(after_error=True)
 
         if 'FAILED_PRECONDITION' in error:
             self.command = 'stopped'
@@ -2591,7 +2582,7 @@ class Strategy(StrategyBase):
         self.reverse = json.loads(saved_state.get('reverse'))
         self.deposit_first = f2d(json.loads(saved_state.get('deposit_first')))
         self.deposit_second = f2d(json.loads(saved_state.get('deposit_second')))
-        self.last_shift_time = json.loads(saved_state.get('last_shift_time')) or self.get_time()
+        self.last_shift_time = self.get_time()
         self.order_q = json.loads(saved_state.get('order_q'))
         self.orders_grid.restore(json.loads(saved_state.get('orders')))
         self.orders_hold.restore(json.loads(saved_state.get('orders_hold')))

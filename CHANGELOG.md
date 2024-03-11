@@ -1,3 +1,10 @@
+## 3.0.0rc19 - 2024-03-11
+### Update
+* Replaced checking price when calculating TP vs updating price based on order book if error occurred
+* Don't unload assets on *`test`* accounts for avoid overload limited `coinmarketcap` API
+* Startup sequence optimization
+* Up requirements for exchanges-wrapper==2.0.1
+
 ## 3.0.0rc18 - 2024-03-10
 ### Update
 * Added price check when calculating TP in relation to the average filling price of the last grid order.

@@ -42,9 +42,9 @@ package "martin-binance" #D3D3D3 {
     [trade raw] -up-> exp
     }
     component mw [
-        margin_wrapper.py
+        strategy_base.py
         ===
-        Strategy API layer
+        gRPC client / API layer
     ]
     frame python_strategy #E6E6FA {
         component ex [

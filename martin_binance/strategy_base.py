@@ -491,7 +491,7 @@ class StrategyBase:
                     if (
                         not self.wss_fire_up
                         and self.operational_status
-                        and (time.time() - last_exec_time > HEARTBEAT * 30)
+                        and (time.time() - last_exec_time > HEARTBEAT * 10)
                     ):
                         last_exec_time = time.time()
                         try:
@@ -501,7 +501,7 @@ class StrategyBase:
                                 symbol=self.symbol
                             )
                         except Exception as ex:
-                            logger.warning(f"Exception on Check WSS: {ex}")
+                            logger.warning(f"Exception on check WSS: {ex}")
                         else:
                             if not res.success:
                                 logger.warning(f"Not active WSS for {self.symbol} on {self.exchange},"
@@ -537,7 +537,7 @@ class StrategyBase:
             await asyncio.sleep(HEARTBEAT)
         delay = HEARTBEAT * 300  # 10 min
         max_use_update = 60 * 60 * 24  # 24h if the row has not been updated that the asset is not traded
-        while True:
+        while self.operational_status:
             try:
                 res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
             except asyncio.CancelledError:
@@ -1276,15 +1276,8 @@ class StrategyBase:
         exch_orders = []
         diff_id = set()
         restore = False
-        await self.wait_wss_init()
         while self.operational_status:
             try:
-                if not self.wss_fire_up:
-                    res = await self.send_request(self.stub.check_stream, mr.MarketRequest, symbol=self.symbol)
-                    if res is None or not res.success:
-                        self.wss_fire_up = True
-                        self.message_log(f"Not active WSS for {self.symbol} on {self.exchange}, restart request sent")
-
                 _orders = await self.send_request(self.stub.fetch_open_orders, mr.MarketRequest, symbol=self.symbol)
                 if _orders is None:
                     raise UserWarning("Can't fetch open orders")
@@ -1570,7 +1563,7 @@ class StrategyBase:
 
             await self.buffered_funds()
             answer = str()
-            restored = True
+
             if restore_state:
                 if last_state.get("command", None) == '"stopped"':
                     input('Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n')
@@ -1578,55 +1571,46 @@ class StrategyBase:
                 if not prm.LOAD_LAST_STATE:
                     answer = input('Restore saved state after restart? Y:\n')
                 if prm.LOAD_LAST_STATE or answer.lower() == 'y':
+                    self.message_log("Load saved state after restart", color=Style.GREEN)
                     self.last_state = last_state
-                    try:
-                        self.message_log("Load saved state after restart", color=Style.GREEN)
-                        # Restore StrategyBase class var
-                        self.order_id = json.loads(
-                            last_state.pop(MS_ORDER_ID, str(int(datetime.now().strftime("%S%M")) * 1000))
-                        )
-                        self.start_time_ms = json.loads(
-                            last_state.pop('ms_start_time_ms', str(int(time.time() * 1000)))
-                        )
+                    # Restore StrategyBase class var
+                    self.order_id = json.loads(
+                        last_state.pop(MS_ORDER_ID, str(int(datetime.now().strftime("%S%M")) * 1000))
+                    )
+                    self.start_time_ms = json.loads(
+                        last_state.pop('ms_start_time_ms', str(int(time.time() * 1000)))
+                    )
 
-                        # TODO Replace after update
-                        # self.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
+                    # TODO Replace after update
+                    # self.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
 
-                        _orders = last_state.pop(MS_ORDERS, '{}')
-                        _orders = _orders.replace('margin_wrapper', 'lib')
-                        self.orders = jsonpickle.decode(_orders, keys=True)
-                        #
+                    _orders = last_state.pop(MS_ORDERS, '{}')
+                    _orders = _orders.replace('margin_wrapper', 'lib')
+                    self.orders = jsonpickle.decode(_orders, keys=True)
+                    #
 
-                        orders_keys = self.orders.keys()
-                        for _id in exch_orders_ids:
-                            if _id not in orders_keys:
-                                _order = next((_o for _o in active_orders if int(_o["orderId"]) == _id))
-                                self.orders[_id] = Order(_order)
-                                self.message_log(
-                                    f"Was restored order {_id}({_order.get('clientOrderId')}) from exchange data",
-                                    log_level=logging.WARNING,
-                                    color=Style.YELLOW
-                                )
-                        [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
-                        #
-                        self.restore_strategy_state(last_state, restore=False)
-                        #
-                        self.init(check_funds=False)
-                        await self.wss_init()
-                    except Exception as ex:
-                        print(f"Strategy init error: {ex}")
-                        restored = False
-            if prm.MODE in ('T', 'TC'):
-                loop.create_task(self.buffered_orders())
-            if not restore_state or (not prm.LOAD_LAST_STATE and answer.lower() != 'y'):
+                    orders_keys = self.orders.keys()
+                    for _id in exch_orders_ids:
+                        if _id not in orders_keys:
+                            _order = next((_o for _o in active_orders if int(_o["orderId"]) == _id))
+                            self.orders[_id] = Order(_order)
+                            self.message_log(
+                                f"Was restored order {_id}({_order.get('clientOrderId')}) from exchange data",
+                                log_level=logging.WARNING,
+                                color=Style.YELLOW
+                            )
+                    [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
+                    #
+                    self.restore_strategy_state(last_state, restore=False)
+                    #
+                    self.init(check_funds=False)
+                else:
+                    restore_state = False
+
+            if not restore_state:
                 if prm.MODE in ('T', 'TC'):
                     self.init()
                     input('Press Enter for Start or Ctrl-Z for Cancel\n')
-                    print('Waiting for WSS to initialize...')
-                    await self.wss_init()
-                    while not self.operational_status:
-                        await asyncio.sleep(HEARTBEAT)
-                    self.start()
                 else:
                     # Set initial local time from backtest data
                     self.time_operational['new'] = self.backtest['ticker_index_first'] / 1000
@@ -1642,11 +1626,19 @@ class StrategyBase:
                     else:
                         self.init()
                         self.start()
-            if restored:
-                loop.create_task(self.heartbeat(self.session))
-                if prm.MODE in ('T', 'TC'):
+
+            if prm.MODE in ('T', 'TC'):
+                await self.wss_init()
+                await self.wait_wss_init()
+                loop.create_task(save_to_csv())
+                loop.create_task(self.buffered_orders())
+                if self.session.client.real_market:
                     loop.create_task(self.save_asset())
-                    loop.create_task(save_to_csv())
+                if not restore_state:
+                    self.start()
+
+            loop.create_task(self.heartbeat(self.session))
+
         except (KeyboardInterrupt, SystemExit):
             # noinspection PyProtectedMember, PyUnresolvedReferences
             os._exit(1)
