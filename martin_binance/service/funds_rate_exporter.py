@@ -114,7 +114,9 @@ def get_rate(_currency_rate) -> {}:
         'UST': 'USDT',
         'IOT': 'MIOTA',
         'LUNA': 'LUNC',
-        'LUNA2': 'LUNA'
+        'LUNA2': 'LUNA',
+        'TESTUSDT': 'USDT',
+        'TESTBTC': 'BTC'
     }
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
     session = Session()
