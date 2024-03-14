@@ -1,3 +1,15 @@
+## 3.0.0rc21 - 2024-03-13
+### Fix
+* `Analytics`: Refine unload and processing assets data
+
+## 3.0.0rc20 - 2024-03-12
+### Fix
+* `cancel_order_call()`: incorrect using asyncio.wait_for()
+
+### Update
+* logging improvement
+* fee settings and handling
+
 ## 3.0.0rc19 - 2024-03-11
 ### Update
 * Replaced checking price when calculating TP vs updating price based on order book if error occurred

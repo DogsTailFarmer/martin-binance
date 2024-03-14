@@ -16,11 +16,10 @@ SYMBOL = str()
 EXCHANGE = ()
 # Exchange setup
 ID_EXCHANGE = int()
-FEE_IN_PAIR = bool()
 FEE_MAKER = Decimal()
 FEE_TAKER = Decimal()
-FEE_SECOND = bool()
-FEE_BNB_IN_PAIR = bool()
+FEE_FIRST = False
+FEE_SECOND = False
 GRID_MAX_COUNT = int()
 # Trade parameter
 START_ON_BUY = bool()

@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc16"
+__version__ = "3.0.0rc21"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -64,6 +64,20 @@ MS_ORDER_ID = 'ms.order_id'
 MS_ORDERS = 'ms.orders'
 O_DEC = Decimal()
 SAVE_TRADE_QUEUE = asyncio.Queue()
+
+
+def refresh_t_asset(cursor, key, value, used):
+    cursor.execute(
+        'DELETE FROM t_asset\
+         WHERE id_exchange=:id_exchange\
+         AND currency=:currency\
+         AND use=:use',
+        {'id_exchange': prm.ID_EXCHANGE, 'currency': key, 'use': used}
+    )
+    cursor.execute(
+        'INSERT into t_asset values(?, ?, ?, ?, ?)',
+        (prm.ID_EXCHANGE, key, float(value), used, int(time.time()))
+    )
 
 
 class StrategyBase:
@@ -323,7 +337,7 @@ class StrategyBase:
                     except (asyncio.CancelledError, KeyboardInterrupt):
                         break
                     except Exception as err:
-                        logger.warning(f"Backtest control: {err}")
+                        self.message_log(f"Backtest control: {err}", log_level=logging.WARNING)
                     else:
                         storage_name.replace(storage_name.with_name('study.db'))
                         if _res:
@@ -357,7 +371,7 @@ class StrategyBase:
                                                       interval=i.value,
                                                       limit=KLINES_LIM)
                     except Exception as ex:
-                        logger.warning(f"FetchKlines: {ex}")
+                        self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
                     else:
                         self.klines[i.value] = list(map(json.loads, res.items))
                 # Save current strategy state for backtesting
@@ -501,14 +515,16 @@ class StrategyBase:
                                 symbol=self.symbol
                             )
                         except Exception as ex:
-                            logger.warning(f"Exception on check WSS: {ex}")
+                            self.message_log(f"Exception on check WSS: {ex}", log_level=logging.WARNING)
                         else:
                             if not res.success:
-                                logger.warning(f"Not active WSS for {self.symbol} on {self.exchange},"
-                                               f" restart request sent")
+                                self.message_log(f"Not active WSS for {self.symbol} on {self.exchange},"
+                                                 f" restart request sent", log_level=logging.WARNING)
                                 update_max_queue_size = True
                                 self.wss_fire_up = True
                     #
+
+                    print(f"heartbeat: client_id: {self.client_id}, wss_fire_up: {self.wss_fire_up}")
                     if self.client_id and self.wss_fire_up:
                         try:
                             if await self.session.get_client():
@@ -521,7 +537,7 @@ class StrategyBase:
                                 await self.wss_init(update_max_queue_size=update_max_queue_size)
                                 self.wss_fire_up = False
                         except Exception as ex:
-                            logger.warning(f"Exception on fire up WSS: {ex}")
+                            self.message_log(f"Exception on fire up WSS: {ex}", log_level=logging.WARNING)
                             self.wss_fire_up = True
                 await asyncio.sleep(HEARTBEAT)
             except (KeyboardInterrupt, asyncio.CancelledError):
@@ -532,20 +548,22 @@ class StrategyBase:
         Update account asset list and value in t_asset
         """
         connection_analytic = None
+        balances = []
         while connection_analytic is None:
             connection_analytic = self.connection_analytic
             await asyncio.sleep(HEARTBEAT)
-        delay = HEARTBEAT * 300  # 10 min
-        max_use_update = 60 * 60 * 24  # 24h if the row has not been updated that the asset is not traded
+        delay = 300  # 5 min
+        max_use_update = 12.5 * 60  # 12.5 min if the row has not been updated that the instance is down
         while self.operational_status:
             try:
                 res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
             except asyncio.CancelledError:
                 pass
             except Exception as _ex:
-                logger.warning(f"Exception save_asset: {_ex}")
+                self.message_log(f"Exception save_asset: {_ex}", log_level=logging.WARNING)
             else:
-                balances = list(map(json.loads, res.items))
+                if res:
+                    balances = list(map(json.loads, res.items))
                 # Refresh actual balance
                 try:
                     balance_f = next(item for item in balances if item["asset"] == self.base_asset)
@@ -555,20 +573,11 @@ class StrategyBase:
                     balance_s = next(item for item in balances if item["asset"] == self.quote_asset)
                 except StopIteration:
                     balance_s = {'asset': self.base_asset, 'free': '0.0', 'locked': '0.0'}
-                funds = {self.base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
-                         self.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
-                self.funds = funds
+                self.funds = {
+                    self.base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
+                    self.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}
+                }
                 # Get asset balances from Funding Wallet
-                cursor = connection_analytic.cursor()
-                try:
-                    cursor.execute('SELECT 1 FROM t_asset WHERE id_exchange=:id_exchange AND use=:use',
-                                   {'id_exchange': prm.ID_EXCHANGE, 'use': 1})
-                    main_active = cursor.fetchone()
-                    cursor.close()
-                except sqlite3.Error as err:
-                    cursor.close()
-                    main_active = (2,)
-                    print(f"SELECT from t_asset: {err}")
                 funding_wallet = []
                 assets_fw = {}
                 if self.exchange not in ('bitfinex', 'huobi'):
@@ -582,72 +591,40 @@ class StrategyBase:
                         funding_wallet = list(map(json.loads, res.items))
                     for fw in funding_wallet:
                         assets_fw[fw['asset']] = Decimal(fw['free']) + Decimal(fw['locked']) + Decimal(fw['freeze'])
-                # Create list of cumulative asset without current pair, from SPOT wallet
-                # and all assets from Funding wallet on Binance
+                # Create list of cumulative asset from SPOT and Funding wallet
                 assets = {}
                 for balance in balances:
                     if self.exchange != 'bitfinex':
-                        total = assets_fw.pop(balance['asset'], Decimal('0.0'))
+                        total = assets_fw.pop(balance['asset'], O_DEC)
                     else:
                         total = Decimal('0.0')
-                    if balance['asset'] not in (self.base_asset, self.quote_asset) or prm.GRID_ONLY:
+                    if balance['asset'] in (self.base_asset, self.quote_asset) or prm.GRID_ONLY:
                         total += Decimal(balance['free']) + Decimal(balance['locked'])
                     assets[balance['asset']] = float(total)
-                cursor_analytic = connection_analytic.cursor()
-                try:
-                    cursor_analytic.execute('SELECT id_exchange, currency, value, use, timestamp\
-                                             FROM t_asset\
-                                             WHERE id_exchange=:id_exchange',
-                                            {'id_exchange': prm.ID_EXCHANGE})
-                    rows = cursor_analytic.fetchall()
-                    cursor_analytic.close()
-                except sqlite3.Error as err:
-                    rows = []
-                    print(f"SELECT from t_asset: {err}")
+
                 cursor = connection_analytic.cursor()
                 try:
                     cursor.execute('BEGIN')
-                    cursor.execute('DELETE\
-                                    FROM t_asset\
-                                    WHERE id_exchange=:id_exchange\
-                                    and use=:use',
-                                   {'id_exchange': prm.ID_EXCHANGE, 'use': 0})
-                    for row in rows:
-                        if row[1] in (self.base_asset, self.quote_asset) and main_active == (1,):
-                            amount = float(assets.pop(row[1], 0))
-                            cursor.execute('UPDATE t_asset SET value=:value, timestamp=:timestamp, use=:use\
-                                            WHERE id_exchange=:id_exchange\
-                                            and currency=:currency',
-                                           {
-                                               'value': amount if prm.GRID_ONLY else 0,
-                                               'timestamp': int(time.time()),
-                                               'use': 1,
-                                               'id_exchange': prm.ID_EXCHANGE,
-                                               'currency': row[1]}
-                                           )
-                        elif row[3]:
-                            # Check used currency from other pair for last update time
-                            if time.time() - row[4] > max_use_update:
-                                cursor.execute('DELETE FROM t_asset\
-                                                WHERE id_exchange=:id_exchange\
-                                                and currency=:currency',
-                                               {'id_exchange': prm.ID_EXCHANGE, 'currency': row[1]})
-                            assets.pop(row[1], None)
-                    if assets:
-                        for key, value in assets.items():
-                            use = 1 if key in (self.base_asset, self.quote_asset) else 0
-                            cursor.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
-                                           (prm.ID_EXCHANGE, key, value, use, int(time.time())))
-                    if assets_fw:
-                        for key, value in assets_fw.items():
-                            cursor.execute('INSERT into t_asset values(?, ?, ?, ?, ?)',
-                                           (prm.ID_EXCHANGE, key, float(value), 0, int(time.time())))
+                    cursor.execute(
+                        'DELETE FROM t_asset WHERE timestamp<:timestamp',
+                        {'timestamp': time.time() - max_use_update}
+                    )
+
+                    for key, value in assets_fw.items():
+                        refresh_t_asset(cursor, key, value, used=0)
+
+                    for key, value in assets.items():
+                        if prm.GRID_ONLY:
+                            refresh_t_asset(cursor, key, value, used=0)
+                        elif key in (self.base_asset, self.quote_asset):
+                            refresh_t_asset(cursor, key, value, used=1)
+
                     cursor.execute('COMMIT')
                     cursor.close()
                 except sqlite3.Error as err:
                     cursor.execute('ROLLBACK')
                     cursor.close()
-                    logger.warning(f"Refresh t_asset: {err}")
+                    self.message_log(f"Refresh t_asset: {err}", log_level=logging.WARNING)
             await asyncio.sleep(delay)
 
     async def ask_exit(self):
@@ -658,7 +635,7 @@ class StrategyBase:
             try:
                 await self.send_request(self.stub.stop_stream, mr.MarketRequest, symbol=self.symbol)
             except Exception as ex:
-                logger.warning(f"ask_exit: {ex}")
+                self.message_log(f"ask_exit: {ex}", log_level=logging.WARNING)
 
             self.task_cancel()
 
@@ -718,8 +695,8 @@ class StrategyBase:
                     if funds.get(self.base_asset) or funds.get(self.quote_asset):
                         self.on_funds_update_handler(funds)
             except Exception as ex:
-                logger.warning(f"Exception on WSS, on_funds_update loop closed: {ex}")
-                logger.debug(f"Exception traceback: {traceback.format_exc()}")
+                self.message_log(f"Exception on WSS, on_funds_update loop closed: {ex}", log_level=logging.WARNING)
+                self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
         else:
             funds = {}
@@ -783,38 +760,34 @@ class StrategyBase:
             if prm.MODE in ('T', 'TC'):
                 if cancel_all:
                     if _id not in self.bulk_orders_cancel:
-                        res = await asyncio.wait_for(
-                            self.send_request(
-                                self.stub.cancel_all_orders,
-                                mr.MarketRequest,
-                                symbol=self.symbol
-                            ),
-                            timeout=ORDER_TIMEOUT - 5
+                        res = await self.send_request(
+                            self.stub.cancel_all_orders,
+                            mr.MarketRequest,
+                            symbol=self.symbol
                         )
                         if res:
                             for v in ast.literal_eval(json.loads(res.result)):
                                 self.bulk_orders_cancel.update({v['orderId']: v})
                     result = self.bulk_orders_cancel.pop(_id, None)
                 else:
-                    res = await self.send_request(self.stub.cancel_order, mr.CancelOrderRequest,
-                                                  symbol=self.symbol,
-                                                  order_id=_id)
+                    res = await self.send_request(
+                        self.stub.cancel_order,
+                        mr.CancelOrderRequest,
+                        symbol=self.symbol,
+                        order_id=_id
+                    )
                     result = res.to_pydict()
             else:
                 result = self.account.cancel_order(order_id=_id, ts=int(self.get_time() * 1000))
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error.
-        except asyncio.TimeoutError:
-            # TODO timeout event not raised exception
-            _fetch_order = True
-            self.message_log(f"Timeout on cancel order {_id}")
         except GRPCError as ex:
             _fetch_order = True
             self.message_log(f"Exception on cancel order {_id}: {ex.status.name}, {ex.message}")
         except Exception as _ex:
             _fetch_order = True
-            self.message_log(f"Exception on cancel order call for {_id}: {_ex}")
-            logger.debug(f"Exception traceback: {traceback.format_exc()}")
+            self.message_log(f"Exception on cancel order call for {_id}: {_ex}", log_level=logging.WARNING)
+            self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
         else:
             # print(f"cancel_order_call.result: {result}")
             # Remove from orders lists
@@ -887,7 +860,7 @@ class StrategyBase:
         except asyncio.CancelledError:
             pass
         except Exception as _ex:
-            logger.warning(f"Exception buffered_funds: {_ex}")
+            self.message_log(f"Exception buffered_funds: {_ex}", log_level=logging.WARNING)
         else:
             balance_f = next(
                 (item for item in balances if item["asset"] == self.base_asset),
@@ -932,6 +905,8 @@ class StrategyBase:
             else:
                 self.info_symbol = _exchange_info_symbol.to_pydict()
                 self.tcm = TradingCapabilityManager(self.info_symbol, prm.PRICE_LIMIT_RULES)
+                if prm.MODE == 'S':
+                    break
             await asyncio.sleep(600)
 
     async def buffered_candle(self):
@@ -951,7 +926,7 @@ class StrategyBase:
                     )
                 except Exception as ex:
                     kline = []
-                    logger.warning(f"FetchKlines: {ex}")
+                    self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
                 else:
                     kline = list(map(json.loads, res.items))
                     if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
@@ -967,7 +942,7 @@ class StrategyBase:
         if len(klines) == len(KLINES_INIT):
             self.tasks_list.append(asyncio.ensure_future(self.on_klines_update(klines)))
         else:
-            logger.info("Init buffered candle failed. try one else...")
+            self.message_log("Init buffered candle failed. try one else...", log_level=logging.WARNING)
             await asyncio.sleep(random.uniform(1, 5))
             self.wss_fire_up = True
 
@@ -991,8 +966,8 @@ class StrategyBase:
                             {"key": int(time.time() * 1000), "row": orjson.dumps(candle)}
                         )
             except Exception as ex:
-                logger.warning(f"Exception on WSS, on_klines_update loop closed: {ex}")
-                logger.debug(f"Exception traceback: {traceback.format_exc()}")
+                self.message_log(f"Exception on WSS, on_klines_update loop closed: {ex}", log_level=logging.WARNING)
+                self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
         else:
             for i in _intervals:
@@ -1089,8 +1064,8 @@ class StrategyBase:
                 )
                 self.on_balance_update_ex(_res)
         except Exception as ex:
-            logger.warning(f"Exception on WSS, on_balance_update loop closed: {ex}")
-            logger.debug(f"Exception traceback: {traceback.format_exc()}")
+            self.message_log(f"Exception on WSS, on_balance_update loop closed: {ex}", log_level=logging.WARNING)
+            self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
             self.wss_fire_up = True
 
     async def on_order_update(self):
@@ -1100,8 +1075,8 @@ class StrategyBase:
                 ed = json.loads(event.result)
                 await self.on_order_update_handler(ed)
         except Exception as ex:
-            logger.warning(f"Exception on WSS, on_order_update loop closed: {ex}")
-            logger.debug(f"Exception traceback: {traceback.format_exc()}")
+            self.message_log(f"Exception on WSS, on_order_update loop closed: {ex}", log_level=logging.WARNING)
+            self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
             self.wss_fire_up = True
 
     async def on_order_update_handler(self, ed):
@@ -1219,8 +1194,8 @@ class StrategyBase:
                         if prm.SAVE_DS:
                             self.open_orders_snapshot(ts=ts)
             except Exception as ex:
-                logger.warning(f"Exception on WSS, on_ticker_update loop closed: {ex}")
-                logger.debug(f"Exception traceback: {traceback.format_exc()}")
+                self.message_log(f"Exception on WSS, on_ticker_update loop closed: {ex}", log_level=logging.WARNING)
+                self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
         else:
             if prm.LOGGING:
@@ -1263,8 +1238,8 @@ class StrategyBase:
                             {"key": int(time.time() * 1000), "row": orjson.dumps(self.order_book)}
                         )
             except Exception as ex:
-                logger.warning(f"Exception on WSS, on_order_book_update loop closed: {ex}")
-                logger.debug(f"Exception traceback: {traceback.format_exc()}")
+                self.message_log(f"Exception on WSS, on_order_book_update loop closed: {ex}", log_level=logging.WARNING)
+                self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
         else:
             async for row in self.loop_ds(self.backtest['order_book']):
@@ -1288,10 +1263,10 @@ class StrategyBase:
                 [exch_orders.append(int(_o['orderId'])) for _o in orders]
 
                 if restore:
-                    self.message_log("Trying restore saved state after lost connection to host", color=Style.GREEN)
+                    self.message_log("Restore saved state after lost connection to host", color=Style.GREEN)
 
                 if self.last_state:
-                    self.message_log("Trying restore saved state after restart", color=Style.GREEN)
+                    self.message_log("Restore saved state after restart", color=Style.GREEN)
                     self.restore_strategy_state(restore=True)
 
                 for order in orders:
@@ -1343,7 +1318,7 @@ class StrategyBase:
                         await self.send_request(self.stub.reset_rate_limit, mr.OpenClientConnectionId,
                                                 rate_limiter=self.rate_limiter)
                     except Exception as ex_4:
-                        logger.warning(f"Exception buffered_orders:ResetRateLimit: {ex_4}")
+                        self.message_log(f"Exception buffered_orders:ResetRateLimit: {ex_4}", log_level=logging.WARNING)
                 else:
                     restore = True
             except Exception as ex_5:
@@ -1358,7 +1333,7 @@ class StrategyBase:
             try:
                 res = await self.send_request(self.stub.check_stream, mr.MarketRequest, symbol=self.symbol)
             except Exception as ex_1:
-                logger.warning(f"Exception on Check WSS: {ex_1}")
+                self.message_log(f"Exception on Check WSS: {ex_1}", log_level=logging.WARNING)
             else:
                 if res.success:
                     self.operational_status = True
@@ -1476,7 +1451,6 @@ class StrategyBase:
                 loop.create_task(self.get_exchange_info(send_request, _symbol))
                 while not self.info_symbol:
                     await asyncio.sleep(0.1)
-                # print("\n".join(f"{k}\t{v}" for k, v in self.info_symbol.items()))
                 if prm.LOGGING:
                     filters = self.info_symbol.get('filters')
                     for _filter in filters:

@@ -7,11 +7,9 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.0.4"
+__version__ = "3.0.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
-
-from datetime import datetime
 
 import os
 import time
@@ -158,7 +156,7 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
                     FROM t_funds as tf LEFT JOIN t_exchange tex USING(id_exchange)\
                     GROUP BY tex.name, tf.id_exchange, tf.f_currency, tf.s_currency')
     records = cursor.fetchall()
-    # Get non-traded assets
+    # Get assets
     cursor.execute('SELECT tex.id_exchange, tex.name, ta.currency, ta.value\
                     FROM t_asset as ta LEFT JOIN t_exchange tex USING(id_exchange)\
                     WHERE ta.value > 0')
@@ -190,7 +188,6 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
     for row in records:
         # print(f"row: {row}")
         exchange = str(row[0])
-        name = names.get(exchange)
         id_exchange = int(row[1])
         f_currency = str(row[2])
         s_currency = str(row[3])
@@ -281,7 +278,6 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
                         WHERE id_exchange=:id_exchange\
                         AND f_currency=:f_currency\
                         AND s_currency=:s_currency\
-                        AND active=1\
                         ORDER BY id DESC LIMIT 1',
                        {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
         if balance_row := cursor.fetchone():
@@ -291,36 +287,6 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
             F_BALANCE.labels(exchange, pair, VPS_NAME).set(f_balance)
             S_BALANCE.labels(exchange, pair, VPS_NAME).set(s_balance)
             TOTAL_BALANCE.labels(exchange, pair, VPS_NAME).set(balance)
-            # Balance in USD cumulative for SPOT and Funding wallets
-            f_balance_fw = 0.0
-            for i, v in enumerate(assets):
-                if v[0] == id_exchange and v[2] == f_currency:
-                    f_balance_fw = v[3]
-                    del assets[i]  # skipcq: PYL-E1138
-                    break
-            f_balance += f_balance_fw
-            f_balance_usd = -1
-            if _currency_rate.get(f_currency):
-                try:
-                    f_balance_usd = f_balance / _currency_rate[f_currency]
-                except ZeroDivisionError:
-                    f_balance_usd = -1
-            s_balance_fw = 0.0
-            for i, v in enumerate(assets):
-                if v[0] == id_exchange and v[2] == s_currency:
-                    s_balance_fw = v[3]
-                    del assets[i]  # skipcq: PYL-E1138
-                    break
-            s_balance += s_balance_fw
-            s_balance_usd = -1
-            if _currency_rate.get(s_currency):
-                try:
-                    s_balance_usd = s_balance / _currency_rate[s_currency]
-                except ZeroDivisionError:
-                    s_balance_usd = -1
-            # print(f"f_balance_usd: {f_balance_usd}, s_balance_usd: {s_balance_usd}")
-            BALANCE_USD.labels(name, exchange, f_currency, VPS_NAME).set(f_balance_usd)
-            BALANCE_USD.labels(name, exchange, s_currency, VPS_NAME).set(s_balance_usd)
             # Cycle parameters
             CYCLE_BUY.labels(exchange, pair, VPS_NAME).set(balance_row[2])
             F_DEPO.labels(exchange, pair, VPS_NAME).set(balance_row[3])
@@ -328,9 +294,9 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
             OVER_PRICE.labels(exchange, pair, VPS_NAME).set(balance_row[5])
 
     for asset in assets:
-        if _currency_rate.get(asset[2]):
+        if _rate := _currency_rate.get(asset[2]):
             try:
-                usd_amount = asset[3] / _currency_rate[asset[2]]
+                usd_amount = asset[3] / _rate
             except ZeroDivisionError:
                 usd_amount = -1
             if usd_amount >= 1.0:

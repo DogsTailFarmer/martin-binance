@@ -98,7 +98,7 @@ class Trade:
                  and 'failed to connect to all addresses' in ex.message)
                     or
                 (status_code == Status.UNKNOWN
-                 and "'NoneType' object has no attribute 'client'" in ex.message)
+                 and "No client exist" in ex.message)
             ):
                 self.client = None
                 raise UserWarning(

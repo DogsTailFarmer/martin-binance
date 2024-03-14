@@ -93,7 +93,7 @@ class Strategy(StrategyBase):
         self.cycle_time_reverse = None  # + Reverse cycle start time
         self.first_run = True  # -
         self.grid_only_restart = None  # -
-        self.grid_remove = None  # - Flag when starting cancel grid orders
+        self.grid_remove = None  # + Flag when starting cancel grid orders
         self.grid_update_started = None  # - Flag when grid update process started
         self.heartbeat_counter = 0  # -
         self.last_ticker_update = 0  # -
@@ -123,11 +123,7 @@ class Strategy(StrategyBase):
 
     def init(self, check_funds: bool = True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
-        if not FEE_IN_PAIR and FEE_SECOND:
-            init_params_error = 'FEE_IN_PAIR and FEE_SECOND'
-        elif not FEE_IN_PAIR and FEE_BNB_IN_PAIR:
-            init_params_error = 'FEE_IN_PAIR and FEE_BNB_IN_PAIR'
-        elif COLLECT_ASSETS and GRID_ONLY:
+        if COLLECT_ASSETS and GRID_ONLY:
             init_params_error = 'COLLECT_ASSETS and GRID_ONLY: one only allowed'
         elif PROFIT_MAX and PROFIT_MAX < PROFIT + FEE_TAKER:
             init_params_error = 'PROFIT_MAX'
@@ -370,16 +366,6 @@ class Strategy(StrategyBase):
                     self.grid_update()
             if self.heartbeat_counter > 150:
                 self.heartbeat_counter = 0
-                if MODE in ('T', 'TC') and not GRID_ONLY:
-                    # Update t_funds.active set True
-                    data_to_db = {
-                        'ID_EXCHANGE': ID_EXCHANGE,
-                        'f_currency': self.f_currency,
-                        's_currency': self.s_currency,
-                        'destination': 't_funds.active update'
-                    }
-                    if self.queue_to_db:
-                        self.queue_to_db.put(data_to_db)
             if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
                 self.get_buffered_funds()
             if self.reverse_hold:
@@ -407,6 +393,7 @@ class Strategy(StrategyBase):
             # endregion
         if MODE in ('T', 'TC'):
             return {'command': json.dumps(self.command),
+                    'grid_remove': json.dumps(self.grid_remove),
                     'cycle_buy': json.dumps(self.cycle_buy),
                     'cycle_buy_count': json.dumps(self.cycle_buy_count),
                     'cycle_sell_count': json.dumps(self.cycle_sell_count),
@@ -456,6 +443,7 @@ class Strategy(StrategyBase):
             self.message_log("\n".join(f"{k}\t{v}" for k, v in strategy_state.items()), log_level=logging.DEBUG)
             #
             self.command = json.loads(strategy_state.get('command'))
+            self.grid_remove = json.loads(strategy_state.get('grid_remove', 'null'))
             #
             self.cycle_buy = json.loads(strategy_state.get('cycle_buy'))
             self.cycle_buy_count = json.loads(strategy_state.get('cycle_buy_count'))
@@ -525,6 +513,9 @@ class Strategy(StrategyBase):
             # Possible strategy states in compare with saved one
             grid_open_orders_len = len(open_orders) - 1 if self.tp_order_id else 0
             #
+            if self.grid_remove:
+                self.message_log("Restore, continue cancel grid orders", tlg=True)
+                self.cancel_grid()
             if not grid_open_orders_len and self.orders_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                 self.place_grid_part()
@@ -534,8 +525,6 @@ class Strategy(StrategyBase):
             if not GRID_ONLY and self.shift_grid_threshold is None and not self.tp_order_id:
                 self.message_log("Restore, no TP order, replace", tlg=True)
                 self.place_profit_order()
-            #
-            self.message_log("Restored, go work", tlg=True)
 
     def start(self, profit_f: Decimal = O_DEC, profit_s: Decimal = O_DEC) -> None:
         self.message_log('Start')
@@ -569,7 +558,7 @@ class Strategy(StrategyBase):
                                              base=False)
                 go_trade = fs >= init_s
                 if go_trade:
-                    if FEE_IN_PAIR and FEE_MAKER:
+                    if FEE_MAKER:
                         fs = self.initial_reverse_second if self.reverse else self.initial_second
                     _ff = ff
                     _fs = fs - profit_s
@@ -578,7 +567,7 @@ class Strategy(StrategyBase):
                                              base=True)
                 go_trade = ff >= init_f
                 if go_trade:
-                    if FEE_IN_PAIR and FEE_MAKER:
+                    if FEE_MAKER:
                         ff = self.initial_reverse_first if self.reverse else self.initial_first
                     _ff = ff - profit_f
                     _fs = fs
@@ -939,6 +928,8 @@ class Strategy(StrategyBase):
         self.message_log(f"\n"
                          f"! =======================================\n"
                          f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
+                         f"! reverse: {self.reverse}\n"
+                         f"! Cycle Buy: {self.cycle_buy}\n"
                          f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
                          f"! initial_first: {self.initial_first}, initial_second: {self.initial_second}\n"
                          f"! initial_reverse_first: {self.initial_reverse_first},"
@@ -954,7 +945,6 @@ class Strategy(StrategyBase):
                          f"! part_profit_first: {self.part_profit_first},"
                          f" part_profit_second: {self.part_profit_second}\n"
                          f"! command: {self.command}\n"
-                         f"! reverse: {self.reverse}\n"
                          f"! Profit: {self.get_sum_profit()}\n"
                          f"! ======================================",
                          log_level=logging.DEBUG)
@@ -1455,7 +1445,6 @@ class Strategy(StrategyBase):
 
     def set_profit(self, tp_amount: Decimal, amount: Decimal, by_market: bool) -> Decimal:
         fee = FEE_TAKER if by_market else FEE_MAKER
-        fee = fee if FEE_IN_PAIR else fee + FEE_MAKER
         tbb = None
         bbb = None
         n = len(self.orders_grid) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
@@ -1577,28 +1566,14 @@ class Strategy(StrategyBase):
         """
         Calculate trade amount with Fee for grid order for both currency
         """
-        message = str()
-        if FEE_IN_PAIR:
-            fee = FEE_TAKER if by_market else FEE_MAKER
-            if FEE_BNB_IN_PAIR:
-                if self.cycle_buy:
-                    amount_first -= self.round_fee(fee, amount_first, base=True)
-                    message = f"For grid order First - fee: {any2str(amount_first)}"
-                else:
-                    amount_first += self.round_fee(fee, amount_first, base=True)
-                    message = f"For grid order First + fee: {any2str(amount_first)}"
-            else:
-                if self.cycle_buy:
-                    if FEE_SECOND:
-                        amount_second += self.round_fee(fee, amount_second, base=False)
-                        message = f"For grid order Second + fee: {any2str(amount_second)}"
-                    else:
-                        amount_first -= self.round_fee(fee, amount_first, base=True)
-                        message = f"For grid order First - fee: {any2str(amount_first)}"
-                else:
-                    amount_second -= self.round_fee(fee, amount_second, base=False)
-                    message = f"For grid order Second - fee: {any2str(amount_second)}"
-        if print_info and message:
+        fee = FEE_TAKER if by_market else FEE_MAKER
+        if FEE_FIRST or (self.cycle_buy and not FEE_SECOND):
+            amount_first -= self.round_fee(fee, amount_first, base=True)
+            message = f"For grid order First - fee: {any2str(amount_first)}"
+        else:
+            amount_second -= self.round_fee(fee, amount_second, base=False)
+            message = f"For grid order Second - fee: {any2str(amount_second)}"
+        if print_info:
             self.message_log(message, log_level=logging.DEBUG)
         return self.round_truncate(amount_first, fee=True), self.round_truncate(amount_second, fee=True)
 
@@ -1610,28 +1585,15 @@ class Strategy(StrategyBase):
         """
         Calculate trade amount with Fee for take profit order for both currency
         """
-        if FEE_IN_PAIR:
-            fee = FEE_TAKER if by_market else FEE_MAKER
-            if FEE_BNB_IN_PAIR:
-                if self.cycle_buy:
-                    amount_first += self.round_fee(fee, amount_first, base=True)
-                    log_text = f"Take profit order First + fee: {amount_first}"
-                else:
-                    amount_first -= self.round_fee(fee, amount_first, base=True)
-                    log_text = f"Take profit order First - fee: {amount_first}"
-            else:
-                if self.cycle_buy:
-                    amount_second -= self.round_fee(fee, amount_second, base=False)
-                    log_text = f"Take profit order Second - fee: {amount_second}"
-                else:
-                    if FEE_SECOND:
-                        amount_second += self.round_fee(fee, amount_second, base=False)
-                        log_text = f"Take profit order Second + fee: {amount_second}"
-                    else:
-                        amount_first -= self.round_fee(fee, amount_first, base=True)
-                        log_text = f"Take profit order First - fee: {amount_first}"
-            if log_output:
-                self.message_log(log_text, log_level=logging.DEBUG)
+        fee = FEE_TAKER if by_market else FEE_MAKER
+        if FEE_SECOND or (self.cycle_buy and not FEE_FIRST):
+            amount_second -= self.round_fee(fee, amount_second, base=False)
+            log_text = f"Take profit order Second - fee: {amount_second}"
+        else:
+            amount_first -= self.round_fee(fee, amount_first, base=True)
+            log_text = f"Take profit order First - fee: {amount_first}"
+        if log_output:
+            self.message_log(log_text, log_level=logging.DEBUG)
         return self.round_truncate(amount_first, fee=True), self.round_truncate(amount_second, fee=True)
 
     def after_filled_tp(self, one_else_grid: bool = False):

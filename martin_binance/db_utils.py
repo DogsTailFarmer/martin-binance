@@ -4,7 +4,7 @@ Functions for managing and saving data to a SQLite database from martin-binance 
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "2.1.3"
+__version__ = "3.0.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -135,39 +135,4 @@ def save_to_db(queue_to_db) -> None:
                 connection_analytic.commit()
             except sqlite3.Error as err:
                 logger.error(f"INSERT into t_orders: {err}")
-        elif data.get('destination') == 't_funds.active update':
-            cursor_analytic = connection_analytic.cursor()
-            try:
-                cursor_analytic.execute('SELECT 1 FROM t_funds\
-                                         WHERE id_exchange =:id_exchange\
-                                         AND f_currency =:f_currency\
-                                         AND s_currency =:s_currency\
-                                         AND active = 1',
-                                        {'id_exchange': data.get('ID_EXCHANGE'),
-                                         'f_currency': data.get('f_currency'),
-                                         's_currency': data.get('s_currency'),
-                                         }
-                                        )
-                row_active = cursor_analytic.fetchone()
-                cursor_analytic.close()
-            except sqlite3.Error as err:
-                cursor_analytic.close()
-                row_active = (2,)
-                logger.error(f"SELECT from t_funds: {err}")
-            if row_active is None:
-                # logger.info("save_to_db: UPDATE t_funds set active=1")
-                try:
-                    connection_analytic.execute('UPDATE t_funds SET active = 1\
-                                                 WHERE id=(SELECT max(id) FROM t_funds\
-                                                 WHERE id_exchange=:id_exchange\
-                                                 AND f_currency=:f_currency\
-                                                 AND s_currency=:s_currency)',
-                                                {'id_exchange': data.get('ID_EXCHANGE'),
-                                                 'f_currency': data.get('f_currency'),
-                                                 's_currency': data.get('s_currency'),
-                                                 }
-                                                )
-                    connection_analytic.commit()
-                except sqlite3.Error as err:
-                    logger.error(f"save_to_db: UPDATE t_funds: {err}")
     connection_analytic.commit()
