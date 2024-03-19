@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc21"
+__version__ = "3.0.0rc24"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -20,7 +20,7 @@ import sqlite3
 import time
 import traceback
 from abc import abstractmethod
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from shutil import rmtree, copy
@@ -62,6 +62,7 @@ ORDER_BOOK_PRKT = "order_book.parquet"
 TICKER_PRKT = "ticker.parquet"
 MS_ORDER_ID = 'ms.order_id'
 MS_ORDERS = 'ms.orders'
+CONTROLLED_ASSETS = ['BNB']  # which is not traded, but must be controlled
 O_DEC = Decimal()
 SAVE_TRADE_QUEUE = asyncio.Queue()
 
@@ -116,12 +117,13 @@ class StrategyBase:
         self.tasks_list = []
         #
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
-        self.account = backTestAccount(prm.SAVE_DS) if prm.MODE == 'S' else None
+        self.account = None
         self.get_buffered_funds_last_time = self.get_time()
         self.queue_to_tlg = queue.Queue() if prm.TOKEN and prm.MODE != 'S' else None
         self.status_time = None  # + Last time sending status message
         self.tlg_header = ''  # - Header for Telegram message
         self.start_collect = None
+        self.s_mode_break = None
         # Init in reset_backtest_vars()
         self.s_ticker = None
         self.s_order_book = None
@@ -154,6 +156,7 @@ class StrategyBase:
         self.grid_sell = {}
 
     def reset_vars(self):
+        self.account = None
         self.ticker = {}
         self.funds = {}
         self.order_book = {}
@@ -167,6 +170,7 @@ class StrategyBase:
         self.start_time_ms = int(time.time() * 1000)
         self.backtest = {}
         self.bulk_orders_cancel = {}
+        self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}
 
     def update_vars(self, _session):
         self.client = _session.client
@@ -289,8 +293,7 @@ class StrategyBase:
 
     def trade_not_exist(self, _order_id: int, _trade_id: int) -> bool:
         return all(
-            trade.order_id != _order_id or trade.id != _trade_id
-            for trade in self.trades
+            trade.order_id != _order_id or trade.id != _trade_id for trade in self.trades
         )
 
     def order_trades_sum(self, _order_id: int) -> Decimal:
@@ -311,18 +314,20 @@ class StrategyBase:
         """
         Managing backtest and optimization cycles
         """
+        while not self.operational_status:
+            await asyncio.sleep(HEARTBEAT)
         delay = HEARTBEAT * 30  # 1 min
         ts = time.time()
         restart = False
-        while not self.operational_status:
-            await asyncio.sleep(HEARTBEAT)
+        prm_best = {}
+
         while self.operational_status:
             if self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
                 self.start_collect = False
                 self.session_data_handler()
                 self.reset_backtest_vars()
                 if prm.SELF_OPTIMIZATION and self.command != 'stopped':
-                    _ts = datetime.utcnow()
+                    _ts = datetime.now(timezone.utc)
                     storage_name = Path(self.session_root, "_study.db")
                     try:
                         _res = await run_optimize(
@@ -331,30 +336,35 @@ class StrategyBase:
                             Path(self.session_root, Path(prm.PARAMS).name),
                             str(prm.N_TRIALS),
                             f"sqlite:///{storage_name}",
-                            f"{prm.ID_EXCHANGE}_{prm.SYMBOL}_S.log"
+                            json.dumps(prm_best),
+                            f"{prm.ID_EXCHANGE}_{prm.SYMBOL}_S.log",
                         )
-                        _res = orjson.loads(_res)
+                        prm_best = orjson.loads(_res)
                     except (asyncio.CancelledError, KeyboardInterrupt):
                         break
                     except Exception as err:
-                        self.message_log(f"Backtest control: {err}", log_level=logging.WARNING)
+                        self.message_log(f"Backtest control: {err}", log_level=logging.ERROR)
+                        self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                     else:
                         storage_name.replace(storage_name.with_name('study.db'))
-                        if _res:
-                            self.message_log(f"Updating parameters from backtest,"
-                                             f" predicted value {_res.pop('_value')} ->"
-                                             f" {_res.pop('new_value')}",
-                                             color=Style.B_WHITE, tlg=True)
-                            for key, value in _res.items():
+                        if prm_best:
+                            self.message_log(
+                                f"Updating parameters from backtest,"
+                                f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
+                                color=Style.B_WHITE,
+                                tlg=True
+                            )
+                            for key, value in prm_best.items():
                                 self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
                                 setattr(
                                     prm, key,
                                     value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
                                 )
+                        l_m = str(datetime.now(timezone.utc) - _ts + timedelta(seconds=prm.SAVE_PERIOD)).rsplit('.')[0]
                         self.message_log(
-                            f"Strategy parameters are optimal now. Optimization cycle duration"
-                            f" {str(datetime.utcnow() - _ts + timedelta(seconds=prm.SAVE_PERIOD)).rsplit('.')[0]}",
-                            color=Style.B_WHITE, tlg=True
+                            f"Strategy parameters are optimal now. Optimization cycle duration {l_m}",
+                            color=Style.B_WHITE,
+                            tlg=True
                         )
                         restart = True
                 else:
@@ -392,6 +402,7 @@ class StrategyBase:
         """
         # Finalize ticker file
         if _ticker := self.s_ticker['pylist']:
+            # noinspection PyArgumentList
             self.s_ticker['writer'].write_batch(
                 pa.RecordBatch.from_pylist(mapping=_ticker)
             )
@@ -400,6 +411,7 @@ class StrategyBase:
 
         # Finalize order_book file
         if _order_book := self.s_order_book['pylist']:
+            # noinspection PyArgumentList
             self.s_order_book['writer'].write_batch(
                 pa.RecordBatch.from_pylist(mapping=_order_book)
             )
@@ -414,6 +426,7 @@ class StrategyBase:
         # Finalize candles files
         for i in KLINES_INIT:
             if _candles := self.candles[f"pylist_{i.value}"]:
+                # noinspection PyArgumentList
                 self.candles[f"writer_{i.value}"].write_batch(
                     pa.RecordBatch.from_pylist(mapping=_candles)
                 )
@@ -454,7 +467,7 @@ class StrategyBase:
         s_free = prm.SESSION_RESULT['free'] = f"{self.get_free_assets(mode='free', backtest=True)[2]}"
         if prm.LOGGING:
             print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
-            test_time = datetime.utcnow() - self.cycle_time
+            test_time = datetime.now(timezone.utc) - self.cycle_time
             original_time = (self.backtest['ticker_index_last'] - self.backtest['ticker_index_first']) / 1000
             original_time = timedelta(seconds=original_time)
             print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
@@ -514,8 +527,11 @@ class StrategyBase:
                                 mr.MarketRequest,
                                 symbol=self.symbol
                             )
+                        except UserWarning as ex:
+                            self.wss_fire_up = True
+                            self.message_log(f"{ex}", log_level=logging.WARNING)
                         except Exception as ex:
-                            self.message_log(f"Exception on check WSS: {ex}", log_level=logging.WARNING)
+                            self.message_log(f"Exception on check WSS: {ex}", log_level=logging.ERROR)
                         else:
                             if not res.success:
                                 self.message_log(f"Not active WSS for {self.symbol} on {self.exchange},"
@@ -523,8 +539,6 @@ class StrategyBase:
                                 update_max_queue_size = True
                                 self.wss_fire_up = True
                     #
-
-                    print(f"heartbeat: client_id: {self.client_id}, wss_fire_up: {self.wss_fire_up}")
                     if self.client_id and self.wss_fire_up:
                         try:
                             if await self.session.get_client():
@@ -552,8 +566,8 @@ class StrategyBase:
         while connection_analytic is None:
             connection_analytic = self.connection_analytic
             await asyncio.sleep(HEARTBEAT)
-        delay = 300  # 5 min
-        max_use_update = 12.5 * 60  # 12.5 min if the row has not been updated that the instance is down
+        delay = 600  # 10 min
+        max_use_update = 25 * 60  # 25 min if the row has not been updated that the instance is down
         while self.operational_status:
             try:
                 res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
@@ -593,12 +607,13 @@ class StrategyBase:
                         assets_fw[fw['asset']] = Decimal(fw['free']) + Decimal(fw['locked']) + Decimal(fw['freeze'])
                 # Create list of cumulative asset from SPOT and Funding wallet
                 assets = {}
+                controlled_assets = [self.base_asset, self.quote_asset] + CONTROLLED_ASSETS
                 for balance in balances:
                     if self.exchange != 'bitfinex':
                         total = assets_fw.pop(balance['asset'], O_DEC)
                     else:
                         total = Decimal('0.0')
-                    if balance['asset'] in (self.base_asset, self.quote_asset) or prm.GRID_ONLY:
+                    if balance['asset'] in controlled_assets or prm.GRID_ONLY:
                         total += Decimal(balance['free']) + Decimal(balance['locked'])
                     assets[balance['asset']] = float(total)
 
@@ -616,7 +631,7 @@ class StrategyBase:
                     for key, value in assets.items():
                         if prm.GRID_ONLY:
                             refresh_t_asset(cursor, key, value, used=0)
-                        elif key in (self.base_asset, self.quote_asset):
+                        elif key in controlled_assets:
                             refresh_t_asset(cursor, key, value, used=1)
 
                     cursor.execute('COMMIT')
@@ -630,8 +645,9 @@ class StrategyBase:
     async def ask_exit(self):
         self.message_log("Got signal for exit", color=Style.MAGENTA)
         self.operational_status = False
+        self.s_mode_break = True
+        await asyncio.sleep(HEARTBEAT)
         if prm.MODE in ('T', 'TC'):
-            await asyncio.sleep(HEARTBEAT)
             try:
                 await self.send_request(self.stub.stop_stream, mr.MarketRequest, symbol=self.symbol)
             except Exception as ex:
@@ -644,19 +660,20 @@ class StrategyBase:
                 self.start_collect = False
                 self.session_data_handler()
 
-        self.channel.close()
-        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-        [task.cancel() for task in tasks]
-        await asyncio.gather(*tasks, return_exceptions=True)
-        if prm.LOGGING:
-            print(f"Cancelling {len(tasks)} outstanding tasks")
+            self.channel.close()
+
+            tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+            [task.cancel() for task in tasks]
+            await asyncio.gather(*tasks, return_exceptions=True)
+            if prm.LOGGING:
+                print(f"Cancelling {len(tasks)} outstanding tasks")
+            if prm.LAST_STATE_FILE.exists():
+                print(f"Current state saved into {prm.LAST_STATE_FILE}")
+
         try:
             self.stop()
         except Exception as _err:
             print(f"ask_exit.strategy.stop: {_err}")
-
-        if prm.MODE in ('T', 'TC') and prm.LAST_STATE_FILE.exists():
-            print(f"Current state saved into {prm.LAST_STATE_FILE}")
 
     async def fetch_order(self, _id: int, _client_order_id: str = None, _filled_update_call=False):
         try:
@@ -735,8 +752,11 @@ class StrategyBase:
             self.backtest['ticker_index_last'] = index_prev * 1000
 
     async def aiter_candles(self, _klines: {str: Klines}, _i: str):
+        self.s_mode_break = None
         async for row in self.loop_ds(self.backtest[f"candles_{_i}"]):
             _klines.get(_i).refresh(row)
+            if self.s_mode_break:
+                break
         self.message_log(f"Backtest candles *** {_i} *** timeSeries ended")
 
     def open_orders_snapshot(self, ts=None):
@@ -784,9 +804,12 @@ class StrategyBase:
         except GRPCError as ex:
             _fetch_order = True
             self.message_log(f"Exception on cancel order {_id}: {ex.status.name}, {ex.message}")
-        except Exception as _ex:
+        except UserWarning as ex:
             _fetch_order = True
-            self.message_log(f"Exception on cancel order call for {_id}: {_ex}", log_level=logging.WARNING)
+            self.message_log(f"Exception on cancel order call for {_id}: {ex}", log_level=logging.WARNING)
+        except Exception as ex:
+            _fetch_order = True
+            self.message_log(f"Exception on cancel order call for {_id}: {ex}", log_level=logging.ERROR)
             self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
         else:
             # print(f"cancel_order_call.result: {result}")
@@ -957,6 +980,7 @@ class StrategyBase:
                     _klines.get(res.interval).refresh(candle)
                     if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         if len(self.candles[f"pylist_{res.interval}"]) > PYARROW_BATCH_BUFFER_SIZE:
+                            # noinspection PyArgumentList
                             self.candles[f"writer_{res.interval}"].write_batch(
                                 pa.RecordBatch.from_pylist(mapping=self.candles[f"pylist_{res.interval}"])
                             )
@@ -1184,6 +1208,7 @@ class StrategyBase:
                     if prm.MODE == 'TC' and self.start_collect:
                         ts = int(time.time() * 1000)
                         if len(self.s_ticker['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
+                            # noinspection PyArgumentList
                             self.s_ticker['writer'].write_batch(
                                 pa.RecordBatch.from_pylist(mapping=self.s_ticker['pylist'])
                             )
@@ -1200,6 +1225,7 @@ class StrategyBase:
         else:
             if prm.LOGGING:
                 pbar = tqdm(total=self.backtest['ticker'].metadata.num_rows)
+            self.s_mode_break = None
             async for row in self.loop_ds(self.backtest['ticker'], ticker=True):
                 self.delay_ordering_s = row.pop('delay', 0)
                 self.ticker = row
@@ -1211,9 +1237,12 @@ class StrategyBase:
                 if prm.LOGGING:
                     # noinspection PyUnboundLocalVariable
                     pbar.update()
+                if self.s_mode_break:
+                    break
             if prm.LOGGING:
                 pbar.close()
             self.message_log("Backtest *** ticker *** timeSeries ended")
+            self.s_mode_break = True
             self.back_test_handler()
 
     async def on_order_book_update(self):
@@ -1230,6 +1259,7 @@ class StrategyBase:
                         self.order_book['bids'] = self.order_book['bids'][:1]
                         self.order_book['asks'] = self.order_book['asks'][:1]
                         if len(self.s_order_book['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
+                            # noinspection PyArgumentList
                             self.s_order_book['writer'].write_batch(
                                 pa.RecordBatch.from_pylist(mapping=self.s_order_book['pylist'])
                             )
@@ -1242,9 +1272,12 @@ class StrategyBase:
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
         else:
+            self.s_mode_break = None
             async for row in self.loop_ds(self.backtest['order_book']):
                 self.order_book = row
                 self.on_new_order_book(OrderBook(row))
+                if self.s_mode_break:
+                    break
             self.message_log("Backtest *** order_book *** timeSeries ended")
 
     async def buffered_orders(self):
@@ -1301,13 +1334,13 @@ class StrategyBase:
                 # print("buffered_orders.Cancelled")
                 self.operational_status = False
             except UserWarning as ex_2:
-                self.message_log(f"Exception buffered_orders: {ex_2}", log_level=logging.WARNING)
+                self.message_log(f"Exception buffered_orders 2: {ex_2}", log_level=logging.WARNING)
                 restore = True
             except ConnectionRefusedError:
                 restore = True
             except GRPCError as ex_3:
                 status_code = ex_3.status
-                self.message_log(f"Exception buffered_orders: {status_code.name}, {ex_3.message}",
+                self.message_log(f"Exception buffered_orders 3: {status_code.name}, {ex_3.message}",
                                  log_level=logging.WARNING, color=Style.B_RED, tlg=True)
                 if status_code == Status.RESOURCE_EXHAUSTED:
                     # Decrease requests frequency
@@ -1318,11 +1351,12 @@ class StrategyBase:
                         await self.send_request(self.stub.reset_rate_limit, mr.OpenClientConnectionId,
                                                 rate_limiter=self.rate_limiter)
                     except Exception as ex_4:
-                        self.message_log(f"Exception buffered_orders:ResetRateLimit: {ex_4}", log_level=logging.WARNING)
+                        self.message_log(f"Exception buffered_orders 4:ResetRateLimit: {ex_4}",
+                                         log_level=logging.WARNING)
                 else:
                     restore = True
             except Exception as ex_5:
-                self.message_log(f"Exception buffered_orders: {ex_5}", log_level=logging.ERROR)
+                self.message_log(f"Exception buffered_orders 5: {ex_5}", log_level=logging.ERROR)
                 self.message_log(traceback.format_exc(), log_level=logging.DEBUG)
                 restore = True
             await asyncio.sleep(self.rate_limiter)
@@ -1506,8 +1540,10 @@ class StrategyBase:
                 # Init class atr for reuse in next backtest cycle
                 raw_path = Path(self.session_root, "raw")
                 self.reset_vars()
+                self.reset_vars_ex()
             #
             if prm.MODE == 'S':
+                self.account = backTestAccount(prm.SAVE_DS)
                 self.account.funds.base = {
                     'asset': self.base_asset,
                     'free': prm.AMOUNT_FIRST,
@@ -1590,16 +1626,16 @@ class StrategyBase:
                     self.time_operational['new'] = self.backtest['ticker_index_first'] / 1000
                     self.get_buffered_funds_last_time = self.get_time()
                     self.start_time_ms = int(self.get_time() * 1000)
-                    self.cycle_time = datetime.utcnow()
+                    self.cycle_time = datetime.now(timezone.utc)
                     #
                     await self.wss_declare()
                     if self.state_file.exists():
                         self.restore_state_before_backtesting()
                         self.init(check_funds=False)
-                        self.start_collect = True
                     else:
                         self.init()
                         self.start()
+                    self.start_collect = True
 
             if prm.MODE in ('T', 'TC'):
                 await self.wss_init()
@@ -1684,6 +1720,10 @@ class StrategyBase:
 
     @abstractmethod
     def init(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @abstractmethod
+    def reset_vars_ex(self):
         raise NotImplementedError
 
     # endregion

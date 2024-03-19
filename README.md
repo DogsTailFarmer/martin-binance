@@ -26,7 +26,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* After update to `3.0.0`, the configuration files `cli_XX_AAABBB.py` for all running trading pairs
+* After update to `3.0.1`, the configuration files `cli_XX_AAABBB.py` for all running trading pairs
 should be updated. Use templates for reference.
 
 * You cannot run multiple pairs with overlapping currencies on the same account!

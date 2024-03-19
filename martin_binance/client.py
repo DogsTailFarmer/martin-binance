@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc7"
+__version__ = "3.0.0rc22"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -14,6 +14,7 @@ import logging
 
 import grpclib.exceptions
 import shortuuid
+import traceback
 
 from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
 
@@ -90,24 +91,20 @@ class Trade:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
-            logger.warning("Have not connection to gRPC server")
+            raise UserWarning("Have not connection to gRPC server")
+        except ConnectionRefusedError as ex:
+            raise UserWarning("Connection to gRPC server broken")
         except GRPCError as ex:
             status_code = ex.status
-            if (
-                (status_code == Status.UNAVAILABLE
-                 and 'failed to connect to all addresses' in ex.message)
-                    or
-                (status_code == Status.UNKNOWN
-                 and "No client exist" in ex.message)
-            ):
+            if status_code == Status.UNAVAILABLE:
                 self.client = None
                 raise UserWarning(
                     "Connection to gRPC server failed, wait connection..."
                 ) from ex
-            if status_code == Status.RESOURCE_EXHAUSTED:
-                raise
-            logger.debug(f"Exception on send request {_request}: {status_code.name}, {ex.message}")
+            logger.debug(f"Send request {_request}: {status_code.name}, {ex.message}")
             raise
+        except Exception as ex:
+            logger.error(f"Exception on send request {ex}")
         else:
             if res is None:
                 self.client = None

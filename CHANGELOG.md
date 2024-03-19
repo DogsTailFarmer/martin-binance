@@ -1,6 +1,17 @@
-## 3.0.0rc21 - 2024-03-13
+## 3.0.1rc1 - 2024-03-19
+### Fix
+* Cyclic Backtesting workflow
+
+### Update
+* Up requirements for exchanges-wrapper==2.1.2
+
+
+## 3.0.0rc22 - 2024-03-13
 ### Fix
 * `Analytics`: Refine unload and processing assets data
+
+### Update
+* Up requirements for exchanges-wrapper==2.1.0
 
 ## 3.0.0rc20 - 2024-03-12
 ### Fix

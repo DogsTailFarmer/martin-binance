@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0"
+__version__ = "3.0.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -37,11 +37,10 @@ import martin_binance.params as ex
 ex.SYMBOL = 'BTCUSDT'
 # Exchange setup, see list of exchange in ms_cfg.toml
 ex.ID_EXCHANGE = 0  # See ms_cfg.toml Use for collection of statistics *and get client connection*
-ex.FEE_IN_PAIR = True  # Fee pays in pair
 ex.FEE_MAKER = Decimal('0.1')  # standard exchange Fee for maker
 ex.FEE_TAKER = Decimal('0.1')  # standard exchange Fee for taker
-ex.FEE_SECOND = False  # On KRAKEN fee always in second coin
-ex.FEE_BNB_IN_PAIR = False  # Binance fee in BNB and BNB is base asset
+ex.FEE_FIRST = False  # For example fee in BNB and BNB in pair, and it is base asset
+ex.FEE_SECOND = False  # For example fee in BNB and BNB in pair, and it is quote asset
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
@@ -147,8 +146,6 @@ def trade(strategy=None):
         except Exception as _err:
             print(f"Error: {_err}")
         loop.run_until_complete(loop.shutdown_asyncgens())
-        if ex.MODE in ('T', 'TC'):
-            loop.close()
     return strategy
 
 

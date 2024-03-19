@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc4"
+__version__ = "3.0.1rc1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -49,8 +49,9 @@ def try_trade(mbs, skip_log, **kwargs):
     return float(mbs.ex.SESSION_RESULT.get('profit', 0)) + float(mbs.ex.SESSION_RESULT.get('free', 0))
 
 
-def optimize(study_name, cli, n_trials, storage_name=None, skip_log=True, show_progress_bar=False):
+def optimize(study_name, cli, n_trials, storage_name=None, prm_best=None, skip_log=True, show_progress_bar=False):
     sys.excepthook = notify_exception
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     def objective(_trial):
         params = {
@@ -70,12 +71,13 @@ def optimize(study_name, cli, n_trials, storage_name=None, skip_log=True, show_p
     spec = iu.spec_from_file_location("strategy", cli)
     mbs = iu.module_from_spec(spec)
     spec.loader.exec_module(mbs)
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
     _study = optuna.create_study(study_name=study_name, storage=storage_name, direction="maximize")
-    try:
-        _study.optimize(objective, n_trials=n_trials, gc_after_trial=True, show_progress_bar=show_progress_bar)
-    except KeyboardInterrupt:
-        pass  # ignore
+
+    if prm_best:
+        logger.info(f"Previous best params: {prm_best}")
+        _study.enqueue_trial(prm_best)
+
+    _study.optimize(objective, n_trials=n_trials, gc_after_trial=True, show_progress_bar=show_progress_bar)
     return _study
 
 
@@ -90,18 +92,32 @@ if __name__ == "__main__":
     logger.level = logging.INFO
     formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
     #
-    fh = logging.handlers.RotatingFileHandler(Path(LOG_PATH, sys.argv[5]), maxBytes=500000, backupCount=5)
+    fh = logging.handlers.RotatingFileHandler(Path(LOG_PATH, sys.argv[6]), maxBytes=500000, backupCount=5)
     fh.setFormatter(formatter)
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
     #
-    study = optimize(sys.argv[1], sys.argv[2], int(sys.argv[3]), storage_name=sys.argv[4])
-    logger.info(f"Optimal parameters: {study.best_params} for get {study.best_value}")
-    new_value = study.best_value
-    _value = study.get_trials()[0].value
-    if new_value > _value:
-        res = study.best_params
-        res |= {'new_value': any2str(new_value), '_value': any2str(_value)}
-        print(json.dumps(res))
+    prm_best = None
+    try:
+        prm_best = json.loads(sys.argv[5])
+        study = optimize(
+            sys.argv[1],
+            sys.argv[2],
+            int(sys.argv[3]),
+            storage_name=sys.argv[4],
+            prm_best=prm_best
+        )
+    except KeyboardInterrupt:
+        pass  # ignore
+    except Exception as ex:
+        logger.info(f"optimizer: {ex}")
     else:
-        print(json.dumps({}))
+        logger.info(f"Optimal parameters: {study.best_params} for get {study.best_value}")
+        new_value = study.best_value
+        _value = study.get_trials()[0].value
+        if new_value > _value or not prm_best:
+            res = study.best_params
+            res |= {'new_value': any2str(new_value), '_value': any2str(_value)}
+            print(json.dumps(res))
+        else:
+            print(json.dumps({}))
