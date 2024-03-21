@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc19"
+__version__ = "3.0.1rc3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -271,7 +271,7 @@ class Strategy(StrategyBase):
                 last_price = self.get_buffered_ticker().last_price
                 ticker_update = int(self.get_time()) - self.last_ticker_update
                 if self.cycle_time:
-                    ct = str(datetime.now(timezone.utc) - self.cycle_time).rsplit('.')[0]
+                    ct = str(datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time).rsplit('.')[0]
                 else:
                     self.message_log("save_strategy_state: cycle_time is None!", log_level=logging.DEBUG)
                     ct = str(datetime.now(timezone.utc)).rsplit('.')[0]
@@ -579,7 +579,7 @@ class Strategy(StrategyBase):
                     else:
                         df = self.deposit_first - self.profit_first
                         ds = O_DEC
-                    ct = datetime.now(timezone.utc) - self.cycle_time
+                    ct = datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time
                     ct = ct.total_seconds()
                     # noinspection PyUnboundLocalVariable
                     data_to_db = {
@@ -641,7 +641,7 @@ class Strategy(StrategyBase):
                              f"Second: {self.sum_profit_second}\n"
                              f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
         if self.first_run or MODE in ('T', 'TC'):
-            self.cycle_time = datetime.now(timezone.utc)
+            self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
         #
         memory = psutil.virtual_memory()
         swap = psutil.swap_memory()
@@ -688,6 +688,7 @@ class Strategy(StrategyBase):
                                  color=Style.B_WHITE)
             self.debug_output()
             if MODE in ('TC', 'S') and self.start_collect is None:
+
                 self.start_collect = True
             self.first_run = False
             self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
@@ -1167,7 +1168,7 @@ class Strategy(StrategyBase):
             self.message_log(f"Hold grid for {'Buy' if buy_side else 'Sell'} cycle with {depo} {currency} depo."
                              f" Available funds is {fund} {currency}", tlg=False)
         if self.tp_hold_additional:
-            self.message_log("Replace take profit order after place additional grid orders", tlg=True)
+            self.message_log("Replace take profit order after place additional grid orders")
             self.tp_hold = False
             self.tp_hold_additional = False
             self.place_profit_order()
@@ -1625,7 +1626,7 @@ class Strategy(StrategyBase):
             self.message_log(f"Cycle profit first {self.profit_first} + {profit_reverse}")
         transfer_sum_amount_first = transfer_sum_amount_second = O_DEC
         if one_else_grid:
-            self.message_log("Some grid orders was execute after TP was filled", tlg=True)
+            self.message_log("Some grid orders was execute after TP was filled")
             self.tp_was_filled = ()
             if self.convert_tp(amount_first_fee - profit_first, amount_second_fee - profit_second):
                 return
@@ -1696,7 +1697,7 @@ class Strategy(StrategyBase):
             self.reverse = False
             self.restart = True
             # Calculate profit and time for Reverse cycle
-            self.cycle_time = self.cycle_time_reverse or datetime.now(timezone.utc)
+            self.cycle_time = self.cycle_time_reverse or datetime.now(timezone.utc).replace(tzinfo=None)
             if self.cycle_buy:
                 self.profit_first += self.round_truncate(self.sum_amount_first - self.reverse_init_amount +
                                                          self.tp_part_amount_first, base=True)
@@ -1733,7 +1734,7 @@ class Strategy(StrategyBase):
                 trend_up = adx.get('adx') > ADX_THRESHOLD and adx.get('+DI') > adx.get('-DI')
                 trend_down = adx.get('adx') > ADX_THRESHOLD and adx.get('-DI') > adx.get('+DI')
                 # print('adx: {}, +DI: {}, -DI: {}'.format(adx.get('adx'), adx.get('+DI'), adx.get('-DI')))
-            self.cycle_time_reverse = self.cycle_time or datetime.now(timezone.utc)
+            self.cycle_time_reverse = self.cycle_time or datetime.now(timezone.utc).replace(tzinfo=None)
             self.start_reverse_time = self.get_time()
             # Calculate target return amount
             tp = self.calc_profit_order(not self.cycle_buy)
@@ -1877,10 +1878,10 @@ class Strategy(StrategyBase):
                     self.tp_part_amount_first,
                     self.tp_part_amount_second,
                     _update_sum_amount=False):
-                self.message_log("No grid orders after part filled TP, converted TP to grid", tlg=True)
+                self.message_log("No grid orders after part filled TP, converted TP to grid")
                 self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
             elif self.tp_was_filled:
-                self.message_log("Was filled TP and all grid orders, converse TP to grid", tlg=True)
+                self.message_log("Was filled TP and all grid orders, converse TP to grid")
                 self.after_filled_tp(one_else_grid=True)
             else:
                 # Ended grid order, calculate depo and Reverse
@@ -1944,7 +1945,7 @@ class Strategy(StrategyBase):
             self.restore_orders_fire()
             if replace_tp:
                 self.tp_hold_additional = True
-                self.message_log("Replace TP", tlg=True)
+                self.message_log("Replace TP")
             self.place_grid(self.cycle_buy,
                             amount,
                             reverse_target_amount,
@@ -2162,7 +2163,6 @@ class Strategy(StrategyBase):
     ##############################################################
 
     def on_balance_update_ex(self, balance: Dict) -> None:
-        # TODO Check amount and correct appropriate order volume
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
         restart = False
@@ -2406,7 +2406,7 @@ class Strategy(StrategyBase):
                                        replace_tp=False):
                         self.tp_part_free = False
                         self.cancel_reverse_hold()
-                        self.message_log("Part filled TP was converted to grid", tlg=True)
+                        self.message_log("Part filled TP was converted to grid")
             else:
                 self.message_log(f"Wild order, do not know it: {update.original_order.id}", tlg=True)
 
@@ -2416,7 +2416,7 @@ class Strategy(StrategyBase):
         self.reverse_target_amount = O_DEC
         self.reverse_init_amount = O_DEC
         self.initial_reverse_first = self.initial_reverse_second = O_DEC
-        self.message_log("Cancel hold reverse cycle", color=Style.B_WHITE, tlg=True)
+        self.message_log("Cancel hold reverse cycle", color=Style.B_WHITE)
 
     def on_place_order_success(self, place_order_id: int, order: Order) -> None:
         # print(f"on_place_order_success.place_order_id: {place_order_id}")

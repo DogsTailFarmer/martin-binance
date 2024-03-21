@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc3"
+__version__ = "3.0.1rc3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -421,9 +421,9 @@ class Ticker:
     __slots__ = ("last_day_price", "last_price", "timestamp")
 
     def __init__(self, _ticker):
-        self.last_day_price = Decimal(_ticker.get('openPrice', '0'))
-        self.last_price = Decimal(_ticker.get('lastPrice', '0'))
-        self.timestamp = int(_ticker.get('closeTime', 0))
+        self.last_day_price = Decimal(_ticker['openPrice'])
+        self.last_price = Decimal(_ticker['lastPrice'])
+        self.timestamp = int(_ticker['closeTime'])
 
     def __call__(self):
         return self
@@ -433,8 +433,8 @@ class FundsEntry:
     __slots__ = ("available", "reserved", "total_for_currency")
 
     def __init__(self, _funds):
-        self.available = Decimal(_funds.get('free'))
-        self.reserved = Decimal(_funds.get('locked'))
+        self.available = Decimal(_funds['free'])
+        self.reserved = Decimal(_funds['locked'])
         self.total_for_currency = self.available + self.reserved
 
     def __call__(self):

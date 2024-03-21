@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc22"
+__version__ = "3.0.1rc3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -12,9 +12,9 @@ import asyncio
 import random
 import logging
 
+# noinspection PyPackageRequirements
 import grpclib.exceptions
 import shortuuid
-import traceback
 
 from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
 
@@ -92,7 +92,7 @@ class Trade:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
             raise UserWarning("Have not connection to gRPC server")
-        except ConnectionRefusedError as ex:
+        except ConnectionRefusedError:
             raise UserWarning("Connection to gRPC server broken")
         except GRPCError as ex:
             status_code = ex.status

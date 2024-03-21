@@ -1,3 +1,10 @@
+## 3.0.1rc3 - 2024-03-21
+### Added for new features
+:rocket: `Backtesting`: handling of partially filling events
+
+### Update
+* Up requirements for exchanges-wrapper==2.1.3
+
 ## 3.0.1rc1 - 2024-03-19
 ### Fix
 * Cyclic Backtesting workflow

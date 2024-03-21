@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc24"
+__version__ = "3.0.1rc3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -327,7 +327,7 @@ class StrategyBase:
                 self.session_data_handler()
                 self.reset_backtest_vars()
                 if prm.SELF_OPTIMIZATION and self.command != 'stopped':
-                    _ts = datetime.now(timezone.utc)
+                    _ts = datetime.now(timezone.utc).replace(tzinfo=None)
                     storage_name = Path(self.session_root, "_study.db")
                     try:
                         _res = await run_optimize(
@@ -360,7 +360,9 @@ class StrategyBase:
                                     prm, key,
                                     value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
                                 )
-                        l_m = str(datetime.now(timezone.utc) - _ts + timedelta(seconds=prm.SAVE_PERIOD)).rsplit('.')[0]
+                        l_m = str(
+                            datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)
+                        ).rsplit('.')[0]
                         self.message_log(
                             f"Strategy parameters are optimal now. Optimization cycle duration {l_m}",
                             color=Style.B_WHITE,
@@ -467,7 +469,7 @@ class StrategyBase:
         s_free = prm.SESSION_RESULT['free'] = f"{self.get_free_assets(mode='free', backtest=True)[2]}"
         if prm.LOGGING:
             print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
-            test_time = datetime.now(timezone.utc) - self.cycle_time
+            test_time = datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time
             original_time = (self.backtest['ticker_index_last'] - self.backtest['ticker_index_first']) / 1000
             original_time = timedelta(seconds=original_time)
             print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
@@ -539,7 +541,7 @@ class StrategyBase:
                                 update_max_queue_size = True
                                 self.wss_fire_up = True
                     #
-                    if self.client_id and self.wss_fire_up:
+                    if self.wss_fire_up:
                         try:
                             if await self.session.get_client():
                                 self.update_vars(self.session)
@@ -660,7 +662,8 @@ class StrategyBase:
                 self.start_collect = False
                 self.session_data_handler()
 
-            self.channel.close()
+            if self.channel:
+                self.channel.close()
 
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
@@ -730,7 +733,7 @@ class StrategyBase:
 
     async def loop_ds(self, ds, ticker=False):
         while not self.start_collect:
-            await asyncio.sleep(0.001)
+            await asyncio.sleep(0.010)
 
         batches = ds.iter_batches(PYARROW_BATCH_BUFFER_SIZE)
         index_prev = 0
@@ -748,6 +751,7 @@ class StrategyBase:
                     delay /= prm.XTIME
                     await asyncio.sleep(delay)
                 yield orjson.loads(row['row'])
+
         if ticker:
             self.backtest['ticker_index_last'] = index_prev * 1000
 
@@ -1150,13 +1154,6 @@ class StrategyBase:
         if ed['order_status'] == 'FILLED':
             # Remove from orders dict
             self.remove_from_orders_lists([ed['order_id']])
-            if prm.MODE == 'TC' and self.start_collect and self.s_ticker['pylist']:
-                s_tic = self.s_ticker['pylist'].pop()
-                s_tic_row = orjson.loads(s_tic['row'])
-                s_tic_row['lastPrice'] = ed['last_executed_price']
-                s_tic['row'] = orjson.dumps(s_tic_row)
-                if prm.SAVE_DS:
-                    self.open_orders_snapshot()
         elif ed['order_status'] == 'PARTIALLY_FILLED':
             # Update order in orders dict
             _order = {
@@ -1169,6 +1166,19 @@ class StrategyBase:
                 "transactTime": ed['transaction_time'],
             }
             self.orders |= {ed['order_id']: Order(_order)}
+
+        if prm.MODE == 'TC' and self.start_collect and self.s_ticker['pylist']:
+            # print(f"1 s_ticker: {self.s_ticker['pylist'][-1]}")
+            s_tic = self.s_ticker['pylist'].pop()
+            s_tic_row = orjson.loads(s_tic['row'])
+            s_tic_row['lastPrice'] = ed['last_executed_price']
+            if ed['order_status'] == 'PARTIALLY_FILLED':
+                s_tic_row['Qty'] = ed['last_executed_quantity']
+            s_tic['row'] = orjson.dumps(s_tic_row)
+            self.s_ticker['pylist'].append(s_tic)
+            if prm.SAVE_DS:
+                self.open_orders_snapshot()
+            # print(f"2 s_ticker: {self.s_ticker['pylist'][-1]}")
 
     def _on_order_update_handler_ext(self, ed):
         trade = {
@@ -1207,14 +1217,14 @@ class StrategyBase:
                     #
                     if prm.MODE == 'TC' and self.start_collect:
                         ts = int(time.time() * 1000)
+                        self.ticker |= {'delay': self.delay_ordering_s, 'Qty': "0"}
                         if len(self.s_ticker['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
                             # noinspection PyArgumentList
                             self.s_ticker['writer'].write_batch(
                                 pa.RecordBatch.from_pylist(mapping=self.s_ticker['pylist'])
                             )
                             self.s_ticker['pylist'].clear()
-                        self.ticker['delay'] = self.delay_ordering_s
-                        # print(f"on_ticker_update.ticker_24h: {ticker_24h}")
+                        # print(f"on_ticker_update.ticker: {self.ticker}")
                         self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(self.ticker)})
                         if prm.SAVE_DS:
                             self.open_orders_snapshot(ts=ts)
@@ -1386,8 +1396,8 @@ class StrategyBase:
                 self.tasks_list.append(asyncio.ensure_future(self.backtest_control()))
 
     async def wss_init(self, update_max_queue_size=False):
-        self.message_log(f"Init WSS, client_id: {self.client_id}")
         if self.client_id:
+            self.message_log(f"Init WSS, client_id: {self.client_id}")
             self.task_cancel()
             await self.wss_declare()
             # WSS start
@@ -1513,15 +1523,12 @@ class StrategyBase:
                         self.order_book['bids'] = self.order_book['bids'] or [[price['price'], amount]]
                         self.order_book['asks'] = self.order_book['asks'] or [[price['price'], amount]]
                     # endregion
-                    _ticker = await self.send_request(self.stub.fetch_ticker_price_change_statistics,
-                                                      mr.MarketRequest,
-                                                      symbol=_symbol)
+                    _ticker = await self.send_request(
+                        self.stub.fetch_ticker_price_change_statistics,
+                        mr.MarketRequest,
+                        symbol=_symbol
+                    )
                     self.ticker = _ticker.to_pydict()
-                    if prm.MODE == 'TC':
-                        # Save first order_book and ticker raw's
-                        ts = int(time.time() * 1000)
-                        self.s_order_book['pylist'].append({"key": ts, "row": orjson.dumps(self.order_book)})
-                        self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(self.ticker)})
                 #
                 if prm.MODE in ('TC', 'S'):
                     self.session_root = Path(BACKTEST_PATH, f"{self.exchange}_{self.symbol}")
@@ -1591,7 +1598,7 @@ class StrategyBase:
                         last_state.pop('ms_start_time_ms', str(int(time.time() * 1000)))
                     )
 
-                    # TODO Replace after update
+                    # TODO Replace after update to 3.0.0
                     # self.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
 
                     _orders = last_state.pop(MS_ORDERS, '{}')
@@ -1626,16 +1633,16 @@ class StrategyBase:
                     self.time_operational['new'] = self.backtest['ticker_index_first'] / 1000
                     self.get_buffered_funds_last_time = self.get_time()
                     self.start_time_ms = int(self.get_time() * 1000)
-                    self.cycle_time = datetime.now(timezone.utc)
+                    self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
                     #
                     await self.wss_declare()
                     if self.state_file.exists():
                         self.restore_state_before_backtesting()
                         self.init(check_funds=False)
+                        self.start_collect = True
                     else:
                         self.init()
                         self.start()
-                    self.start_collect = True
 
             if prm.MODE in ('T', 'TC'):
                 await self.wss_init()

@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc1"
+__version__ = "3.0.1rc3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -30,6 +30,7 @@ PARAMS_FLOAT = ['KBB']
 STRATEGY = None
 
 
+# noinspection PyUnusedLocal
 def notify_exception(*args):
     pass  # Supress message from sys.excepthook
 
@@ -49,7 +50,7 @@ def try_trade(mbs, skip_log, **kwargs):
     return float(mbs.ex.SESSION_RESULT.get('profit', 0)) + float(mbs.ex.SESSION_RESULT.get('free', 0))
 
 
-def optimize(study_name, cli, n_trials, storage_name=None, prm_best=None, skip_log=True, show_progress_bar=False):
+def optimize(study_name, cli, n_trials, storage_name=None, _prm_best=None, skip_log=True, show_progress_bar=False):
     sys.excepthook = notify_exception
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -71,11 +72,12 @@ def optimize(study_name, cli, n_trials, storage_name=None, prm_best=None, skip_l
     spec = iu.spec_from_file_location("strategy", cli)
     mbs = iu.module_from_spec(spec)
     spec.loader.exec_module(mbs)
+    # noinspection PyArgumentList
     _study = optuna.create_study(study_name=study_name, storage=storage_name, direction="maximize")
 
-    if prm_best:
-        logger.info(f"Previous best params: {prm_best}")
-        _study.enqueue_trial(prm_best)
+    if _prm_best:
+        logger.info(f"Previous best params: {_prm_best}")
+        _study.enqueue_trial(_prm_best)
 
     _study.optimize(objective, n_trials=n_trials, gc_after_trial=True, show_progress_bar=show_progress_bar)
     return _study
@@ -105,7 +107,7 @@ if __name__ == "__main__":
             sys.argv[2],
             int(sys.argv[3]),
             storage_name=sys.argv[4],
-            prm_best=prm_best
+            _prm_best=prm_best
         )
     except KeyboardInterrupt:
         pass  # ignore
