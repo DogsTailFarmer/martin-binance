@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc3"
+__version__ = "3.0.1rc5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -131,17 +131,18 @@ class Strategy(StrategyBase):
         if init_params_error:
             self.message_log(f"Incorrect value for {init_params_error}", log_level=logging.ERROR)
             raise SystemExit(1)
+        tcm = self.get_trading_capability_manager()
+        self.f_currency = self.get_first_currency()
+        self.s_currency = self.get_second_currency()
+        self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}. "
+        self.message_log(f"{self.tlg_header}", color=Style.B_WHITE)
         if MODE == 'S':
             self.profit_first = self.profit_second = O_DEC
             self.sum_profit_first = self.sum_profit_second = O_DEC
             self.part_profit_first = self.part_profit_second = O_DEC
         else:
             db_management(EXCHANGE)
-        tcm = self.get_trading_capability_manager()
-        self.f_currency = self.get_first_currency()
-        self.s_currency = self.get_second_currency()
-        self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}. "
-        self.message_log(f"{self.tlg_header}", color=Style.B_WHITE)
+            self.start_process()
         self.status_time = int(self.get_time())
         self.start_after_shift = True
         self.over_price = OVER_PRICE
@@ -335,7 +336,7 @@ class Strategy(StrategyBase):
                     self.message_log(f"{header}\n"
                                      f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* **  **  ** *'}\n"
                                      f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
-                                     f"{' Hold reverse' if self.reverse_hold else ''} cycle with"
+                                     f"{' Hold reverse' if self.reverse_hold else ''} {MODE}-cycle with"
                                      f" {order_buy} buy and {order_sell} sell active orders.\n"
                                      f"{order_hold or 'No'} hold grid orders\n"
                                      f"Over price: {self.over_price:.2f}%\n"
@@ -500,7 +501,6 @@ class Strategy(StrategyBase):
             self.first_run = False
         #
         if restore:
-            self.start_process()
             if self.command == 'stopped':
                 self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
                 return
@@ -547,8 +547,6 @@ class Strategy(StrategyBase):
         ff, fs, _, _ = self.get_free_assets(mode='available')
         # Save initial funds and cycle statistics to .db for external analytics
         if self.first_run:
-            if MODE in ('T', 'TC'):
-                self.start_process()
             self.save_init_assets(ff, fs)
         if self.restart:
             # Check refunding before restart
@@ -756,19 +754,18 @@ class Strategy(StrategyBase):
 
     def start_process(self):
         # Init analytic
-        if MODE != 'S':
-            self.connection_analytic = (
-                    self.connection_analytic or
-                    sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
-            )
-            self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,), daemon=True)
-            if not self.pr_db.is_alive():
-                self.message_log('Start process for .db save')
-                try:
-                    self.pr_db.start()
-                except AssertionError as error:
-                    self.message_log(str(error), log_level=logging.ERROR, color=Style.B_RED)
-        if TOKEN and MODE != 'S':
+        self.connection_analytic = (
+                self.connection_analytic or
+                sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
+        )
+        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,), daemon=True)
+        if not self.pr_db.is_alive():
+            self.message_log('Start process for .db save')
+            try:
+                self.pr_db.start()
+            except AssertionError as error:
+                self.message_log(str(error), log_level=logging.ERROR, color=Style.B_RED)
+        if TOKEN:
             self.pr_tlg = Thread(
                 target=telegram,
                 args=(

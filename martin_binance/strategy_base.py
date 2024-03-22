@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc3"
+__version__ = "3.0.1rc5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -202,7 +202,6 @@ class StrategyBase:
         return Ticker(self.ticker)
 
     def get_buffered_funds(self) -> Dict[str, FundsEntry]:
-        # print(f"get_buffered_funds.funds: {self.funds}")
         if self.get_time() - self.get_buffered_funds_last_time > self.rate_limiter:
             loop.create_task(self.buffered_funds(print_info=False))
             self.get_buffered_funds_last_time = self.get_time()
@@ -210,7 +209,6 @@ class StrategyBase:
                 self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
 
     def get_buffered_order_book(self) -> OrderBook:
-        # print(f"get_buffered_order_book.order_book: {self.order_book}")
         return OrderBook(self.order_book, _tcm=self.tcm)
 
     def get_buffered_completed_trades(self) -> List[PrivateTrade]:
@@ -886,6 +884,8 @@ class StrategyBase:
                 balances = self.account.funds.get_funds()
         except asyncio.CancelledError:
             pass
+        except UserWarning as _ex:
+            self.message_log(f"UserWarning: {_ex}", log_level=logging.DEBUG)
         except Exception as _ex:
             self.message_log(f"Exception buffered_funds: {_ex}", log_level=logging.WARNING)
         else:
@@ -1168,7 +1168,6 @@ class StrategyBase:
             self.orders |= {ed['order_id']: Order(_order)}
 
         if prm.MODE == 'TC' and self.start_collect and self.s_ticker['pylist']:
-            # print(f"1 s_ticker: {self.s_ticker['pylist'][-1]}")
             s_tic = self.s_ticker['pylist'].pop()
             s_tic_row = orjson.loads(s_tic['row'])
             s_tic_row['lastPrice'] = ed['last_executed_price']
@@ -1178,7 +1177,6 @@ class StrategyBase:
             self.s_ticker['pylist'].append(s_tic)
             if prm.SAVE_DS:
                 self.open_orders_snapshot()
-            # print(f"2 s_ticker: {self.s_ticker['pylist'][-1]}")
 
     def _on_order_update_handler_ext(self, ed):
         trade = {
@@ -1224,7 +1222,6 @@ class StrategyBase:
                                 pa.RecordBatch.from_pylist(mapping=self.s_ticker['pylist'])
                             )
                             self.s_ticker['pylist'].clear()
-                        # print(f"on_ticker_update.ticker: {self.ticker}")
                         self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(self.ticker)})
                         if prm.SAVE_DS:
                             self.open_orders_snapshot(ts=ts)
@@ -1309,7 +1306,7 @@ class StrategyBase:
                     self.message_log("Restore saved state after lost connection to host", color=Style.GREEN)
 
                 if self.last_state:
-                    self.message_log("Restore saved state after restart", color=Style.GREEN)
+                    self.message_log("Restore saved state after restart", color=Style.GREEN, tlg=True)
                     self.restore_strategy_state(restore=True)
 
                 for order in orders:

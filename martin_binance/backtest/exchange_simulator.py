@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc3"
+__version__ = "3.0.1rc5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -237,10 +237,6 @@ class Account:
                     'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def on_ticker_update(self, ticker: {}, ts: int) -> [dict]:
-        # print(f"on_ticker_update.ticker: {ts}: {ticker}")
-        # print(f"BUY: {self.orders_buy}")
-        # print(f"SELL: {self.orders_sell}")
-
         filled_buy_id = []
         filled_sell_id = []
         orders_id = []
@@ -325,7 +321,7 @@ class Account:
                 'trade_id': order.trade_id,
                 'ignore_a': 12345678,
                 'in_order_book': False,
-                'is_maker_side': False if order_id in self.market_ids else True,
+                'is_maker_side': bool(order_id not in self.market_ids),
                 'ignore_b': True,
                 'order_creation_time': order.order_creation_time,
                 'quote_asset_transacted': str(order.quote_asset_transacted),
