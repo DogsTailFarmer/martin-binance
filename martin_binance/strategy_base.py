@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc5"
+__version__ = "3.0.1rc6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -385,7 +385,7 @@ class StrategyBase:
                     else:
                         self.klines[i.value] = list(map(json.loads, res.items))
                 # Save current strategy state for backtesting
-                last_state = self.save_strategy_state(return_only=True)
+                last_state = self.save_strategy_state()
                 self.last_state_update(last_state)
                 with self.state_file.open(mode='w') as outfile:
                     json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
@@ -505,8 +505,9 @@ class StrategyBase:
         last_exec_time = time.time()
         while True:
             try:
-                last_state = self.save_strategy_state()
+                self.refresh_scheduler()
                 if prm.MODE in ('T', 'TC'):
+                    last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
                     # print(f"heartbeat.last_state: {last_state}")
                     if prm.LAST_STATE_FILE.exists():
@@ -1327,7 +1328,7 @@ class StrategyBase:
                             await self.cancel_order_handler(_id, cancel_all=False)
 
                 if self.last_state and prm.MODE == 'TC':
-                    last_state = self.save_strategy_state(return_only=True)
+                    last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
                     with self.state_file.open(mode='w') as outfile:
                         json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
@@ -1728,6 +1729,10 @@ class StrategyBase:
 
     @abstractmethod
     def reset_vars_ex(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def refresh_scheduler(self):
         raise NotImplementedError
 
     # endregion

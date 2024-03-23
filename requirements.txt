@@ -20,3 +20,4 @@ shortuuid~=1.0.11
 numpy~=1.23.4
 scipy==1.12.0
 toml~=0.10.2
+schedule~=1.2.1

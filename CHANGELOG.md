@@ -1,3 +1,7 @@
+## 3.0.1rc6 - 2024-03-23
+### Update
+* Refactoring processing periodically events
+
 ## 3.0.1rc3 - 2024-03-21
 ### Added for new features
 :rocket: `Backtesting`: handling of partially filling events

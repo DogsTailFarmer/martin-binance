@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc5"
+__version__ = "3.0.1rc6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 import os
 import psutil
 import numpy as np
+import schedule
 
 from typing import Dict
 
@@ -94,7 +95,6 @@ class Strategy(StrategyBase):
         self.grid_only_restart = None  # -
         self.grid_remove = None  # + Flag when starting cancel grid orders
         self.grid_update_started = None  # - Flag when grid update process started
-        self.heartbeat_counter = 0  # -
         self.last_ticker_update = 0  # -
         self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
         self.order_q = None  # + Adaptive order quantity
@@ -119,6 +119,12 @@ class Strategy(StrategyBase):
         self.tp_part_free = False  # + Can use TP part amount for converting to grid orders
         self.ts_grid_update = self.get_time()  # - When updated grid
         self.wait_wss_refresh = {}  # -
+        #
+        schedule.every().minute.do(self.event_export_operational_status)
+        schedule.every(10).seconds.do(self.event_get_command_tlg)
+        schedule.every(6).seconds.do(self.event_report)
+        schedule.every(5).minutes.do(self.event_grid_update)
+        schedule.every(5).seconds.do(self.event_processing)
 
     def init(self, check_funds=True) -> None:  # skipcq: PYL-W0221
         self.message_log('Start Init section')
@@ -188,23 +194,60 @@ class Strategy(StrategyBase):
             self.message_log("Can't get actual price, initialization checks stopped", log_level=logging.CRITICAL)
             raise SystemExit(1)
 
-    def save_strategy_state(self, return_only=False) -> Dict[str, str]:
-        if not return_only:
-            # region SaveOperationalStatus
-            # Skip when transition processes or GRID_ONLY mode
-            stable_state = (self.shift_grid_threshold is None
-                            and self.grid_remove is None
-                            and not self.reverse_hold
-                            and not GRID_ONLY
-                            and not self.grid_update_started
-                            and not self.start_after_shift
-                            and not self.tp_hold
-                            and not self.tp_was_filled
-                            and not self.orders_init)
-            if (MODE in ('T', 'TC') and (stable_state or (self.grid_hold.get('timestamp') and
-                int(self.get_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT) or
-                    (self.tp_order_hold.get('timestamp') and
-                     int(self.get_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT))):
+    def save_strategy_state(self) -> Dict[str, str]:
+        return {
+            'command': json.dumps(self.command),
+            'grid_remove': json.dumps(self.grid_remove),
+            'cycle_buy': json.dumps(self.cycle_buy),
+            'cycle_buy_count': json.dumps(self.cycle_buy_count),
+            'cycle_sell_count': json.dumps(self.cycle_sell_count),
+            'cycle_time': json.dumps(self.cycle_time, default=str),
+            'cycle_time_reverse': json.dumps(self.cycle_time_reverse, default=str),
+            'deposit_first': json.dumps(self.deposit_first),
+            'deposit_second': json.dumps(self.deposit_second),
+            'martin': json.dumps(self.martin),
+            'order_q': json.dumps(self.order_q),
+            'orders': json.dumps(self.orders_grid.get()),
+            'orders_hold': json.dumps(self.orders_hold.get()),
+            'orders_save': json.dumps(self.orders_save.get()),
+            'over_price': json.dumps(self.over_price),
+            'part_amount': json.dumps(str(self.part_amount)),
+            'initial_first': json.dumps(self.initial_first),
+            'initial_second': json.dumps(self.initial_second),
+            'initial_reverse_first': json.dumps(self.initial_reverse_first),
+            'initial_reverse_second': json.dumps(self.initial_reverse_second),
+            'profit_first': json.dumps(self.profit_first),
+            'profit_second': json.dumps(self.profit_second),
+            'reverse': json.dumps(self.reverse),
+            'reverse_hold': json.dumps(self.reverse_hold),
+            'reverse_init_amount': json.dumps(self.reverse_init_amount),
+            'reverse_price': json.dumps(self.reverse_price),
+            'reverse_target_amount': json.dumps(self.reverse_target_amount),
+            'shift_grid_threshold': json.dumps(self.shift_grid_threshold),
+            'status_time': json.dumps(self.status_time),
+            'sum_amount_first': json.dumps(self.sum_amount_first),
+            'sum_amount_second': json.dumps(self.sum_amount_second),
+            'sum_profit_first': json.dumps(self.sum_profit_first),
+            'sum_profit_second': json.dumps(self.sum_profit_second),
+            'tp_amount': json.dumps(self.tp_amount),
+            'tp_order_id': json.dumps(self.tp_order_id),
+            'tp_part_amount_first': json.dumps(self.tp_part_amount_first),
+            'tp_part_amount_second': json.dumps(self.tp_part_amount_second),
+            'tp_target': json.dumps(self.tp_target),
+            'tp_order': json.dumps(str(self.tp_order)),
+            'tp_wait_id': json.dumps(self.tp_wait_id),
+            'restore_orders': json.dumps(self.restore_orders),
+            'tp_part_free': json.dumps(self.tp_part_free)
+        }
+
+    def event_export_operational_status(self):
+        if MODE in ('T', 'TC'):
+            has_grid_hold_timeout = self.grid_hold.get('timestamp') and \
+                int(self.get_time() - self.grid_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+            has_tp_order_hold_timeout = self.tp_order_hold.get('timestamp') and \
+                int(self.get_time() - self.tp_order_hold['timestamp']) > HOLD_TP_ORDER_TIMEOUT
+
+            if self.stable_state() or has_grid_hold_timeout or has_tp_order_hold_timeout:
                 orders = self.get_buffered_open_orders()
                 order_buy = len([i for i in orders if i.buy is True])
                 order_sell = len([i for i in orders if i.buy is False])
@@ -212,63 +255,67 @@ class Strategy(StrategyBase):
                 cycle_status = (self.cycle_buy, order_buy, order_sell, order_hold)
                 if self.cycle_status != cycle_status:
                     self.cycle_status = cycle_status
-                    data_to_db = {
-                        'ID_EXCHANGE': ID_EXCHANGE,
-                        'f_currency': self.f_currency,
-                        's_currency': self.s_currency,
-                        'cycle_buy': self.cycle_buy,
-                        'order_buy': order_buy,
-                        'order_sell': order_sell,
-                        'order_hold': order_hold,
-                        'destination': 't_orders'
-                    }
                     if self.queue_to_db:
-                        # print('Send data to t_orders')
-                        self.queue_to_db.put(data_to_db)
+                        self.queue_to_db.put(
+                            {
+                                'ID_EXCHANGE': ID_EXCHANGE,
+                                'f_currency': self.f_currency,
+                                's_currency': self.s_currency,
+                                'cycle_buy': self.cycle_buy,
+                                'order_buy': order_buy,
+                                'order_sell': order_sell,
+                                'order_hold': order_hold,
+                                'destination': 't_orders'
+                            }
+                        )
             else:
                 self.cycle_status = ()
-            # endregion
-            # region ReportStatus
-            # Get command from Telegram
-            command = None
-            if MODE in ('T', 'TC') and self.connection_analytic and self.heartbeat_counter % 5 == 0:
-                cursor_analytic = self.connection_analytic.cursor()
-                bot_id = self.tlg_header.split('.')[0]
+
+    def event_get_command_tlg(self):
+        if MODE in ('T', 'TC') and self.connection_analytic:
+            cursor_analytic = self.connection_analytic.cursor()
+            bot_id = self.tlg_header.split('.')[0]
+            try:
+                cursor_analytic.execute(
+                    'SELECT max(message_id), text_in, bot_id \
+                     FROM t_control \
+                     WHERE bot_id=:bot_id',
+                    {'bot_id': bot_id}
+                )
+                row = cursor_analytic.fetchone()
+                cursor_analytic.close()
+            except sqlite3.Error as err:
+                cursor_analytic.close()
+                row = None
+                print(f"SELECT from t_control: {err}")
+            if row and row[0]:
+                self.command = row[1]
+                # Remove applied command from .db
                 try:
-                    cursor_analytic.execute('SELECT max(message_id), text_in, bot_id\
-                                            FROM t_control WHERE bot_id=:bot_id', {'bot_id': bot_id})
-                    row = cursor_analytic.fetchone()
-                    cursor_analytic.close()
+                    self.connection_analytic.execute(
+                        'UPDATE t_control \
+                         SET apply = 1 \
+                         WHERE message_id=:message_id',
+                        {'message_id': row[0]}
+                    )
+                    self.connection_analytic.commit()
                 except sqlite3.Error as err:
-                    cursor_analytic.close()
-                    row = None
-                    print(f"SELECT from t_control: {err}")
-                if row and row[0]:
-                    # Analyse and execute received command
-                    command = row[1]
-                    if command != 'status':
-                        self.command = command
-                        command = None
-                    # Remove applied command from .db
-                    try:
-                        self.connection_analytic.execute('UPDATE t_control SET apply = 1 WHERE message_id=:message_id',
-                                                         {'message_id': row[0]})
-                        self.connection_analytic.commit()
-                    except sqlite3.Error as err:
-                        print(f"UPDATE t_control: {err}")
-                # self.message_log(f"save_strategy_state.command: {self.command}", log_level=logging.DEBUG)
-            if self.command == 'stopped':
-                if isinstance(self.start_collect, int):
-                    if self.start_collect < 5:
-                        self.start_collect += 1
-                    else:
-                        self.start_collect = False
-            elif self.command == 'restart':
-                self.stop()
-                os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
-            if (MODE in ('T', 'TC') and
-                    (command or (STATUS_DELAY and (self.get_time() - self.status_time) / 60 > STATUS_DELAY))):
-                # Report current status
+                    print(f"UPDATE t_control: {err}")
+        if self.command == 'stopped':
+            if isinstance(self.start_collect, int):
+                if self.start_collect < 5:
+                    self.start_collect += 1
+                else:
+                    self.start_collect = False
+        elif self.command == 'restart':
+            self.stop()
+            os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
+
+    def event_report(self):
+        if MODE in ('T', 'TC'):
+            is_time_for_report_update = STATUS_DELAY and (self.get_time() - self.status_time) / 60 > STATUS_DELAY
+            if self.command == 'status' or is_time_for_report_update:
+                self.command = None
                 last_price = self.get_buffered_ticker().last_price
                 ticker_update = int(self.get_time()) - self.last_ticker_update
                 if self.cycle_time:
@@ -322,7 +369,7 @@ class Strategy(StrategyBase):
                     command = bool(self.command in ('end', 'stop'))
                     if GRID_ONLY:
                         header = (f"{'Buy' if self.cycle_buy else 'Sell'} assets Grid only mode\n"
-                                  f"{('Waiting funding for convert'+chr(10)) if self.grid_only_restart else ''}"
+                                  f"{('Waiting funding for convert' + chr(10)) if self.grid_only_restart else ''}"
                                   f"{self.get_free_assets()[3]}"
                                   )
                     else:
@@ -347,94 +394,60 @@ class Strategy(StrategyBase):
                                      f"{'-   ***   ***   ***   -' if self.command == 'stop' else ''}\n"
                                      f"{'Waiting for end of cycle for manual action' if command else ''}",
                                      tlg=True)
-            # endregion
-            # region ProcessingEvent
-            if self.wait_wss_refresh and self.get_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
-                self.place_grid(self.wait_wss_refresh['buy_side'],
-                                self.wait_wss_refresh['depo'],
-                                self.reverse_target_amount,
-                                self.wait_wss_refresh['allow_grid_shift'],
-                                self.wait_wss_refresh['additional_grid'],
-                                self.wait_wss_refresh['grid_update'])
-            self.heartbeat_counter += 1
-            if ADAPTIVE_TRADE_CONDITION and stable_state and self.command != 'stopped':
-                if self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60*15:
-                    self.message_log("Update TP order", color=Style.B_WHITE)
-                    self.place_profit_order()
-                elif self.heartbeat_counter % 15 == 0 \
-                        and (self.orders_grid or self.orders_hold) and not self.part_amount:
-                    self.grid_update()
-            if self.heartbeat_counter > 150:
-                self.heartbeat_counter = 0
-            if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
-                self.get_buffered_funds()
-            if self.reverse_hold:
-                if self.start_reverse_time:
-                    if self.get_time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
-                        last_price = self.get_buffered_ticker().last_price
-                        if self.cycle_buy:
-                            price_diff = 100 * (self.reverse_price - last_price) / self.reverse_price
-                        else:
-                            price_diff = 100 * (last_price - self.reverse_price) / self.reverse_price
-                        if price_diff > ADX_PRICE_THRESHOLD:
-                            # Reverse
-                            self.cycle_buy = not self.cycle_buy
-                            self.command = 'stop' if REVERSE_STOP else None
-                            self.reverse = True
-                            self.reverse_hold = False
-                            self.sum_amount_first = self.tp_part_amount_first
-                            self.sum_amount_second = self.tp_part_amount_second
-                            self.tp_part_amount_first = O_DEC
-                            self.tp_part_amount_second = O_DEC
-                            self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
-                            self.start()
-                else:
-                    self.start_reverse_time = self.get_time()
-            # endregion
-        if MODE in ('T', 'TC'):
-            return {'command': json.dumps(self.command),
-                    'grid_remove': json.dumps(self.grid_remove),
-                    'cycle_buy': json.dumps(self.cycle_buy),
-                    'cycle_buy_count': json.dumps(self.cycle_buy_count),
-                    'cycle_sell_count': json.dumps(self.cycle_sell_count),
-                    'cycle_time': json.dumps(self.cycle_time, default=str),
-                    'cycle_time_reverse': json.dumps(self.cycle_time_reverse, default=str),
-                    'deposit_first': json.dumps(self.deposit_first),
-                    'deposit_second': json.dumps(self.deposit_second),
-                    'martin': json.dumps(self.martin),
-                    'order_q': json.dumps(self.order_q),
-                    'orders': json.dumps(self.orders_grid.get()),
-                    'orders_hold': json.dumps(self.orders_hold.get()),
-                    'orders_save': json.dumps(self.orders_save.get()),
-                    'over_price': json.dumps(self.over_price),
-                    'part_amount': json.dumps(str(self.part_amount)),
-                    'initial_first': json.dumps(self.initial_first),
-                    'initial_second': json.dumps(self.initial_second),
-                    'initial_reverse_first': json.dumps(self.initial_reverse_first),
-                    'initial_reverse_second': json.dumps(self.initial_reverse_second),
-                    'profit_first': json.dumps(self.profit_first),
-                    'profit_second': json.dumps(self.profit_second),
-                    'reverse': json.dumps(self.reverse),
-                    'reverse_hold': json.dumps(self.reverse_hold),
-                    'reverse_init_amount': json.dumps(self.reverse_init_amount),
-                    'reverse_price': json.dumps(self.reverse_price),
-                    'reverse_target_amount': json.dumps(self.reverse_target_amount),
-                    'shift_grid_threshold': json.dumps(self.shift_grid_threshold),
-                    'status_time': json.dumps(self.status_time),
-                    'sum_amount_first': json.dumps(self.sum_amount_first),
-                    'sum_amount_second': json.dumps(self.sum_amount_second),
-                    'sum_profit_first': json.dumps(self.sum_profit_first),
-                    'sum_profit_second': json.dumps(self.sum_profit_second),
-                    'tp_amount': json.dumps(self.tp_amount),
-                    'tp_order_id': json.dumps(self.tp_order_id),
-                    'tp_part_amount_first': json.dumps(self.tp_part_amount_first),
-                    'tp_part_amount_second': json.dumps(self.tp_part_amount_second),
-                    'tp_target': json.dumps(self.tp_target),
-                    'tp_order': json.dumps(str(self.tp_order)),
-                    'tp_wait_id': json.dumps(self.tp_wait_id),
-                    'restore_orders': json.dumps(self.restore_orders),
-                    'tp_part_free': json.dumps(self.tp_part_free)}
-        return {}
+
+    def refresh_scheduler(self):
+        schedule.run_pending()
+
+    def event_processing(self):
+        if self.wait_wss_refresh and self.get_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
+            self.place_grid(self.wait_wss_refresh['buy_side'],
+                            self.wait_wss_refresh['depo'],
+                            self.reverse_target_amount,
+                            self.wait_wss_refresh['allow_grid_shift'],
+                            self.wait_wss_refresh['additional_grid'],
+                            self.wait_wss_refresh['grid_update'])
+        if ADAPTIVE_TRADE_CONDITION and self.stable_state():
+            if self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60 * 15:
+                self.message_log("Update TP order", color=Style.B_WHITE)
+                self.place_profit_order()
+        if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
+            self.get_buffered_funds()
+        if self.reverse_hold:
+            if self.start_reverse_time:
+                if self.get_time() - self.start_reverse_time > 2 * SHIFT_GRID_DELAY:
+                    last_price = self.get_buffered_ticker().last_price
+                    if self.cycle_buy:
+                        price_diff = 100 * (self.reverse_price - last_price) / self.reverse_price
+                    else:
+                        price_diff = 100 * (last_price - self.reverse_price) / self.reverse_price
+                    if price_diff > ADX_PRICE_THRESHOLD:
+                        # Reverse
+                        self.cycle_buy = not self.cycle_buy
+                        self.command = 'stop' if REVERSE_STOP else None
+                        self.reverse = True
+                        self.reverse_hold = False
+                        self.sum_amount_first = self.tp_part_amount_first
+                        self.sum_amount_second = self.tp_part_amount_second
+                        self.tp_part_amount_first = O_DEC
+                        self.tp_part_amount_second = O_DEC
+                        self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
+                        self.start()
+            else:
+                self.start_reverse_time = self.get_time()
+
+    def stable_state(self):
+        return (
+            self.shift_grid_threshold is None
+            and self.grid_remove is None
+            and not self.reverse_hold
+            and not GRID_ONLY
+            and not self.grid_update_started
+            and not self.start_after_shift
+            and not self.tp_hold
+            and not self.tp_was_filled
+            and not self.orders_init
+            and self.command != 'stopped'
+        )
 
     def restore_strategy_state(self, strategy_state: Dict[str, str] = None, restore=True) -> None:
         if strategy_state:
@@ -1259,53 +1272,36 @@ class Strategy(StrategyBase):
             'orders': orders
         }
 
-    def grid_update(self, force=False):
+    def event_grid_update(self):
         do_it = False
-        depo_remaining = self.depo_unused() / (self.deposit_second if self.cycle_buy else self.deposit_first)
+        if ADAPTIVE_TRADE_CONDITION and self.stable_state() and not self.part_amount \
+                and (self.orders_grid or self.orders_hold):
+            depo_remaining = self.depo_unused() / (self.deposit_second if self.cycle_buy else self.deposit_first)
 
-        if force and self.check_min_amount(amount=depo_remaining, for_tp=False):
-            do_it = False
-        elif self.reverse and depo_remaining >= f2d(0.65):
-            if self.get_time() - self.ts_grid_update > GRID_UPDATE_INTERVAL:
-                do_it = True
-        elif not self.reverse and depo_remaining >= f2d(0.35):
-            try:
-                bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
-            except Exception as ex:
-                self.message_log(f"Can't get BB in grid update: {ex}", log_level=logging.INFO)
-            else:
-                if self.heartbeat_counter % 150 == 0:
-                    frequency = 'low'
-                elif self.heartbeat_counter % 30 == 0:
-                    frequency = 'mid'
+            if self.reverse and depo_remaining >= f2d(0.65):
+                if self.get_time() - self.ts_grid_update > GRID_UPDATE_INTERVAL:
+                    do_it = True
+            elif not self.reverse and depo_remaining >= f2d(0.35):
+                try:
+                    bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
+                except Exception as ex:
+                    self.message_log(f"Can't get BB in grid update: {ex}", log_level=logging.INFO)
                 else:
-                    frequency = 'hi'
-                #
-                last_price = self.orders_hold.get_last()[3] if self.orders_hold else self.orders_grid.get_last()[3]
-                predicted_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
-                if self.cycle_buy:
-                    delta = 100 * (last_price - predicted_price) / last_price
-                else:
-                    delta = 100 * (predicted_price - last_price) / last_price
-                #
-                if delta > 0:
-                    if frequency == 'hi':
-                        do_it = delta > f2d(0.5)
-                    elif frequency == 'mid':
-                        do_it = delta > f2d(0.25)
-                    elif frequency == 'low':
-                        do_it = delta > f2d(0.12)
-                elif delta < 0 and frequency == 'low':
-                    do_it = -1 * delta > 3
+                    last_price = self.orders_hold.get_last()[3] if self.orders_hold else self.orders_grid.get_last()[3]
+                    predicted_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
+                    if self.cycle_buy:
+                        delta = 100 * (last_price - predicted_price) / last_price
+                    else:
+                        delta = 100 * (predicted_price - last_price) / last_price
+                    #
+                    do_it = (delta > f2d(1.5)) if delta > 0 else (delta < f2d(-3))
+
         if do_it:
-            if force:
-                self.message_log("Force update grid", color=Style.B_WHITE)
-            elif self.reverse:
+            if self.reverse:
                 self.message_log("Update grid in Reverse cycle", color=Style.B_WHITE)
             else:
                 # noinspection PyUnboundLocalVariable
-                self.message_log(f"Update grid orders, frequency: {frequency},"
-                                 f" BB limit difference: {float(delta):.2f}%", color=Style.B_WHITE)
+                self.message_log(f"Update grid orders, BB limit difference: {float(delta):.2f}%", color=Style.B_WHITE)
             self.grid_update_started = True
             self.cancel_grid()
 
