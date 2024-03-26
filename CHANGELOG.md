@@ -1,6 +1,7 @@
-## 3.0.1rc6 - 2024-03-23
+## 3.0.1rc7 - 2024-03-26
 ### Update
 * Refactoring processing periodically events
+* Up requirements for exchanges-wrapper==2.1.5
 
 ## 3.0.1rc3 - 2024-03-21
 ### Added for new features

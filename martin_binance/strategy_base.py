@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc6"
+__version__ = "3.0.1rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -87,7 +87,6 @@ class StrategyBase:
         self.client = None
         self.exchange = str()
         self.symbol = str()
-        self.channel = None
         self.stub = mr.MartinStub
         self.client_id = int()
         self.info_symbol = {}
@@ -175,7 +174,6 @@ class StrategyBase:
     def update_vars(self, _session):
         self.client = _session.client
         self.stub = _session.stub
-        self.channel = _session.channel
         self.client_id = _session.client.client_id if _session.client else None
         self.exchange = _session.client.exchange if _session.client else None
         self.send_request = _session.send_request
@@ -651,6 +649,7 @@ class StrategyBase:
         if prm.MODE in ('T', 'TC'):
             try:
                 await self.send_request(self.stub.stop_stream, mr.MarketRequest, symbol=self.symbol)
+                self.session.channel.close()
             except Exception as ex:
                 self.message_log(f"ask_exit: {ex}", log_level=logging.WARNING)
 
@@ -661,21 +660,16 @@ class StrategyBase:
                 self.start_collect = False
                 self.session_data_handler()
 
-            if self.channel:
-                self.channel.close()
+            if prm.LAST_STATE_FILE.exists():
+                print(f"Current state saved into {prm.LAST_STATE_FILE}")
 
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
             await asyncio.gather(*tasks, return_exceptions=True)
             if prm.LOGGING:
                 print(f"Cancelling {len(tasks)} outstanding tasks")
-            if prm.LAST_STATE_FILE.exists():
-                print(f"Current state saved into {prm.LAST_STATE_FILE}")
 
-        try:
             self.stop()
-        except Exception as _err:
-            print(f"ask_exit.strategy.stop: {_err}")
 
     async def fetch_order(self, _id: int, _client_order_id: str = None, _filled_update_call=False):
         try:

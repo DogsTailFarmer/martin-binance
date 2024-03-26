@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc3"
+__version__ = "3.0.1rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -16,6 +16,7 @@ import logging
 import grpclib.exceptions
 import shortuuid
 
+from martin_binance import ORDER_TIMEOUT
 from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
 
 logger = logging.getLogger('logger.client')
@@ -27,8 +28,8 @@ logger.addHandler(stream_handler)
 
 class Trade:
     def __init__(self, account_name, rate_limiter, symbol):
-        self.channel = Channel('127.0.0.1', 50051)
-        self.stub = mr.MartinStub(self.channel)
+        self.channel = None
+        self.stub = None
         self.account_name = account_name
         self.rate_limiter = rate_limiter
         self.symbol = symbol
@@ -42,10 +43,14 @@ class Trade:
         self.wait_connection = True
         client = None
         while client is None:
+            self.channel = Channel('127.0.0.1', 50051)
+            self.stub = mr.MartinStub(self.channel)
             try:
                 client = await self.connect()
             except UserWarning:
                 client = None
+                self.channel.close()
+                await asyncio.sleep(random.randint(5, 30))
             else:
                 self.client = client
                 self.wait_connection = False
@@ -64,18 +69,12 @@ class Trade:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error.
         except ConnectionRefusedError as ex:
-            logger.error(f"{ex}, reconnect...")
-            await asyncio.sleep(random.randint(5, 30))
-            raise UserWarning from ex
+            raise UserWarning(f"{ex}, reconnect...") from None
         except GRPCError as ex:
             status_code = ex.status
-            logger.error(f"Exception on register client: {status_code.name}, {ex.message}")
             if status_code == Status.FAILED_PRECONDITION:
                 raise SystemExit(1) from ex
-            logger.warning('Restart gRPC client session')
-            await asyncio.sleep(random.randint(5, 30))
-            raise UserWarning from ex
-
+            raise UserWarning(f"Exception on register client: {status_code.name}, {ex.message}") from None
         else:
             logger.info(f"gRPC session started for client_id: {_client.client_id}\n"
                         f"trade_id: {self.trade_id}")
@@ -87,20 +86,21 @@ class Trade:
         kwargs['client_id'] = self.client.client_id
         kwargs['trade_id'] = self.trade_id
         try:
-            res = await _request(_request_type(**kwargs))
+            res = await asyncio.wait_for(_request(_request_type(**kwargs)), ORDER_TIMEOUT)
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
             raise UserWarning("Have not connection to gRPC server")
         except ConnectionRefusedError:
             raise UserWarning("Connection to gRPC server broken")
+        except asyncio.TimeoutError:
+            self.channel.close()
+            raise UserWarning("gRCP request timeout error")
         except GRPCError as ex:
             status_code = ex.status
             if status_code == Status.UNAVAILABLE:
                 self.client = None
-                raise UserWarning(
-                    "Connection to gRPC server failed, wait connection..."
-                ) from ex
+                raise UserWarning("Wait connection to gRPC server") from None
             logger.debug(f"Send request {_request}: {status_code.name}, {ex.message}")
             raise
         except Exception as ex:

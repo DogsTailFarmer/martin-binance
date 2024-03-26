@@ -45,6 +45,7 @@ GRID_ONLY = bool()
 LOG_LEVEL = logging.DEBUG  # Default level for console output
 HOLD_TP_ORDER_TIMEOUT = 30
 COLLECT_ASSETS = bool()
+GRID_ONLY_DELAY = 30  # sec delay before try restart GRID_ONLY cycle
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()
