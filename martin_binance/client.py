@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc7"
+__version__ = "3.0.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -16,7 +16,6 @@ import logging
 import grpclib.exceptions
 import shortuuid
 
-from martin_binance import ORDER_TIMEOUT
 from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
 
 logger = logging.getLogger('logger.client')
@@ -86,30 +85,23 @@ class Trade:
         kwargs['client_id'] = self.client.client_id
         kwargs['trade_id'] = self.trade_id
         try:
-            res = await asyncio.wait_for(_request(_request_type(**kwargs)), ORDER_TIMEOUT)
+            res = await _request(_request_type(**kwargs))
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
             raise UserWarning("Have not connection to gRPC server")
         except ConnectionRefusedError:
             raise UserWarning("Connection to gRPC server broken")
-        except asyncio.TimeoutError:
-            self.channel.close()
-            raise UserWarning("gRCP request timeout error")
         except GRPCError as ex:
             status_code = ex.status
+            logger.debug(f"Send request {_request}: {status_code.name}, {ex.message}")
             if status_code == Status.UNAVAILABLE:
                 self.client = None
                 raise UserWarning("Wait connection to gRPC server") from None
-            logger.debug(f"Send request {_request}: {status_code.name}, {ex.message}")
             raise
         except Exception as ex:
             logger.error(f"Exception on send request {ex}")
         else:
-            if res is None:
-                self.client = None
-                asyncio.create_task(self.get_client())
-                raise UserWarning("Can't get response, restart connection to gRPC server ...")
             return res
 
     async def for_request(self, _request, _request_type, **kwargs):
@@ -123,8 +115,10 @@ class Trade:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
-            logger.warning("WSS connection to gRPC server was terminated")
+            pass  # handling in send_request()
         except GRPCError as ex:
             status_code = ex.status
             logger.warning(f"Exception on WSS loop: {status_code.name}, {ex.message}")
             raise
+        except Exception as ex:
+            logger.debug(f"for_request: {ex}")

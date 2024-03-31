@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc7"
+__version__ = "3.0.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -135,9 +135,6 @@ class StrategyBase:
         #
         self.cycle_time = None  # + Cycle start time
         self.command = None  # + External input command from Telegram
-        self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
-        self.tp_part_amount_first = O_DEC  # + Sum partially filled TP
-        self.tp_part_amount_second = O_DEC  # + Sum partially filled TP
         self.connection_analytic = None  # - Connection to .db
 
     def __call__(self):
@@ -315,8 +312,8 @@ class StrategyBase:
         delay = HEARTBEAT * 30  # 1 min
         ts = time.time()
         restart = False
+        _prm_best = {}
         prm_best = {}
-
         while self.operational_status:
             if self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
                 self.start_collect = False
@@ -332,7 +329,7 @@ class StrategyBase:
                             Path(self.session_root, Path(prm.PARAMS).name),
                             str(prm.N_TRIALS),
                             f"sqlite:///{storage_name}",
-                            json.dumps(prm_best),
+                            json.dumps(prm_best or _prm_best),
                             f"{prm.ID_EXCHANGE}_{prm.SYMBOL}_S.log",
                         )
                         prm_best = orjson.loads(_res)
@@ -344,6 +341,7 @@ class StrategyBase:
                     else:
                         storage_name.replace(storage_name.with_name('study.db'))
                         if prm_best:
+                            _prm_best = dict(prm_best)
                             self.message_log(
                                 f"Updating parameters from backtest,"
                                 f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
@@ -368,7 +366,7 @@ class StrategyBase:
                 else:
                     break
 
-            if restart and not self.part_amount and not self.tp_part_amount_first:
+            if restart and self.stable_state_backtest():
                 restart = False
                 self.parquet_declare(Path(self.session_root, "raw"))
                 # Refresh klines init
@@ -649,10 +647,10 @@ class StrategyBase:
         if prm.MODE in ('T', 'TC'):
             try:
                 await self.send_request(self.stub.stop_stream, mr.MarketRequest, symbol=self.symbol)
-                self.session.channel.close()
             except Exception as ex:
                 self.message_log(f"ask_exit: {ex}", log_level=logging.WARNING)
 
+            self.session.channel.close()
             self.task_cancel()
 
             if prm.MODE == 'TC' and self.start_collect:
@@ -744,6 +742,12 @@ class StrategyBase:
                     delay /= prm.XTIME
                     await asyncio.sleep(delay)
                 yield orjson.loads(row['row'])
+
+                if self.s_mode_break:
+                    break
+            else:
+                continue
+            break
 
         if ticker:
             self.backtest['ticker_index_last'] = index_prev * 1000
@@ -1338,8 +1342,6 @@ class StrategyBase:
             except UserWarning as ex_2:
                 self.message_log(f"Exception buffered_orders 2: {ex_2}", log_level=logging.WARNING)
                 restore = True
-            except ConnectionRefusedError:
-                restore = True
             except GRPCError as ex_3:
                 status_code = ex_3.status
                 self.message_log(f"Exception buffered_orders 3: {status_code.name}, {ex_3.message}",
@@ -1590,7 +1592,7 @@ class StrategyBase:
                         last_state.pop('ms_start_time_ms', str(int(time.time() * 1000)))
                     )
 
-                    # TODO Replace after update to 3.0.0
+                    # TODO Replace after 3.0.2
                     # self.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
 
                     _orders = last_state.pop(MS_ORDERS, '{}')
@@ -1727,6 +1729,10 @@ class StrategyBase:
 
     @abstractmethod
     def refresh_scheduler(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def stable_state_backtest(self):
         raise NotImplementedError
 
     # endregion

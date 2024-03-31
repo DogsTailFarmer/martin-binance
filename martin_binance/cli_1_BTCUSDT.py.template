@@ -141,7 +141,7 @@ def trade(strategy=None):
     finally:
         try:
             loop.run_until_complete(strategy.ask_exit())
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, KeyboardInterrupt):
             pass
         except Exception as _err:
             print(f"Error: {_err}")

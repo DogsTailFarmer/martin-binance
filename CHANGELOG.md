@@ -1,3 +1,17 @@
+## 3.0.1 - 2024-03-31
+### Refined and added new features
+* Project architecture
+* :rocket: Cyclic Backtesting workflow with update base trade parameters
+* :rocket: `Backtesting`: handling of partially filling events
+* :rocket: Migrate `gRPC` from [grpcio](https://grpc.io/) to [grpclib](https://github.com/vmagamedov/grpclib) + [python-betterproto](https://github.com/danielgtaylor/python-betterproto)
+* Logging improvement
+* `Analytics`: Refine unload and processing assets data
+* Refactoring processing periodically events based on [schedule](https://github.com/dbader/schedule)
+* New strategy mode: [Keeping level of first asset](https://github.com/DogsTailFarmer/martin-binance/wiki/How-it's-work#keeping-level-of-first-asset)
+
+### Update
+* Up requirements for exchanges-wrapper==2.1.6
+
 ## 3.0.1rc7 - 2024-03-26
 ### Update
 * Refactoring processing periodically events

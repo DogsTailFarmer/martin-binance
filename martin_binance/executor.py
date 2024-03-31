@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1rc7"
+__version__ = "3.0.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -59,13 +59,16 @@ class Strategy(StrategyBase):
         self.tp_hold_additional = False  # - Need place TP after placed additional grid orders
         self.tp_target = O_DEC  # + Target amount for TP that will be placed
         self.tp_amount = O_DEC  # + Initial depo for active TP
+        self.tp_part_amount_first = O_DEC  # + Sum partially filled TP
+        self.tp_part_amount_second = O_DEC  # + Sum partially filled TP
         self.part_profit_first = O_DEC  # +
         self.part_profit_second = O_DEC  # +
         self.tp_was_filled = ()  # - Exist incomplete processing filled TP
         #
         self.sum_amount_first = O_DEC  # Sum buy/sell in first currency for current cycle
         self.sum_amount_second = O_DEC  # Sum buy/sell in second currency for current cycle
-        #
+        self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
+    #
         self.deposit_first = AMOUNT_FIRST  # + Calculated operational deposit
         self.deposit_second = AMOUNT_SECOND  # + Calculated operational deposit
         self.sum_profit_first = O_DEC  # + Sum profit from start to now()
@@ -121,9 +124,12 @@ class Strategy(StrategyBase):
         #
         schedule.every(5).minutes.do(self.event_grid_update)
         schedule.every(5).seconds.do(self.event_processing)
+        schedule.every(1).minutes.do(self.event_grid_only_release)
+        schedule.every().minute.at(":30").do(self.event_grid_only_release)
+        schedule.every().minute.at(":35").do(self.event_update_tp)
         schedule.every(2).seconds.do(self.event_exec_command)
         if MODE in ('T', 'TC'):
-            schedule.every().minute.do(self.event_export_operational_status)
+            schedule.every().minute.at(":15").do(self.event_export_operational_status)
             schedule.every(10).seconds.do(self.event_get_command_tlg)
             schedule.every(6).seconds.do(self.event_report)
 
@@ -410,10 +416,7 @@ class Strategy(StrategyBase):
                             self.wait_wss_refresh['allow_grid_shift'],
                             self.wait_wss_refresh['additional_grid'],
                             self.wait_wss_refresh['grid_update'])
-        if ADAPTIVE_TRADE_CONDITION and self.stable_state():
-            if self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60 * 15:
-                self.message_log("Update TP order", color=Style.B_WHITE)
-                self.place_profit_order()
+        self.event_update_tp()
         if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
             self.get_buffered_funds()
         if self.reverse_hold:
@@ -438,26 +441,55 @@ class Strategy(StrategyBase):
                         self.start()
             else:
                 self.start_reverse_time = self.get_time()
-        if self.grid_only_restart and self.get_time() > self.grid_only_restart and START_ON_BUY and AMOUNT_FIRST:
+
+    def event_update_tp(self):
+        if ADAPTIVE_TRADE_CONDITION and self.stable_state():
+            if self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60 * 15:
+                self.message_log("Update TP order", color=Style.B_WHITE)
+                self.place_profit_order()
+
+    def event_grid_only_release(self):
+        if self.grid_only_restart and START_ON_BUY and AMOUNT_FIRST:
             ff, fs, _, _ = self.get_free_assets(mode='available')
-            if ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
+            if self.get_time() > self.grid_only_restart and ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
                 self.grid_only_restart = 0
+                self.save_init_assets(ff, fs)
                 self.sum_amount_first = self.sum_amount_second = O_DEC
                 self.start()
 
-    def stable_state(self):
+    def _common_stable_conditions(self):
+        """
+        Checks the common conditions for stability in both live and backtest modes.
+        """
         return (
-            self.shift_grid_threshold is None
-            and self.grid_remove is None
-            and not self.reverse_hold
+            self.grid_remove is None
             and not GRID_ONLY
             and not self.grid_update_started
             and not self.start_after_shift
             and not self.tp_hold
             and not self.tp_order_hold
-            and not self.tp_was_filled
             and not self.orders_init
             and self.command != 'stopped'
+        )
+
+    def stable_state(self):
+        """
+        Checks if the system is in a stable state for live trading.
+        """
+        return (
+            self._common_stable_conditions()
+            and self.shift_grid_threshold is None
+            and not self.reverse_hold
+        )
+
+    def stable_state_backtest(self):
+        """
+        Checks if the system is in a stable state for backtesting.
+        """
+        return (
+            self._common_stable_conditions()
+            and not self.part_amount
+            and not self.tp_part_amount_first
         )
 
     def restore_strategy_state(self, strategy_state: Dict[str, str] = None, restore=True) -> None:
@@ -467,7 +499,7 @@ class Strategy(StrategyBase):
             #
             self.command = json.loads(strategy_state.get('command'))
             self.grid_remove = json.loads(strategy_state.get('grid_remove', 'null'))
-            self.grid_only_restart = json.loads(strategy_state.get('grid_only_restart', 0))
+            self.grid_only_restart = json.loads(strategy_state.get('grid_only_restart', "0"))
             #
             self.cycle_buy = json.loads(strategy_state.get('cycle_buy'))
             self.cycle_buy_count = json.loads(strategy_state.get('cycle_buy_count'))
@@ -545,7 +577,7 @@ class Strategy(StrategyBase):
             elif not self.orders_grid and not self.orders_hold and not self.orders_save and not self.tp_order_id:
                 self.message_log("Restore, Restart", tlg=True)
                 self.start()
-            if not GRID_ONLY and self.shift_grid_threshold is None and not self.tp_order_id:
+            if not self.tp_order_id and self.stable_state():
                 self.message_log("Restore, no TP order, replace", tlg=True)
                 self.place_profit_order()
 
@@ -2017,10 +2049,10 @@ class Strategy(StrategyBase):
                 self.message_log(f"cancel_grid order: {_id}", log_level=logging.DEBUG)
                 self.cancel_order(_id, cancel_all=cancel_all)
             else:
-                self.message_log("cancel_grid: Ended", log_level=logging.DEBUG)
+                self.grid_remove = None
                 self.orders_save.orders_list.clear()
                 self.orders_hold.orders_list.clear()
-                self.grid_remove = None
+                self.message_log("cancel_grid: Ended", log_level=logging.DEBUG)
                 if self.tp_was_filled:
                     self.grid_update_started = None
                     self.after_filled_tp(one_else_grid=False)

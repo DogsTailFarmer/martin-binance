@@ -4,7 +4,7 @@ martin-binance strategy parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0rc1"
+__version__ = "3.0.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -45,7 +45,7 @@ GRID_ONLY = bool()
 LOG_LEVEL = logging.DEBUG  # Default level for console output
 HOLD_TP_ORDER_TIMEOUT = 30
 COLLECT_ASSETS = bool()
-GRID_ONLY_DELAY = 30  # sec delay before try restart GRID_ONLY cycle
+GRID_ONLY_DELAY = 150  # sec delay before try restart GRID_ONLY cycle
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()
