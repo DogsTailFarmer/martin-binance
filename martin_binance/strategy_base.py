@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1"
+__version__ = "3.0.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -15,7 +15,6 @@ import logging
 import queue
 import os
 import random
-import shutil
 import sqlite3
 import time
 import traceback
@@ -23,7 +22,7 @@ from abc import abstractmethod
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
-from shutil import rmtree, copy
+from shutil import rmtree, copy, make_archive
 from typing import Dict, List
 
 import jsonpickle
@@ -338,31 +337,32 @@ class StrategyBase:
                     except Exception as err:
                         self.message_log(f"Backtest control: {err}", log_level=logging.ERROR)
                         self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
-                    else:
-                        storage_name.replace(storage_name.with_name('study.db'))
-                        if prm_best:
-                            _prm_best = dict(prm_best)
-                            self.message_log(
-                                f"Updating parameters from backtest,"
-                                f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
-                                color=Style.B_WHITE,
-                                tlg=True
-                            )
-                            for key, value in prm_best.items():
-                                self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
-                                setattr(
-                                    prm, key,
-                                    value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
-                                )
-                        l_m = str(
-                            datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)
-                        ).rsplit('.')[0]
+                        break
+                    #
+                    storage_name.replace(storage_name.with_name('study.db'))
+                    if prm_best:
+                        _prm_best = dict(prm_best)
                         self.message_log(
-                            f"Strategy parameters are optimal now. Optimization cycle duration {l_m}",
+                            f"Updating parameters from backtest,"
+                            f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
                             color=Style.B_WHITE,
                             tlg=True
                         )
-                        restart = True
+                        for key, value in prm_best.items():
+                            self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
+                            setattr(
+                                prm, key,
+                                value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
+                            )
+                    l_m = str(
+                        datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)
+                    ).rsplit('.')[0]
+                    self.message_log(
+                        f"Strategy parameters are optimal now. Optimization cycle duration {l_m}",
+                        color=Style.B_WHITE,
+                        tlg=True
+                    )
+                    restart = True
                 else:
                     break
 
@@ -442,7 +442,7 @@ class StrategyBase:
             df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
             df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
 
-        shutil.make_archive(str(Path(self.session_root, "raw_bak")), 'zip', self.session_root, 'raw')
+        make_archive(str(Path(self.session_root, "raw_bak")), 'zip', self.session_root, 'raw')
         self.message_log(f"Stream data for backtesting saved to {self.session_root}")
 
     def parquet_declare(self, raw_path):
@@ -1704,7 +1704,7 @@ class StrategyBase:
         raise NotImplementedError
 
     @abstractmethod
-    def get_free_assets(self, **kwargs):
+    def get_free_assets(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod

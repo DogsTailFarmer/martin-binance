@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1"
+__version__ = "3.0.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -234,7 +234,7 @@ class PrivateTrade:
         self.amount = Decimal(_trade["qty"])
         self.buy = _trade.get('isBuyer', False)
         self.is_maker = _trade.get('isMaker', False)
-        self.id = _trade["id"]
+        self.id = int(_trade["id"])
         self.order_id = int(_trade["orderId"])
         self.price = Decimal(_trade["price"])
         self.commission = Decimal(_trade.get('commission', "0"))

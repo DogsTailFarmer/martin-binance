@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1"
+__version__ = "3.0.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -124,7 +124,6 @@ class Strategy(StrategyBase):
         #
         schedule.every(5).minutes.do(self.event_grid_update)
         schedule.every(5).seconds.do(self.event_processing)
-        schedule.every(1).minutes.do(self.event_grid_only_release)
         schedule.every().minute.at(":30").do(self.event_grid_only_release)
         schedule.every().minute.at(":35").do(self.event_update_tp)
         schedule.every(2).seconds.do(self.event_exec_command)
@@ -416,7 +415,6 @@ class Strategy(StrategyBase):
                             self.wait_wss_refresh['allow_grid_shift'],
                             self.wait_wss_refresh['additional_grid'],
                             self.wait_wss_refresh['grid_update'])
-        self.event_update_tp()
         if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
             self.get_buffered_funds()
         if self.reverse_hold:
@@ -443,10 +441,10 @@ class Strategy(StrategyBase):
                 self.start_reverse_time = self.get_time()
 
     def event_update_tp(self):
-        if ADAPTIVE_TRADE_CONDITION and self.stable_state():
-            if self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60 * 15:
-                self.message_log("Update TP order", color=Style.B_WHITE)
-                self.place_profit_order()
+        if ADAPTIVE_TRADE_CONDITION and self.stable_state() \
+              and self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60 * 15:
+            self.message_log("Update TP order", color=Style.B_WHITE)
+            self.place_profit_order()
 
     def event_grid_only_release(self):
         if self.grid_only_restart and START_ON_BUY and AMOUNT_FIRST:

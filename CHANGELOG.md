@@ -1,3 +1,13 @@
+## 3.0.2 - 2024-04-03
+### Fix
+* `Backtesting`: updating the balances at slippage
+* `class PrivateTrade:` convert trade_id to int()
+* `Backtest control`: orjson.JSONDecodeError: unexpected character: line 1 column 1 (char 0)
+
+### Update
+* Up requirements for exchanges-wrapper==2.1.7
+* Some minor improvement
+
 ## 3.0.1 - 2024-03-31
 ### Refined and added new features
 * Project architecture

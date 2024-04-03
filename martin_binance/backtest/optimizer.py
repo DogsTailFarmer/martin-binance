@@ -101,6 +101,7 @@ if __name__ == "__main__":
     logger.addHandler(fh)
     #
     prm_best = json.loads(sys.argv[5])
+    logger.info(f"Previous best params: {prm_best}")
     try:
         study = optimize(
             sys.argv[1],
@@ -115,11 +116,11 @@ if __name__ == "__main__":
         logger.info(f"optimizer: {ex}")
     else:
         new_value = round(study.best_value, ndigits=6)
-        logger.info(f"Optimal parameters: {study.best_params} for get {new_value}")
+        bp = {k: int(any2str(v)) if isinstance(v, int) else float(any2str(v)) for k, v in study.best_params.items()}
+        logger.info(f"Optimal parameters: {bp} for get {new_value}")
         _value = round(study.get_trials()[0].value, ndigits=6)
         if not prm_best or new_value > _value:
-            res = study.best_params
-            res |= {'new_value': any2str(new_value), '_value': any2str(_value)}
-            print(json.dumps(res))
+            bp |= {'new_value': any2str(new_value), '_value': any2str(_value)}
+            print(json.dumps(bp))
         else:
             print(json.dumps({}))

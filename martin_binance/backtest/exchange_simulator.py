@@ -6,7 +6,7 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1"
+__version__ = "3.0.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -49,13 +49,14 @@ class Funds:
             self.base['free'] += amount
             self.base['locked'] -= amount
 
-    def on_order_filled(self, side: str, amount: Decimal, price: Decimal, fee: Decimal):
+    def on_order_filled(self, side: str, amount: Decimal, price: Decimal, last_price: Decimal, fee: Decimal):
         if side == 'BUY':
             self.base['free'] += amount - fee * amount / 100
             self.quote['locked'] -= amount * price
+            self.quote['free'] += amount * (price - last_price)
         else:
             self.base['locked'] -= amount
-            self.quote['free'] += amount * price - fee * (amount * price) / 100
+            self.quote['free'] += amount * last_price - fee * (amount * last_price) / 100
 
 
 class Order:
@@ -184,7 +185,6 @@ class Account:
             # Market event
             self.market_ids.append(order_id)
 
-        # print(f"create_order.order: {vars(order)}")
         return {'symbol': order.symbol,
                 'orderId': order.order_id,
                 'orderListId': order.order_list_id,
@@ -218,23 +218,23 @@ class Account:
                     self.grid_sell[ts] = self.orders_sell
         except Exception as ex:
             raise UserWarning(f"Order {order_id} not active: {ex}") from ex
-        else:
-            self.orders[order_id] = order
-            self.funds.on_order_canceled(order.side, order.orig_qty, order.price)
-            return {'symbol': order.symbol,
-                    'origClientOrderId': order.client_order_id,
-                    'orderId': order.order_id,
-                    'orderListId': order.order_list_id,
-                    'clientOrderId': 'qwert',
-                    'price': str(order.price),
-                    'origQty': str(order.orig_qty),
-                    'executedQty': str(order.executed_qty),
-                    'cummulativeQuoteQty': str(order.cummulative_quote_qty),
-                    'status': order.status,
-                    'timeInForce': order.time_in_force,
-                    'type': order.type,
-                    'side': order.side,
-                    'selfTradePreventionMode': order.self_trade_prevention_mode}
+
+        self.orders[order_id] = order
+        self.funds.on_order_canceled(order.side, order.orig_qty - order.executed_qty, order.price)
+        return {'symbol': order.symbol,
+                'origClientOrderId': order.client_order_id,
+                'orderId': order.order_id,
+                'orderListId': order.order_list_id,
+                'clientOrderId': 'qwert',
+                'price': str(order.price),
+                'origQty': str(order.orig_qty),
+                'executedQty': str(order.executed_qty),
+                'cummulativeQuoteQty': str(order.cummulative_quote_qty),
+                'status': order.status,
+                'timeInForce': order.time_in_force,
+                'type': order.type,
+                'side': order.side,
+                'selfTradePreventionMode': order.self_trade_prevention_mode}
 
     def on_ticker_update(self, ticker: {}, ts: int) -> [dict]:
         filled_buy_id = []
@@ -330,9 +330,11 @@ class Account:
             }
             #
             orders_filled.append(res)
+
             self.funds.on_order_filled(
                 order.side,
                 order.last_executed_quantity,
+                order.price,
                 order.last_executed_price,
                 self.fee_taker if order_id in self.market_ids else self.fee_maker
             )
