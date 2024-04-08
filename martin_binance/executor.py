@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.2"
+__version__ = "3.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -324,7 +324,8 @@ class Strategy(StrategyBase):
     def event_report(self):
         is_time_for_report_update = STATUS_DELAY and (self.get_time() - self.status_time) / 60 > STATUS_DELAY
         if self.command == 'status' or is_time_for_report_update:
-            self.command = None
+            if self.command == 'status':
+                self.command = None
             last_price = self.get_buffered_ticker().last_price
             ticker_update = int(self.get_time()) - self.last_ticker_update
             if self.cycle_time:
@@ -392,7 +393,8 @@ class Strategy(StrategyBase):
                 self.message_log(f"{header}\n"
                                  f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* **  **  ** *'}\n"
                                  f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
-                                 f"{' Hold reverse' if self.reverse_hold else ''} {MODE}-cycle with"
+                                 f"{' Hold reverse' if self.reverse_hold else ''} "
+                                 f"{MODE}{'-SO' if MODE == 'TC' and SELF_OPTIMIZATION else ''}-cycle with"
                                  f" {order_buy} buy and {order_sell} sell active orders.\n"
                                  f"{order_hold or 'No'} hold grid orders\n"
                                  f"Over price: {self.over_price:.2f}%\n"

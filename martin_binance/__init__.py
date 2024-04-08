@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.2"
+__version__ = "3.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -26,7 +26,12 @@ DB_FILE = Path(WORK_PATH, "funds_rate.db")
 LOG_PATH = Path(WORK_PATH, "log")
 LAST_STATE_PATH = Path(WORK_PATH, "last_state")
 BACKTEST_PATH = Path(WORK_PATH, "back_test")
+TRIAL_PARAMS = Path(WORK_PATH, "trial_params.json")
 EQUAL_STR = "================================================================"
+
+# TODO remove after update to 3.0.3
+if CONFIG_FILE.exists() and not TRIAL_PARAMS.exists():
+    copy(Path(Path(__file__).parent.absolute(), "templates/trial_params.json"), TRIAL_PARAMS)
 
 
 def init():
@@ -34,16 +39,23 @@ def init():
         print(f"Client config found at {CONFIG_FILE}")
     else:
         print("Can't find client config file! Creating it...")
-        CONFIG_PATH.mkdir(parents=True, exist_ok=True)
-        LOG_PATH.mkdir(parents=True, exist_ok=True)
-        LAST_STATE_PATH.mkdir(parents=True, exist_ok=True)
-        copy(Path(Path(__file__).parent.absolute(), "ms_cfg.toml.template"), CONFIG_FILE)
-        copy(Path(Path(__file__).parent.absolute(), "funds_rate.db.template"), DB_FILE)
-        copy(Path(Path(__file__).parent.absolute(), "cli_0_BTCUSDT.py.template"), Path(WORK_PATH, "cli_0_BTCUSDT.py"))
-        copy(Path(Path(__file__).parent.absolute(), "cli_1_BTCUSDT.py.template"), Path(WORK_PATH, "cli_1_BTCUSDT.py"))
-        copy(Path(Path(__file__).parent.absolute(), "cli_2_TESTBTCTESTUSDT.py.template"),
-             Path(WORK_PATH, "cli_2_TESTBTCTESTUSDT.py"))
-        copy(Path(Path(__file__).parent.absolute(), "cli_3_BTCUSDT.py.template"), Path(WORK_PATH, "cli_3_BTCUSDT.py"))
+        for path in [CONFIG_PATH, LOG_PATH, LAST_STATE_PATH]:
+            path.mkdir(parents=True, exist_ok=True)
+
+        templates = Path(Path(__file__).parent.absolute(), "templates")
+
+        copy(Path(templates, "ms_cfg.toml"), CONFIG_FILE)
+
+        files_to_copy = [
+            "funds_rate.db",
+            "trial_params.json",
+            "cli_0_BTCUSDT.py",
+            "cli_1_BTCUSDT.py",
+            "cli_2_TESTBTCTESTUSDT.py",
+            "cli_3_BTCUSDT.py"
+        ]
+        [copy(Path(templates, file_name), Path(WORK_PATH, file_name)) for file_name in files_to_copy]
+
         print(f"Before the first run, set the parameters in {CONFIG_FILE}")
         raise SystemExit(1)
 

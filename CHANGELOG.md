@@ -1,3 +1,10 @@
+## 3.0.3 - 2024-04-08
+### Update
+* Refine templates handling
+* `Backtesting`: extract trial parameters into `/home/ubuntu/.MartinBinance/trial_params.json`, [detail here.](https://github.com/DogsTailFarmer/martin-binance/wiki/Back-testing-and-parameters-optimization#some-details)
+* `Backtesting`: add logging importance parameters rating for each optimisation cycle
+* Up requirements for exchanges-wrapper==2.1.8
+
 ## 3.0.2 - 2024-04-03
 ### Fix
 * `Backtesting`: updating the balances at slippage
@@ -102,9 +109,9 @@
 * ModuleNotFoundError: No module named 'optimizer' #73
 
 ### Update
-* Do not send orders if was getting 'FAILED_PRECONDITION' response
-* Do not started Telegram control process for Simulate mode or if bot id is not setting
-* Do not started DB control process for Simulate mode
+* Do not send orders if it was getting 'FAILED_PRECONDITION' response
+* Do not start Telegram control process for Simulate mode or if bot id is not setting
+* Do not start DB control process for Simulate mode
 * Changed initialization sequence during recovery from saved state
 
 ## 2.1.4 - 2024-02-22
@@ -418,6 +425,8 @@ as a result - a negative value of free funds
 Ticker history includes fulfillment events that may not be in the original stream. I.e. the order was executed
 at price P, and there was no such price in the stream at a given time period. This led to a divergence of the test
 session against the original (reference).
+
+<!--suppress ALL -->
 
 <img height="350" src="https://user-images.githubusercontent.com/77513676/253804148-ed92bf13-ca04-46bf-8714-28380d0c2e52.png" width="350"/>
 

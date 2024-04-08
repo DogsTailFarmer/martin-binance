@@ -1,0 +1,12 @@
+{
+  "GRID_MAX_COUNT": {"type": "int", "range": [3, 5]},
+  "PRICE_SHIFT": {"type": "float", "range": [0, 0.05], "step": 0.01},
+  "PROFIT": {"type": "float", "range": [0.05, 0.2], "step": 0.05},
+  "PROFIT_MAX": {"type": "float", "range": [0.4, 1.0], "step": 0.05},
+  "OVER_PRICE": {"type": "float", "range": [0.1, 1], "step": 0.1},
+  "ORDER_Q": {"type": "int", "range": [6, 12]},
+  "MARTIN": {"type": "float", "range": [5, 15], "step": 0.5},
+  "SHIFT_GRID_DELAY": {"type": "int", "range": [10, 150], "step": 10},
+  "KBB": {"type": "float", "range": [0.5, 4], "step": 0.5},
+  "LINEAR_GRID_K": {"type": "int", "range": [0, 500], "step": 50}
+}

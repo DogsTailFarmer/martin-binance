@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1"
+__version__ = "3.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -34,17 +34,17 @@ import martin_binance.params as ex
 # Exchange setup and parameter settings
 ################################################################
 # Set trading pair for Strategy
-ex.SYMBOL = 'BTCUSDT'
+ex.SYMBOL = 'TESTBTCTESTUSDT'
 # Exchange setup, see list of exchange in ms_cfg.toml
-ex.ID_EXCHANGE = 1  # See ms_cfg.toml Use for collection of statistics *and get client connection*
-ex.FEE_MAKER = Decimal('0.08')  # standard exchange Fee for maker
-ex.FEE_TAKER = Decimal('0.1')  # standard exchange Fee for taker
+ex.ID_EXCHANGE = 2  # See ms_cfg.toml Use for collection of statistics *and get client connection*
+ex.FEE_MAKER = Decimal('0.1')  # standard exchange Fee for maker
+ex.FEE_TAKER = Decimal('0.17')  # standard exchange Fee for taker
 ex.FEE_FIRST = False  # For example fee in BNB and BNB in pair, and it is base asset
 ex.FEE_SECOND = False  # For example fee in BNB and BNB in pair, and it is quote asset
-ex.GRID_MAX_COUNT = 3  # Maximum counts for placed grid orders
+ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
-ex.AMOUNT_FIRST = Decimal('0.05')  # Deposit for Sale cycle in first currency
+ex.AMOUNT_FIRST = Decimal('0.1')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FUND = False  # Use all available fund for initial cycle or alltime for GRID_ONLY
 ex.AMOUNT_SECOND = Decimal('1000.0')  # Deposit for Buy cycle in second currency
 ex.PRICE_SHIFT = Decimal('0.01')  # 'No market' shift price in % from current bid/ask price
@@ -60,7 +60,7 @@ ex.ORDER_Q = 12  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
 ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
 # Other
-ex.STATUS_DELAY = 180  # Minute between sending Tlg message about current status, 0 - disable
+ex.STATUS_DELAY = 5  # Minute between sending Tlg message about current status, 0 - disable
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
 ex.LOG_LEVEL = logging.DEBUG  # Default level for console output
 ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for subaccount only

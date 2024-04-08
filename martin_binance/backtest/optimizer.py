@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1"
+__version__ = "3.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -22,7 +22,7 @@ from pathlib import Path
 import optuna
 import ujson as json
 
-from martin_binance import LOG_PATH
+from martin_binance import LOG_PATH, TRIAL_PARAMS
 
 OPTIMIZER = Path(__file__).absolute()
 OPTIMIZER.chmod(OPTIMIZER.stat().st_mode | stat.S_IEXEC)
@@ -54,23 +54,25 @@ def optimize(study_name, cli, n_trials, storage_name=None, _prm_best=None, skip_
     sys.excepthook = notify_exception
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+    # Load parameter definitions from JSON file
+    with open(TRIAL_PARAMS) as f:
+        param_defs = json.load(f)
+
     spec = iu.spec_from_file_location("strategy", cli)
     mbs = iu.module_from_spec(spec)
     spec.loader.exec_module(mbs)
 
     def objective(_trial):
-        params = {
-            'GRID_MAX_COUNT': _trial.suggest_int('GRID_MAX_COUNT', 3, 5),
-            'PRICE_SHIFT': _trial.suggest_float('PRICE_SHIFT', 0, 0.05, step=0.01),
-            'PROFIT': _trial.suggest_float('PROFIT', 0.05, 0.2, step=0.05),
-            'PROFIT_MAX': _trial.suggest_float('PROFIT_MAX', 0.4, 1.0, step=0.05),
-            'OVER_PRICE': _trial.suggest_float('OVER_PRICE', 0.1, 1, step=0.1),
-            'ORDER_Q': _trial.suggest_int('ORDER_Q', 6, 12),
-            'MARTIN': _trial.suggest_float('MARTIN', 5, 15, step=1),
-            'SHIFT_GRID_DELAY': _trial.suggest_int('SHIFT_GRID_DELAY', 10, 150, step=10),
-            'KBB': _trial.suggest_float('KBB', 0.5, 4, step=0.5),
-            'LINEAR_GRID_K': _trial.suggest_int('LINEAR_GRID_K', 0, 500, step=50),
-        }
+        params = {}
+        for param_name, param_props in param_defs.items():
+            if param_props['type'] == 'int':
+                params[param_name] = _trial.suggest_int(
+                    param_name, *param_props['range'], step=param_props.get('step', 1)
+                )
+            elif param_props['type'] == 'float':
+                params[param_name] = _trial.suggest_float(
+                    param_name, *param_props['range'], step=param_props.get('step', 0.1)
+                )
         return try_trade(mbs, skip_log, **params)
 
     # noinspection PyArgumentList
@@ -117,8 +119,13 @@ if __name__ == "__main__":
     else:
         new_value = round(study.best_value, ndigits=6)
         bp = {k: int(any2str(v)) if isinstance(v, int) else float(any2str(v)) for k, v in study.best_params.items()}
+
         logger.info(f"Optimal parameters: {bp} for get {new_value}")
+        if new_value:
+            logger.info(f"Importance parameters: {optuna.importance.get_param_importances(study)}")
+
         _value = round(study.get_trials()[0].value, ndigits=6)
+
         if not prm_best or new_value > _value:
             bp |= {'new_value': any2str(new_value), '_value': any2str(_value)}
             print(json.dumps(bp))

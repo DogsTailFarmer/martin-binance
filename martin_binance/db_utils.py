@@ -4,13 +4,13 @@ Functions for managing and saving data to a SQLite database from martin-binance 
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0"
+__version__ = "3.0.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import contextlib
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from martin_binance import DB_FILE
@@ -92,7 +92,7 @@ def save_to_db(queue_to_db) -> None:
                                              float(data.get('s_depo')),
                                              float(data.get('f_profit')),
                                              float(data.get('s_profit')),
-                                             datetime.utcnow(),
+                                             datetime.now(timezone.utc).replace(tzinfo=None),
                                              float(data.get('PRICE_SHIFT')),
                                              float(data.get('PROFIT')),
                                              float(data.get('over_price')),
