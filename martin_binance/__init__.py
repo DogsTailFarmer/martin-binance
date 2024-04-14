@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.3"
+__version__ = "3.0.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -28,10 +28,6 @@ LAST_STATE_PATH = Path(WORK_PATH, "last_state")
 BACKTEST_PATH = Path(WORK_PATH, "back_test")
 TRIAL_PARAMS = Path(WORK_PATH, "trial_params.json")
 EQUAL_STR = "================================================================"
-
-# TODO remove after update to 3.0.3
-if CONFIG_FILE.exists() and not TRIAL_PARAMS.exists():
-    copy(Path(Path(__file__).parent.absolute(), "templates/trial_params.json"), TRIAL_PARAMS)
 
 
 def init():

@@ -137,12 +137,12 @@ def trade(strategy=None):
         loop.create_task(strategy.main(ex.SYMBOL))
         loop.run_forever()
     except KeyboardInterrupt:
-        pass
+        pass  # user interrupt
     finally:
         try:
             loop.run_until_complete(strategy.ask_exit())
         except (asyncio.CancelledError, KeyboardInterrupt):
-            pass
+            pass  # user interrupt
         except Exception as _err:
             print(f"Error: {_err}")
         loop.run_until_complete(loop.shutdown_asyncgens())

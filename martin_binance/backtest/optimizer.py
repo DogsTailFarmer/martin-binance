@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.3"
+__version__ = "3.0.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -84,12 +84,6 @@ def optimize(study_name, cli, n_trials, storage_name=None, _prm_best=None, skip_
 
     _study.optimize(objective, n_trials=n_trials, gc_after_trial=True, show_progress_bar=show_progress_bar)
     return _study
-
-
-async def run_optimize(*args):
-    process = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE)
-    stdout, _ = await process.communicate()
-    return stdout.splitlines()[0]
 
 
 if __name__ == "__main__":

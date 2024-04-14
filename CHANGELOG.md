@@ -1,3 +1,12 @@
+## 3.0.4 - 2024-04-14
+### Fix
+* Creating and manage asynchronous tasks
+
+### Update
+* Up requirements for exchanges-wrapper==2.1.9
+* 'Backtesting': some minor improvements
+* Remove cross-version updates
+
 ## 3.0.3 - 2024-04-08
 ### Update
 * Refine templates handling

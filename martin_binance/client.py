@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1"
+__version__ = "3.0.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -71,12 +71,12 @@ class Trade:
             raise UserWarning(f"{ex}, reconnect...") from None
         except GRPCError as ex:
             status_code = ex.status
+            logger.warning(f"Exception on register client: {status_code.name}, {ex.message}")
             if status_code == Status.FAILED_PRECONDITION:
                 raise SystemExit(1) from ex
-            raise UserWarning(f"Exception on register client: {status_code.name}, {ex.message}") from None
+            raise UserWarning
         else:
-            logger.info(f"gRPC session started for client_id: {_client.client_id}\n"
-                        f"trade_id: {self.trade_id}")
+            logger.info(f"gRPC session started for client_id: {_client.client_id}, trade_id: {self.trade_id}")
             return _client
 
     async def send_request(self, _request, _request_type, **kwargs):
@@ -85,7 +85,7 @@ class Trade:
         kwargs['client_id'] = self.client.client_id
         kwargs['trade_id'] = self.trade_id
         try:
-            res = await _request(_request_type(**kwargs))
+            return await _request(_request_type(**kwargs))
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
@@ -101,8 +101,6 @@ class Trade:
             raise
         except Exception as ex:
             logger.error(f"Exception on send request {ex}")
-        else:
-            return res
 
     async def for_request(self, _request, _request_type, **kwargs):
         if not self.client:
