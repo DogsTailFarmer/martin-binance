@@ -4,13 +4,26 @@ martin-binance strategy parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.1"
+__version__ = "3.0.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import logging
 from decimal import Decimal
 from pathlib import Path
+
+__all__ = [
+    'SYMBOL', 'EXCHANGE', 'ID_EXCHANGE', 'FEE_MAKER', 'FEE_TAKER', 'FEE_FIRST', 'FEE_SECOND', 'GRID_MAX_COUNT',
+    'START_ON_BUY', 'AMOUNT_FIRST', 'USE_ALL_FUND', 'AMOUNT_SECOND', 'PRICE_SHIFT', 'PRICE_LIMIT_RULES',
+    'ROUND_BASE', 'ROUND_QUOTE', 'PROFIT', 'PROFIT_MAX', 'OVER_PRICE', 'ORDER_Q', 'MARTIN', 'SHIFT_GRID_DELAY',
+    'GRID_UPDATE_INTERVAL', 'STATUS_DELAY', 'GRID_ONLY', 'LOG_LEVEL', 'HOLD_TP_ORDER_TIMEOUT', 'COLLECT_ASSETS',
+    'GRID_ONLY_DELAY', 'ADAPTIVE_TRADE_CONDITION', 'BB_CANDLE_SIZE_IN_MINUTES', 'BB_NUMBER_OF_CANDLES', 'KBB',
+    'LINEAR_GRID_K', 'ADX_CANDLE_SIZE_IN_MINUTES', 'ADX_NUMBER_OF_CANDLES', 'ADX_PERIOD', 'ADX_THRESHOLD',
+    'ADX_PRICE_THRESHOLD', 'REVERSE', 'REVERSE_TARGET_AMOUNT', 'REVERSE_INIT_AMOUNT', 'REVERSE_STOP',
+    'HEAD_VERSION', 'LOAD_LAST_STATE', 'LAST_STATE_FILE', 'VPS_NAME', 'PARAMS', 'TELEGRAM_URL', 'TOKEN',
+    'CHANNEL_ID', 'STOP_TLG', 'INLINE_BOT', 'MODE', 'XTIME', 'SAVE_DS', 'SAVE_PERIOD', 'LOGGING', 'SELF_OPTIMIZATION',
+    'N_TRIALS', 'SESSION_RESULT'
+]
 
 SYMBOL = str()
 EXCHANGE = ()

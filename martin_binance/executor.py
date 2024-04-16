@@ -4,15 +4,16 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.3"
+__version__ = "3.0.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
+import logging
 import sys
 import gc
 import statistics
 import traceback
-from decimal import ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
 from threading import Thread
 import queue
 import math
@@ -132,7 +133,7 @@ class Strategy(StrategyBase):
             schedule.every(10).seconds.do(self.event_get_command_tlg)
             schedule.every(6).seconds.do(self.event_report)
 
-    def init(self, check_funds=True) -> None:  # skipcq: PYL-W0221
+    def init(self, check_funds=True) -> None:
         self.message_log('Start Init section')
         if COLLECT_ASSETS and GRID_ONLY:
             init_params_error = 'COLLECT_ASSETS and GRID_ONLY: one only allowed'

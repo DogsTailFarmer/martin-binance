@@ -1624,7 +1624,7 @@ class StrategyBase:
                             )
                     [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                     #
-                    self.restore_strategy_state(last_state, restore=False)
+                    self.restore_strategy_state(strategy_state=last_state, restore=False)
                     #
                     self.init(check_funds=False)
                 else:
@@ -1716,7 +1716,7 @@ class StrategyBase:
         raise NotImplementedError
 
     @abstractmethod
-    def get_free_assets(self, *args, **kwargs):
+    def get_free_assets(self, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
@@ -1724,7 +1724,7 @@ class StrategyBase:
         raise NotImplementedError
 
     @abstractmethod
-    def restore_strategy_state(self, *args, **kwargs):
+    def restore_strategy_state(self, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
@@ -1732,7 +1732,7 @@ class StrategyBase:
         raise NotImplementedError
 
     @abstractmethod
-    def init(self, *args, **kwargs):
+    def init(self, **kwargs):
         raise NotImplementedError
 
     @abstractmethod

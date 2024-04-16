@@ -1,3 +1,9 @@
+## 3.0.5 - 2024-04-16
+### Update
+* Up requirements for exchanges-wrapper==2.1.10
+* Import from `params` module
+* Some issues `Mismatch between signature and use of an overridden method`
+
 ## 3.0.4 - 2024-04-14
 ### Fix
 * Creating and manage asynchronous tasks
