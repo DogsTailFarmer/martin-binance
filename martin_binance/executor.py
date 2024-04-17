@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.5"
+__version__ = "3.0.6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -69,11 +69,11 @@ class Strategy(StrategyBase):
         self.sum_amount_first = O_DEC  # Sum buy/sell in first currency for current cycle
         self.sum_amount_second = O_DEC  # Sum buy/sell in second currency for current cycle
         self.part_amount = {}  # + {order_id: (Decimal(str(amount_f)), Decimal(str(amount_s)))} of partially filled
-    #
+        #
         self.deposit_first = AMOUNT_FIRST  # + Calculated operational deposit
         self.deposit_second = AMOUNT_SECOND  # + Calculated operational deposit
-        self.sum_profit_first = O_DEC  # + Sum profit from start to now()
-        self.sum_profit_second = O_DEC  # + Sum profit from start to now()
+        self.sum_profit_first = O_DEC  # + Sum profit from start
+        self.sum_profit_second = O_DEC  # + Sum profit from start
         self.cycle_buy_count = 0  # + Count for buy cycle
         self.cycle_sell_count = 0  # + Count for sale cycle
         self.shift_grid_threshold = None  # - Price level of shift grid threshold for current cycle
@@ -375,8 +375,7 @@ class Strategy(StrategyBase):
                     order_buy = len([i for i in orders if i.buy is True])
                     order_sell = len([i for i in orders if i.buy is False])
                     order_hold = len(self.orders_hold)
-                sum_profit = self.round_truncate(self.sum_profit_first * self.avg_rate + self.sum_profit_second,
-                                                 base=False)
+
                 command = bool(self.command in ('end', 'stop'))
                 if GRID_ONLY:
                     header = (f"{'Buy' if self.cycle_buy else 'Sell'} assets Grid only mode\n"
@@ -388,7 +387,7 @@ class Strategy(StrategyBase):
                               f"For all cycles profit:\n"
                               f"First: {self.sum_profit_first}\n"
                               f"Second: {self.sum_profit_second}\n"
-                              f"Summary: {sum_profit}\n"
+                              f"Summary: {self.get_sum_profit}\n"
                               f"{self.get_free_assets(mode='free')[3]}"
                               )
                 self.message_log(f"{header}\n"
@@ -695,7 +694,7 @@ class Strategy(StrategyBase):
                              f"For all cycles profit:\n"
                              f"First: {self.sum_profit_first}\n"
                              f"Second: {self.sum_profit_second}\n"
-                             f"Summary: {self.sum_profit_first * self.avg_rate + self.sum_profit_second:f}\n")
+                             f"Summary: {self.get_sum_profit}\n")
         if self.first_run or MODE in ('T', 'TC'):
             self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
         #
@@ -2213,6 +2212,12 @@ class Strategy(StrategyBase):
             bool(asset == self.f_currency),
             _rounding=ROUND_FLOOR if delta > 0 else ROUND_CEILING
         )
+        #
+        if delta < 0 and not GRID_ONLY:
+            if asset == self.f_currency:
+                self.sum_profit_first += abs(delta)
+            elif asset == self.s_currency:
+                self.sum_profit_second += abs(delta)
         #
         if self.cycle_buy:
             if asset == self.s_currency:

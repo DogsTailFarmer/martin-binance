@@ -1,3 +1,7 @@
+## 3.0.6 - 2024-04-xx
+### Added new features
+* The total income includes withdrawn funds
+
 ## 3.0.5 - 2024-04-16
 ### Update
 * Up requirements for exchanges-wrapper==2.1.10
