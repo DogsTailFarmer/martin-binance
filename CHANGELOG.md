@@ -1,6 +1,13 @@
 ## 3.0.6 - 2024-04-xx
+### Fix
+* Unattended cancelling keepalive tasks
+
 ### Added new features
 * The total income includes withdrawn funds
+
+### Update
+* Up requirements for exchanges-wrapper==2.1.11
+* Refine handling backtest process 
 
 ## 3.0.5 - 2024-04-16
 ### Update

@@ -314,6 +314,7 @@ class StrategyBase:
         prm_best = {}
         _res = None
         while True:
+            await asyncio.sleep(delay)
             try:
                 if self.operational_status and self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
                     self.start_collect = False
@@ -331,20 +332,18 @@ class StrategyBase:
                                 f"sqlite:///{storage_name}",
                                 json.dumps(prm_best or _prm_best),
                                 f"{prm.ID_EXCHANGE}_{prm.SYMBOL}_S.log",
-
                                 stdout=asyncio.subprocess.PIPE
                             )
                             stdout, _ = await self.backtest_process.communicate()
+                        except Exception as ex:
+                            self.message_log(f"Backtest process: {ex}", log_level=logging.ERROR)
+                        else:
                             _res = stdout.splitlines()
-                            if _res:
+                        if _res:
+                            try:
                                 prm_best = orjson.loads(_res[0])
-                        except orjson.JSONDecodeError:
-                            self.message_log(f"Backtest control: response {_res}", log_level=logging.ERROR)
-                            break
-                        except Exception as err:
-                            self.message_log(f"Backtest control: {err}", log_level=logging.ERROR)
-                            self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
-                            break
+                            except orjson.JSONDecodeError:
+                                self.message_log(f"Backtest control: response {_res}", log_level=logging.ERROR)
                         #
                         self.backtest_process = None
                         storage_name.replace(storage_name.with_name('study.db'))
@@ -376,18 +375,20 @@ class StrategyBase:
 
                 if restart and self.stable_state_backtest():
                     restart = False
-                    self.parquet_declare(Path(self.session_root, "raw"))
                     # Refresh klines init
-                    for i in KLINES_INIT:
-                        try:
+                    try:
+                        for i in KLINES_INIT:
                             res = await self.send_request(self.stub.fetch_klines, mr.FetchKlinesRequest,
                                                           symbol=self.symbol,
                                                           interval=i.value,
                                                           limit=KLINES_LIM)
-                        except Exception as ex:
-                            self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
-                        else:
                             self.klines[i.value] = list(map(json.loads, res.items))
+                    except Exception as ex:
+                        restart = True
+                        self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
+                        continue
+
+                    self.parquet_declare(Path(self.session_root, "raw"))
                     # Save current strategy state for backtesting
                     last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
@@ -399,7 +400,10 @@ class StrategyBase:
                     self.message_log("Start data collect", tlg=True)
             except (asyncio.CancelledError, KeyboardInterrupt):
                 break
-            await asyncio.sleep(delay)
+            except Exception as err:
+                self.message_log(f"Backtest control: {err}", log_level=logging.ERROR)
+                self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
+                break
         self.message_log("Backtest data collect and optimize session ended", tlg=True)
 
     def session_data_handler(self):
@@ -479,6 +483,9 @@ class StrategyBase:
             print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
         if prm.SAVE_DS:
             self._back_test_handler_ext()
+
+        self.session.channel.close()
+        self.task_cancel()
         asyncio.get_event_loop().stop()
 
     def _back_test_handler_ext(self):
@@ -580,7 +587,7 @@ class StrategyBase:
         max_use_update = 25 * 60  # 25 min if the row has not been updated that the instance is down
         while True:
             if not self.operational_status:
-                await asyncio.sleep(HEARTBEAT)
+                await asyncio.sleep(HEARTBEAT * 30)
                 continue
             try:
                 res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
