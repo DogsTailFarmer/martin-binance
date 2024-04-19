@@ -1,4 +1,4 @@
-## 3.0.6 - 2024-04-xx
+## 3.0.6 - 2024-04-19
 ### Fix
 * Unattended cancelling keepalive tasks
 
