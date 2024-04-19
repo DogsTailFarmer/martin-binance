@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.4"
+__version__ = "3.0.6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -307,98 +307,98 @@ class StrategyBase:
         """
         Managing backtest and optimization cycles
         """
-        while not self.operational_status:
-            await asyncio.sleep(HEARTBEAT)
         delay = HEARTBEAT * 30  # 1 min
         ts = time.time()
         restart = False
         _prm_best = {}
         prm_best = {}
-        while self.operational_status:
-            if self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
-                self.start_collect = False
-                self.session_data_handler()
-                self.reset_backtest_vars()
-                if prm.SELF_OPTIMIZATION and self.command != 'stopped':
-                    _ts = datetime.now(timezone.utc).replace(tzinfo=None)
-                    storage_name = Path(self.session_root, "_study.db")
-                    try:
-                        self.backtest_process = await asyncio.create_subprocess_exec(
-                            OPTIMIZER,
-                            f"{self.exchange}_{self.symbol}",
-                            Path(self.session_root, Path(prm.PARAMS).name),
-                            str(prm.N_TRIALS),
-                            f"sqlite:///{storage_name}",
-                            json.dumps(prm_best or _prm_best),
-                            f"{prm.ID_EXCHANGE}_{prm.SYMBOL}_S.log",
+        _res = None
+        while True:
+            try:
+                if self.operational_status and self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
+                    self.start_collect = False
+                    self.session_data_handler()
+                    self.reset_backtest_vars()
+                    if prm.SELF_OPTIMIZATION and self.command != 'stopped':
+                        _ts = datetime.now(timezone.utc).replace(tzinfo=None)
+                        storage_name = Path(self.session_root, "_study.db")
+                        try:
+                            self.backtest_process = await asyncio.create_subprocess_exec(
+                                OPTIMIZER,
+                                f"{self.exchange}_{self.symbol}",
+                                Path(self.session_root, Path(prm.PARAMS).name),
+                                str(prm.N_TRIALS),
+                                f"sqlite:///{storage_name}",
+                                json.dumps(prm_best or _prm_best),
+                                f"{prm.ID_EXCHANGE}_{prm.SYMBOL}_S.log",
 
-                            stdout=asyncio.subprocess.PIPE
-                        )
-                        stdout, _ = await self.backtest_process.communicate()
-                        _res = stdout.splitlines()
-                        if _res:
-                            prm_best = orjson.loads(_res[0])
-                        else:
-                            self.message_log("Backtest control: result is empty", log_level=logging.WARNING)
+                                stdout=asyncio.subprocess.PIPE
+                            )
+                            stdout, _ = await self.backtest_process.communicate()
+                            _res = stdout.splitlines()
+                            if _res:
+                                prm_best = orjson.loads(_res[0])
+                        except orjson.JSONDecodeError:
+                            self.message_log(f"Backtest control: response {_res}", log_level=logging.ERROR)
                             break
-                    except (asyncio.CancelledError, KeyboardInterrupt):
-                        break
-                    except Exception as err:
-                        self.message_log(f"Backtest control: {err}", log_level=logging.ERROR)
-                        self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
-                        break
-                    #
-                    self.backtest_process = None
-                    storage_name.replace(storage_name.with_name('study.db'))
-                    if prm_best:
-                        _prm_best = dict(prm_best)
+                        except Exception as err:
+                            self.message_log(f"Backtest control: {err}", log_level=logging.ERROR)
+                            self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
+                            break
+                        #
+                        self.backtest_process = None
+                        storage_name.replace(storage_name.with_name('study.db'))
+                        if prm_best:
+                            _prm_best = dict(prm_best)
+                            self.message_log(
+                                f"Updating parameters from backtest,"
+                                f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
+                                color=Style.B_WHITE,
+                                tlg=True
+                            )
+                            for key, value in prm_best.items():
+                                self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
+                                setattr(
+                                    prm, key,
+                                    value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
+                                )
+                        l_m = str(
+                            datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)
+                        ).rsplit('.')[0]
                         self.message_log(
-                            f"Updating parameters from backtest,"
-                            f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
+                            f"Strategy parameters are optimal now. Optimization cycle duration {l_m}",
                             color=Style.B_WHITE,
                             tlg=True
                         )
-                        for key, value in prm_best.items():
-                            self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
-                            setattr(
-                                prm, key,
-                                value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
-                            )
-                    l_m = str(
-                        datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)
-                    ).rsplit('.')[0]
-                    self.message_log(
-                        f"Strategy parameters are optimal now. Optimization cycle duration {l_m}",
-                        color=Style.B_WHITE,
-                        tlg=True
-                    )
-                    restart = True
-                else:
-                    break
-
-            if restart and self.stable_state_backtest():
-                restart = False
-                self.parquet_declare(Path(self.session_root, "raw"))
-                # Refresh klines init
-                for i in KLINES_INIT:
-                    try:
-                        res = await self.send_request(self.stub.fetch_klines, mr.FetchKlinesRequest,
-                                                      symbol=self.symbol,
-                                                      interval=i.value,
-                                                      limit=KLINES_LIM)
-                    except Exception as ex:
-                        self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
+                        restart = True
                     else:
-                        self.klines[i.value] = list(map(json.loads, res.items))
-                # Save current strategy state for backtesting
-                last_state = self.save_strategy_state()
-                self.last_state_update(last_state)
-                with self.state_file.open(mode='w') as outfile:
-                    json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-                #
-                self.start_collect = True
-                ts = time.time()
-                self.message_log("Start data collect", tlg=True)
+                        break
+
+                if restart and self.stable_state_backtest():
+                    restart = False
+                    self.parquet_declare(Path(self.session_root, "raw"))
+                    # Refresh klines init
+                    for i in KLINES_INIT:
+                        try:
+                            res = await self.send_request(self.stub.fetch_klines, mr.FetchKlinesRequest,
+                                                          symbol=self.symbol,
+                                                          interval=i.value,
+                                                          limit=KLINES_LIM)
+                        except Exception as ex:
+                            self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
+                        else:
+                            self.klines[i.value] = list(map(json.loads, res.items))
+                    # Save current strategy state for backtesting
+                    last_state = self.save_strategy_state()
+                    self.last_state_update(last_state)
+                    with self.state_file.open(mode='w') as outfile:
+                        json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                    #
+                    self.start_collect = True
+                    ts = time.time()
+                    self.message_log("Start data collect", tlg=True)
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                break
             await asyncio.sleep(delay)
         self.message_log("Backtest data collect and optimize session ended", tlg=True)
 
@@ -545,6 +545,9 @@ class StrategyBase:
                                                  f" restart request sent", log_level=logging.WARNING)
                                 update_max_queue_size = True
                                 self.wss_fire_up = True
+                        finally:
+                            if self.wss_fire_up:
+                                self.operational_status = False
                     #
                     if self.wss_fire_up:
                         try:
@@ -556,9 +559,9 @@ class StrategyBase:
                                     symbol=self.symbol
                                 )
                                 await self.wss_init(update_max_queue_size=update_max_queue_size)
-                                self.wss_fire_up = False
                         except Exception as ex:
                             self.message_log(f"Exception on fire up WSS: {ex}", log_level=logging.WARNING)
+                            self.message_log(traceback.format_exc(), log_level=logging.DEBUG)
                             self.wss_fire_up = True
                 await asyncio.sleep(HEARTBEAT)
             except (KeyboardInterrupt, asyncio.CancelledError):
@@ -575,11 +578,14 @@ class StrategyBase:
             await asyncio.sleep(HEARTBEAT)
         delay = 600  # 10 min
         max_use_update = 25 * 60  # 25 min if the row has not been updated that the instance is down
-        while self.operational_status:
+        while True:
+            if not self.operational_status:
+                await asyncio.sleep(HEARTBEAT)
+                continue
             try:
                 res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
-            except asyncio.CancelledError:
-                pass
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                break
             except Exception as _ex:
                 self.message_log(f"Exception save_asset: {_ex}", log_level=logging.WARNING)
             else:
@@ -604,8 +610,8 @@ class StrategyBase:
                 if self.exchange not in ('bitfinex', 'huobi'):
                     try:
                         res = await self.send_request(self.stub.fetch_funding_wallet, mr.FetchFundingWalletRequest)
-                    except asyncio.CancelledError:
-                        pass
+                    except (asyncio.CancelledError, KeyboardInterrupt):
+                        break
                     except Exception as _ex:
                         logger.warning(f"FetchFundingWallet: {_ex}")
                     else:
@@ -953,6 +959,7 @@ class StrategyBase:
         Klines.klines_lim = KLINES_LIM
         klines = {}
         klines_from_file = {}
+        kline = []
         if prm.MODE == 'S':
             klines_from_file = json.load(open(Path(self.session_root, "raw/klines.json")))
         for i in KLINES_INIT:
@@ -965,12 +972,12 @@ class StrategyBase:
                         limit=KLINES_LIM
                     )
                 except Exception as ex:
-                    kline = []
                     self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
                 else:
-                    kline = list(map(json.loads, res.items))
-                    if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
-                        self.klines[i.value] = kline
+                    if res:
+                        kline = list(map(json.loads, res.items))
+                        if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
+                            self.klines[i.value] = kline
             else:
                 kline = klines_from_file.get(i.value, [])
 
@@ -980,7 +987,7 @@ class StrategyBase:
             klines[i.value] = kline_i
 
         if len(klines) == len(KLINES_INIT):
-            self.tasks_manage(self.on_klines_update(klines))
+            self.tasks_manage(self.on_klines_update(klines), name='wss')
         else:
             self.message_log("Init buffered candle failed. try one else...", log_level=logging.WARNING)
             await asyncio.sleep(random.uniform(1, 5))
@@ -1012,7 +1019,7 @@ class StrategyBase:
                 self.wss_fire_up = True
         else:
             for i in _intervals:
-                self.tasks_manage(self.aiter_candles(_klines, i))
+                self.tasks_manage(self.aiter_candles(_klines, i), name='wss')
 
     async def create_limit_order(self, _id: int, buy: bool, amount: str, price: str) -> None:
         self.wait_order_id.append(_id)
@@ -1304,7 +1311,10 @@ class StrategyBase:
         exch_orders = []
         diff_id = set()
         restore = False
-        while self.operational_status:
+        while True:
+            if not self.operational_status:
+                await asyncio.sleep(HEARTBEAT)
+                continue
             try:
                 _orders = await self.send_request(self.stub.fetch_open_orders, mr.MarketRequest, symbol=self.symbol)
                 if _orders is None:
@@ -1350,9 +1360,8 @@ class StrategyBase:
                 self.last_state = None
                 restore = False
 
-            except asyncio.CancelledError:
-                # print("buffered_orders.Cancelled")
-                self.operational_status = False
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                break
             except UserWarning as ex_2:
                 self.message_log(f"Exception buffered_orders 2: {ex_2}", log_level=logging.WARNING)
                 restore = True
@@ -1390,23 +1399,22 @@ class StrategyBase:
                 if res.success:
                     self.operational_status = True
 
-    def tasks_manage(self, coro):
-        _t = asyncio.create_task(coro)
+    def tasks_manage(self, coro, name=None, add_done_callback=True):
+        _t = asyncio.create_task(coro, name=name)
         self.tasks.add(_t)
-        _t.add_done_callback(self.tasks.discard)
+        if add_done_callback:
+            _t.add_done_callback(self.tasks.discard)
 
     async def wss_declare(self):
         # Market stream
-        self.tasks_manage(self.on_ticker_update())
+        self.tasks_manage(self.on_ticker_update(), name='wss')
         await self.buffered_candle()
-        self.tasks_manage(self.on_order_book_update())
+        self.tasks_manage(self.on_order_book_update(), name='wss')
         if prm.MODE in ('T', 'TC'):
             # User Stream
-            self.tasks_manage(self.on_funds_update())
-            self.tasks_manage(self.on_order_update())
-            self.tasks_manage(self.on_balance_update())
-            if prm.MODE == 'TC':
-                self.tasks_manage(self.backtest_control())
+            self.tasks_manage(self.on_funds_update(), name='wss')
+            self.tasks_manage(self.on_order_update(), name='wss')
+            self.tasks_manage(self.on_balance_update(), name='wss')
 
     async def wss_init(self, update_max_queue_size=False):
         if self.client_id:
@@ -1429,14 +1437,14 @@ class StrategyBase:
                 self.wss_fire_up = True
             else:
                 self.wss_fire_up = False
+                await self.wait_wss_init()
         else:
             self.message_log("Init WSS failed, retry", log_level=logging.WARNING)
             await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))
             self.wss_fire_up = True
 
     def task_cancel(self):
-        [task.cancel() for task in self.tasks if not task.done()]
-        self.tasks.clear()
+        [task.cancel() for task in self.tasks if not task.done() and task.get_name() == 'wss']
 
     async def main(self, _symbol):
         restore_state = None
@@ -1652,15 +1660,16 @@ class StrategyBase:
 
             if prm.MODE in ('T', 'TC'):
                 await self.wss_init()
-                await self.wait_wss_init()
                 self.tasks_manage(save_to_csv())
-                self.tasks_manage(self.buffered_orders())
+                self.tasks_manage(self.buffered_orders(), add_done_callback=False)
                 if self.session.client.real_market:
-                    self.tasks_manage(self.save_asset())
+                    self.tasks_manage(self.save_asset(), add_done_callback=False)
+                if prm.MODE == 'TC':
+                    self.tasks_manage(self.backtest_control(), add_done_callback=False)
                 if not restore_state:
                     self.start()
 
-            self.tasks_manage(self.heartbeat(self.session))
+            self.tasks_manage(self.heartbeat(self.session), add_done_callback=False)
 
         except (KeyboardInterrupt, SystemExit):
             # noinspection PyProtectedMember, PyUnresolvedReferences

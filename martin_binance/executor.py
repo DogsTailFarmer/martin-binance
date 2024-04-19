@@ -387,7 +387,7 @@ class Strategy(StrategyBase):
                               f"For all cycles profit:\n"
                               f"First: {self.sum_profit_first}\n"
                               f"Second: {self.sum_profit_second}\n"
-                              f"Summary: {self.get_sum_profit}\n"
+                              f"Summary: {self.get_sum_profit()}\n"
                               f"{self.get_free_assets(mode='free')[3]}"
                               )
                 self.message_log(f"{header}\n"
@@ -462,7 +462,8 @@ class Strategy(StrategyBase):
         Checks the common conditions for stability in both live and backtest modes.
         """
         return (
-            self.grid_remove is None
+            self.operational_status
+            and self.grid_remove is None
             and not GRID_ONLY
             and not self.grid_update_started
             and not self.start_after_shift
@@ -694,7 +695,7 @@ class Strategy(StrategyBase):
                              f"For all cycles profit:\n"
                              f"First: {self.sum_profit_first}\n"
                              f"Second: {self.sum_profit_second}\n"
-                             f"Summary: {self.get_sum_profit}\n")
+                             f"Summary: {self.get_sum_profit()}\n")
         if self.first_run or MODE in ('T', 'TC'):
             self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
         #
@@ -2116,7 +2117,7 @@ class Strategy(StrategyBase):
             price_limit_rules=False
     ) -> int:
         """
-        Before place limit order check trade conditions and correct price
+        Before place limit order checking trade conditions and correct price
         """
         if self.command == 'stopped':
             return 0

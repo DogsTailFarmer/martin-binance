@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.4"
+__version__ = "3.0.6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -46,7 +46,8 @@ class Trade:
             self.stub = mr.MartinStub(self.channel)
             try:
                 client = await self.connect()
-            except UserWarning:
+            except UserWarning as ex:
+                logger.warning(ex)
                 client = None
                 self.channel.close()
                 await asyncio.sleep(random.randint(5, 30))
@@ -66,7 +67,7 @@ class Trade:
                 )
             )
         except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error.
+            pass  # Task cancellation should not be logged as an error
         except ConnectionRefusedError as ex:
             raise UserWarning(f"{ex}, reconnect...") from None
         except GRPCError as ex:
@@ -85,7 +86,7 @@ class Trade:
         kwargs['client_id'] = self.client.client_id
         kwargs['trade_id'] = self.trade_id
         try:
-            return await _request(_request_type(**kwargs))
+            res = await _request(_request_type(**kwargs))
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
@@ -101,6 +102,8 @@ class Trade:
             raise
         except Exception as ex:
             logger.error(f"Exception on send request {ex}")
+        else:
+            return res
 
     async def for_request(self, _request, _request_type, **kwargs):
         if not self.client:
