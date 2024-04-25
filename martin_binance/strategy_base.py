@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.6"
+__version__ = "3.0.6.post1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -51,7 +51,7 @@ else:
 
 color_init()
 
-RATE_LIMITER = HEARTBEAT * 5
+RATE_LIMITER = HEARTBEAT * (60 if prm.GRID_ONLY else 10)
 KLINES_LIM = 50  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and par.LOAD_LAST_STATE = 0
 TRADES_LIST_LIMIT = 50
@@ -1378,7 +1378,7 @@ class StrategyBase:
                                  log_level=logging.WARNING, color=Style.B_RED, tlg=True)
                 if status_code == Status.RESOURCE_EXHAUSTED:
                     # Decrease requests frequency
-                    self.rate_limiter += HEARTBEAT
+                    self.rate_limiter += HEARTBEAT * 5
                     self.message_log(f"RATE_LIMITER set to {self.rate_limiter}s", log_level=logging.WARNING)
                     await asyncio.sleep(ORDER_TIMEOUT)
                     try:

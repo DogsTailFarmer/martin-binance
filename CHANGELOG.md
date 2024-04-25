@@ -1,3 +1,7 @@
+## 3.0.6.post1 - 2024-04-xx
+### Update
+* `RATE_LIMITER` initial settings changed
+
 ## 3.0.6 - 2024-04-19
 ### Fix
 * Unattended cancelling keepalive tasks
