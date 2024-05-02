@@ -24,7 +24,11 @@ import ujson as json
 from martin_binance import LOG_PATH, TRIAL_PARAMS
 
 OPTIMIZER = Path(__file__).absolute()
-OPTIMIZER.chmod(OPTIMIZER.stat().st_mode | stat.S_IEXEC)
+try:
+    OPTIMIZER.chmod(OPTIMIZER.stat().st_mode | stat.S_IEXEC)
+except PermissionError:
+    pass  # if executed in Docker environment
+
 PARAMS_FLOAT = ['KBB']
 STRATEGY = None
 

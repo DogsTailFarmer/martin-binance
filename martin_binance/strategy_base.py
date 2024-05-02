@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.6.post1"
+__version__ = "3.0.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1031,6 +1031,7 @@ class StrategyBase:
     async def create_limit_order(self, _id: int, buy: bool, amount: str, price: str) -> None:
         self.wait_order_id.append(_id)
         _fetch_order = False
+        msg = None
         try:
             if prm.MODE in ('T', 'TC'):
                 ts = time.time()
@@ -1059,26 +1060,30 @@ class StrategyBase:
         except GRPCError as ex:
             status_code = ex.status
             if status_code == Status.FAILED_PRECONDITION:
+                self.message_log(f"Order {_id}: {status_code.name}, {ex.message}")
                 if _id in self.wait_order_id:
                     # Supress call strategy handler
                     self.wait_order_id.remove(_id)
             else:
                 _fetch_order = True
-            self.on_place_order_error(_id, f"{status_code.name}, {ex.message}")
+            msg = f"Create order {_id}: {status_code.name}, {ex.message}"
         except Exception as _ex:
             _fetch_order = True
-            self.message_log(f"Exception creating order {_id}: {_ex}")
+            msg = f"Exception creating order {_id}: {_ex}"
         else:
             if result:
                 await self.create_order_handler(_id, result)
             else:
                 _fetch_order = True
+                msg = f"Creating order {_id}: no result getting"
         finally:
             if prm.MODE in ('T', 'TC') and _fetch_order:
                 await asyncio.sleep(HEARTBEAT)
                 res = await self.fetch_order(0, str(_id), _filled_update_call=True)
                 if res.get('status') in ('NEW', 'PARTIALLY_FILLED', 'FILLED'):
                     await self.create_order_handler(_id, res)
+                else:
+                    self.on_place_order_error(_id, msg)
 
     async def create_order_handler(self, _id, result):
         # print(f"create_order_handler.result: {result}")

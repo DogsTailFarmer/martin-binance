@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.6"
+__version__ = "3.0.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -36,6 +36,15 @@ from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, any2str, Or
 from martin_binance.params import *
 
 O_DEC = Decimal()
+
+
+def get_mode_details(mode):
+    mode_mapping = {
+        'T': ("Trade", Style.B_WHITE),
+        'TC': ("Trade & Collect", Style.B_RED),
+        'S': ("Simulate", Style.GREEN)
+    }
+    return mode_mapping.get(mode, ("Unknown Mode", Style.RESET))
 
 
 class Strategy(StrategyBase):
@@ -167,9 +176,10 @@ class Strategy(StrategyBase):
             self.message_log(f"Mode for {'Buy' if self.cycle_buy else 'Sell'} {self.f_currency} by grid orders"
                              f" placement ON",
                              color=Style.B_WHITE)
-        self.message_log(f"This is {'Trade' if MODE == 'T' else ('Trade & Collect' if MODE == 'TC' else 'Simulate')}"
-                         f" mode",
-                         color=Style.B_WHITE if MODE == 'T' else (Style.B_RED if MODE == 'TC' else Style.GREEN))
+
+        mode_message, mode_color = get_mode_details(MODE)
+        self.message_log(f"This is {mode_message} mode", color=mode_color)
+
         if MODE == 'TC' and SELF_OPTIMIZATION:
             self.message_log("Auto update parameters mode!", log_level=logging.WARNING, color=Style.B_RED)
         # Calculate round float multiplier

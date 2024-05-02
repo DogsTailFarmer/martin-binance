@@ -1,6 +1,10 @@
-## 3.0.6.post1 - 2024-04-xx
+## 3.0.7 - 2024-05-02
+### Fix
+* `Docker`: server-client deployment functionality restored (`exchanges-wrapper` and `martin-binance`), also for Windows
+
 ### Update
 * `RATE_LIMITER` initial settings changed
+* Up requirements for exchanges-wrapper==2.1.12
 
 ## 3.0.6 - 2024-04-19
 ### Fix

@@ -1,0 +1,33 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="exchanges-wrapper" type="docker-deploy" factoryName="docker-image" editBeforeRun="true" server-name="Docker">
+    <deployment type="docker-image">
+      <settings>
+        <option name="imageTag" value="ghcr.io/dogstailfarmer/exchanges-wrapper:latest" />
+        <option name="containerName" value="exchanges-wrapper" />
+        <option name="commandLineOptions" value="-i -t -P" />
+        <option name="showCommandPreview" value="true" />
+        <option name="volumeBindings">
+          <list>
+            <DockerVolumeBindingImpl>
+              <option name="containerPath" value="$PROJECT_DIR$/../../../appuser/.MartinBinance" />
+              <option name="hostPath" value="$USER_HOME$/.MartinBinance" />
+            </DockerVolumeBindingImpl>
+          </list>
+        </option>
+      </settings>
+    </deployment>
+    <method v="2" />
+  </configuration>
+  <configuration default="false" name="martin-binance" type="docker-deploy" factoryName="docker-image" editBeforeRun="true" server-name="Docker">
+    <deployment type="docker-image">
+      <settings>
+        <option name="imageTag" value="martin-binance:last" />
+        <option name="command" value="$PROJECT_DIR$/../../../appuser/.MartinBinance/cli_7_BTCUSDT.py" />
+        <option name="containerName" value="7-BTCUSDT" />
+        <option name="commandLineOptions" value="-i -t -P --mount type=bind,source=$USER_HOME$/.MartinBinance,target=$PROJECT_DIR$/../../../appuser/.MartinBinance --network=host" />
+        <option name="showCommandPreview" value="true" />
+      </settings>
+    </deployment>
+    <method v="2" />
+  </configuration>
+</component>
