@@ -37,7 +37,7 @@ should be updated. Use templates for reference.
 > 
 >As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
 
-* Due to a limitation in the implementation of asyncio under Windows, this program cannot be executed. [Use Docker on Windows instead.](https://github.com/DogsTailFarmer/martin-binance/wiki/Quick-start#docker)
+* Due to a limitation in the implementation of asyncio under Windows, this program cannot be executed. [Use with Docker on Windows instead.](https://github.com/DogsTailFarmer/martin-binance/wiki/Quick-start#docker)
 
 ## References
 * Detailed information about use this strategy placed to [wiki](https://github.com/DogsTailFarmer/martin-binance/wiki)
