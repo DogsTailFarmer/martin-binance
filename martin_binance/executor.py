@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.7"
+__version__ = "3.0.8"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -106,7 +106,7 @@ class Strategy(StrategyBase):
         self.first_run = True  # -
         self.grid_only_restart = 0  # + Time to restart GRID_ONLY mode
         self.grid_remove = None  # + Flag when starting cancel grid orders
-        self.grid_update_started = None  # - Flag when grid update process started
+        self.grid_update_started = None  # + Flag when grid update process started
         self.last_ticker_update = 0  # -
         self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
         self.order_q = None  # + Adaptive order quantity
@@ -227,6 +227,7 @@ class Strategy(StrategyBase):
             'deposit_second': json.dumps(self.deposit_second),
             'grid_only_restart': json.dumps(self.grid_only_restart),
             'grid_remove': json.dumps(self.grid_remove),
+            'grid_update_started': json.dumps(self.grid_update_started),
             'initial_first': json.dumps(self.initial_first),
             'initial_reverse_first': json.dumps(self.initial_reverse_first),
             'initial_reverse_second': json.dumps(self.initial_reverse_second),
@@ -511,6 +512,7 @@ class Strategy(StrategyBase):
             self.command = json.loads(strategy_state.get('command'))
             self.grid_remove = json.loads(strategy_state.get('grid_remove', 'null'))
             self.grid_only_restart = json.loads(strategy_state.get('grid_only_restart', "0"))
+            self.grid_update_started = json.loads(strategy_state.get('grid_update_started', 'null'))
             #
             self.cycle_buy = json.loads(strategy_state.get('cycle_buy'))
             self.cycle_buy_count = json.loads(strategy_state.get('cycle_buy_count'))
@@ -585,6 +587,10 @@ class Strategy(StrategyBase):
             elif not grid_open_orders_len and self.orders_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                 self.place_grid_part()
+            elif self.grid_update_started and not self.orders_grid and not self.orders_hold and not self.orders_save:
+                self.message_log("Continue update grid", tlg=True)
+                self.grid_remove = True
+                self.cancel_grid()
             elif not self.orders_grid and not self.orders_hold and not self.orders_save and not self.tp_order_id:
                 self.message_log("Restore, Restart", tlg=True)
                 self.start()
