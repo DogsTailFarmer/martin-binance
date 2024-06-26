@@ -1,4 +1,8 @@
 ## 3.0.8 - 2024-06-26
+### Fix
+* Version compatibility
+
+## 3.0.8 - 2024-06-26
 ### Added new features
 * Continue interrupted grid update cycle after restart
 
