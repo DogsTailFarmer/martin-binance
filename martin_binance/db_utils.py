@@ -4,7 +4,7 @@ Functions for managing and saving data to a SQLite database from martin-binance 
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.3"
+__version__ = "3.0.9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -55,12 +55,6 @@ def db_management(exchange) -> None:
                 conn.commit()
             except sqlite3.Error as err:
                 logger.error(f"INSERT into t_exchange: {err}")
-    #
-    try:
-        conn.execute('UPDATE t_funds SET active = 0 WHERE active = 1')
-        conn.commit()
-    except sqlite3.Error as ex:
-        logger.error(f"Initialise t_funds failed: {ex}")
     conn.close()
 
 
@@ -103,7 +97,7 @@ def save_to_db(queue_to_db) -> None:
                                              data.get('KBB'),
                                              1,
                                              data.get('cycle_time'),
-                                             1))
+                                             0))
                 connection_analytic.commit()
             except sqlite3.Error as err:
                 result = False

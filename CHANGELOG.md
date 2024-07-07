@@ -1,8 +1,12 @@
+## 3.0.9 - 2024-07-07
+### Added new features
+* Updated `APY profit rating` Grafana report, used data from selected time range for APY calculation
+* Processing account replenishment in all states with increasing turnover
+
 ## 3.0.8 - 2024-06-26
 ### Fix
 * Version compatibility
 
-## 3.0.8 - 2024-06-26
 ### Added new features
 * Continue interrupted grid update cycle after restart
 

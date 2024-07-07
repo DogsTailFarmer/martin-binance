@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.0"
+__version__ = "3.0.9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -19,6 +19,7 @@ from requests import Session
 import toml
 import platform
 from prometheus_client import start_http_server, Gauge
+from concurrent.futures import ThreadPoolExecutor
 
 from martin_binance import Path, CONFIG_FILE, DB_FILE
 from exchanges_wrapper import CONFIG_FILE as SRV_CONFIG_FILE
@@ -52,10 +53,15 @@ VPS_NAME = config.get('vps_name')
 URL = config.get('url')
 API = config.get('api')
 request_delay = 60 / config.get('rate_limit')
-
 #  endregion
 
 CURRENCY_RATE_LAST_TIME = int(time.time())
+
+try:
+    SQL_CONN = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
+except sqlite3.Error as error:
+    SQL_CONN = None
+    print("SQLite error:", error)
 
 # region Metric declare
 STATUS_ALARM = Gauge("margin_alarm", "1 when not order", ['exchange', 'pair', 'vps_name'])
@@ -71,27 +77,29 @@ SUM_PROFIT_USD = Gauge("margin_sum_profit_usd", "sum profit on last rate on USD"
 CYCLE_COUNT = Gauge("margin_cycle_count", "cycle count", ['exchange', 'pair', 'vps_name'])
 BUY_COUNT = Gauge("margin_buy_count", "cycle buy count", ['exchange', 'pair', 'vps_name'])
 SELL_COUNT = Gauge("margin_sell_count", "cycle sell count", ['exchange', 'pair', 'vps_name'])
+
 BUY_TIME = Gauge("margin_buy_time", "cycle buy time", ['exchange', 'pair', 'vps_name'])
 SELL_TIME = Gauge("margin_sell_time", "cycle sell time", ['exchange', 'pair', 'vps_name'])
-
 BUY_INTEREST = Gauge("margin_buy_interest", "sum buy interest", ['exchange', 'pair', 'vps_name'])
 SELL_INTEREST = Gauge("margin_sell_interest", "sum sell interest", ['exchange', 'pair', 'vps_name'])
 
 F_BALANCE = Gauge("margin_f_balance", "first balance amount", ['exchange', 'pair', 'vps_name'])
 S_BALANCE = Gauge("margin_s_balance", "second balance amount", ['exchange', 'pair', 'vps_name'])
 TOTAL_BALANCE = Gauge("margin_balance", "total balance amount by last rate", ['exchange', 'pair', 'vps_name'])
-
 BALANCE_USD = Gauge("margin_balance_usd", "balance amount in USD", ['name', 'exchange', 'currency', 'vps_name'])
-
-# VPS control
-VPS_CPU = Gauge("margin_vps_cpu", "average cpu load", ['vps_name'])
-VPS_MEMORY = Gauge("margin_vps_memory", "average memory use in %", ['vps_name'])
 
 # Cycle parameters
 CYCLE_BUY = Gauge("margin_cycle_buy", "cycle buy", ['exchange', 'pair', 'vps_name'])
 OVER_PRICE = Gauge("margin_over_price", "over price", ['exchange', 'pair', 'vps_name'])
 F_DEPO = Gauge("margin_f_depo", "first depo", ['exchange', 'pair', 'vps_name'])
 S_DEPO = Gauge("margin_s_depo", "second depo", ['exchange', 'pair', 'vps_name'])
+
+# VPS control
+VPS_CPU = Gauge("margin_vps_cpu", "average cpu load", ['vps_name'])
+VPS_MEMORY = Gauge("margin_vps_memory", "average memory use in %", ['vps_name'])
+
+SET_ACTIVE = Gauge("margin_set_active", "mark rows as loaded and reset some metrics", ['vps_name'])
+SET_ACTIVE.labels(VPS_NAME).set_function(lambda: set_active())
 
 ''' Cycle parameters for future use
 PRICE_SHIFT = Gauge("margin_price_shift", "price shift", ['exchange', 'pair'])
@@ -104,6 +112,32 @@ KB = Gauge("margin_kb", "bollinger band k bottom", ['exchange', 'pair'])
 KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
 '''
 # endregion
+
+
+def set_active():
+    if PREPARED:
+        try:
+            SQL_CONN.execute('UPDATE t_funds SET active = 1 WHERE active = 0')
+            SQL_CONN.commit()
+        except sqlite3.Error as ex:
+            print(f"Update t_funds failed: {ex}")
+            return 0.0
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            executor.submit(reset)
+    return 1.0
+
+
+# noinspection PyProtectedMember
+def reset():
+    time.sleep(5)
+    metrics = [BUY_TIME, BUY_INTEREST, SELL_TIME, SELL_INTEREST]
+    for metric in metrics:
+        # noinspection PyUnresolvedReferences
+        label_names = metric._labelnames
+        label_values = metric._metrics.keys()
+        for label_value in label_values:
+            labels = dict(zip(label_names, label_value))
+            metric.labels(**labels).set(0.0)
 
 
 def get_rate(_currency_rate) -> {}:
@@ -140,11 +174,13 @@ def get_rate(_currency_rate) -> {}:
                 data = response.json()
                 price = data['data'][0]['quote'][_currency]['price'] or -1
         _currency_rate[currency] = price
-        time.sleep(request_delay)
+        # time.sleep(request_delay)
     return _currency_rate
 
 
 def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
+    global PREPARED
+    PREPARED = False
     global request_delay
     cursor = sql_conn.cursor()
     # Aggregate score for pair on exchange
@@ -184,6 +220,10 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
     F_DEPO.clear()
     S_DEPO.clear()
     OVER_PRICE.clear()
+    BUY_TIME.clear()
+    BUY_INTEREST.clear()
+    SELL_TIME.clear()
+    SELL_INTEREST.clear()
     #
     for row in records:
         # print(f"row: {row}")
@@ -192,8 +232,7 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
         f_currency = str(row[2])
         s_currency = str(row[3])
         pair = f"{f_currency}/{s_currency}"
-        cycle_count = int(row[4])
-        CYCLE_COUNT.labels(exchange, pair, VPS_NAME).set(cycle_count)
+        CYCLE_COUNT.labels(exchange, pair, VPS_NAME).set(int(row[4]))
         sum_f_profit = float(row[5])
         SUM_F_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_f_profit)
         sum_s_profit = float(row[6])
@@ -237,8 +276,9 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
             except ZeroDivisionError:
                 sum_profit_usd = -1
         SUM_PROFIT_USD.labels(exchange, pair, VPS_NAME).set(sum_profit_usd)
-        # Sum interest income and cycle count, calculated by each buy and sell cycle
-        cursor.execute('SELECT count(*), sum(100 * s_profit / s_depo), sum(cycle_time)\
+
+        # Cycle count, calculated by each buy and sell cycle
+        cursor.execute('SELECT count(*)\
                         FROM t_funds\
                         WHERE id_exchange=:id_exchange\
                         AND f_currency=:f_currency\
@@ -246,12 +286,8 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
                         AND cycle_buy = 1',
                        {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
         cycle_buy_row = cursor.fetchone()
-
         cycle_buy_count = int(cycle_buy_row[0]) if cycle_buy_row[0] else 0
-        cycle_buy_interest = float(cycle_buy_row[1]) if cycle_buy_row[1] else 0.0
-        cycle_buy_time = float(cycle_buy_row[2]) if cycle_buy_row[2] else 0.0
-
-        cursor.execute('SELECT count(*), sum(100 * f_profit / f_depo), sum(cycle_time)\
+        cursor.execute('SELECT count(*)\
                         FROM t_funds\
                         WHERE id_exchange=:id_exchange\
                         AND f_currency=:f_currency\
@@ -259,16 +295,37 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
                         AND cycle_buy = 0',
                        {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
         cycle_sell_row = cursor.fetchone()
-
         cycle_sell_count = int(cycle_sell_row[0]) if cycle_sell_row[0] else 0
-        cycle_sell_interest = float(cycle_sell_row[1]) if cycle_sell_row[1] else 0.0
-        cycle_sell_time = float(cycle_sell_row[2]) if cycle_sell_row[2] else 0.0
-
         BUY_COUNT.labels(exchange, pair, VPS_NAME).set(cycle_buy_count)
+        SELL_COUNT.labels(exchange, pair, VPS_NAME).set(cycle_sell_count)
+
+        # Sum income interest, calculated by each buy and sell cycle
+        cursor.execute('SELECT sum(100 * s_profit / s_depo), sum(cycle_time)\
+                        FROM t_funds\
+                        WHERE id_exchange=:id_exchange\
+                        AND f_currency=:f_currency\
+                        AND s_currency=:s_currency\
+                        AND cycle_buy = 1\
+                        AND active = 0',
+                       {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
+        cycle_buy_row = cursor.fetchone()
+        cycle_buy_interest = float(cycle_buy_row[0]) if cycle_buy_row[0] else 0.0
+        cycle_buy_time = float(cycle_buy_row[1]) if cycle_buy_row[1] else 0.0
+
+        cursor.execute('SELECT sum(100 * f_profit / f_depo), sum(cycle_time)\
+                        FROM t_funds\
+                        WHERE id_exchange=:id_exchange\
+                        AND f_currency=:f_currency\
+                        AND s_currency=:s_currency\
+                        AND cycle_buy = 0\
+                        AND active = 0',
+                       {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency})
+        cycle_sell_row = cursor.fetchone()
+        cycle_sell_interest = float(cycle_sell_row[0]) if cycle_sell_row[0] else 0.0
+        cycle_sell_time = float(cycle_sell_row[1]) if cycle_sell_row[1] else 0.0
+
         BUY_TIME.labels(exchange, pair, VPS_NAME).set(cycle_buy_time)
         BUY_INTEREST.labels(exchange, pair, VPS_NAME).set(cycle_buy_interest)
-
-        SELL_COUNT.labels(exchange, pair, VPS_NAME).set(cycle_sell_count)
         SELL_TIME.labels(exchange, pair, VPS_NAME).set(cycle_sell_time)
         SELL_INTEREST.labels(exchange, pair, VPS_NAME).set(cycle_sell_interest)
 
@@ -310,16 +367,13 @@ if __name__ == '__main__':
     # Start up the server to expose the metrics.
     currency_rate = {}
     start_http_server(PORT)
-    sqlite_connection = None
-    try:
-        sqlite_connection = sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
-    except sqlite3.Error as error:
-        print("SQLite error:", error)
     while True:
         try:
-            CURRENCY_RATE_LAST_TIME = db_handler(sqlite_connection, currency_rate, CURRENCY_RATE_LAST_TIME)
+            CURRENCY_RATE_LAST_TIME = db_handler(SQL_CONN, currency_rate, CURRENCY_RATE_LAST_TIME)
         except sqlite3.Error as error:
             print("DB operational error:", error)
+        else:
+            PREPARED = True
         VPS_CPU.labels(VPS_NAME).set(100 * psutil.getloadavg()[0] / psutil.cpu_count())
         #
         memory = psutil.virtual_memory()
