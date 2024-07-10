@@ -1,3 +1,11 @@
+## 3.0.10 - 2024-07-07
+### Fix
+* `on_balance_update_ex`: excessive recalculation of income when withdrawing funds
+
+### Update
+* Processing account replenishment in all states with increasing turnover
+* Dependency !!!!!!!
+
 ## 3.0.9 - 2024-07-07
 ### Added new features
 * Updated `APY profit rating` Grafana report, used data from selected time range for APY calculation
