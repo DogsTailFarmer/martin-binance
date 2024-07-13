@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.3"
+__version__ = "3.0.11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -41,6 +41,15 @@ ex.FEE_MAKER = Decimal('0.1')  # standard exchange Fee for maker
 ex.FEE_TAKER = Decimal('0.15')  # standard exchange Fee for taker
 ex.FEE_FIRST = False  # For example fee in BNB and BNB in pair, and it is base asset
 ex.FEE_SECOND = False  # For example fee in BNB and BNB in pair, and it is quote asset
+# Setting for auto deposit BNB on subaccount for fee payment. For Binance subaccount only.
+# See also https://github.com/DogsTailFarmer/martin-binance/wiki/How-it's-work#keeping-level-of-first-asset
+ex.FEE_BNB = {
+    'id_exchange': 0,                               # Where collected assets and keeping BNB volume
+    'symbol': 'BNB/USDT',                           # Specified on the source strategy (id_exchange above)
+    'email': 'sub-account@email.com',               # Email registered on this subaccount
+    'target_amount': '0',                           # BNB in USD equivalent, no less than min_notional
+    'tranche_volume': '0'                           # BNB in USD equivalent, no less than min_notional
+}
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction

@@ -1,15 +1,19 @@
+## 3.0.11 - 2024-07-13
+### Added new features
+* [Maintaining a supply of BNB in sub-account to pay fees](https://github.com/DogsTailFarmer/martin-binance/wiki/How-it's-work#maintaining-a-supply-of-bnb-in-a-sub-account-to-pay-fees)
+
 ## 3.0.10 - 2024-07-07
 ### Fix
 * `on_balance_update_ex`: excessive recalculation of income when withdrawing funds
 
 ### Update
 * Processing account replenishment in all states with increasing turnover
-* Dependency !!!!!!!
+* Dependency
 
 ## 3.0.9 - 2024-07-07
 ### Added new features
 * Updated `APY profit rating` Grafana report, used data from selected time range for APY calculation
-* Processing account replenishment in all states with increasing turnover
+* Processing [account replenishment](https://github.com/DogsTailFarmer/martin-binance/wiki/How-it's-work#deposit-and-withdraw-assets-on-active-strategy) in all states with increasing turnover
 
 ## 3.0.8 - 2024-06-26
 ### Fix

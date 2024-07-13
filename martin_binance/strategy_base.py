@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.7"
+__version__ = "3.0.11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -239,9 +239,12 @@ class StrategyBase:
             last = current_time
         return last
 
-    def transfer_to_master(self, symbol: str, amount: str):
+    def transfer_to(self, symbol: str, amount: str, email=None):
         if prm.MODE in ('T', 'TC'):
-            self.tasks_manage(self.transfer2master(symbol, amount))
+            if email:
+                self.tasks_manage(self.transfer2sub(email, symbol, amount))
+            else:
+                self.tasks_manage(self.transfer2master(symbol, amount))
 
     def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal) -> int:
         self.order_id += 1
@@ -599,17 +602,28 @@ class StrategyBase:
                 if res:
                     balances = list(map(json.loads, res.items))
                 # Refresh actual balance
-                try:
-                    balance_f = next(item for item in balances if item["asset"] == self.base_asset)
-                except StopIteration:
-                    balance_f = {'asset': self.base_asset, 'free': '0.0', 'locked': '0.0'}
-                try:
-                    balance_s = next(item for item in balances if item["asset"] == self.quote_asset)
-                except StopIteration:
-                    balance_s = {'asset': self.base_asset, 'free': '0.0', 'locked': '0.0'}
+                default_balance = {'free': '0.0', 'locked': '0.0'}
+
+                if self.exchange == 'binance' and \
+                        not (prm.FEE_FIRST and prm.FEE_SECOND) and (prm.FEE_MAKER or prm.FEE_TAKER):
+
+                    await self.fee_generate_bnb_request(balances, connection_analytic, default_balance)
+
+                balance_f = next(
+                    (item for item in balances if item["asset"] == self.base_asset),
+                    default_balance
+                ).copy()
+                balance_f.pop('asset', None)
+
+                balance_s = next(
+                    (item for item in balances if item["asset"] == self.quote_asset),
+                    default_balance
+                ).copy()
+                balance_s.pop('asset', None)
+
                 self.funds = {
-                    self.base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
-                    self.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}
+                    self.base_asset: balance_f,
+                    self.quote_asset: balance_s
                 }
                 # Get asset balances from Funding Wallet
                 funding_wallet = []
@@ -661,6 +675,46 @@ class StrategyBase:
                     cursor.close()
                     self.message_log(f"Refresh t_asset: {err}", log_level=logging.WARNING)
             await asyncio.sleep(delay)
+
+    async def fee_generate_bnb_request(self, balances, connection_analytic, default_balance):
+        bnb = next((item for item in balances if item["asset"] == 'BNB'), default_balance)['free']
+        _price = await self.send_request(
+            self.stub.fetch_symbol_price_ticker,
+            mr.MarketRequest,
+            symbol=prm.FEE_BNB['symbol'].replace('/', '')
+        )
+        price = _price.to_pydict()['price']
+        if (Decimal(bnb) * Decimal(price) <=
+                max(self.tcm.min_notional, Decimal(prm.FEE_BNB['target_amount']))):
+            bot_id = f"{prm.EXCHANGE[prm.FEE_BNB['id_exchange']]}, {prm.FEE_BNB['symbol']}"
+            cursor = connection_analytic.cursor()
+            try:
+                cursor.execute(
+                    'SELECT max(message_id), text_in\
+                     FROM t_control \
+                     WHERE bot_id=:bot_id',
+                    {'bot_id': bot_id}
+                )
+                row = cursor.fetchone()
+                cursor.close()
+            except sqlite3.Error as err:
+                cursor.close()
+                row = None
+                print(f"SELECT from t_control: {err}")
+
+            if row and (row[0] is None or prm.FEE_BNB['email'] not in row[1]):
+                msg = json.dumps(['BNB_request', prm.FEE_BNB])
+                try:
+                    connection_analytic.execute(
+                        'insert into t_control values(?,?,?,?)',
+                        ((row[0] or 0) + 1, msg, bot_id, None)
+                    )
+                    connection_analytic.commit()
+                except sqlite3.Error as err:
+                    logger.error(f"INSERT into t_control: {err}")
+                else:
+                    self.message_log(f"BNB request was generated from {bot_id} to {prm.FEE_BNB['email']}",
+                                     color=Style.BLUE)
 
     async def ask_exit(self):
         self.message_log("Got signal for exit", color=Style.MAGENTA)
@@ -899,6 +953,29 @@ class StrategyBase:
                 self.message_log(f"Sent {amount} {symbol} to main account", log_level=logging.INFO)
             else:
                 self.message_log(f"Not sent {amount} {symbol} to main account\n,{res.result}",
+                                 log_level=logging.WARNING)
+
+    async def transfer2sub(self, email: str, symbol: str, amount: str):
+        try:
+            res = await self.send_request(
+                self.stub.transfer_to_sub,
+                mr.MarketRequest,
+                symbol=symbol,
+                amount=amount,
+                data=email
+            )
+        except asyncio.CancelledError:
+            pass  # Task cancellation should not be logged as an error
+        except GRPCError as ex:
+            status_code = ex.status
+            self.message_log(f"Exception transfer {symbol} to subaccount: {status_code.name}, {ex.message}")
+        except Exception as _ex:
+            self.message_log(f"Exception transfer {symbol} to subaccount: {_ex}")
+        else:
+            if res.success:
+                self.message_log(f"Sent {amount} {symbol} to subaccount {email}", log_level=logging.INFO)
+            else:
+                self.message_log(f"Not sent {amount} {symbol} to subaccount {email}\n,{res.result}",
                                  log_level=logging.WARNING)
 
     async def buffered_funds(self, print_info: bool = True):

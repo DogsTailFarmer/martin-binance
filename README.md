@@ -26,7 +26,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* After update to `3.0.1`, the configuration files `cli_XX_AAABBB.py` for all running trading pairs
+* After update to `3.0.11`, the configuration files `cli_XX_AAABBB.py` for `Binance` trading pairs
 should be updated. Use templates for reference.
 
 * You cannot run multiple pairs with overlapping currencies on the same account!
@@ -37,7 +37,7 @@ should be updated. Use templates for reference.
 > 
 >As a result of the mutual impact on the operating balance sheet, the liquidity control system will block the work.
 
-* Due to a limitation in the implementation of asyncio under Windows, this program cannot be executed. [Use with Docker on Windows instead.](https://github.com/DogsTailFarmer/martin-binance/wiki/Quick-start#docker)
+* Due to a limitation in the implementation of asyncio under **Windows**, this program cannot be executed. [Use with Docker on Windows instead.](https://github.com/DogsTailFarmer/martin-binance/wiki/Quick-start#docker)
 
 ## References
 * Detailed information about use this strategy placed to [wiki](https://github.com/DogsTailFarmer/martin-binance/wiki)

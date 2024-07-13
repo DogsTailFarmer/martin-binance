@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.10"
+__version__ = "3.0.11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -310,7 +310,20 @@ class Strategy(StrategyBase):
                 row = None
                 print(f"SELECT from t_control: {err}")
             if row and row[0]:
-                self.command = row[1]
+                if 'BNB_request' in row[1]:
+                    params = json.loads(row[1])[1]
+                    self.transfer_to(
+                        'BNB',
+                        any2str(
+                            max(
+                                Decimal(params['tranche_volume']),
+                                self.get_trading_capability_manager().min_notional
+                            ) / self.get_buffered_ticker().last_price
+                        ),
+                        params['email']
+                    )
+                else:
+                    self.command = row[1]
                 # Remove applied command from .db
                 try:
                     self.connection_analytic.execute(
@@ -981,12 +994,12 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         if ff >= f2d(tcm.min_qty):
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE)
-            self.transfer_to_master(self.f_currency, any2str(ff))
+            self.transfer_to(self.f_currency, any2str(ff))
         else:
             ff = O_DEC
         if fs >= f2d(tcm.min_notional):
             self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE)
-            self.transfer_to_master(self.s_currency, any2str(fs))
+            self.transfer_to(self.s_currency, any2str(fs))
         else:
             fs = O_DEC
         return ff, fs
