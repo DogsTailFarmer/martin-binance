@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.11"
+__version__ = "3.0.12"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1825,13 +1825,13 @@ class Strategy(StrategyBase):
             self.message_log(f"For Reverse cycle set target return amount: {self.reverse_target_amount}"
                              f" with profit: {tp.get('profit')}%", color=Style.B_WHITE)
             self.debug_output()
+            self.reverse_price = self.get_buffered_ticker().last_price
             if (self.cycle_buy and trend_down) or (not self.cycle_buy and trend_up):
                 self.message_log('Start reverse cycle', tlg=True)
                 self.reverse = True
                 self.command = 'stop' if REVERSE_STOP else None
             else:
                 self.message_log('Hold reverse cycle', color=Style.B_WHITE)
-                self.reverse_price = self.get_buffered_ticker().last_price
                 self.reverse_hold = True
                 self.place_profit_order()
         if not self.reverse_hold:
@@ -2281,10 +2281,10 @@ class Strategy(StrategyBase):
                 if delta > 0:
                     self.shift_grid_threshold = None
                     deposit_add = self.round_truncate(delta * self.avg_rate, base=False)
+                    self.deposit_second += deposit_add
                     if self.reverse:
                         profit = (self.reverse_target_amount - self.reverse_init_amount) / self.reverse_init_amount
                         self.deposit_first += delta
-                        self.deposit_second += deposit_add
                         self.initial_reverse_second += deposit_add
                         self.reverse_init_amount += delta
                         self.reverse_target_amount = self.round_truncate(
@@ -2293,13 +2293,12 @@ class Strategy(StrategyBase):
                             _rounding=ROUND_CEILING
                         )
                     else:
-                        self.deposit_second += deposit_add
                         self.initial_second += deposit_add
 
                     self.update_sum_amount(-delta, -deposit_add)
                     self.place_profit_order()
-
-                self.initial_first += delta
+                else:
+                    self.initial_first += delta
         else:
             if asset == self.f_currency:
                 restart = True
@@ -2331,9 +2330,9 @@ class Strategy(StrategyBase):
                 if delta > 0:
                     self.shift_grid_threshold = None
                     deposit_add = self.round_truncate(delta / self.avg_rate, base=True)
+                    self.deposit_first += deposit_add
                     if self.reverse:
                         profit = (self.reverse_target_amount - self.reverse_init_amount) / self.reverse_init_amount
-                        self.deposit_first += deposit_add
                         self.deposit_second += delta
                         self.initial_reverse_first += deposit_add
                         self.reverse_init_amount += delta
@@ -2343,13 +2342,12 @@ class Strategy(StrategyBase):
                             _rounding=ROUND_CEILING
                             )
                     else:
-                        self.deposit_first += deposit_add
                         self.initial_first += deposit_add
 
                     self.update_sum_amount(-deposit_add, -delta)
                     self.place_profit_order()
-
-                self.initial_second += delta
+                else:
+                    self.initial_second += delta
 
         self.debug_output()
 

@@ -1,3 +1,9 @@
+## 3.0.12 - 2024-08-13
+### Fix
+* Calculating`self.reverse_price` before immediately starting Reverse cycle also. It can be used later in
+`on_balance_update_ex`
+* `on_balance_update_ex`: initial balance update logic
+ 
 ## 3.0.11 - 2024-07-13
 ### Added new features
 * [Maintaining a supply of BNB in sub-account to pay fees](https://github.com/DogsTailFarmer/martin-binance/wiki/How-it's-work#maintaining-a-supply-of-bnb-in-a-sub-account-to-pay-fees)
