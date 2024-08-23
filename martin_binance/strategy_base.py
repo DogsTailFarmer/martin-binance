@@ -351,19 +351,22 @@ class StrategyBase:
                         self.backtest_process = None
                         storage_name.replace(storage_name.with_name('study.db'))
                         if prm_best:
-                            _prm_best = dict(prm_best)
-                            self.message_log(
-                                f"Updating parameters from backtest,"
-                                f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
-                                color=Style.B_WHITE,
-                                tlg=True
-                            )
-                            for key, value in prm_best.items():
-                                self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
-                                setattr(
-                                    prm, key,
-                                    value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
+                            if '_value' in prm_best:
+                                _prm_best = dict(prm_best)
+                                self.message_log(
+                                    f"Updating parameters from backtest,"
+                                    f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
+                                    color=Style.B_WHITE,
+                                    tlg=True
                                 )
+                                for key, value in prm_best.items():
+                                    self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
+                                    setattr(
+                                        prm, key,
+                                        value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
+                                    )
+                            else:
+                                break
                         l_m = str(
                             datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)
                         ).rsplit('.')[0]
