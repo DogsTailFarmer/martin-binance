@@ -707,7 +707,13 @@ class Strategy(StrategyBase):
         #
         self.avg_rate = self.get_buffered_ticker().last_price
         if GRID_ONLY:
-            if USE_ALL_FUND and not self.start_after_shift:
+            if (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
+                    or not self.check_min_amount(for_tp=False):
+                self.first_run = False
+                self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
+                self.message_log("Waiting for conditions for conversion", color=Style.B_WHITE)
+                return
+            elif USE_ALL_FUND and not self.start_after_shift:
                 if self.cycle_buy:
                     self.deposit_second = fs
                     self.message_log(f'Use all available funds: {self.deposit_second} {self.s_currency}')
@@ -715,12 +721,6 @@ class Strategy(StrategyBase):
                     self.deposit_first = ff
                     self.message_log(f'Use all available funds: {self.deposit_first} {self.f_currency}')
                 self.save_init_assets(ff, fs)
-            elif (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
-                    or not self.check_min_amount(for_tp=False):
-                self.first_run = False
-                self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
-                self.message_log("Waiting for conditions for conversion", color=Style.B_WHITE)
-                return
         if not self.first_run and not self.start_after_shift and not self.reverse and not GRID_ONLY:
             self.message_log(f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
                              f"For all cycles profit:\n"
