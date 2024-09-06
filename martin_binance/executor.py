@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.12"
+__version__ = "3.0.13"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -134,13 +134,14 @@ class Strategy(StrategyBase):
         #
         schedule.every(5).minutes.do(self.event_grid_update)
         schedule.every(5).seconds.do(self.event_processing)
-        schedule.every().minute.at(":30").do(self.event_grid_only_release)
         schedule.every().minute.at(":35").do(self.event_update_tp)
         schedule.every(2).seconds.do(self.event_exec_command)
         if MODE in ('T', 'TC'):
             schedule.every().minute.at(":15").do(self.event_export_operational_status)
             schedule.every(10).seconds.do(self.event_get_command_tlg)
             schedule.every(6).seconds.do(self.event_report)
+            if GRID_ONLY and START_ON_BUY and AMOUNT_FIRST:
+                schedule.every().minute.at(":30").do(self.event_grid_only_release)
 
     def init(self, check_funds=True) -> None:
         self.message_log('Start Init section')
@@ -473,9 +474,10 @@ class Strategy(StrategyBase):
             self.place_profit_order()
 
     def event_grid_only_release(self):
-        if self.grid_only_restart and START_ON_BUY and AMOUNT_FIRST:
+        # Grid only mode for keep level of first asset
+        if self.grid_only_restart and self.get_time() > self.grid_only_restart:
             ff, fs, _, _ = self.get_free_assets(mode='available')
-            if self.get_time() > self.grid_only_restart and ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
+            if ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
                 self.grid_only_restart = 0
                 self.save_init_assets(ff, fs)
                 self.sum_amount_first = self.sum_amount_second = O_DEC
@@ -713,10 +715,10 @@ class Strategy(StrategyBase):
                     self.deposit_first = ff
                     self.message_log(f'Use all available funds: {self.deposit_first} {self.f_currency}')
                 self.save_init_assets(ff, fs)
-            if (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
+            elif (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
                     or not self.check_min_amount(for_tp=False):
                 self.first_run = False
-                self.grid_only_restart = self.get_time()
+                self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
                 self.message_log("Waiting for conditions for conversion", color=Style.B_WHITE)
                 return
         if not self.first_run and not self.start_after_shift and not self.reverse and not GRID_ONLY:
