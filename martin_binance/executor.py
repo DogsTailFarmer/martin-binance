@@ -140,7 +140,7 @@ class Strategy(StrategyBase):
             schedule.every().minute.at(":15").do(self.event_export_operational_status)
             schedule.every(10).seconds.do(self.event_get_command_tlg)
             schedule.every(6).seconds.do(self.event_report)
-            if GRID_ONLY and START_ON_BUY and AMOUNT_FIRST:
+            if GRID_ONLY:
                 schedule.every().minute.at(":30").do(self.event_grid_only_release)
 
     def init(self, check_funds=True) -> None:
@@ -149,6 +149,8 @@ class Strategy(StrategyBase):
             init_params_error = 'COLLECT_ASSETS and GRID_ONLY: one only allowed'
         elif PROFIT_MAX and PROFIT_MAX < PROFIT + FEE_TAKER:
             init_params_error = 'PROFIT_MAX'
+        elif USE_ALL_FUND and START_ON_BUY and AMOUNT_FIRST:
+            init_params_error = 'USE_ALL_FUND and (AMOUNT_FIRST and START_ON_BUY): one only allowed'
         else:
             init_params_error = None
         if init_params_error:
@@ -474,14 +476,29 @@ class Strategy(StrategyBase):
             self.place_profit_order()
 
     def event_grid_only_release(self):
-        # Grid only mode for keep level of first asset
-        if self.grid_only_restart and self.get_time() > self.grid_only_restart:
-            ff, fs, _, _ = self.get_free_assets(mode='available')
-            if ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
-                self.grid_only_restart = 0
-                self.save_init_assets(ff, fs)
-                self.sum_amount_first = self.sum_amount_second = O_DEC
-                self.start()
+        if self.grid_only_restart:
+            if USE_ALL_FUND:
+                if self.cycle_buy:
+                    ds = self.get_buffered_funds().get(self.s_currency, O_DEC)
+                    ds = self.round_truncate(ds.available if ds else O_DEC, base=False)
+                    df = ds / self.avg_rate
+                else:
+                    df = self.get_buffered_funds().get(self.f_currency, O_DEC)
+                    df = self.round_truncate(df.available if df else O_DEC, base=True)
+                    ds = O_DEC
+                if self.check_min_amount(amount=df):
+                    self.grid_only_restart = 0
+                    if self.cycle_buy:
+                        self.deposit_second = ds
+                    else:
+                        self.deposit_first = df
+                    self.start()
+            elif AMOUNT_FIRST and START_ON_BUY and self.get_time() > self.grid_only_restart:
+                ff, fs, _, _ = self.get_free_assets(mode='available')
+                if ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
+                    self.grid_only_restart = 0
+                    self.save_init_assets(ff, fs)
+                    self.start()
 
     def _common_stable_conditions(self):
         """
@@ -2136,8 +2153,7 @@ class Strategy(StrategyBase):
                     _amount = _tp['amount']
                 elif not for_tp:
                     _amount = self.deposit_first
-        _amount = self.round_truncate(_amount, base=True)
-        return _amount >= min_trade_amount
+        return self.round_truncate(_amount, base=True) >= min_trade_amount
 
     def place_limit_order_check(
             self,
