@@ -1,4 +1,4 @@
-exchanges-wrapper==2.1.18
+exchanges-wrapper==2.1.19
 jsonpickle==3.3.0
 psutil==6.0.0
 requests==2.32.3
@@ -13,11 +13,11 @@ future==1.0.0
 inquirer==3.4.0
 scikit-learn==1.5.2
 tqdm==4.66.5
-ujson
+ujson~=5.10.0
 orjson~=3.10.7
 pyarrow~=17.0.0
 shortuuid~=1.0.13
 numpy~=2.1.1
 scipy==1.14.1
-toml
+toml~=0.10.2
 schedule~=1.2.2

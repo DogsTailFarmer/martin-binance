@@ -1,3 +1,7 @@
+## 3.0.14- 2024-09-13
+### Fix
+* `pyproject.toml`
+
 ## 3.0.13post1 - 2024-09-13
 ### Fix
 * deepsource found style issue
