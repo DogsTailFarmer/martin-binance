@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.11"
+__version__ = "3.0.13"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -538,7 +538,7 @@ class StrategyBase:
                     if (
                         not self.wss_fire_up
                         and self.operational_status
-                        and (time.time() - last_exec_time > HEARTBEAT * 10)
+                        and (time.time() - last_exec_time > HEARTBEAT * 30)
                     ):
                         last_exec_time = time.time()
                         try:

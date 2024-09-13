@@ -1,4 +1,4 @@
-## 3.0.13 - 2024-08-xx
+## 3.0.13 - 2024-09-13
 ### Fix
 *  Sometimes get error from backtesting on Exit [#81](https://github.com/DogsTailFarmer/martin-binance/issues/81#issue-2465248437) 
 
@@ -6,7 +6,8 @@
 * (3.0.13b4) Handling missed asset update events of GRID_ONLY and USE_ALL_FUND modes
 
 ### Update
-* Up requirements for exchanges-wrapper==2.1.16
+* Up requirements for exchanges-wrapper==2.1.18
+* Dependency
 * Some minor improvement
 
 ## 3.0.12 - 2024-08-13

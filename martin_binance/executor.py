@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.13b4"
+__version__ = "3.0.13"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -491,7 +491,7 @@ class Strategy(StrategyBase):
                     if self.cycle_buy:
                         self.deposit_second = ds
                     else:
-                        self.deposit_first = df
+                        self.deposit_first = self.round_truncate(df, base=True)
                     self.start()
             elif AMOUNT_FIRST and START_ON_BUY and self.get_time() > self.grid_only_restart:
                 ff, fs, _, _ = self.get_free_assets(mode='available')
