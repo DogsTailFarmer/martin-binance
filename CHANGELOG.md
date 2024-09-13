@@ -1,3 +1,7 @@
+## 3.0.13post1 - 2024-09-13
+### Fix
+* deepsource found style issue
+
 ## 3.0.13 - 2024-09-13
 ### Fix
 *  Sometimes get error from backtesting on Exit [#81](https://github.com/DogsTailFarmer/martin-binance/issues/81#issue-2465248437) 
