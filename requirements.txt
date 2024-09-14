@@ -1,4 +1,4 @@
-exchanges-wrapper==2.1.19
+exchanges-wrapper==2.1.20
 jsonpickle==3.3.0
 psutil==6.0.0
 requests==2.32.3
@@ -21,3 +21,4 @@ numpy~=2.1.1
 scipy==1.14.1
 toml~=0.10.2
 schedule~=1.2.2
+betterproto==2.0.0b6

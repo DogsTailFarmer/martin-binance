@@ -1,3 +1,8 @@
+## 3.0.15- 2024-09-14
+### Update
+* Up requirements for exchanges-wrapper==2.1.20
+* Add `betterproto` to requirements
+
 ## 3.0.14- 2024-09-13
 ### Fix
 * `pyproject.toml`
