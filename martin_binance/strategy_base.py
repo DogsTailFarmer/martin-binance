@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.13"
+__version__ = "3.0.16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -43,6 +43,7 @@ from martin_binance.backtest.optimizer import OPTIMIZER, PARAMS_FLOAT
 from martin_binance.client import Trade
 from martin_binance.lib import Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, \
     any2str, PrivateTrade, Order, convert_from_minute, OrderUpdate, load_file, load_last_state, Klines
+from martin_binance.params import SAVE_ASSET
 
 if prm.MODE == 'S':
     logger = logging.getLogger('logger_S')
@@ -1754,7 +1755,7 @@ class StrategyBase:
                 await self.wss_init()
                 self.tasks_manage(save_to_csv())
                 self.tasks_manage(self.buffered_orders(), add_done_callback=False)
-                if self.session.client.real_market:
+                if self.session.client.real_market and SAVE_ASSET:
                     self.tasks_manage(self.save_asset(), add_done_callback=False)
                 if prm.MODE == 'TC':
                     self.tasks_manage(self.backtest_control(), add_done_callback=False)

@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.11"
+__version__ = "3.0.16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -50,6 +50,7 @@ ex.FEE_BNB = {
     'target_amount': '0',                           # BNB in USD equivalent, no less than min_notional
     'tranche_volume': '0'                           # BNB in USD equivalent, no less than min_notional
 }
+ex.SAVE_ASSET = True  # Save account asset list and value in funds_rate.db
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction

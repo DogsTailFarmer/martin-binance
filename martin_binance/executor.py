@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.13post1"
+__version__ = "3.0.16"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -47,6 +47,7 @@ def get_mode_details(mode):
     return mode_mapping.get(mode, ("Unknown Mode", Style.RESET))
 
 
+# noinspection PyTypeChecker
 class Strategy(StrategyBase):
     def __init__(self, call_super=True):
         if call_super:
@@ -674,7 +675,6 @@ class Strategy(StrategyBase):
                     _ff = ff - profit_f
                     _fs = fs
             if go_trade:
-                self.wait_refunding_for_start = False
                 if MODE in ('T', 'TC') and not GRID_ONLY:
                     if self.cycle_buy:
                         df = O_DEC
@@ -722,6 +722,7 @@ class Strategy(StrategyBase):
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
         #
+        self.wait_refunding_for_start = False
         self.avg_rate = self.get_buffered_ticker().last_price
         if GRID_ONLY:
             if (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
@@ -761,40 +762,41 @@ class Strategy(StrategyBase):
             self.command = 'stopped'
             self.start_collect = 1
             self.message_log('Stop, waiting manual action', tlg=True)
+            return
+
+        self.message_log(f"Number of unreachable objects collected by GC: {gc.collect(generation=2)}")
+        if self.first_run or self.restart:
+            self.message_log(f"Initial first: {ff}, second: {fs}", color=Style.B_WHITE)
+        self.restart = None
+        # Init variable
+        self.profit_first = O_DEC
+        self.profit_second = O_DEC
+        self.over_price = OVER_PRICE
+        self.order_q = ORDER_Q
+        self.grid_update_started = None
+        #
+        start_cycle_output = not self.start_after_shift or self.first_run
+        if self.cycle_buy:
+            amount = self.deposit_second
+            if start_cycle_output:
+                self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
+                                 f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.s_currency} depo\n"
+                                 f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
         else:
-            self.message_log(f"Number of unreachable objects collected by GC: {gc.collect(generation=2)}")
-            if self.first_run or self.restart:
-                self.message_log(f"Initial first: {ff}, second: {fs}", color=Style.B_WHITE)
-            self.restart = None
-            # Init variable
-            self.profit_first = O_DEC
-            self.profit_second = O_DEC
-            self.over_price = OVER_PRICE
-            self.order_q = ORDER_Q
-            self.grid_update_started = None
-            #
-            start_cycle_output = not self.start_after_shift or self.first_run
-            if self.cycle_buy:
-                amount = self.deposit_second
-                if start_cycle_output:
-                    self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
-                                     f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.s_currency} depo\n"
-                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
-            else:
-                amount = self.deposit_first
-                if start_cycle_output:
-                    self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
-                                     f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
-                                     f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
-            #
-            if self.reverse:
-                self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
-                                 color=Style.B_WHITE)
-            self.debug_output()
-            if MODE in ('TC', 'S') and self.start_collect is None:
-                self.start_collect = True
-            self.first_run = False
-            self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
+            amount = self.deposit_first
+            if start_cycle_output:
+                self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
+                                 f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
+                                 f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
+        #
+        if self.reverse:
+            self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
+                             color=Style.B_WHITE)
+        self.debug_output()
+        if MODE in ('TC', 'S') and self.start_collect is None:
+            self.start_collect = True
+        self.first_run = False
+        self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
 
     def stop(self) -> None:
         self.message_log('Stop')
@@ -2390,6 +2392,7 @@ class Strategy(StrategyBase):
                 tf = ff.total_for_currency if ff else O_DEC
                 go_trade = tf >= (self.initial_reverse_first if self.reverse else self.initial_first)
             if go_trade:
+                self.wait_refunding_for_start = False
                 self.message_log("Started after receipt of funds")
                 self.start()
                 return

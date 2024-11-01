@@ -1,9 +1,14 @@
-## 3.0.15- 2024-09-14
+## 3.0.16 - 2024-11-01
+### Fix
+* Unnecessary restart when updating assets
+* Add parameter `SAVE_ASSET`, to selectively suppress this [feature](https://github.com/DogsTailFarmer/martin-binance/wiki/How-it's-work#save-data-for-external-analytics)
+
+## 3.0.15 - 2024-09-14
 ### Update
 * Up requirements for exchanges-wrapper==2.1.20
 * Add `betterproto` to requirements
 
-## 3.0.14- 2024-09-13
+## 3.0.14 - 2024-09-13
 ### Fix
 * `pyproject.toml`
 
