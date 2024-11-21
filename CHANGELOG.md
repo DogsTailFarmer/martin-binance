@@ -1,3 +1,14 @@
+## 3.0.17 - 2024-11-xx
+### Fix
+* Restored reverse_price value if it is omitted
+* `GRID_ONLY` mode: incorrect check of minimum trading volume
+
+### Added new features
+* `funds_rate_exporter.py`: add export data to IPv6 interface
+
+### Update
+* Dependency: bump requirements
+
 ## 3.0.16 - 2024-11-01
 ### Fix
 * Unnecessary restart when updating assets

@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.9"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -366,7 +366,7 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
 if __name__ == '__main__':
     # Start up the server to expose the metrics.
     currency_rate = {}
-    start_http_server(PORT)
+    start_http_server(PORT, addr='::')
     while True:
         try:
             CURRENCY_RATE_LAST_TIME = db_handler(SQL_CONN, currency_rate, CURRENCY_RATE_LAST_TIME)

@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.16"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -357,11 +357,7 @@ class Strategy(StrategyBase):
                 self.command = None
             last_price = self.get_buffered_ticker().last_price
             ticker_update = int(self.get_time()) - self.last_ticker_update
-            if self.cycle_time:
-                ct = str(datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time).rsplit('.')[0]
-            else:
-                self.message_log("save_strategy_state: cycle_time is None!", log_level=logging.DEBUG)
-                ct = str(datetime.now(timezone.utc)).rsplit('.')[0]
+            ct = str(datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time).rsplit('.')[0]
             if self.command == 'stopped':
                 self.message_log("Strategy stopped. Need manual action", tlg=True)
             elif self.grid_hold or self.tp_order_hold:
@@ -577,10 +573,17 @@ class Strategy(StrategyBase):
             self.reverse = json.loads(strategy_state.get('reverse'))
             self.reverse_hold = json.loads(strategy_state.get('reverse_hold'))
             self.reverse_init_amount = f2d(json.loads(strategy_state.get('reverse_init_amount')))
+            self.reverse_target_amount = f2d(json.loads(strategy_state.get('reverse_target_amount')))
+
             self.reverse_price = json.loads(strategy_state.get('reverse_price'))
             if self.reverse_price:
                 self.reverse_price = f2d(self.reverse_price)
-            self.reverse_target_amount = f2d(json.loads(strategy_state.get('reverse_target_amount')))
+            elif self.reverse:
+                if self.cycle_buy:
+                    self.reverse_price = self.deposit_second / self.reverse_target_amount
+                else:
+                    self.reverse_price = self.reverse_target_amount / self.deposit_first
+
             self.shift_grid_threshold = json.loads(strategy_state.get('shift_grid_threshold'))
             if self.shift_grid_threshold:
                 self.shift_grid_threshold = f2d(self.shift_grid_threshold)
@@ -724,21 +727,21 @@ class Strategy(StrategyBase):
         #
         self.wait_refunding_for_start = False
         self.avg_rate = self.get_buffered_ticker().last_price
+
         if GRID_ONLY:
+            if USE_ALL_FUND and not self.start_after_shift:
+                if self.cycle_buy:
+                    self.deposit_second = fs
+                else:
+                    self.deposit_first = ff
+                self.save_init_assets(ff, fs)
             if (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
                     or not self.check_min_amount(for_tp=False):
                 self.first_run = False
                 self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
                 self.message_log("Waiting for conditions for conversion", color=Style.B_WHITE)
                 return
-            if USE_ALL_FUND and not self.start_after_shift:
-                if self.cycle_buy:
-                    self.deposit_second = fs
-                    self.message_log(f'Use all available funds: {self.deposit_second} {self.s_currency}')
-                else:
-                    self.deposit_first = ff
-                    self.message_log(f'Use all available funds: {self.deposit_first} {self.f_currency}')
-                self.save_init_assets(ff, fs)
+
         if not self.first_run and not self.start_after_shift and not self.reverse and not GRID_ONLY:
             self.message_log(f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
                              f"For all cycles profit:\n"
@@ -2598,7 +2601,7 @@ class Strategy(StrategyBase):
                 elif GRID_ONLY or not self.shift_grid_threshold:
                     self.place_grid_part()
             if not self.orders_hold and not self.orders_init:
-                self.message_log('All grid orders place successfully', color=Style.B_WHITE)
+                self.message_log('All grid orders have been successfully placed', color=Style.B_WHITE)
         elif place_order_id == self.tp_wait_id:
             self.tp_wait_id = None
             self.tp_order_id = order.id

@@ -95,7 +95,7 @@ class StrategyBase:
         self.ticker = {}
         self.funds = {}
         self.order_book = {}
-        self.order_id = int(datetime.now().strftime("%S%M")) * 1000
+        self.order_id = int(datetime.now().strftime("%f%S%M"))
         self.wait_order_id = []  # List of placed orders for time-out detect
         self.canceled_order_id = []  # List canceled orders for time-out detect
         self.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
@@ -157,7 +157,7 @@ class StrategyBase:
         self.ticker = {}
         self.funds = {}
         self.order_book = {}
-        self.order_id = int(datetime.now().strftime("%S%M")) * 1000
+        self.order_id = int(datetime.now().strftime("%f%S%M"))
         self.wait_order_id = []  # List of placed orders for time-out detect
         self.canceled_order_id = []  # List canceled orders  for time-out detect
         self.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
@@ -345,6 +345,7 @@ class StrategyBase:
                             _res = stdout.splitlines()
                         if _res:
                             try:
+                                # noinspection PyTypeChecker
                                 prm_best = orjson.loads(_res[0])
                             except orjson.JSONDecodeError:
                                 self.message_log(f"Backtest control: response {_res}", log_level=logging.ERROR)
@@ -368,6 +369,7 @@ class StrategyBase:
                                     )
                             else:
                                 break
+                        # noinspection PyTypeChecker
                         l_m = str(
                             datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)
                         ).rsplit('.')[0]
@@ -438,6 +440,7 @@ class StrategyBase:
         # Save klines snapshot
         if _klines := self.klines:
             with open(Path(self.session_root, "raw", "klines.json"), 'w') as f:
+                # noinspection PyTypeChecker
                 json.dump(_klines, f)
 
         # Finalize candles files
@@ -533,6 +536,7 @@ class StrategyBase:
                     if prm.LAST_STATE_FILE.exists():
                         prm.LAST_STATE_FILE.replace(prm.LAST_STATE_FILE.with_suffix('.prev'))
                     with prm.LAST_STATE_FILE.open(mode='w') as outfile:
+                        # noinspection PyTypeChecker
                         json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     #
                     update_max_queue_size = False
@@ -1886,25 +1890,20 @@ def load_from_csv() -> []:
     file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
     trades = []
     if file_name.exists() and file_name.stat().st_size:
-        row_count = len(pd.read_csv(file_name, usecols=[0]).index)
-        with open(file_name, "r") as csvfile:
-            reader = csv.reader(csvfile)
-            try:
-                [next(reader) for _ in range(row_count - TRADES_LIST_LIMIT)]
-            except StopIteration:
-                pass
-            for row in reader:
-                if row[0] in ('TRADE', 'TRADE_BY_MARKET'):
-                    trade = {
-                        "time": row[1],
-                        "isBuyer": row[2] == 'BUY',
-                        "isMaker": row[0] == 'TRADE',
-                        "orderId": row[3],
-                        "id": row[5],
-                        "qty": row[10],
-                        "price": row[11],
-                    }
-                    trades.append(trade)
+        # noinspection PyTypeChecker
+        df = pd.read_csv(file_name, usecols=[0, 1, 2, 3, 5, 10, 11])
+        for index, row in df.tail(TRADES_LIST_LIMIT).iterrows():
+            if row.iloc[0] in ('TRADE', 'TRADE_BY_MARKET'):
+                trade = {
+                    "time": row.iloc[1],
+                    "isBuyer": row.iloc[2] == 'BUY',
+                    "isMaker": row.iloc[0] == 'TRADE',
+                    "orderId": row.iloc[3],
+                    "id": row.iloc[4],
+                    "qty": row.iloc[5],
+                    "price": row.iloc[6],
+                }
+                trades.append(trade)
     return trades
 
 
