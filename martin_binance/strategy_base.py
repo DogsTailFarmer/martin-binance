@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.16"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1890,20 +1890,27 @@ def load_from_csv() -> []:
     file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
     trades = []
     if file_name.exists() and file_name.stat().st_size:
-        # noinspection PyTypeChecker
-        df = pd.read_csv(file_name, usecols=[0, 1, 2, 3, 5, 10, 11])
-        for index, row in df.tail(TRADES_LIST_LIMIT).iterrows():
-            if row.iloc[0] in ('TRADE', 'TRADE_BY_MARKET'):
-                trade = {
-                    "time": row.iloc[1],
-                    "isBuyer": row.iloc[2] == 'BUY',
-                    "isMaker": row.iloc[0] == 'TRADE',
-                    "orderId": row.iloc[3],
-                    "id": row.iloc[4],
-                    "qty": row.iloc[5],
-                    "price": row.iloc[6],
-                }
-                trades.append(trade)
+        data = []
+        with open(file_name, 'r') as f:
+            for line in f:
+                values = line.strip().split(',')
+                if len(values) == 12:
+                    data.append(values)
+
+        df = pd.DataFrame(data).tail(TRADES_LIST_LIMIT)
+
+        for index, row in df.iterrows():
+            trade = {
+                "time": row.iloc[1],
+                "isBuyer": row.iloc[2] == 'BUY',
+                "isMaker": row.iloc[0] == 'TRADE',
+                "orderId": row.iloc[3],
+                "id": row.iloc[5],
+                "qty": row.iloc[10],
+                "price": row.iloc[11],
+            }
+            trades.append(trade)
+
     return trades
 
 

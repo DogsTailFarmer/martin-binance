@@ -26,8 +26,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* After update to `3.0.11`, the configuration files `cli_XX_AAABBB.py` for `Binance` trading pairs
-should be updated. Use templates for reference.
+* After update to `3.0.17`, the configuration file `exch_srv_cfg.toml` for [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper) must be updated. [Use templates for reference.](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/exchanges_wrapper/exch_srv_cfg.toml.template)
 
 * You cannot run multiple pairs with overlapping currencies on the same account!
 

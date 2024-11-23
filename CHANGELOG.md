@@ -7,7 +7,7 @@
 * `funds_rate_exporter.py`: add export data to IPv6 interface
 
 ### Update
-* Dependency: bump requirements
+* Bump requirements
 
 ## 3.0.16 - 2024-11-01
 ### Fix
