@@ -3,6 +3,7 @@
 * Restored reverse_price value if it is omitted
 * `GRID_ONLY` mode: incorrect check of minimum trading volume
 * Erroneous correction of the opposite coin when withdrawing in a reverse cycle is excluded
+* Restarting a session in case of network failures when sharing a client between pairs
 
 ### Added new features
 * `funds_rate_exporter.py`: add export data to IPv6 interface

@@ -42,7 +42,13 @@ def telegram(queue_to_tlg, _bot_id, url, token, channel_id, db_file, stop_tlg, i
             _data['reply_markup'] = keyboard
         _res = None
         try:
+
+            # print(f"requests_post._method: {_method}, _data: {_data}")
+
             _res = session.post(_method, data=_data)
+
+            # print(f"requests_post._res: {_res}")
+
         except requests.exceptions.RetryError as _exc:
             logger.error(f"Telegram: {_exc}")
         except Exception as _exc:
@@ -169,7 +175,7 @@ def telegram(queue_to_tlg, _bot_id, url, token, channel_id, db_file, stop_tlg, i
             break
         except queue.Empty:
             # Get external command from Telegram bot
-            updates = telegram_get(offset_id)
+            updates = []  # telegram_get(offset_id)
             if not updates:
                 continue
             offset_id = updates[-1].get('update_id') + 1

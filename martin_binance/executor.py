@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17rc3"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -727,6 +727,8 @@ class Strategy(StrategyBase):
         #
         self.wait_refunding_for_start = False
         self.avg_rate = self.get_buffered_ticker().last_price
+        if self.first_run or MODE in ('T', 'TC'):
+            self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if GRID_ONLY:
             if USE_ALL_FUND and not self.start_after_shift:
@@ -737,7 +739,9 @@ class Strategy(StrategyBase):
                 self.save_init_assets(ff, fs)
             if (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
                     or not self.check_min_amount(for_tp=False):
-                self.first_run = False
+                if self.first_run:
+                    self.message_log("Grid only mode started", tlg=True)
+                    self.first_run = False
                 self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
                 self.message_log("Waiting for conditions for conversion", color=Style.B_WHITE)
                 return
@@ -748,8 +752,7 @@ class Strategy(StrategyBase):
                              f"First: {self.sum_profit_first}\n"
                              f"Second: {self.sum_profit_second}\n"
                              f"Summary: {self.get_sum_profit()}\n")
-        if self.first_run or MODE in ('T', 'TC'):
-            self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
+
         #
         memory = psutil.virtual_memory()
         swap = psutil.swap_memory()

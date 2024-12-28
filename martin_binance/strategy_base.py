@@ -527,6 +527,7 @@ class StrategyBase:
         # print(f"tik-tak:' {int(time.time() * 1000)}")
         last_exec_time = time.time()
         while True:
+            # print(f"tik-tak:' {int(time.time() * 1000)}")
             try:
                 self.refresh_scheduler()
                 if prm.MODE in ('T', 'TC'):
@@ -569,7 +570,7 @@ class StrategyBase:
                     #
                     if self.wss_fire_up:
                         try:
-                            if await self.session.get_client():
+                            if self.session.client:
                                 self.update_vars(self.session)
                                 await self.send_request(
                                     self.stub.stop_stream,
@@ -1210,7 +1211,7 @@ class StrategyBase:
                 self.on_balance_update_ex(_res)
         except Exception as ex:
             self.message_log(f"Exception on WSS, on_balance_update loop closed: {ex}", log_level=logging.WARNING)
-            self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
+            # self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
             self.wss_fire_up = True
 
     async def on_order_update(self):
@@ -1469,13 +1470,13 @@ class StrategyBase:
                 if status_code == Status.RESOURCE_EXHAUSTED:
                     # Decrease requests frequency
                     self.rate_limiter += HEARTBEAT * 5
-                    self.message_log(f"RATE_LIMITER set to {self.rate_limiter}s", log_level=logging.WARNING)
+                    self.message_log(f"Trying set RATE_LIMITER to {self.rate_limiter}s", log_level=logging.WARNING)
                     await asyncio.sleep(ORDER_TIMEOUT)
                     try:
                         await self.send_request(self.stub.reset_rate_limit, mr.OpenClientConnectionId,
                                                 rate_limiter=self.rate_limiter)
                     except Exception as ex_4:
-                        self.message_log(f"Exception buffered_orders 4:ResetRateLimit: {ex_4}",
+                        self.message_log(f"Exception buffered_orders 4: Set RATE_LIMITER failed: {ex_4}",
                                          log_level=logging.WARNING)
                 else:
                     restore = True
@@ -1537,13 +1538,13 @@ class StrategyBase:
                 await self.wait_wss_init()
         else:
             self.message_log("Init WSS failed, retry", log_level=logging.WARNING)
-            await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))
+            await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))  # /NOSONAR
             self.wss_fire_up = True
 
     def task_cancel(self):
         [task.cancel() for task in self.tasks if not task.done() and task.get_name() == 'wss']
 
-    async def main(self, _symbol):
+    async def main(self, _symbol):  # /NOSONAR
         restore_state = None
         last_state = {}
         active_orders = []
@@ -1768,7 +1769,7 @@ class StrategyBase:
 
             self.tasks_manage(self.heartbeat(self.session), add_done_callback=False)
 
-        except (KeyboardInterrupt, SystemExit):
+        except (KeyboardInterrupt, SystemExit):  # /NOSONAR
             # noinspection PyProtectedMember, PyUnresolvedReferences
             os._exit(1)
 

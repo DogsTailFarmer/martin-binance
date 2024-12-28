@@ -21,7 +21,7 @@ from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
 logger = logging.getLogger('logger.client')
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
-stream_handler.setLevel(logging.WARNING)
+stream_handler.setLevel(logging.INFO)
 logger.addHandler(stream_handler)
 
 
@@ -35,21 +35,37 @@ class Trade:
         self.client = None
         self.wait_connection = False
         self.trade_id = shortuuid.uuid()
+        self.reconnect = True
+
+    async def kill_client(self):
+        logger.warning("Kill client")
+        await asyncio.sleep(30)
+        logger.warning(f"Kill client: {self.client}")
+        self.client = None
+        logger.warning("Client was died")
 
     async def get_client(self):
+
+        if self.stub is None:
+            # asyncio.create_task(self.kill_client())
+            pass
+
         if self.wait_connection:
             return False
         self.wait_connection = True
         client = None
         while client is None:
-            self.channel = Channel('127.0.0.1', 50051)
-            self.stub = mr.MartinStub(self.channel)
+            if self.reconnect:
+                if self.stub:
+                    self.channel.close()
+                self.channel = Channel('127.0.0.1', 50051)
+                self.stub = mr.MartinStub(self.channel)
+                self.reconnect = False
             try:
                 client = await self.connect()
             except UserWarning as ex:
                 logger.warning(ex)
                 client = None
-                self.channel.close()
                 await asyncio.sleep(random.randint(5, 30))
             else:
                 self.client = client
@@ -69,20 +85,22 @@ class Trade:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except ConnectionRefusedError as ex:
+            self.reconnect = True
             raise UserWarning(f"{ex}, reconnect...") from None
         except GRPCError as ex:
             status_code = ex.status
-            logger.warning(f"Exception on register client: {status_code.name}, {ex.message}")
             if status_code == Status.FAILED_PRECONDITION:
                 raise SystemExit(1) from ex
-            raise UserWarning
+            raise UserWarning(f"Exception on register client: {status_code.name}, {ex.message}")
         else:
             logger.info(f"gRPC session started for client_id: {_client.client_id}, trade_id: {self.trade_id}")
             return _client
 
     async def send_request(self, _request, _request_type, **kwargs):
         if not self.client:
-            raise UserWarning("Send gRPC request failed, not active client session")
+            logger.warning("Send gRPC request failed, not active client session, restart")
+            if not await self.get_client():
+                raise UserWarning("Connection to gRPC server in progress...")
         kwargs['client_id'] = self.client.client_id
         kwargs['trade_id'] = self.trade_id
         try:
@@ -90,8 +108,10 @@ class Trade:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
+            self.reconnect = True
             raise UserWarning("Have not connection to gRPC server")
         except ConnectionRefusedError:
+            self.reconnect = True
             raise UserWarning("Connection to gRPC server broken")
         except GRPCError as ex:
             status_code = ex.status
