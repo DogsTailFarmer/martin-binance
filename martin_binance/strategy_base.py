@@ -1496,6 +1496,7 @@ class StrategyBase:
             else:
                 if res.success:
                     self.operational_status = True
+                    self.message_log("WSS started")
 
     def tasks_manage(self, coro, name=None, add_done_callback=True):
         _t = asyncio.create_task(coro, name=name)
