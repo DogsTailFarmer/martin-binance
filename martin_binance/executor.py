@@ -2,9 +2,9 @@
 Cyclic grid strategy based on martingale
 """
 __author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
+__copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.17rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -30,10 +30,9 @@ from typing import Dict
 
 from martin_binance import DB_FILE
 from martin_binance.db_utils import db_management, save_to_db
-from martin_binance.telegram_utils import telegram
 from martin_binance.strategy_base import StrategyBase, __version__ as msb_ver
 from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, any2str, Order, OrderUpdate, Orders, f2d, solve
-from martin_binance.params import *
+from martin_binance.params import *  # NOSONAR python:S2208
 
 O_DEC = Decimal()
 
@@ -113,8 +112,6 @@ class Strategy(StrategyBase):
         self.order_q = None  # + Adaptive order quantity
         self.over_price = None  # + Adaptive over price
         self.pr_db = None  # - Process for save data to .db
-        self.pr_tlg = None  # - Process for sending message to Telegram
-        self.pr_tlg_control = None  # - Process for get command from Telegram
         self.profit_first = O_DEC  # + Cycle profit
         self.profit_second = O_DEC  # + Cycle profit
         self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
@@ -139,7 +136,7 @@ class Strategy(StrategyBase):
         schedule.every(2).seconds.do(self.event_exec_command)
         if MODE in ('T', 'TC'):
             schedule.every().minute.at(":15").do(self.event_export_operational_status)
-            schedule.every(10).seconds.do(self.event_get_command_tlg)
+            schedule.every(30).seconds.do(self.event_get_external_command)
             schedule.every(6).seconds.do(self.event_report)
             if GRID_ONLY:
                 schedule.every().minute.at(":30").do(self.event_grid_only_release)
@@ -160,7 +157,7 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         self.f_currency = self.get_first_currency()
         self.s_currency = self.get_second_currency()
-        self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}. "
+        self.tlg_header = f"{EXCHANGE[ID_EXCHANGE]}, {self.f_currency}/{self.s_currency}"
         self.message_log(f"{self.tlg_header}", color=Style.B_WHITE)
         if MODE == 'S':
             self.profit_first = self.profit_second = O_DEC
@@ -296,16 +293,15 @@ class Strategy(StrategyBase):
         else:
             self.cycle_status = ()
 
-    def event_get_command_tlg(self):
+    def event_get_external_command(self):
         if self.connection_analytic:
             cursor_analytic = self.connection_analytic.cursor()
-            bot_id = self.tlg_header.split('.')[0]
             try:
                 cursor_analytic.execute(
                     'SELECT max(message_id), text_in, bot_id \
                      FROM t_control \
                      WHERE bot_id=:bot_id',
-                    {'bot_id': bot_id}
+                    {'bot_id': self.tlg_header}
                 )
                 row = cursor_analytic.fetchone()
                 cursor_analytic.close()
@@ -313,21 +309,18 @@ class Strategy(StrategyBase):
                 cursor_analytic.close()
                 row = None
                 print(f"SELECT from t_control: {err}")
-            if row and row[0]:
-                if 'BNB_request' in row[1]:
-                    params = json.loads(row[1])[1]
-                    self.transfer_to(
-                        'BNB',
-                        any2str(
-                            max(
-                                Decimal(params['tranche_volume']),
-                                self.get_trading_capability_manager().min_notional
-                            ) / self.get_buffered_ticker().last_price
-                        ),
-                        params['email']
-                    )
-                else:
-                    self.command = row[1]
+            if row and row[0] and 'BNB_request' in row[1]:
+                params = json.loads(row[1])[1]
+                self.transfer_to(
+                    'BNB',
+                    any2str(
+                        max(
+                            Decimal(params['tranche_volume']),
+                            self.get_trading_capability_manager().min_notional
+                        ) / self.get_buffered_ticker().last_price
+                    ),
+                    params['email']
+                )
                 # Remove applied command from .db
                 try:
                     self.connection_analytic.execute(
@@ -808,8 +801,6 @@ class Strategy(StrategyBase):
         self.message_log('Stop')
         if self.queue_to_db:
             self.queue_to_db.put({'stop_signal': True})
-        if self.queue_to_tlg:
-            self.queue_to_tlg.put(STOP_TLG)
         if self.connection_analytic:
             try:
                 self.connection_analytic.execute("DELETE FROM t_orders\
@@ -878,27 +869,6 @@ class Strategy(StrategyBase):
                 self.pr_db.start()
             except AssertionError as error:
                 self.message_log(str(error), log_level=logging.ERROR, color=Style.B_RED)
-        if TOKEN:
-            self.pr_tlg = Thread(
-                target=telegram,
-                args=(
-                    self.queue_to_tlg,
-                    self.tlg_header.split('.')[0],
-                    TELEGRAM_URL,
-                    TOKEN,
-                    CHANNEL_ID,
-                    DB_FILE,
-                    STOP_TLG,
-                    INLINE_BOT,
-                ),
-                daemon=True
-            )
-            if not self.pr_tlg.is_alive():
-                self.message_log('Start process for Telegram')
-                try:
-                    self.pr_tlg.start()
-                except AssertionError as error:
-                    self.message_log(str(error), log_level=logging.ERROR, color=Style.B_RED)
 
     ##############################################################
     # Technical analysis

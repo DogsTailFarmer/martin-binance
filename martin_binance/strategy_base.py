@@ -2,9 +2,9 @@
 martin-binance base class and methods definitions
 """
 __author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
+__copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.17rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -12,7 +12,6 @@ import ast
 import asyncio
 import csv
 import logging
-import queue
 import os
 import random
 import sqlite3
@@ -43,7 +42,8 @@ from martin_binance.backtest.optimizer import OPTIMIZER, PARAMS_FLOAT
 from martin_binance.client import Trade
 from martin_binance.lib import Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, \
     any2str, PrivateTrade, Order, convert_from_minute, OrderUpdate, load_file, load_last_state, Klines
-from martin_binance.params import SAVE_ASSET
+from martin_binance.params import SAVE_ASSET, TELEGRAM_CONFIG
+from martin_binance.telegram_proxy.tlg_client import TlgClient
 
 if prm.MODE == 'S':
     logger = logging.getLogger('logger_S')
@@ -65,6 +65,13 @@ MS_ORDERS = 'ms.orders'
 CONTROLLED_ASSETS = ['BNB']  # which is not traded, but must be controlled
 O_DEC = Decimal()
 SAVE_TRADE_QUEUE = asyncio.Queue()
+
+TLG_CHAT_ID = prm.TELEGRAM_CONFIG['chat_id']
+TLG_DELAY = prm.TELEGRAM_CONFIG['heartbeat']
+for bot in prm.TELEGRAM_CONFIG['Bots']:
+    if prm.ID_EXCHANGE in bot['id_exchange']:
+        TLG_TOKEN = bot['token']
+        break
 
 
 def refresh_t_asset(cursor, key, value, used):
@@ -118,9 +125,9 @@ class StrategyBase:
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
         self.account = None
         self.get_buffered_funds_last_time = self.get_time()
-        self.queue_to_tlg = queue.Queue() if prm.TOKEN and prm.MODE != 'S' else None
         self.status_time = None  # + Last time sending status message
         self.tlg_header = ''  # - Header for Telegram message
+        self.tlg_client = None
         self.start_collect = None
         self.s_mode_break = None
         self.backtest_process = None
@@ -262,7 +269,7 @@ class StrategyBase:
         self.tasks_manage(self.cancel_order_timeout(order_id))
         self.tasks_manage(self.cancel_order_call(order_id, cancel_all))
 
-    def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE) -> None:
+    def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE, tlg_inline=False) -> None:
         if prm.LOGGING:
             if tlg and color == Style.WHITE:
                 color = Style.B_WHITE
@@ -277,14 +284,14 @@ class StrategyBase:
                     tqdm.write(f"{datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')[:-3]} {color_msg}")
             if prm.MODE in ('T', 'TC'):
                 logger.log(log_level, msg)
-                if tlg and self.queue_to_tlg:
-                    msg = self.tlg_header + msg
+                if tlg and self.tlg_client:
                     self.status_time = self.get_time()
-                    self.queue_to_tlg.put(msg)
+                    self.tasks_manage(
+                        self.tlg_client.post_message(msg, inline_buttons=tlg_inline and prm.TLG_INLINE)
+                    )
         elif log_level >= logging.ERROR:
             logger.log(log_level, msg)
 
-    #
     def order_exist(self, _id) -> bool:
         return bool(self.orders.get(int(_id)))
 
@@ -495,7 +502,7 @@ class StrategyBase:
             self._back_test_handler_ext()
 
         self.session.channel.close()
-        self.task_cancel()
+        self.wss_cancel_tasks()
         asyncio.get_event_loop().stop()
 
     def _back_test_handler_ext(self):
@@ -740,7 +747,7 @@ class StrategyBase:
                 self.message_log(f"ask_exit: {ex}", log_level=logging.WARNING)
 
             self.session.channel.close()
-            self.task_cancel()
+            self.wss_cancel_tasks()
 
             if prm.MODE == 'TC' and self.start_collect:
                 # Save stream data for backtesting
@@ -750,6 +757,7 @@ class StrategyBase:
             if prm.LAST_STATE_FILE.exists():
                 print(f"Current state saved into {prm.LAST_STATE_FILE}")
 
+            self.tlg_client.close()
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -1486,7 +1494,7 @@ class StrategyBase:
                 restore = True
             await asyncio.sleep(self.rate_limiter)
 
-    async def wait_wss_init(self):
+    async def wss_wait_init(self):
         while not self.operational_status:
             await asyncio.sleep(HEARTBEAT)
             try:
@@ -1497,6 +1505,8 @@ class StrategyBase:
                 if res.success:
                     self.operational_status = True
                     self.message_log("WSS started")
+                else:
+                    self.message_log("WSS not active", log_level=logging.WARNING)
 
     def tasks_manage(self, coro, name=None, add_done_callback=True):
         _t = asyncio.create_task(coro, name=name)
@@ -1518,7 +1528,7 @@ class StrategyBase:
     async def wss_init(self, update_max_queue_size=False):
         if self.client_id:
             self.message_log(f"Init WSS, client_id: {self.client_id}")
-            self.task_cancel()
+            self.wss_cancel_tasks()
             await self.wss_declare()
             # WSS start
             '''
@@ -1536,14 +1546,22 @@ class StrategyBase:
                 self.wss_fire_up = True
             else:
                 self.wss_fire_up = False
-                await self.wait_wss_init()
+                await self.wss_wait_init()
         else:
             self.message_log("Init WSS failed, retry", log_level=logging.WARNING)
             await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))  # /NOSONAR
             self.wss_fire_up = True
 
-    def task_cancel(self):
+    def wss_cancel_tasks(self):
         [task.cancel() for task in self.tasks if not task.done() and task.get_name() == 'wss']
+
+    async def tlg_get_command(self):
+        while True:
+            res = await self.tlg_client.get_update()
+            command = json.loads(res.data) if res else None
+            if command:
+                self.command = command
+            await asyncio.sleep(TLG_DELAY)
 
     async def main(self, _symbol):  # /NOSONAR
         restore_state = None
@@ -1758,6 +1776,9 @@ class StrategyBase:
                         self.start()
 
             if prm.MODE in ('T', 'TC'):
+                self.tlg_client = TlgClient(self.tlg_header, TLG_TOKEN, TLG_CHAT_ID)
+                self.tasks_manage(self.tlg_client.connect())
+                self.tasks_manage(self.tlg_get_command())
                 await self.wss_init()
                 self.tasks_manage(save_to_csv())
                 self.tasks_manage(self.buffered_orders(), add_done_callback=False)

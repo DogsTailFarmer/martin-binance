@@ -1,0 +1,30 @@
+/*
+Protocol buffer definition for telegram proxy service
+
+For compile use next commands
+pip install --pre "betterproto[compiler]"
+pip install grpcio-tools
+python -m grpc_tools.protoc -I . --python_betterproto_out=. telegram_proxy/tlg_proxy.proto
+*/
+
+syntax = "proto3";
+
+package tlg;
+
+service TlgProxy {
+  rpc PostMessage (Request) returns (Response) {}
+  rpc GetUpdate (Request) returns (Response) {}
+}
+
+message Request {
+  string bot_id = 1;
+  string token = 2;
+  string chat_id = 3;
+  bool inline_buttons = 4;
+  string data = 5;
+}
+
+message Response {
+  string bot_id = 1;
+  string data = 2;
+}

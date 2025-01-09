@@ -37,19 +37,7 @@ class Trade:
         self.trade_id = shortuuid.uuid()
         self.reconnect = True
 
-    async def kill_client(self):
-        logger.warning("Kill client")
-        await asyncio.sleep(30)
-        logger.warning(f"Kill client: {self.client}")
-        self.client = None
-        logger.warning("Client was died")
-
     async def get_client(self):
-
-        if self.stub is None:
-            # asyncio.create_task(self.kill_client())
-            pass
-
         if self.wait_connection:
             return False
         self.wait_connection = True

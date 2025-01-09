@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17rc5"
+__version__ = "3.0.17rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -29,6 +29,8 @@ LOG_PATH = Path(WORK_PATH, "log")
 LAST_STATE_PATH = Path(WORK_PATH, "last_state")
 BACKTEST_PATH = Path(WORK_PATH, "back_test")
 TRIAL_PARAMS = Path(WORK_PATH, "trial_params.json")
+CERT_DIR = Path(WORK_PATH, "keys")
+LOG_FILE_TLG = Path(LOG_PATH, "tlg_proxy.log")
 EQUAL_STR = "================================================================"
 
 
@@ -37,7 +39,7 @@ def init():
         print(f"Client config found at {CONFIG_FILE}")
     else:
         print("Can't find client config file! Creating it...")
-        for path in [CONFIG_PATH, LOG_PATH, LAST_STATE_PATH]:
+        for path in [CONFIG_PATH, LOG_PATH, LAST_STATE_PATH, CERT_DIR]:
             path.mkdir(parents=True, exist_ok=True)
 
         templates = Path(Path(__file__).parent.absolute(), "templates")

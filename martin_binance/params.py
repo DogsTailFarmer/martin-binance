@@ -2,9 +2,9 @@
 martin-binance strategy parameters
 """
 __author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
+__copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.16"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -21,8 +21,8 @@ __all__ = [
     'BB_CANDLE_SIZE_IN_MINUTES', 'BB_NUMBER_OF_CANDLES', 'KBB', 'LINEAR_GRID_K', 'ADX_CANDLE_SIZE_IN_MINUTES',
     'ADX_NUMBER_OF_CANDLES', 'ADX_PERIOD', 'ADX_THRESHOLD', 'ADX_PRICE_THRESHOLD', 'REVERSE', 'REVERSE_TARGET_AMOUNT',
     'REVERSE_INIT_AMOUNT', 'REVERSE_STOP', 'HEAD_VERSION', 'LOAD_LAST_STATE', 'LAST_STATE_FILE', 'VPS_NAME', 'PARAMS',
-    'TELEGRAM_URL', 'TOKEN', 'CHANNEL_ID', 'STOP_TLG', 'INLINE_BOT', 'MODE', 'XTIME', 'SAVE_DS', 'SAVE_PERIOD',
-    'LOGGING', 'SELF_OPTIMIZATION', 'N_TRIALS', 'SESSION_RESULT'
+    'TELEGRAM_CONFIG', 'MODE', 'XTIME', 'SAVE_DS', 'SAVE_PERIOD', 'LOGGING', 'SELF_OPTIMIZATION', 'N_TRIALS',
+    'SESSION_RESULT'
 ]
 
 SYMBOL = str()
@@ -93,11 +93,8 @@ LAST_STATE_FILE: Path
 VPS_NAME = str()
 PARAMS: Path
 # Telegram
-TELEGRAM_URL = str()
-TOKEN = str()
-CHANNEL_ID = str()
-STOP_TLG = 'stop_signal_QWE#@!'
-INLINE_BOT = True
+TELEGRAM_CONFIG = {}
+TLG_INLINE = False
 # Backtesting
 MODE = 'T'  # 'T' - Trade, 'TC' - Trade and Collect, 'S' - Simulate
 XTIME = 1000  # Time accelerator
