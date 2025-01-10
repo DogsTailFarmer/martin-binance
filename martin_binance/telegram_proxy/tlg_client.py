@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Telegram proxy client
+
+"""
+__author__ = "Jerry Fedorenko"
+__copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
+__license__ = "MIT"
+__version__ = "3.0.17rc8"
+__maintainer__ = "Jerry Fedorenko"
+__contact__ = "https://github.com/DogsTailFarmer"
 
 # Generate ssl certificates
 # cd ~/.MartinBinance/keys
@@ -110,16 +120,14 @@ class TlgClient:
                 )
             )
             return res
-        except (
-            ConnectionRefusedError,
-            exceptions.StreamTerminatedError,
-            asyncio.exceptions.CancelledError
-        ):
-            logger.warning("Connection refused to Telegram proxy, waiting reconnection...")
+        except (ConnectionRefusedError, exceptions.StreamTerminatedError):
+            logger.warning("Connection refused to Telegram proxy (post_message), waiting reconnection...")
             if self.init_event.is_set():
                 self.tasks_manage(self.connect())
             elif reraise:
                 raise
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            pass  # user interrupt
 
     async def get_update(self) -> tlg.Response:
         try:
@@ -129,16 +137,13 @@ class TlgClient:
                 )
             )
             return res
-        except (
-            ConnectionRefusedError,
-            exceptions.StreamTerminatedError,
-            asyncio.exceptions.CancelledError
-        ):
+        except (ConnectionRefusedError, exceptions.StreamTerminatedError):
             if self.init_event.is_set():
                 self.tasks_manage(self.connect())
-            logger.warning("Telegram proxy: Get update, waiting reconnection...")
+            logger.warning("Connection refused to Telegram proxy (get_update), waiting reconnection...")
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            pass  # user interrupt
 
     def close(self):
         self.channel.close()
         self.task_cancel()
-
