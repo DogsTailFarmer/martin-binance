@@ -35,7 +35,6 @@ class Trade:
         self.client = None
         self.wait_connection = False
         self.trade_id = shortuuid.uuid()
-        self.reconnect = True
 
     async def get_client(self):
         if self.wait_connection:
@@ -43,12 +42,10 @@ class Trade:
         self.wait_connection = True
         client = None
         while client is None:
-            if self.reconnect:
-                if self.stub:
-                    self.channel.close()
-                self.channel = Channel('127.0.0.1', 50051)
-                self.stub = mr.MartinStub(self.channel)
-                self.reconnect = False
+            if self.channel:
+                self.channel.close()
+            self.channel = Channel('127.0.0.1', 50051)
+            self.stub = mr.MartinStub(self.channel)
             try:
                 client = await self.connect()
             except UserWarning as ex:
@@ -73,7 +70,6 @@ class Trade:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except ConnectionRefusedError as ex:
-            self.reconnect = True
             raise UserWarning(f"{ex}, reconnect...") from None
         except GRPCError as ex:
             status_code = ex.status
@@ -96,10 +92,10 @@ class Trade:
         except asyncio.CancelledError:
             pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
-            self.reconnect = True
+            self.client = None
             raise UserWarning("Have not connection to gRPC server")
         except ConnectionRefusedError:
-            self.reconnect = True
+            self.client = None
             raise UserWarning("Connection to gRPC server broken")
         except GRPCError as ex:
             status_code = ex.status

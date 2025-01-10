@@ -34,21 +34,19 @@ from martin_binance import LOG_FILE_TLG, CONFIG_FILE, CERT_DIR
 from exchanges_wrapper import Channel, exceptions
 
 #
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('tlg_client')
+logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
 #
 fh = logging.handlers.RotatingFileHandler(LOG_FILE_TLG, maxBytes=1000000, backupCount=10)
 fh.setFormatter(formatter)
-fh.setLevel(logging.INFO)
+logger.addHandler(fh)
+fh.setLevel(logging.DEBUG)
 #
 sh = logging.StreamHandler()
 sh.setFormatter(formatter)
+logger.addHandler(sh)
 sh.setLevel(logging.INFO)
-#
-root_logger = logging.getLogger()
-root_logger.setLevel(min([fh.level, sh.level]))
-root_logger.addHandler(fh)
-root_logger.addHandler(sh)
 #
 config = toml.load(str(CONFIG_FILE))['Telegram']
 TLG_PROXY_HOST = config['tlg_proxy_host']

@@ -571,11 +571,9 @@ class StrategyBase:
                                                  f" restart request sent", log_level=logging.WARNING)
                                 update_max_queue_size = True
                                 self.wss_fire_up = True
-                        finally:
-                            if self.wss_fire_up:
-                                self.operational_status = False
                     #
                     if self.wss_fire_up:
+                        self.operational_status = False
                         try:
                             if self.session.client:
                                 self.update_vars(self.session)
@@ -587,7 +585,7 @@ class StrategyBase:
                                 await self.wss_init(update_max_queue_size=update_max_queue_size)
                         except Exception as ex:
                             self.message_log(f"Exception on fire up WSS: {ex}", log_level=logging.WARNING)
-                            self.message_log(traceback.format_exc(), log_level=logging.DEBUG)
+                            # self.message_log(traceback.format_exc(), log_level=logging.DEBUG)
                             self.wss_fire_up = True
                 await asyncio.sleep(HEARTBEAT)
             except (KeyboardInterrupt, asyncio.CancelledError):
@@ -1529,6 +1527,7 @@ class StrategyBase:
         if self.client_id:
             self.message_log(f"Init WSS, client_id: {self.client_id}")
             self.wss_cancel_tasks()
+            await asyncio.sleep(HEARTBEAT)
             await self.wss_declare()
             # WSS start
             '''
