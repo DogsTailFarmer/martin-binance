@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.17rc11"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1922,7 +1922,7 @@ def load_from_csv() -> []:
 
         df = pd.DataFrame(data).tail(TRADES_LIST_LIMIT)
 
-        for index, row in df.iterrows():
+        for _, row in df.iterrows():
             trade = {
                 "time": row.iloc[1],
                 "isBuyer": row.iloc[2] == 'BUY',
