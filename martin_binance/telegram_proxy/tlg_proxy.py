@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# TODO Add docstring
+"""
+This script sets up a Telegram proxy server with secure SSL context.
+It configures logging, loads configuration from a TOML file, and establishes
+retry policies for HTTP requests. The script also defines a function to create
+a secure context for SSL connections and provides a method to generate keyboard
+markup for Telegram bot commands.
+"""
+__author__ = "Jerry Fedorenko"
+__copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
+__license__ = "MIT"
+__version__ = "3.0.17"
+__maintainer__ = "Jerry Fedorenko"
+__contact__ = "https://github.com/DogsTailFarmer"
+
 import ssl
 from pathlib import Path
 import socket

@@ -1,11 +1,11 @@
-## 3.0.17 - 2024-11-xx
+## 3.0.17 - 2025-12-xx
 ### Fix
 * Restored reverse_price value if it is omitted
 * `GRID_ONLY` mode: incorrect check of minimum trading volume
 * Erroneous correction of the opposite coin when withdrawing in a reverse cycle is excluded
 * Restarting a session in case of network failures when sharing a client between pairs
 * Interaction with the Telegram service, consolidation of messages and distribution of commands through
-a centralized proxy service
+a centralized proxy service, default use tlg_proxy service disabled
 
 ### Added new features
 * `funds_rate_exporter.py`: add export data to IPv6 interface

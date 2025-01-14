@@ -5,9 +5,9 @@
 # See README.md for detail
 ####################################################################
 __author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
+__copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.16"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -50,7 +50,6 @@ ex.FEE_BNB = {
     'target_amount': '0',                           # BNB in USD equivalent, no less than min_notional
     'tranche_volume': '0'                           # BNB in USD equivalent, no less than min_notional
 }
-ex.SAVE_ASSET = True  # Save account asset list and value in funds_rate.db
 ex.GRID_MAX_COUNT = 5  # Maximum counts for placed grid orders
 # Trade parameter
 ex.START_ON_BUY = True  # First cycle direction
@@ -70,7 +69,9 @@ ex.ORDER_Q = 11  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
 ex.SHIFT_GRID_DELAY = 1  # sec delay for shift grid action
 # Other
-ex.STATUS_DELAY = 60  # Minute between sending Tlg message about current status, 0 - disable
+ex.STATUS_DELAY = 180  # Minute between sending Tlg message about current status, 0 - disable
+ex.TLG_SERVICE = False  # Enable Tlg bot service
+ex.TLG_INLINE = False  # Show inline keyboard in Tlg bot, global setting
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
 ex.LOG_LEVEL = logging.DEBUG  # Default level for console output
 ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for subaccount only
@@ -106,18 +107,11 @@ ex.N_TRIALS = 250  # Number of optimization cycles for optuna study in self opti
 ################################################################
 ex.PARAMS = Path(__file__).absolute()
 ex.HEAD_VERSION = __version__
-config = toml.load(str(CONFIG_FILE)) if CONFIG_FILE.exists() else None
-ex.EXCHANGE = config.get('exchange')
-ex.VPS_NAME = config.get('Exporter').get('vps_name')
-# Telegram parameters
-telegram = config.get('Telegram')
-ex.TELEGRAM_URL = config.get('telegram_url')
-for tlg in telegram:
-    if ex.ID_EXCHANGE in tlg.get('id_exchange'):
-        ex.TOKEN = tlg.get('token')
-        ex.CHANNEL_ID = tlg.get('channel_id')
-        ex.INLINE_BOT = tlg.get('inline')
-        break
+config = toml.load(str(CONFIG_FILE))
+ex.EXCHANGE = config['exchange']
+ex.VPS_NAME = config['Exporter']['vps_name']
+ex.TELEGRAM_CONFIG = config['Telegram']
+ex.TELEGRAM_CONFIG['Bots'] = config['Bots']
 
 
 def trade(strategy=None):
@@ -142,7 +136,8 @@ def trade(strategy=None):
     if strategy is None:
         from martin_binance.executor import Strategy
         strategy = Strategy()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
         loop.create_task(strategy.main(ex.SYMBOL))
         loop.run_forever()
@@ -153,8 +148,6 @@ def trade(strategy=None):
             loop.run_until_complete(strategy.ask_exit())
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass  # user interrupt
-        except Exception as _err:
-            print(f"Error: {_err}")
         loop.run_until_complete(loop.shutdown_asyncgens())
     return strategy
 

@@ -6,11 +6,9 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17rc9"
+__version__ = "3.0.17rc10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
-
-# TODO update cli_ templates
 
 from pathlib import Path
 from shutil import copy

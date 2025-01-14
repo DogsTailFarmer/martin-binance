@@ -93,6 +93,7 @@ LAST_STATE_FILE: Path
 VPS_NAME = str()
 PARAMS: Path
 # Telegram
+TLG_SERVICE = False
 TELEGRAM_CONFIG = {}
 TLG_INLINE = False
 # Backtesting

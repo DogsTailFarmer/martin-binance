@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Telegram proxy client
+This module contains Telegram proxy client implementation with secure SSL context.
+It provides high-level abstraction for communication with Telegram proxy service.
 
+Generate ssl certificates
+cd ~/.MartinBinance/keys
+
+Proxy Service pair
+
+openssl req -x509 -newkey rsa:2048 -nodes -subj '/CN=localhost' --addext 'subjectAltName=IP:aaa.bbb.ccc.ddd'\
+ -keyout tlg-proxy.key -out tlg-proxy.pem
+
+Client pair
+
+openssl req -x509 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyout tlg-client.key -out tlg-client.pem
 """
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17rc8"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
-
-# Generate ssl certificates
-# cd ~/.MartinBinance/keys
-# Proxy Service pair
-# openssl req -x509 -newkey rsa:2048 -nodes -subj '/CN=localhost' --addext 'subjectAltName=IP:AAA.BBB.CCC.DDD'\
-# -keyout tlg-proxy.key -out tlg-proxy.pem
-#
-# Client pair
-# openssl req -x509 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyout tlg-client.key -out tlg-client.pem
 
 import ssl
 from pathlib import Path
@@ -32,10 +35,9 @@ import martin_binance.tlg as tlg
 from martin_binance import LOG_FILE_TLG, CONFIG_FILE, CERT_DIR
 
 from exchanges_wrapper import Channel, exceptions
-
 #
 logger = logging.getLogger('tlg_client')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 formatter = logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s")
 #
 fh = logging.handlers.RotatingFileHandler(LOG_FILE_TLG, maxBytes=1000000, backupCount=10)
@@ -119,7 +121,6 @@ class TlgClient:
             )
             return res
         except (ConnectionRefusedError, exceptions.StreamTerminatedError):
-            logger.warning("Connection refused to Telegram proxy (post_message), waiting reconnection...")
             if self.init_event.is_set():
                 self.tasks_manage(self.connect())
             elif reraise:
@@ -138,7 +139,6 @@ class TlgClient:
         except (ConnectionRefusedError, exceptions.StreamTerminatedError):
             if self.init_event.is_set():
                 self.tasks_manage(self.connect())
-            logger.warning("Connection refused to Telegram proxy (get_update), waiting reconnection...")
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass  # user interrupt
 

@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17rc7"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -42,7 +42,6 @@ from martin_binance.backtest.optimizer import OPTIMIZER, PARAMS_FLOAT
 from martin_binance.client import Trade
 from martin_binance.lib import Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, \
     any2str, PrivateTrade, Order, convert_from_minute, OrderUpdate, load_file, load_last_state, Klines
-from martin_binance.params import SAVE_ASSET, TELEGRAM_CONFIG
 from martin_binance.telegram_proxy.tlg_client import TlgClient
 
 if prm.MODE == 'S':
@@ -755,7 +754,8 @@ class StrategyBase:
             if prm.LAST_STATE_FILE.exists():
                 print(f"Current state saved into {prm.LAST_STATE_FILE}")
 
-            self.tlg_client.close()
+            if self.tlg_client:
+                self.tlg_client.close()
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -1775,13 +1775,14 @@ class StrategyBase:
                         self.start()
 
             if prm.MODE in ('T', 'TC'):
-                self.tlg_client = TlgClient(self.tlg_header, TLG_TOKEN, TLG_CHAT_ID)
-                self.tasks_manage(self.tlg_client.connect())
-                self.tasks_manage(self.tlg_get_command())
+                if prm.TLG_SERVICE:
+                    self.tlg_client = TlgClient(self.tlg_header, TLG_TOKEN, TLG_CHAT_ID)
+                    self.tasks_manage(self.tlg_client.connect())
+                    self.tasks_manage(self.tlg_get_command())
                 await self.wss_init()
                 self.tasks_manage(save_to_csv())
                 self.tasks_manage(self.buffered_orders(), add_done_callback=False)
-                if self.session.client.real_market and SAVE_ASSET:
+                if self.session.client.real_market and prm.SAVE_ASSET:
                     self.tasks_manage(self.save_asset(), add_done_callback=False)
                 if prm.MODE == 'TC':
                     self.tasks_manage(self.backtest_control(), add_done_callback=False)

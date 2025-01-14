@@ -1,0 +1,13 @@
+[Unit]
+Description=restart tlg-proxy service
+After=syslog.target
+After=network.target
+
+[Service]
+User=ubuntu
+Group=sudo
+WorkingDirectory=/home/ubuntu/.local/lib/python3.10/site-packages/martin_binance/telegram_proxy/
+ExecStart=python3 tlg_proxy.py
+
+[Install]
+WantedBy=default.target
