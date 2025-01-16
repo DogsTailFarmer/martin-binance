@@ -29,7 +29,9 @@ Strongly recommended that you test the strategy in the demo mode before using re
 * After update to `3.0.17`, the configuration file `exch_srv_cfg.toml` for [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper) must be updated. [Use templates for reference.](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/exchanges_wrapper/exch_srv_cfg.toml.template)
 * After update to `3.0.17`, the configuration file `ms_cfg.toml` must be updated. [Use templates for reference.](https://github.com/DogsTailFarmer/martin-binance/blob/f0a0e5f9a7ceba3919ea0087f1b9f4e0d1bc95b6/martin_binance/templates/ms_cfg.toml)
 * The config files `cli_XX_AAABBB.py` also must be updated from [template](https://github.com/DogsTailFarmer/martin-binance/tree/public/martin_binance/templates)
+* Interaction with Telegram has been radically changed. Please review the new [terms and conditions](https://github.com/DogsTailFarmer/martin-binance/wiki/How-it's-work#telegram) carefully. Loading of the service can be completely disabled in the settings.
 
+## Notices
 * You cannot run multiple pairs with overlapping currencies on the same account!
 
 >Valid: (BTC/USDT), (ETH/BUSD), (SOL/LTC)
