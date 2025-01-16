@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17rc11"
+__version__ = "3.0.17"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -546,7 +546,6 @@ class StrategyBase:
                         # noinspection PyTypeChecker
                         json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     #
-                    update_max_queue_size = False
                     if (
                         not self.wss_fire_up
                         and self.operational_status
@@ -568,7 +567,6 @@ class StrategyBase:
                             if not res.success:
                                 self.message_log(f"Not active WSS for {self.symbol} on {self.exchange},"
                                                  f" restart request sent", log_level=logging.WARNING)
-                                update_max_queue_size = True
                                 self.wss_fire_up = True
                     #
                     if self.wss_fire_up:
@@ -581,10 +579,9 @@ class StrategyBase:
                                     mr.MarketRequest,
                                     symbol=self.symbol
                                 )
-                                await self.wss_init(update_max_queue_size=update_max_queue_size)
+                                await self.wss_init()
                         except Exception as ex:
                             self.message_log(f"Exception on fire up WSS: {ex}", log_level=logging.WARNING)
-                            # self.message_log(traceback.format_exc(), log_level=logging.DEBUG)
                             self.wss_fire_up = True
                 await asyncio.sleep(HEARTBEAT)
             except (KeyboardInterrupt, asyncio.CancelledError):
@@ -1523,7 +1520,7 @@ class StrategyBase:
             self.tasks_manage(self.on_order_update(), name='wss')
             self.tasks_manage(self.on_balance_update(), name='wss')
 
-    async def wss_init(self, update_max_queue_size=False):
+    async def wss_init(self):
         if self.client_id:
             self.message_log(f"Init WSS, client_id: {self.client_id}")
             self.wss_cancel_tasks()
@@ -1538,8 +1535,7 @@ class StrategyBase:
                 await self.send_request(self.stub.start_stream,
                                         mr.StartStreamRequest,
                                         symbol=self.symbol,
-                                        market_stream_count=5,
-                                        update_max_queue_size=update_max_queue_size)
+                                        market_stream_count=5)
             except UserWarning:
                 self.message_log("Start WSS failed, retry", log_level=logging.WARNING)
                 self.wss_fire_up = True

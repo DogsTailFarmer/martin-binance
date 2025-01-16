@@ -1,4 +1,4 @@
-## 3.0.17 - 2025-12-xx
+## 3.0.17 - 2025-01-16
 ### Fix
 * Restored reverse_price value if it is omitted
 * `GRID_ONLY` mode: incorrect check of minimum trading volume
@@ -12,6 +12,7 @@ a centralized proxy service, default use tlg_proxy service disabled
 
 ### Update
 * Bump requirements
+* Moving control and updating MAX_QUEUE_SIZE for on_*_update loops to server side
 
 ## 3.0.16 - 2024-11-01
 ### Fix

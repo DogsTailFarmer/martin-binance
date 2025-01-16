@@ -608,7 +608,7 @@ class Strategy(StrategyBase):
             #
             open_orders = self.get_buffered_open_orders()
             # Possible strategy states in compare with saved one
-            grid_open_orders_len = len(open_orders) - 1 if self.tp_order_id else 0
+            grid_open_orders_len = len(open_orders) - (1 if self.tp_order_id else 0)
             #
             if self.grid_remove:
                 self.message_log("Restore, continue cancel grid orders", tlg=True)
