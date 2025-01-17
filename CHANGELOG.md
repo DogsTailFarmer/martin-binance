@@ -1,3 +1,7 @@
+## 3.0.18 - 2025-01-17
+### Update
+* Change dependency model for exchanges-wrapper
+
 ## 3.0.17 - 2025-01-16
 ### Fix
 * Restored reverse_price value if it is omitted
