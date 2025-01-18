@@ -1,4 +1,4 @@
-exchanges-wrapper>=2.1.24
+exchanges-wrapper>=2.1.26
 jsonpickle==3.3.0
 psutil==6.0.0
 requests==2.32.3

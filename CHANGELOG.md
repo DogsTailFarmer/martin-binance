@@ -1,6 +1,7 @@
-## 3.0.18 - 2025-01-17
+## 3.0.18 - 2025-01-18
 ### Update
 * Change dependency model for exchanges-wrapper
+* Up requirements for exchanges-wrapper>=2.1.26
 
 ## 3.0.17 - 2025-01-16
 ### Fix
