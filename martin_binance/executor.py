@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.19"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -1343,6 +1343,10 @@ class Strategy(StrategyBase):
         }
 
     def event_grid_update(self):
+        if not self.orders_grid:
+            self.place_grid_part()
+            return
+        #
         do_it = False
         if ADAPTIVE_TRADE_CONDITION and self.stable_state() and not self.part_amount \
                 and (self.orders_grid or self.orders_hold):
@@ -2177,20 +2181,6 @@ class Strategy(StrategyBase):
     def on_new_ticker(self, ticker: Ticker) -> None:
         # print(f"on_new_ticker:{datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
         self.last_ticker_update = int(self.get_time())
-        if not self.orders_grid and not self.orders_init and self.orders_hold:
-            _, _buy, _amount, _price = self.orders_hold.get_first()
-            tcm = self.get_trading_capability_manager()
-            if ((_buy and _price >= tcm.get_min_buy_price(ticker.last_price)) or
-                    (not _buy and _price <= tcm.get_max_sell_price(ticker.last_price))):
-                waiting_order_id = self.place_limit_order_check(
-                    _buy,
-                    _amount,
-                    _price,
-                    check=True
-                )
-                self.orders_init.append_order(waiting_order_id, _buy, _amount, _price)
-                del self.orders_hold.orders_list[0]
-        #
         if (self.shift_grid_threshold and self.last_shift_time and self.get_time() -
                 self.last_shift_time > SHIFT_GRID_DELAY
             and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
@@ -2293,8 +2283,7 @@ class Strategy(StrategyBase):
 
                     self.update_sum_amount(-delta, -deposit_add)
                     self.place_profit_order()
-                elif not self.reverse:
-                    self.initial_first += delta
+                self.initial_first += delta
         else:
             if asset == self.f_currency:
                 restart = True
@@ -2342,8 +2331,7 @@ class Strategy(StrategyBase):
 
                     self.update_sum_amount(-deposit_add, -delta)
                     self.place_profit_order()
-                elif not self.reverse:
-                    self.initial_second += delta
+                self.initial_second += delta
 
         self.debug_output()
 
@@ -2556,6 +2544,9 @@ class Strategy(StrategyBase):
         self.initial_reverse_first = self.initial_reverse_second = O_DEC
         self.message_log("Cancel hold reverse cycle", color=Style.B_WHITE)
 
+    def order_init_exist(self, place_order_id: int):
+        return bool(self.orders_init.exist(place_order_id) or place_order_id == self.tp_wait_id)
+
     def on_place_order_success(self, place_order_id: int, order: Order) -> None:
         # print(f"on_place_order_success.place_order_id: {place_order_id}")
         if self.orders_init.exist(place_order_id):
@@ -2584,7 +2575,7 @@ class Strategy(StrategyBase):
             else:
                 self.place_grid_part()
         else:
-            self.message_log(f"Did not have waiting order id for {place_order_id}", logging.ERROR)
+            self.message_log(f"Did not have waiting order {place_order_id}", logging.ERROR)
 
     def on_place_order_error(self, place_order_id: int, error: str) -> None:
         # Check all orders on exchange if exists required

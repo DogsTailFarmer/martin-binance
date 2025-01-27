@@ -1,3 +1,12 @@
+## 3.0.19 - 2025-01-27
+### Fix
+* `on_balance_update_ex`: calculating initial balance for opposite coin in Reverse cycle
+
+### Update
+* `funds_rate_exporter.py`: optimized current price queries on `coinmarketcap`
+* Functions for placing and canceling orders have been optimized
+* Bump requirements
+
 ## 3.0.18 - 2025-01-18
 ### Update
 * Change dependency model for exchanges-wrapper

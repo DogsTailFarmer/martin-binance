@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.19"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -102,8 +102,6 @@ class StrategyBase:
         self.funds = {}
         self.order_book = {}
         self.order_id = int(datetime.now().strftime("%f%S%M"))
-        self.wait_order_id = []  # List of placed orders for time-out detect
-        self.canceled_order_id = []  # List canceled orders for time-out detect
         self.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
         self.orders = {}  # {int(id): Order(), } of orders associated with strategy
         self.tcm = None  # TradingCapabilityManager
@@ -164,8 +162,6 @@ class StrategyBase:
         self.funds = {}
         self.order_book = {}
         self.order_id = int(datetime.now().strftime("%f%S%M"))
-        self.wait_order_id = []  # List of placed orders for time-out detect
-        self.canceled_order_id = []  # List canceled orders  for time-out detect
         self.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
         self.orders = {}  # Set of orders associated with strategy
         self.get_buffered_funds_last_time = self.get_time()
@@ -258,14 +254,12 @@ class StrategyBase:
         self.message_log(f"Send order id:{self.order_id} for {'BUY' if buy else 'SELL'}"
                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
                          color=Style.B_YELLOW)
-        self.tasks_manage(self.place_limit_order_timeout(self.order_id))
         self.tasks_manage(self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
         if self.exchange == 'huobi':
             time.sleep(0.02)
         return self.order_id
 
     def cancel_order(self, order_id: int, cancel_all=False) -> None:
-        self.tasks_manage(self.cancel_order_timeout(order_id))
         self.tasks_manage(self.cancel_order_call(order_id, cancel_all))
 
     def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE, tlg_inline=False) -> None:
@@ -781,8 +775,7 @@ class StrategyBase:
                              log_level=logging.INFO, color=Style.GREEN)
             if result:
                 return result
-            self.message_log(f"Can't get status for order {_id}({_client_order_id})",
-                             log_level=logging.WARNING)
+            self.message_log(f"Can't get status for order {_id}({_client_order_id})", log_level=logging.WARNING)
             return {}
 
     async def on_funds_update(self):
@@ -863,11 +856,7 @@ class StrategyBase:
         self.grid_buy.update({ts or int(time.time() * 1000): pd.Series(orders_buy)})
         self.grid_sell.update({ts or int(time.time() * 1000): pd.Series(orders_sell)})
 
-    async def cancel_order_call(self, _id: int, cancel_all=False, count=0):
-        if count == 0:
-            self.canceled_order_id.append(_id)
-        elif _id in self.canceled_order_id:
-            self.canceled_order_id.remove(_id)
+    async def cancel_order_call(self, _id: int, cancel_all=False):
         _fetch_order = False
         try:
             if prm.MODE in ('T', 'TC'):
@@ -917,33 +906,17 @@ class StrategyBase:
                 res = await self.fetch_order(_id, _filled_update_call=True)
                 if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                     await self.cancel_order_handler(_id, cancel_all)
-                elif res.get('status') == 'FILLED':
-                    if _id in self.canceled_order_id:
-                        self.canceled_order_id.remove(_id)
-                elif not res or res.get('status') in ('NEW', 'PARTIALLY_FILLED'):
-                    await asyncio.sleep(HEARTBEAT * count)
-                    if count <= TRY_LIMIT:
-                        await self.cancel_order_call(_id, cancel_all=False, count=count + 1)
-                    else:
-                        self.on_cancel_order_error_string(_id, 'Cancel order try limit exceeded')
+                else:
+                    self.on_cancel_order_error_string(_id, 'order not canceled')
 
     async def cancel_order_handler(self, _id, cancel_all):
-        if _id in self.canceled_order_id:
-            self.canceled_order_id.remove(_id)
-            self.message_log(f"Cancel order {_id} success", color=Style.GREEN)
+        self.message_log(f"Cancel order {_id} success", color=Style.GREEN)
         self.remove_from_orders_lists([_id])
         self.on_cancel_order_success(_id, cancel_all=cancel_all)
         if prm.MODE == 'TC' and prm.SAVE_DS and self.start_collect:
             self.open_orders_snapshot()
         elif prm.MODE == 'S':
             await self.on_funds_update()
-
-    async def cancel_order_timeout(self, _id):
-        await asyncio.sleep(ORDER_TIMEOUT)
-        if _id in self.canceled_order_id:
-            self.canceled_order_id.remove(_id)
-            self.on_cancel_order_error_string(_id, 'Cancel order timeout')
-        # await asyncio.sleep(0)
 
     async def transfer2master(self, symbol: str, amount: str):
         try:
@@ -1024,12 +997,6 @@ class StrategyBase:
                 funds = {self.base_asset: FundsEntry(self.funds[self.base_asset]),
                          self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
                 self.on_new_funds(funds)
-
-    async def place_limit_order_timeout(self, _id):
-        await asyncio.sleep(ORDER_TIMEOUT)
-        if _id in self.wait_order_id:
-            self.wait_order_id.remove(_id)
-            self.on_place_order_error(_id, 'Place order timeout')
 
     async def get_exchange_info(self, _request, _symbol):
         """
@@ -1118,7 +1085,6 @@ class StrategyBase:
                 self.tasks_manage(self.aiter_candles(_klines, i), name='wss')
 
     async def create_limit_order(self, _id: int, buy: bool, amount: str, price: str) -> None:
-        self.wait_order_id.append(_id)
         _fetch_order = False
         msg = None
         try:
@@ -1148,14 +1114,11 @@ class StrategyBase:
             pass  # Task cancellation should not be logged as an error
         except GRPCError as ex:
             status_code = ex.status
-            if status_code == Status.FAILED_PRECONDITION:
-                self.message_log(f"Order {_id}: {status_code.name}, {ex.message}")
-                if _id in self.wait_order_id:
-                    # Supress call strategy handler
-                    self.wait_order_id.remove(_id)
+            msg = f"Create order {_id}: {status_code.name}, {ex.message}"
+            if status_code in (Status.FAILED_PRECONDITION, Status.DEADLINE_EXCEEDED):
+                self.on_place_order_error(_id, msg)
             else:
                 _fetch_order = True
-            msg = f"Create order {_id}: {status_code.name}, {ex.message}"
         except Exception as _ex:
             _fetch_order = True
             msg = f"Exception creating order {_id}: {_ex}"
@@ -1176,14 +1139,14 @@ class StrategyBase:
 
     async def create_order_handler(self, _id, result):
         # print(f"create_order_handler.result: {result}")
-        if _id in self.wait_order_id and not self.order_exist(result['orderId']):
-            self.wait_order_id.remove(_id)
+        if self.order_init_exist(_id) and not self.order_exist(result['orderId']):
             order = Order(result)
+            self.orders[order.id] = order
+            self.on_place_order_success(_id, order)
             self.message_log(
                 f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
                 f" {any2str(order.amount)} by {any2str(order.price)} = {any2str(order.amount * order.price)}",
                 color=Style.GREEN)
-            self.orders[order.id] = order
 
             if prm.MODE == 'S':
                 await self.on_funds_update()
@@ -1198,8 +1161,6 @@ class StrategyBase:
                     self.s_ticker['pylist'].append(s_tic)
                 if prm.SAVE_DS:
                     self.open_orders_snapshot()
-
-            self.on_place_order_success(_id, order)
 
     async def on_balance_update(self):
         try:
@@ -1598,6 +1559,9 @@ class StrategyBase:
                         print(f"Can't get active orders: {ex}")
                     else:
                         active_orders = list(map(json.loads, _active_orders.orders))
+                        for order in active_orders:
+                            print(f"Order: {order['orderId']}, side: {order['side']}, amount: {order['origQty']}"
+                                  f" price:{order['price']}, status: {order['status']}")
                     # Try load last strategy state from saved files
                     last_state = load_last_state(prm.LAST_STATE_FILE)
                     restore_state = bool(last_state)
@@ -1615,7 +1579,7 @@ class StrategyBase:
                                 cancel_orders = ast.literal_eval(json.loads(res.result))
                                 print('Before start was canceled orders:')
                                 for i in cancel_orders:
-                                    print(f"Order:{i['orderId']}, side:{i['side']},"
+                                    print(f"Order: {i['orderId']}, side:{i['side']},"
                                           f" amount:{i['origQty']}, price:{i['price']}, status:{i['status']}")
                                 print(EQUAL_STR)
                             except asyncio.CancelledError:
@@ -1818,6 +1782,10 @@ class StrategyBase:
 
     @abstractmethod
     def on_place_order_error(self, *args):
+        raise NotImplementedError
+
+    @abstractmethod
+    def order_init_exist(self, *args):
         raise NotImplementedError
 
     @abstractmethod

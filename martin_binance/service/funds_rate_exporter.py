@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.19"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -145,34 +145,36 @@ def get_rate(_currency_rate) -> {}:
     replace = {
         'UST': 'USDT',
         'IOT': 'MIOTA',
-        'LUNA': 'LUNC',
-        'LUNA2': 'LUNA',
         'TESTUSDT': 'USDT',
         'TESTBTC': 'BTC'
     }
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
     session = Session()
     session.headers.update(headers)
+    buffer_rate = {}
 
     for currency in _currency_rate:
         _currency = replace.get(currency, currency)
-        price = -1
-        parameters = {'amount': 1, 'symbol': 'USD', 'convert': _currency}
-        try:
-            response = session.get(URL, params=parameters)
-        except Exception as er:
-            print(er)
-        else:
-            if response.status_code == 429:
-                time.sleep(61)
-                request_delay *= 1.5
-                try:
-                    response = session.get(URL, params=parameters)
-                except Exception as er:
-                    print(er)
-            if response.status_code == 200:
-                data = response.json()
-                price = data['data'][0]['quote'][_currency]['price'] or -1
+        price = buffer_rate.get(_currency)
+        if price is None:
+            price = -1
+            parameters = {'amount': 1, 'symbol': 'USD', 'convert': _currency}
+            try:
+                response = session.get(URL, params=parameters)
+            except Exception as er:
+                print(er)
+            else:
+                if response.status_code == 429:
+                    time.sleep(61)
+                    request_delay *= 1.5
+                    try:
+                        response = session.get(URL, params=parameters)
+                    except Exception as er:
+                        print(er)
+                if response.status_code == 200:
+                    data = response.json()
+                    price = data['data'][0]['quote'][_currency]['price'] or -1
+                    buffer_rate[_currency] = price
         _currency_rate[currency] = price
         # time.sleep(request_delay)
     return _currency_rate
