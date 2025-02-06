@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.19"
+__version__ = "3.0.20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -262,6 +262,9 @@ class StrategyBase:
     def cancel_order(self, order_id: int, cancel_all=False) -> None:
         self.tasks_manage(self.cancel_order_call(order_id, cancel_all))
 
+    def check_created_order(self, order_id: int, msg: str) -> None:
+        self.tasks_manage(self.fetch_created_order(order_id, msg))
+
     def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE, tlg_inline=False) -> None:
         if prm.LOGGING:
             if tlg and color == Style.WHITE:
@@ -277,8 +280,8 @@ class StrategyBase:
                     tqdm.write(f"{datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')[:-3]} {color_msg}")
             if prm.MODE in ('T', 'TC'):
                 logger.log(log_level, msg)
+                self.status_time = self.get_time()
                 if tlg and self.tlg_client:
-                    self.status_time = self.get_time()
                     self.tasks_manage(
                         self.tlg_client.post_message(msg, inline_buttons=tlg_inline and prm.TLG_INLINE)
                     )
@@ -1013,7 +1016,7 @@ class StrategyBase:
                 self.message_log(f"Exception get_exchange_info: {_ex}")
             else:
                 self.info_symbol = _exchange_info_symbol.to_pydict()
-                self.tcm = TradingCapabilityManager(self.info_symbol, prm.PRICE_LIMIT_RULES)
+                self.tcm = TradingCapabilityManager(self.info_symbol)
                 if prm.MODE == 'S':
                     break
             await asyncio.sleep(600)
@@ -1131,15 +1134,18 @@ class StrategyBase:
         finally:
             if prm.MODE in ('T', 'TC') and _fetch_order:
                 await asyncio.sleep(HEARTBEAT)
-                res = await self.fetch_order(0, str(_id), _filled_update_call=True)
-                if res.get('status') in ('NEW', 'PARTIALLY_FILLED', 'FILLED'):
-                    await self.create_order_handler(_id, res)
-                else:
-                    self.on_place_order_error(_id, msg)
+                await self.fetch_created_order(_id, msg)
+
+    async def fetch_created_order(self, _id, msg):
+        res = await self.fetch_order(0, str(_id), _filled_update_call=True)
+        if res.get('status') in ('NEW', 'PARTIALLY_FILLED', 'FILLED'):
+            await self.create_order_handler(_id, res)
+        else:
+            self.on_place_order_error(_id, msg)
 
     async def create_order_handler(self, _id, result):
         # print(f"create_order_handler.result: {result}")
-        if self.order_init_exist(_id) and not self.order_exist(result['orderId']):
+        if self.order_init_exist(_id):  # and not self.order_exist(result['orderId']):
             order = Order(result)
             self.orders[order.id] = order
             self.on_place_order_success(_id, order)
@@ -1437,8 +1443,13 @@ class StrategyBase:
                     self.message_log(f"Trying set RATE_LIMITER to {self.rate_limiter}s", log_level=logging.WARNING)
                     await asyncio.sleep(ORDER_TIMEOUT)
                     try:
-                        await self.send_request(self.stub.reset_rate_limit, mr.OpenClientConnectionId,
-                                                rate_limiter=self.rate_limiter)
+                        res = await self.send_request(
+                            self.stub.reset_rate_limit,
+                            mr.OpenClientConnectionId,
+                            rate_limiter=self.rate_limiter
+                        )
+                        if res and res.success:
+                            self.message_log(f"RATE_LIMITER was set to {self.rate_limiter}s", log_level=logging.INFO)
                     except Exception as ex_4:
                         self.message_log(f"Exception buffered_orders 4: Set RATE_LIMITER failed: {ex_4}",
                                          log_level=logging.WARNING)
@@ -1505,7 +1516,7 @@ class StrategyBase:
                 await self.wss_wait_init()
         else:
             self.message_log("Init WSS failed, retry", log_level=logging.WARNING)
-            await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))  # /NOSONAR
+            await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))  # NOSONAR python:S2245
             self.wss_fire_up = True
 
     def wss_cancel_tasks(self):
@@ -1560,8 +1571,8 @@ class StrategyBase:
                     else:
                         active_orders = list(map(json.loads, _active_orders.orders))
                         for order in active_orders:
-                            print(f"Order: {order['orderId']}, side: {order['side']}, amount: {order['origQty']}"
-                                  f" price:{order['price']}, status: {order['status']}")
+                            print(f"Order: {order['orderId']}({order['clientOrderId']}), side: {order['side']},"
+                                  f" amount: {order['origQty']}, price:{order['price']}, status: {order['status']}")
                     # Try load last strategy state from saved files
                     last_state = load_last_state(prm.LAST_STATE_FILE)
                     restore_state = bool(last_state)
@@ -1696,9 +1707,8 @@ class StrategyBase:
                     )
 
                     self.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
-                    orders_keys = self.orders.keys()
                     for _id in exch_orders_ids:
-                        if _id not in orders_keys:
+                        if _id not in self.orders.keys():
                             _order = next((_o for _o in active_orders if int(_o["orderId"]) == _id))
                             self.orders[_id] = Order(_order)
                             self.message_log(

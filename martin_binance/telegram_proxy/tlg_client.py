@@ -19,7 +19,7 @@ openssl req -x509 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyout tlg-clie
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -107,6 +107,9 @@ class TlgClient:
                 delay += random.randint(1, 15)  # NOSONAR python:S2245
                 logger.warning(f"Try connecting to Telegram proxy, retrying in {delay} second... ")
                 await asyncio.sleep(delay)
+            except ssl.SSLCertVerificationError as e:
+                logger.error(f"Connect to Telegram proxy failed: {e}")
+                break
 
     async def post_message(self, text, inline_buttons=False, reraise=False) -> tlg.Response:
         try:
@@ -125,6 +128,8 @@ class TlgClient:
                 self.tasks_manage(self.connect())
             elif reraise:
                 raise
+        except ssl.SSLCertVerificationError as e:
+            logger.error(f"Post message to Telegram proxy failed: {e}")
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass  # user interrupt
 
@@ -141,6 +146,8 @@ class TlgClient:
                 self.tasks_manage(self.connect())
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass  # user interrupt
+        except ssl.SSLCertVerificationError as e:
+            logger.error(f"Get update from Telegram proxy failed: {e}")
 
     def close(self):
         self.channel.close()

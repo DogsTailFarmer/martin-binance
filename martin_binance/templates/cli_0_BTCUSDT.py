@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -57,8 +57,6 @@ ex.AMOUNT_FIRST = Decimal('0.05')  # Deposit for Sale cycle in first currency
 ex.USE_ALL_FUND = False  # Use all available fund for initial cycle or alltime for GRID_ONLY
 ex.AMOUNT_SECOND = Decimal('1000.0')  # Deposit for Buy cycle in second currency
 ex.PRICE_SHIFT = Decimal('0.01')  # 'No market' shift price in % from current bid/ask price
-# Search next parameter on Bybit https://www.bybit.com/en/announcement-info/spot-trading-rules/
-ex.PRICE_LIMIT_RULES = Decimal('0')  # +-% from last ticker price. Use on Bybit only. 0 - disable
 # Round pattern, set pattern 1.0123456789 or if not set used exchange settings
 ex.ROUND_BASE = str()
 ex.ROUND_QUOTE = str()

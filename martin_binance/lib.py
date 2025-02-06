@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.2"
+__version__ = "3.0.20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -354,7 +354,7 @@ class TradingCapabilityManager:
         "max_price",
     )
 
-    def __init__(self, _exchange_info_symbol, price_limit_rules):
+    def __init__(self, _exchange_info_symbol):
         self.base_asset_precision = int(_exchange_info_symbol.get('baseAssetPrecision'))
         self.quote_asset_precision = int(_exchange_info_symbol.get('quoteAssetPrecision'))
         self.min_qty = Decimal(_exchange_info_symbol['filters']['lotSize']['minQty'])
@@ -367,12 +367,8 @@ class TradingCapabilityManager:
         self.tick_size = Decimal(_exchange_info_symbol['filters']['priceFilter']['tickSize'].rstrip('0'))
         self.min_price = Decimal(_exchange_info_symbol['filters']['priceFilter']['minPrice'])
         self.max_price = Decimal(_exchange_info_symbol['filters']['priceFilter']['maxPrice'])
-        if price_limit_rules:
-            self.multiplier_up = 1 + price_limit_rules / 100
-            self.multiplier_down = 1 - price_limit_rules / 100
-        else:
-            self.multiplier_up = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
-            self.multiplier_down = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
+        self.multiplier_up = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierUp'])
+        self.multiplier_down = Decimal(_exchange_info_symbol['filters']['percentPrice']['multiplierDown'])
 
     def __call__(self):
         return self

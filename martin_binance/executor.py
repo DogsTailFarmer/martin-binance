@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.19"
+__version__ = "3.0.20"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -129,6 +129,7 @@ class Strategy(StrategyBase):
         self.tp_part_free = False  # + Can use TP part amount for converting to grid orders
         self.ts_grid_update = self.get_time()  # - When updated grid
         self.wait_wss_refresh = {}  # -
+        self.place_grid_part_after_tp = True  # -
         #
         schedule.every(5).minutes.do(self.event_grid_update)
         schedule.every(5).seconds.do(self.event_processing)
@@ -460,8 +461,13 @@ class Strategy(StrategyBase):
                 self.start_reverse_time = self.get_time()
 
     def event_update_tp(self):
-        if ADAPTIVE_TRADE_CONDITION and self.stable_state() \
-              and self.tp_order_id and not self.tp_part_amount_first and self.get_time() - self.tp_order[3] > 60 * 15:
+        if (
+            ADAPTIVE_TRADE_CONDITION
+            and self.stable_state()
+            and self.tp_order_id
+            and self.get_time() - self.tp_order[3] > TP_REFRESH
+            and not self.tp_part_amount_first
+        ):
             self.message_log("Update TP order", color=Style.B_WHITE)
             self.place_profit_order()
 
@@ -502,6 +508,7 @@ class Strategy(StrategyBase):
             and not self.start_after_shift
             and not self.tp_hold
             and not self.tp_order_hold
+            and not self.tp_wait_id
             and not self.orders_init
             and self.command != 'stopped'
         )
@@ -620,10 +627,24 @@ class Strategy(StrategyBase):
                 self.message_log("Continue update grid", tlg=True)
                 self.grid_remove = True
                 self.cancel_grid()
-            elif not self.orders_grid and not self.orders_hold and not self.orders_save and not self.tp_order_id:
+            elif (
+                    not self.orders_grid
+                    and not self.orders_hold
+                    and not self.orders_save
+                    and not self.orders_init
+                    and not self.tp_order_id
+                    and not self.tp_wait_id
+            ):
                 self.message_log("Restore, Restart", tlg=True)
                 self.start()
-            if not self.tp_order_id and self.stable_state():
+            if self.orders_init:
+                for order_id in self.orders_init.get_id_list():
+                    self.message_log("Restore, wait grid orders", tlg=True)
+                    self.check_created_order(order_id, "Grid order event was missed into reload")
+            if self.tp_wait_id:
+                self.message_log("Restore, wait TP order", tlg=True)
+                self.check_created_order(self.tp_wait_id, "TP order event was missed into reload")
+            elif not self.tp_order_id and self.stable_state():
                 self.message_log("Restore, no TP order, replace", tlg=True)
                 self.place_profit_order()
 
@@ -1857,8 +1878,7 @@ class Strategy(StrategyBase):
                         i['buy'],
                         i['amount'],
                         i['price'],
-                        check=True,
-                        price_limit_rules=True
+                        check=True
                     )
                     if waiting_order_id:
                         self.orders_init.append_order(waiting_order_id, i['buy'], i['amount'], i['price'])
@@ -2137,30 +2157,12 @@ class Strategy(StrategyBase):
                     _amount = self.deposit_first
         return self.round_truncate(_amount, base=True) >= min_trade_amount
 
-    def place_limit_order_check(
-            self,
-            buy: bool,
-            amount: Decimal,
-            price: Decimal,
-            check=False,
-            price_limit_rules=False
-    ) -> int:
+    def place_limit_order_check(self, buy: bool, amount: Decimal, price: Decimal, check=False) -> int:
         """
         Before place limit order checking trade conditions and correct price
         """
         if self.command == 'stopped':
             return 0
-        if price_limit_rules:
-            tcm = self.get_trading_capability_manager()
-            _price = self.get_buffered_ticker().last_price or self.avg_rate
-            if ((buy and price < tcm.get_min_buy_price(_price)) or
-                    (not buy and price > tcm.get_max_sell_price(_price))):
-                self.message_log(
-                    f"{'Buy' if buy else 'Sell'} price {price} is out of trading range, will try later",
-                    log_level=logging.WARNING,
-                    color=Style.YELLOW
-                )
-                return 0
         _price = price
         if check:
             order_book = self.get_buffered_order_book()
@@ -2572,7 +2574,7 @@ class Strategy(StrategyBase):
             if self.tp_hold or self.tp_cancel or self.tp_cancel_from_grid_handler:
                 self.cancel_order_id = self.tp_order_id
                 self.cancel_order(self.tp_order_id)
-            else:
+            elif self.place_grid_part_after_tp:
                 self.place_grid_part()
         else:
             self.message_log(f"Did not have waiting order {place_order_id}", logging.ERROR)
@@ -2585,6 +2587,7 @@ class Strategy(StrategyBase):
             self.orders_init.remove(place_order_id)
             self.orders_hold.orders_list.append(_order)
             self.orders_hold.sort(self.cycle_buy)
+            self.place_grid_part_after_tp = False
             if self.cancel_grid_hold:
                 self.message_log('Continue remove grid orders', color=Style.B_WHITE)
                 self.cancel_grid_hold = False
