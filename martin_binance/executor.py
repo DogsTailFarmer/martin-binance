@@ -794,6 +794,7 @@ class Strategy(StrategyBase):
         self.over_price = OVER_PRICE
         self.order_q = ORDER_Q
         self.grid_update_started = None
+        self.place_grid_part_after_tp = True
         #
         start_cycle_output = not self.start_after_shift or self.first_run
         if self.cycle_buy:

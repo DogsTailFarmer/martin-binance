@@ -1524,8 +1524,7 @@ class StrategyBase:
 
     async def tlg_get_command(self):
         while True:
-            res = await self.tlg_client.get_update()
-            command = json.loads(res.data) if res else None
+            command = await self.tlg_client.get_update()
             if command:
                 self.command = command
             await asyncio.sleep(TLG_DELAY)

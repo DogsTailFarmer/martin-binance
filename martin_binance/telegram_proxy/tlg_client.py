@@ -19,14 +19,15 @@ openssl req -x509 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyout tlg-clie
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.20"
+__version__ = "3.0.21"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import ssl
 from pathlib import Path
 import asyncio
-
+from typing import Any
+import ujson as json
 import toml
 import random
 import logging.handlers
@@ -89,7 +90,7 @@ class TlgClient:
             _t.add_done_callback(self.tasks.discard)
 
     def task_cancel(self):
-        [task.cancel() for task in self.tasks if not task.done()]
+        [task.cancel() for task in self.tasks if not task.done()]  # skipcq: PYL-W0106
 
     async def connect(self):
         self.init_event.clear()
@@ -111,7 +112,7 @@ class TlgClient:
                 logger.error(f"Connect to Telegram proxy failed: {e}")
                 break
 
-    async def post_message(self, text, inline_buttons=False, reraise=False) -> tlg.Response:
+    async def post_message(self, text, inline_buttons=False, reraise=False):
         try:
             res = await self.stub.post_message(
                 tlg.Request(
@@ -133,14 +134,14 @@ class TlgClient:
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass  # user interrupt
 
-    async def get_update(self) -> tlg.Response:
+    async def get_update(self) -> Any | None:
         try:
             res = await self.stub.get_update(
                 tlg.Request(
                     bot_id=self.bot_id,
                 )
             )
-            return res
+            return json.loads(res.data) if res else None
         except (ConnectionRefusedError, exceptions.StreamTerminatedError):
             if self.init_event.is_set():
                 self.tasks_manage(self.connect())

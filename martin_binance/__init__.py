@@ -6,7 +6,7 @@ Free trading system for Binance SPOT API
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.20"
+__version__ = "3.0.21"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -52,6 +52,7 @@ def init():
             "cli_2_TESTBTCTESTUSDT.py",
             "cli_3_BTCUSDT.py"
         ]
+        # skipcq: PYL-W0106
         [copy(Path(templates, file_name), Path(WORK_PATH, file_name)) for file_name in files_to_copy]
 
         print(f"Before the first run, set the parameters in {CONFIG_FILE}")

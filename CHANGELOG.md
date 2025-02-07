@@ -1,3 +1,7 @@
+## 3.0.21 - 2025-02-07
+### Update
+* Some minor improvements
+
 ## 3.0.20 - 2025-02-06
 ### Update
 * `Bybit`: checking for the minimum/maximum Buy/Sell orders price is [excluded](https://announcements.bybit.com/article/title-adjustments-to-bybit-s-spot-trading-limit-order-mechanism-blt786c0c5abf865983/)

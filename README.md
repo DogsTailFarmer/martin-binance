@@ -1,4 +1,4 @@
-<p align="center"><img src="https://github.com/DogsTailFarmer/martin-binance/raw/public/doc/Modified%20martingale.svg" width="200"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/DogsTailFarmer/martin-binance/55758a8d32b08c4deb1b34add01c5e259b88f738/doc/Modified%20martingale.svg" width="200"></p>
 <h3 align="center">Profitable, fault-tolerant, adaptable to the market</h3>
 
 ***

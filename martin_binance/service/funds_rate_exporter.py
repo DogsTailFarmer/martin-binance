@@ -99,7 +99,7 @@ VPS_CPU = Gauge("margin_vps_cpu", "average cpu load", ['vps_name'])
 VPS_MEMORY = Gauge("margin_vps_memory", "average memory use in %", ['vps_name'])
 
 SET_ACTIVE = Gauge("margin_set_active", "mark rows as loaded and reset some metrics", ['vps_name'])
-SET_ACTIVE.labels(VPS_NAME).set_function(lambda: set_active())
+SET_ACTIVE.labels(VPS_NAME).set_function(lambda: set_active())  # skipcq: PYL-W0108
 
 ''' Cycle parameters for future use
 PRICE_SHIFT = Gauge("margin_price_shift", "price shift", ['exchange', 'pair'])
