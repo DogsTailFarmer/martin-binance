@@ -1,3 +1,7 @@
+## 3.0.22 - 2025-02-20
+### Update
+* Bump requirements
+
 ## 3.0.21 - 2025-02-07
 ### Update
 * Some minor improvements
