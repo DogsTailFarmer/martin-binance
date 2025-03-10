@@ -1,3 +1,16 @@
+## 3.0.23 - 2025-03-10
+### Fix
+* `restore_strategy_state`: Logical error when processing orders that were sent before shutdown and no response
+was received
+* `on_balance_update_ex`: doubling the adjustment of the initial balance with a positive replenishment in the opposite
+coin
+
+### Update
+* Added `trade_id` to debug output
+* Bump requirements
+* `grafana.json` template
+* Some minor improvements
+
 ## 3.0.22 - 2025-02-20
 ### Update
 * Bump requirements

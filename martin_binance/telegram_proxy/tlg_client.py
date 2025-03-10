@@ -9,17 +9,17 @@ cd ~/.MartinBinance/keys
 
 Proxy Service pair
 
-openssl req -x509 -newkey rsa:2048 -nodes -subj '/CN=localhost' --addext 'subjectAltName=IP:aaa.bbb.ccc.ddd'\
+openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' --addext 'subjectAltName=IP:aaa.bbb.ccc.ddd'\
  -keyout tlg-proxy.key -out tlg-proxy.pem
 
 Client pair
 
-openssl req -x509 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyout tlg-client.key -out tlg-client.pem
+openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyout tlg-client.key -out tlg-client.pem
 """
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.21"
+__version__ = "3.0.23"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -109,7 +109,10 @@ class TlgClient:
                 logger.warning(f"Try connecting to Telegram proxy, retrying in {delay} second... ")
                 await asyncio.sleep(delay)
             except ssl.SSLCertVerificationError as e:
-                logger.error(f"Connect to Telegram proxy failed: {e}")
+                logger.error(f"Connect to Telegram proxy server failed: {e}")
+                break
+            except Exception as e:
+                logger.error(f"Connect to Telegram proxy server failed, check certificate expiration date first: {e}")
                 break
 
     async def post_message(self, text, inline_buttons=False, reraise=False):

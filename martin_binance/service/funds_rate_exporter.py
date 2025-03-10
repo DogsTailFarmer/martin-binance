@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.19"
+__version__ = "3.0.23"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -55,6 +55,7 @@ API = config.get('api')
 request_delay = 60 / config.get('rate_limit')
 #  endregion
 
+GET_RATE = True  # For develop purpose can skip getting asset rate from coinmarketcap
 CURRENCY_RATE_LAST_TIME = int(time.time())
 
 try:
@@ -156,7 +157,7 @@ def get_rate(_currency_rate) -> {}:
     for currency in _currency_rate:
         _currency = replace.get(currency, currency)
         price = buffer_rate.get(_currency)
-        if price is None:
+        if price is None and GET_RATE:
             price = -1
             parameters = {'amount': 1, 'symbol': 'USD', 'convert': _currency}
             try:
@@ -175,8 +176,7 @@ def get_rate(_currency_rate) -> {}:
                     data = response.json()
                     price = data['data'][0]['quote'][_currency]['price'] or -1
                     buffer_rate[_currency] = price
-        _currency_rate[currency] = price
-        # time.sleep(request_delay)
+        _currency_rate[currency] = price if GET_RATE else 1
     return _currency_rate
 
 

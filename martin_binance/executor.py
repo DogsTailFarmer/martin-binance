@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.20"
+__version__ = "3.0.23"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -637,7 +637,7 @@ class Strategy(StrategyBase):
             ):
                 self.message_log("Restore, Restart", tlg=True)
                 self.start()
-            if self.orders_init:
+            elif self.orders_init:
                 for order_id in self.orders_init.get_id_list():
                     self.message_log("Restore, wait grid orders", tlg=True)
                     self.check_created_order(order_id, "Grid order event was missed into reload")
@@ -770,13 +770,14 @@ class Strategy(StrategyBase):
         #
         memory = psutil.virtual_memory()
         swap = psutil.swap_memory()
-        total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
-        if total_used_percent > 85:
-            self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
-            self.command = 'end'
-        elif total_used_percent > 75:
-            self.message_log(f"For {VPS_NAME} low memory availability, stop after end of cycle", tlg=True)
-            self.command = 'stop'
+        if VPS_NAME != 'DEVELOP':
+            total_used_percent = 100 * float(swap.used + memory.used) / (swap.total + memory.total)
+            if total_used_percent > 85:
+                self.message_log(f"For {VPS_NAME} critical memory availability, end", tlg=True)
+                self.command = 'end'
+            elif total_used_percent > 75:
+                self.message_log(f"For {VPS_NAME} low memory availability, stop after end of cycle", tlg=True)
+                self.command = 'stop'
         if self.command == 'end' or (self.command == 'stop' and
                                      (not self.reverse or (self.reverse and REVERSE_STOP))):
             self.command = 'stopped'
@@ -1030,6 +1031,7 @@ class Strategy(StrategyBase):
         self.message_log(f"\n"
                          f"! =======================================\n"
                          f"! debug output: ver: {self.client.srv_version}: {HEAD_VERSION}+{__version__}+{msb_ver}\n"
+                         f"! trade_id: {self.session.trade_id}\n"
                          f"! reverse: {self.reverse}\n"
                          f"! Cycle Buy: {self.cycle_buy}\n"
                          f"! deposit_first: {self.deposit_first}, deposit_second: {self.deposit_second}\n"
@@ -2286,7 +2288,8 @@ class Strategy(StrategyBase):
 
                     self.update_sum_amount(-delta, -deposit_add)
                     self.place_profit_order()
-                self.initial_first += delta
+                else:
+                    self.initial_first += delta
         else:
             if asset == self.f_currency:
                 restart = True
@@ -2334,7 +2337,8 @@ class Strategy(StrategyBase):
 
                     self.update_sum_amount(-deposit_add, -delta)
                     self.place_profit_order()
-                self.initial_second += delta
+                else:
+                    self.initial_second += delta
 
         self.debug_output()
 
