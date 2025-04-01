@@ -1,3 +1,7 @@
+## 3.0.24 - 2025-04-01
+### Update
+✨ [UPDATE](pyproject.toml/CHANGELOG.md): Bump dependencies and version.
+
 ## 3.0.23 - 2025-03-10
 ### Fix
 * `restore_strategy_state`: Logical error when processing orders that were sent before shutdown and no response
