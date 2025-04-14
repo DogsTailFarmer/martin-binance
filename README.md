@@ -62,7 +62,7 @@ Create account on [OKEX](https://www.okex.com/join/2607649) and get Mystery Boxe
 
 Create account on [Bybit](https://www.bybit.com/invite?ref=9KEW1K) and get exclusive referral rewards
 
-Also, you can start strategy on [Hetzner](https://hetzner.cloud/?ref=uFdrF8nsdGMc) cloud VPS only for 4.75 € per month
+Also, you can start strategy on [Hetzner](https://hetzner.cloud/?ref=uFdrF8nsdGMc) cloud VPS only for 3.79 € per month and receive €20 in cloud credits.
 
 ### Donate
 *USDT* (TRC20) TU3kagV9kxbjuUmEi6bUym5MTXjeM7Tm8K
