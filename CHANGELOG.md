@@ -1,3 +1,7 @@
+## 3.0.26 - 2025-04-24
+🔒 fix(tlg_client, tlg_proxy): set minimum SSL/TLS version to 1.2 for enhanced security  
+🔧 chore(init): bump version to 3.0.26 in `__init__.py`  
+
 ## 3.0.25 - 2025-04-24
 🔧 fix(pyproject.toml, requirements.txt): update `exchanges-wrapper` version to 2.1.35 for compatibility  
 📝 docs(README.md): update configuration instructions for `exchanges-wrapper` to version 3.0.25  

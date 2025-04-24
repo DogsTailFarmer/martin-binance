@@ -19,7 +19,7 @@ openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyou
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.23"
+__version__ = "3.0.26"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -61,6 +61,7 @@ CLIENT_KEY = Path(CERT_DIR, "tlg-client.key")
 
 def create_secure_context(client_cert: Path, client_key: Path, *, trusted: Path) -> ssl.SSLContext:
     ctx = ssl.create_default_context(cafile=str(trusted))
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
     ctx.load_cert_chain(str(client_cert), str(client_key))
     ctx.set_ciphers('ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20')
     ctx.set_alpn_protocols(['h2'])
