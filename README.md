@@ -26,11 +26,7 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* After update to `3.0.20` the config files `cli_XX_AAABBB.py` must be updated from [template](https://github.com/DogsTailFarmer/martin-binance/tree/public/martin_binance/templates)
-* After update to `3.0.17`, the configuration file `exch_srv_cfg.toml` for [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper) must be updated. [Use templates for reference.](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/exchanges_wrapper/exch_srv_cfg.toml.template)
-* After update to `3.0.17`, the configuration file `ms_cfg.toml` must be updated. [Use templates for reference.](https://github.com/DogsTailFarmer/martin-binance/blob/f0a0e5f9a7ceba3919ea0087f1b9f4e0d1bc95b6/martin_binance/templates/ms_cfg.toml)
-* The config files `cli_XX_AAABBB.py` also must be updated from [template](https://github.com/DogsTailFarmer/martin-binance/tree/public/martin_binance/templates)
-* Interaction with Telegram has been radically changed. Please review the new [terms and conditions](https://github.com/DogsTailFarmer/martin-binance/wiki/How-it's-work#telegram) carefully. Loading of the service can be completely disabled in the settings.
+* After update to `3.0.25`, the configuration file `exch_srv_cfg.toml` for [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper) must be updated. [Use templates for reference.](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/exchanges_wrapper/exch_srv_cfg.toml.template)
 
 ## Notices
 * You cannot run multiple pairs with overlapping currencies on the same account!
@@ -54,11 +50,11 @@ Strongly recommended that you test the strategy in the demo mode before using re
 
 Create account on [Binance](https://accounts.binance.com/en/register?ref=FXQ6HY5O) and get 10% discount on all trading fee
 
-Create account on [HUOBI](https://www.huobi.com/en-us/topic/double-reward/?invite_code=9uaw3223) and will get 50 % off trading fees
+Create account on [HTX](https://www.htx.com/invite/en-us/1f?invite_code=9uaw3223)
 
 Create account on [Bitfinex](https://www.bitfinex.com/sign-up?refcode=v_4az2nCP) and get 6% rebate fee
 
-Create account on [OKEX](https://www.okex.com/join/2607649) and get Mystery Boxes worth up to $10,000
+Create account on [OKX](https://okx.com/join/2607649) and will be in for the chance to earn up to 100 USDT
 
 Create account on [Bybit](https://www.bybit.com/invite?ref=9KEW1K) and get exclusive referral rewards
 

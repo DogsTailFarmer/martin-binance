@@ -1,4 +1,8 @@
-## 3.0.24 - 2025-04-01
+## 3.0.25 - 2025-04-24
+🔧 fix(pyproject.toml, requirements.txt): update `exchanges-wrapper` version to 2.1.35 for compatibility  
+📝 docs(README.md): update configuration instructions for `exchanges-wrapper` to version 3.0.25  
+🔄 chore(README.md): change `HUOBI` to `HTX` and `OKEX` to `OKX` in referral links  
+
 ### Update
 ✨ [UPDATE](pyproject.toml/CHANGELOG.md): Bump dependencies and version.
 

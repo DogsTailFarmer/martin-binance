@@ -1,4 +1,4 @@
-exchanges-wrapper>=2.1.33
+exchanges-wrapper>=2.1.35
 betterproto==2.0.0b7
 colorama==0.4.6
 dash==2.18.2
