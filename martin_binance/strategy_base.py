@@ -1029,7 +1029,6 @@ class StrategyBase:
         if prm.MODE == 'S':
             with open(Path(self.session_root, "raw/klines.json")) as file:
                 klines_from_file = json.load(file)
-
         for i in KLINES_INIT:
             if prm.MODE in ('T', 'TC'):
                 try:
