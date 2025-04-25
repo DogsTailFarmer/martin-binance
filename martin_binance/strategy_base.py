@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.20"
+__version__ = "3.0.27"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -303,7 +303,7 @@ class StrategyBase:
                 saved_filled_quantity += _trade.amount
         return saved_filled_quantity
 
-    def remove_from_orders_lists(self, _order_id_list: []) -> None:
+    def remove_from_orders_lists(self, _order_id_list: list) -> None:
         [self.orders.pop(i, None) for i in _order_id_list]
 
     def remove_from_trades_lists(self, _order_id) -> None:
@@ -1027,7 +1027,9 @@ class StrategyBase:
         klines_from_file = {}
         kline = []
         if prm.MODE == 'S':
-            klines_from_file = json.load(open(Path(self.session_root, "raw/klines.json")))
+            with open(Path(self.session_root, "raw/klines.json")) as file:
+                klines_from_file = json.load(file)
+
         for i in KLINES_INIT:
             if prm.MODE in ('T', 'TC'):
                 try:
@@ -1882,7 +1884,7 @@ async def save_to_csv() -> None:
             SAVE_TRADE_QUEUE.task_done()
 
 
-def load_from_csv() -> []:
+def load_from_csv() -> list:
     file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
     trades = []
     if file_name.exists() and file_name.stat().st_size:

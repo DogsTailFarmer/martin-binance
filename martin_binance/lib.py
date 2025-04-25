@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.20"
+__version__ = "3.0.27"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -77,7 +77,7 @@ def convert_from_minute(m: int) -> str:
     return '1w' if 10080 <= m < 44640 else '1m'
 
 
-def load_file(name: Path) -> {}:
+def load_file(name: Path) -> dict:
     _res = {}
     if name.exists():
         try:
@@ -91,7 +91,7 @@ def load_file(name: Path) -> {}:
     return _res
 
 
-def load_last_state(last_state_file) -> {}:
+def load_last_state(last_state_file) -> dict:
     res = {}
     if last_state_file.exists():
         res = load_file(last_state_file)
@@ -145,7 +145,7 @@ class Orders:
     def remove(self, _id: int):
         self.orders_list[:] = [i for i in self.orders_list if i['id'] != _id]
 
-    def find_order(self, in_orders: [], place_order_id: int):
+    def find_order(self, in_orders: list, place_order_id: int):
         """
         Find equal order in_orders[] and self.orders_list[] where in_orders[].id == place_order_id
         If exist return order: Order
@@ -161,20 +161,20 @@ class Orders:
                 break
         return order
 
-    def get_by_id(self, _id: int) -> {}:
+    def get_by_id(self, _id: int) -> dict:
         return next((i for i in self.orders_list if i['id'] == _id), None)
 
     def exist(self, _id: int) -> bool:
         return any(i['id'] == _id for i in self.orders_list)
 
-    def get(self) -> []:
+    def get(self) -> list:
         """
         Get List of Dict for orders
         :return: []
         """
         return self.orders_list
 
-    def get_id_list(self) -> []:
+    def get_id_list(self) -> list:
         """
         Get List of orders id
         :return: []
@@ -195,7 +195,7 @@ class Orders:
         """
         return tuple(self.orders_list[-1].values())
 
-    def restore(self, order_list: []):
+    def restore(self, order_list: list):
         self.orders_list.clear()
         for i in order_list:
             i_dec = {'id': i.get('id'),
@@ -230,7 +230,7 @@ class PrivateTrade:
         "timestamp"
     )
 
-    def __init__(self, _trade: {}) -> None:
+    def __init__(self, _trade: dict) -> None:
         self.amount = Decimal(_trade["qty"])
         self.buy = _trade.get('isBuyer', False)
         self.is_maker = _trade.get('isMaker', False)
@@ -272,12 +272,12 @@ class OrderUpdate:
     PARTIALLY_FILLED = Status.PARTIALLY_FILLED
     REAPPEARED = Status.REAPPEARED
 
-    def __init__(self, event: {}, trades: []) -> None:
+    def __init__(self, event: dict, trades: list) -> None:
 
         class OriginalOrder:
             __slots__ = ("id",)
 
-            def __init__(self, _event: {}):
+            def __init__(self, _event: dict):
                 self.id = _event['order_id']
 
         self.original_order = OriginalOrder(event)
@@ -303,7 +303,7 @@ class OrderUpdate:
 class Order:
     __slots__ = ("amount", "buy", "id", "order_type", "price", "received_amount", "remaining_amount", "timestamp")
 
-    def __init__(self, order: {}):
+    def __init__(self, order: dict):
         self.amount = Decimal(order['origQty'])
         self.buy = order['side'] == 'BUY'
         self.id = int(order['orderId'])
@@ -324,7 +324,7 @@ class Order:
 class Candle:
     __slots__ = ("min_time", "open", "high", "low", "close", "volume", "max_time", "trade_number", "vwap")
 
-    def __init__(self, _candle: []):
+    def __init__(self, _candle: list):
         self.min_time = int(_candle[0])
         self.open = float(_candle[1])
         self.high = float(_candle[2])
@@ -488,5 +488,5 @@ class Klines:
             self.klines_series[self.interval] = self.kline
 
     @classmethod
-    def get_kline(cls, _interval) -> []:
+    def get_kline(cls, _interval) -> list:
         return cls.klines_series.get(_interval, [])

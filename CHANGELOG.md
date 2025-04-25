@@ -1,3 +1,8 @@
+## 3.0.27 - 2025-04-25
+🔧 chore(dependencies): bump `exchanges-wrapper` version to 2.1.36 in `pyproject.toml` and `requirements.txt`  
+🔧 refactor(lib): update function return types to `dict` and `list` in `martin_binance/lib.py`  
+🔧 refactor(strategy_base): update function return types to `list` in `martin_binance/strategy_base.py`  
+
 ## 3.0.26 - 2025-04-24
 🔒 fix(tlg_client, tlg_proxy): set minimum SSL/TLS version to 1.2 for enhanced security  
 🔧 chore(init): bump version to 3.0.26 in `__init__.py`  
