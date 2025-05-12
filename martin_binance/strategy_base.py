@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.27"
+__version__ = "3.0.28"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1146,7 +1146,7 @@ class StrategyBase:
 
     async def create_order_handler(self, _id, result):
         # print(f"create_order_handler.result: {result}")
-        if self.order_init_exist(_id):  # and not self.order_exist(result['orderId']):
+        if self.order_init_exist(_id):
             order = Order(result)
             self.orders[order.id] = order
             self.on_place_order_success(_id, order)

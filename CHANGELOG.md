@@ -1,3 +1,7 @@
+## 3.0.28 - 2025-05-12
+🔧 chore(dependencies): update `exchanges-wrapper` to version 2.1.37 in `pyproject.toml` and `requirements.txt`  
+🔧 fix(strategy): simplify `create_order_handler` method in `strategy_base.py`  
+
 ## 3.0.27 - 2025-04-25
 🔧 chore(dependencies): bump `exchanges-wrapper` version to 2.1.36 in `pyproject.toml` and `requirements.txt`  
 🔧 refactor(lib): update function return types to `dict` and `list` in `martin_binance/lib.py`  
