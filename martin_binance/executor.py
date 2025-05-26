@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.29"
+__version__ = "3.0.30"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -453,8 +453,7 @@ class Strategy(StrategyBase):
                         self.reverse_hold = False
                         self.sum_amount_first = self.tp_part_amount_first
                         self.sum_amount_second = self.tp_part_amount_second
-                        self.tp_part_amount_first = O_DEC
-                        self.tp_part_amount_second = O_DEC
+                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
                         self.message_log('Release Hold reverse cycle', color=Style.B_WHITE)
                         self.start()
             else:
@@ -641,6 +640,10 @@ class Strategy(StrategyBase):
                 for order_id in self.orders_init.get_id_list():
                     self.message_log("Restore, wait grid orders", tlg=True)
                     self.check_created_order(order_id, "Grid order event was missed into reload")
+            elif not grid_open_orders_len:
+                self.message_log("Place grid orders", tlg=True)
+                self.grid_update()
+
             if self.tp_wait_id:
                 self.message_log("Restore, wait TP order", tlg=True)
                 self.check_created_order(self.tp_wait_id, "TP order event was missed into reload")
@@ -2111,32 +2114,33 @@ class Strategy(StrategyBase):
                     self.grid_update_started = None
                     self.after_filled_tp(one_else_grid=False)
                 elif self.grid_update_started:
-                    _depo = self.depo_unused()
-                    self.message_log(f"Start update grid orders, depo: {_depo}", color=Style.B_WHITE)
-                    if self.reverse:
-                        if self.cycle_buy:
-                            _reverse_target_amount = self.reverse_target_amount - self.sum_amount_first
-                        else:
-                            _reverse_target_amount = self.reverse_target_amount - self.sum_amount_second
-                    else:
-                        _reverse_target_amount = O_DEC
-
-                    if self.tp_part_amount_first:
-                        self.tp_part_free = False
-                        self.message_log(f"Partially filled TP order amount was utilised:"
-                                         f" first: {self.tp_part_amount_first}, second: {self.tp_part_amount_second}")
-                        self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-
-                    self.place_grid(self.cycle_buy,
-                                    _depo,
-                                    _reverse_target_amount,
-                                    allow_grid_shift=False,
-                                    grid_update=True)
+                    self.grid_update()
                 else:
                     self.grid_update_started = None
                     self.start()
         else:
             self.grid_remove = None
+
+    def grid_update(self):
+        _depo = self.depo_unused()
+        self.message_log(f"Start update (place) grid orders, depo: {_depo}", color=Style.B_WHITE)
+        if self.reverse:
+            if self.cycle_buy:
+                _reverse_target_amount = self.reverse_target_amount - self.sum_amount_first
+            else:
+                _reverse_target_amount = self.reverse_target_amount - self.sum_amount_second
+        else:
+            _reverse_target_amount = O_DEC
+        if self.tp_part_amount_first:
+            self.tp_part_free = False
+            self.message_log(f"Partially filled TP order amount was utilised:"
+                             f" first: {self.tp_part_amount_first}, second: {self.tp_part_amount_second}")
+            self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
+        self.place_grid(self.cycle_buy,
+                        _depo,
+                        _reverse_target_amount,
+                        allow_grid_shift=False,
+                        grid_update=True)
 
     def check_min_amount(self, amount=O_DEC, price=O_DEC, for_tp=True, by_market=False) -> bool:
         _price = price or self.avg_rate

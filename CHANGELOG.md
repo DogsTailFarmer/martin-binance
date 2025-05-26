@@ -1,3 +1,7 @@
+## 3.0.30 - 2025-05-25
+✨ feat(executor): refactor `grid_update` method and simplify TP order handling logic for clarity and efficiency.  
+🔧 fix(executor): ensure grid orders placement when no open grid orders exist. 
+
 ## 3.0.29 - 2025-05-25
 ✨ refactor(lib.py): simplify `convert_from_minute` using intervals for improved readability and maintainability  
 🔧 fix(executor.py): change type check to `isinstance` for `self.start_collect` in `event_exec_command`  
