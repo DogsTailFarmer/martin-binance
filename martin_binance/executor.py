@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.23"
+__version__ = "3.0.29"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -335,7 +335,7 @@ class Strategy(StrategyBase):
                     print(f"UPDATE t_control: {err}")
 
     def event_exec_command(self):
-        if self.command == 'stopped' and isinstance(self.start_collect, int):
+        if self.command == 'stopped' and type(self.start_collect) is int:
             if self.start_collect < 5:
                 self.start_collect += 1
             else:
@@ -2186,11 +2186,16 @@ class Strategy(StrategyBase):
     def on_new_ticker(self, ticker: Ticker) -> None:
         # print(f"on_new_ticker:{datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
         self.last_ticker_update = int(self.get_time())
-        if (self.shift_grid_threshold and self.last_shift_time and self.get_time() -
-                self.last_shift_time > SHIFT_GRID_DELAY
-            and ((self.cycle_buy and ticker.last_price >= self.shift_grid_threshold)
-                 or
-                 (not self.cycle_buy and ticker.last_price <= self.shift_grid_threshold))):
+        shift_time_elapsed = self.shift_grid_threshold and self.last_shift_time and (
+                    self.get_time() - self.last_shift_time > SHIFT_GRID_DELAY)
+
+        if shift_time_elapsed:
+            price_above_threshold = self.cycle_buy and ticker.last_price >= self.shift_grid_threshold
+            price_below_threshold = not self.cycle_buy and ticker.last_price <= self.shift_grid_threshold
+        else:
+            price_above_threshold = price_below_threshold = False
+
+        if price_above_threshold or price_below_threshold:
             self.message_log('Shift grid', color=Style.B_WHITE)
             self.shift_grid_threshold = None
             self.start_after_shift = True

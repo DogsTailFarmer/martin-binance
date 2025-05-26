@@ -1,3 +1,8 @@
+## 3.0.29 - 2025-05-25
+✨ refactor(lib.py): simplify `convert_from_minute` using intervals for improved readability and maintainability  
+🔧 fix(executor.py): change type check to `isinstance` for `self.start_collect` in `event_exec_command`  
+🔧 fix(executor.py): streamline condition checks in `on_new_ticker` for better clarity and performance
+
 ## 3.0.28 - 2025-05-12
 🔧 chore(dependencies): update `exchanges-wrapper` to version 2.1.37 in `pyproject.toml` and `requirements.txt`  
 🔧 fix(strategy): simplify `create_order_handler` method in `strategy_base.py`  

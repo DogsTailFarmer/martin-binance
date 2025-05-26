@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.27"
+__version__ = "3.0.29"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -48,33 +48,27 @@ def solve(fn, value: Decimal, x: Decimal, **kwargs) -> (Decimal, str):
 
 
 def convert_from_minute(m: int) -> str:
-    if 1 <= m < 3:
-        return '1m'
-    if 3 <= m < 5:
-        return '3m'
-    if 5 <= m < 15:
-        return '5m'
-    if 15 <= m < 30:
-        return '15m'
-    if 30 <= m < 60:
-        return '30m'
-    if 60 <= m < 120:
-        return '1h'
-    if 120 <= m < 240:
-        return '2h'
-    if 240 <= m < 360:
-        return '4h'
-    if 360 <= m < 480:
-        return '6h'
-    if 480 <= m < 720:
-        return '8h'
-    if 720 <= m < 1440:
-        return '12h'
-    if 1440 <= m < 4320:
-        return '1d'
-    if 4320 <= m < 10080:
-        return '3d'
-    return '1w' if 10080 <= m < 44640 else '1m'
+    intervals = [
+        (1, 3, '1m'),
+        (3, 5, '3m'),
+        (5, 15, '5m'),
+        (15, 30, '15m'),
+        (30, 60, '30m'),
+        (60, 120, '1h'),
+        (120, 240, '2h'),
+        (240, 360, '4h'),
+        (360, 480, '6h'),
+        (480, 720, '8h'),
+        (720, 1440, '12h'),
+        (1440, 4320, '1d'),
+        (4320, 10080, '3d'),
+        (10080, 44640, '1w')
+    ]
+
+    for start, end, value in intervals:
+        if start <= m < end:
+            return value
+    return '1m'  # Default case
 
 
 def load_file(name: Path) -> dict:
