@@ -1,3 +1,6 @@
+## 3.0.31 - 2025-05-27
+🔧 fix(executor): correct handling of `delta` in conditional for `initial_first` and `initial_second` updates
+
 ## 3.0.30 - 2025-05-25
 ✨ feat(executor): refactor `grid_update` method and simplify TP order handling logic for clarity and efficiency.  
 🔧 fix(executor): ensure grid orders placement when no open grid orders exist. 

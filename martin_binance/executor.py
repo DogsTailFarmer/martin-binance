@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.30"
+__version__ = "3.0.31"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2298,7 +2298,10 @@ class Strategy(StrategyBase):
                     self.update_sum_amount(-delta, -deposit_add)
                     self.place_profit_order()
                 else:
-                    self.initial_first += delta
+                    if self.reverse:
+                        self.initial_reverse_first += delta
+                    else:
+                        self.initial_first += delta
         else:
             if asset == self.f_currency:
                 restart = True
@@ -2347,7 +2350,10 @@ class Strategy(StrategyBase):
                     self.update_sum_amount(-deposit_add, -delta)
                     self.place_profit_order()
                 else:
-                    self.initial_second += delta
+                    if self.reverse:
+                        self.initial_reverse_second += delta
+                    else:
+                        self.initial_second += delta
 
         self.debug_output()
 
