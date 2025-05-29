@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.31"
+__version__ = "3.0.32"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -2277,8 +2277,8 @@ class Strategy(StrategyBase):
                             self.deposit_second += delta
                             update_grid = True
                     self.initial_second += delta
-            elif asset == self.f_currency and not GRID_ONLY:
-                if delta > 0:
+            elif asset == self.f_currency:
+                if delta > 0 and not GRID_ONLY:
                     self.shift_grid_threshold = None
                     deposit_add = self.round_truncate(delta * self.avg_rate, base=False)
                     self.deposit_second += deposit_add
@@ -2329,8 +2329,8 @@ class Strategy(StrategyBase):
                         self.deposit_first += delta
                         update_grid = True
                     self.initial_first += delta
-            elif asset == self.s_currency and not GRID_ONLY:
-                if delta > 0:
+            elif asset == self.s_currency:
+                if delta > 0 and not GRID_ONLY:
                     self.shift_grid_threshold = None
                     deposit_add = self.round_truncate(delta / self.avg_rate, base=True)
                     self.deposit_first += deposit_add
