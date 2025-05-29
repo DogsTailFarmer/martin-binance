@@ -1,3 +1,6 @@
+## 3.0.32 - 2025-05-30
+🔧 fix(executor): adjust conditions for currency deposits with GRID_ONLY logic
+
 ## 3.0.31 - 2025-05-27
 🔧 fix(executor): correct handling of `delta` in conditional for `initial_first` and `initial_second` updates
 
