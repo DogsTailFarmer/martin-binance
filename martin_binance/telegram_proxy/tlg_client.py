@@ -19,7 +19,7 @@ openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyou
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.26"
+__version__ = "3.0.33"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -27,6 +27,7 @@ import ssl
 from pathlib import Path
 import asyncio
 from typing import Any
+
 import ujson as json
 import toml
 import random
@@ -128,14 +129,14 @@ class TlgClient:
                 )
             )
             return res
-        except (ConnectionRefusedError, exceptions.StreamTerminatedError):
+        except (ConnectionRefusedError, ConnectionAbortedError, exceptions.StreamTerminatedError):
             if self.init_event.is_set():
                 self.tasks_manage(self.connect())
             elif reraise:
                 raise
         except ssl.SSLCertVerificationError as e:
             logger.error(f"Post message to Telegram proxy failed: {e}")
-        except (asyncio.CancelledError, KeyboardInterrupt):
+        except KeyboardInterrupt:
             pass  # user interrupt
 
     async def get_update(self) -> Any | None:
@@ -149,7 +150,7 @@ class TlgClient:
         except (ConnectionRefusedError, exceptions.StreamTerminatedError):
             if self.init_event.is_set():
                 self.tasks_manage(self.connect())
-        except (asyncio.CancelledError, KeyboardInterrupt):
+        except KeyboardInterrupt:
             pass  # user interrupt
         except ssl.SSLCertVerificationError as e:
             logger.error(f"Get update from Telegram proxy failed: {e}")

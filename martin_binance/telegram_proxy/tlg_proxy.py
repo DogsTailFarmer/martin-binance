@@ -10,7 +10,7 @@ markup for Telegram bot commands.
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.26"
+__version__ = "3.0.33"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -55,6 +55,7 @@ HEARTBEAT = config['heartbeat']
 SESSION = requests.Session()
 retries = Retry(total=50, backoff_factor=1, status_forcelist=[101, 104, 111, 502, 503, 504])
 SESSION.mount('https://', HTTPAdapter(max_retries=retries))
+COMMAND_COUNT = 5
 
 
 def create_secure_context(server_cert: Path, server_key: Path, *, trusted: Path) -> ssl.SSLContext:
@@ -78,6 +79,7 @@ def get_keyboard_markup():
                 {'text': 'stop', 'callback_data': 'stop_callback'},
                 {'text': 'end', 'callback_data': 'end_callback'},
                 {'text': 'restart', 'callback_data': 'restart_callback'},
+                {'text': 'exit', 'callback_data': 'exit_callback'},
             ]
         ]})
 
@@ -138,6 +140,8 @@ def parse_query(token, chat_id, update_inner):
         command = 'end'
     elif query_data == 'restart_callback':
         command = 'restart'
+    elif query_data == 'exit_callback':
+        command = 'exit'
     requests_post(
         f'{TLG_URL}{token}//answerCallbackQuery',
         {'callback_query_id': query.get('id')}
@@ -150,7 +154,7 @@ def parse_query(token, chat_id, update_inner):
     }
 
 
-def telegram_get(token, chat_id, offset=None) -> []:
+def telegram_get(token, chat_id, offset=None) -> list:
     command_list = []
     _method = f'{TLG_URL}{token}/getUpdates'
     _res = requests_post(_method, _data={'chat_id': chat_id, 'offset': offset})
@@ -191,7 +195,7 @@ def set_bot_commands(token):
     # Set command for Telegram bot
     _command = requests_post(f'{TLG_URL}{token}/getMyCommands', _data=None)
     if _command and _command.status_code == 200 and (not _command.json().get('result') or
-                                                     len(_command.json().get('result')) < 4):
+                                                     len(_command.json().get('result')) < COMMAND_COUNT):
         _commands = {
             "commands": json.dumps([
                 {"command": "status",
@@ -201,7 +205,9 @@ def set_bot_commands(token):
                 {"command": "end",
                  "description": "Stop strategy after executed TP order, in Direct and Reverse, all the same"},
                 {"command": "restart",
-                 "description": "Restart current pair with recovery"}
+                 "description": "Restart current pair with recovery"},
+                {"command": "exit",
+                 "description": "Exit from apps as Ctrl-C locally"}
             ])
         }
         res = requests_post(f'{TLG_URL}{token}/setMyCommands', _data=_commands)

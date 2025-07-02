@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.17"
+__version__ = "3.0.33"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -67,8 +67,6 @@ class Trade:
                     symbol=self.symbol
                 )
             )
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
         except ConnectionRefusedError as ex:
             raise UserWarning(f"{ex}, reconnect...") from None
         except GRPCError as ex:
@@ -89,8 +87,6 @@ class Trade:
         kwargs['trade_id'] = self.trade_id
         try:
             res = await _request(_request_type(**kwargs))
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
             self.client = None
             raise UserWarning("Have not connection to gRPC server")
@@ -117,8 +113,6 @@ class Trade:
         try:
             async for res in _request(_request_type(**kwargs)):
                 yield res
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
         except grpclib.exceptions.StreamTerminatedError:
             pass  # handling in send_request()
         except GRPCError as ex:

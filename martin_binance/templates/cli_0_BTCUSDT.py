@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.20"
+__version__ = "3.0.33"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -142,10 +142,7 @@ def trade(strategy=None):
     except KeyboardInterrupt:
         pass  # user interrupt
     finally:
-        try:
-            loop.run_until_complete(strategy.ask_exit())
-        except (asyncio.CancelledError, KeyboardInterrupt):
-            pass  # user interrupt
+        loop.run_until_complete(strategy.ask_exit())
         loop.run_until_complete(loop.shutdown_asyncgens())
     return strategy
 

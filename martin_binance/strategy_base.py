@@ -4,20 +4,21 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.28"
+__version__ = "3.0.33"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import ast
 import asyncio
-import csv
+import aiofiles
+from aiocsv import AsyncWriter
 import logging
 import os
 import random
 import sqlite3
 import time
 import traceback
-from abc import abstractmethod
+from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -87,7 +88,7 @@ def refresh_t_asset(cursor, key, value, used):
     )
 
 
-class StrategyBase:
+class StrategyBase(metaclass=ABCMeta):
     def __init__(self):
         self.session = None
         self.client = None
@@ -443,7 +444,6 @@ class StrategyBase:
         # Save klines snapshot
         if _klines := self.klines:
             with open(Path(self.session_root, "raw", "klines.json"), 'w') as f:
-                # noinspection PyTypeChecker
                 json.dump(_klines, f)
 
         # Finalize candles files
@@ -611,7 +611,7 @@ class StrategyBase:
                 # Refresh actual balance
                 default_balance = {'free': '0.0', 'locked': '0.0'}
 
-                if self.exchange == 'binance' and \
+                if self.exchange == 'binance' and Decimal(prm.FEE_BNB["target_amount"]) and \
                         not (prm.FEE_FIRST and prm.FEE_SECOND) and (prm.FEE_MAKER or prm.FEE_TAKER):
 
                     await self.fee_generate_bnb_request(balances, connection_analytic, default_balance)
@@ -653,7 +653,7 @@ class StrategyBase:
                     if self.exchange != 'bitfinex':
                         total = assets_fw.pop(balance['asset'], O_DEC)
                     else:
-                        total = Decimal('0.0')
+                        total = O_DEC
                     if balance['asset'] in controlled_assets or prm.GRID_ONLY:
                         total += Decimal(balance['free']) + Decimal(balance['locked'])
                     assets[balance['asset']] = float(total)
@@ -768,8 +768,6 @@ class StrategyBase:
                 filled_update_call=_filled_update_call
             )
             result = res.to_pydict()
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error.
         except Exception as _ex:
             self.message_log(f"Exception in fetch_order: {_ex}", log_level=logging.ERROR)
             return {}
@@ -884,8 +882,6 @@ class StrategyBase:
                     result = res.to_pydict()
             else:
                 result = self.account.cancel_order(order_id=_id, ts=int(self.get_time() * 1000))
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error.
         except GRPCError as ex:
             _fetch_order = True
             self.message_log(f"Exception on cancel order {_id}: {ex.status.name}, {ex.message}")
@@ -929,8 +925,6 @@ class StrategyBase:
                 symbol=symbol,
                 amount=amount
             )
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
         except GRPCError as ex:
             status_code = ex.status
             self.message_log(f"Exception transfer {symbol} to main account: {status_code.name}, {ex.message}")
@@ -952,8 +946,6 @@ class StrategyBase:
                 amount=amount,
                 data=email
             )
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
         except GRPCError as ex:
             status_code = ex.status
             self.message_log(f"Exception transfer {symbol} to subaccount: {status_code.name}, {ex.message}")
@@ -973,8 +965,6 @@ class StrategyBase:
                 balances = list(map(json.loads, res.items))
             else:
                 balances = self.account.funds.get_funds()
-        except asyncio.CancelledError:
-            pass
         except UserWarning as _ex:
             self.message_log(f"UserWarning: {_ex}", log_level=logging.DEBUG)
         except Exception as _ex:
@@ -1010,8 +1000,6 @@ class StrategyBase:
                 _exchange_info_symbol = await _request(self.stub.fetch_exchange_info_symbol,
                                                        mr.MarketRequest,
                                                        symbol=_symbol)
-            except asyncio.CancelledError:
-                pass  # Task cancellation should not be logged as an error
             except Exception as _ex:
                 self.message_log(f"Exception get_exchange_info: {_ex}")
             else:
@@ -1027,8 +1015,10 @@ class StrategyBase:
         klines_from_file = {}
         kline = []
         if prm.MODE == 'S':
-            with open(Path(self.session_root, "raw/klines.json")) as file:
-                klines_from_file = json.load(file)
+            async with aiofiles.open(Path(self.session_root, "raw/klines.json"), "r") as file:
+                klines_from_file = await file.read()
+                klines_from_file = json.loads(klines_from_file)
+
         for i in KLINES_INIT:
             if prm.MODE in ('T', 'TC'):
                 try:
@@ -1114,8 +1104,6 @@ class StrategyBase:
                     price=price,
                     lt=int(self.get_time() * 1000)
                 )
-        except asyncio.CancelledError:
-            pass  # Task cancellation should not be logged as an error
         except GRPCError as ex:
             status_code = ex.status
             msg = f"Create order {_id}: {status_code.name}, {ex.message}"
@@ -1525,8 +1513,15 @@ class StrategyBase:
 
     async def tlg_get_command(self):
         while True:
-            command = await self.tlg_client.get_update()
+            try:
+                command = await self.tlg_client.get_update()
+            except Exception as ex:
+                self.message_log(f"Can't get command from Tlg proxy, trying later: {ex}", log_level=logging.WARNING)
+                command = None
+                await asyncio.sleep(TLG_DELAY * 10)
             if command:
+                if command == 'exit':
+                    raise SystemExit(1)
                 self.command = command
             await asyncio.sleep(TLG_DELAY)
 
@@ -1578,7 +1573,10 @@ class StrategyBase:
                     restore_state = bool(last_state)
                     print(f"main.restore_state: {restore_state}")
                     if CANCEL_ALL_ORDERS and active_orders and not prm.LOAD_LAST_STATE:
-                        answer = input('Are you want cancel all active order for this pair? Y:\n')
+                        answer = await asyncio.to_thread(
+                            input,
+                            'Are you want cancel all active order for this pair? Y:\n'
+                        )
                         if answer.lower() == 'y':
                             restore_state = False
                             try:
@@ -1593,8 +1591,6 @@ class StrategyBase:
                                     print(f"Order: {i['orderId']}, side:{i['side']},"
                                           f" amount:{i['origQty']}, price:{i['price']}, status:{i['status']}")
                                 print(EQUAL_STR)
-                            except asyncio.CancelledError:
-                                pass  # Task cancellation should not be logged as an error.
                             except GRPCError as ex:
                                 print(f"Exception on cancel All order: {ex.status.name}, {ex.message}")
                         else:
@@ -1691,10 +1687,16 @@ class StrategyBase:
 
             if restore_state:
                 if last_state.get("command", None) == '"stopped"':
-                    input('Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n')
+                    await asyncio.to_thread(
+                        input,
+                        'Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n'
+                    )
                     last_state["command"] = 'null'
                 if not prm.LOAD_LAST_STATE:
-                    answer = input('Restore saved state after restart? Y:\n')
+                    answer = await asyncio.to_thread(
+                        input,
+                        'Restore saved state after restart? Y:\n'
+                    )
                 if prm.LOAD_LAST_STATE or answer.lower() == 'y':
                     self.message_log("Load saved state after restart", color=Style.GREEN)
                     self.last_state = last_state
@@ -1727,7 +1729,10 @@ class StrategyBase:
             if not restore_state:
                 if prm.MODE in ('T', 'TC'):
                     self.init()
-                    input('Press Enter for Start or Ctrl-Z for Cancel\n')
+                    await asyncio.to_thread(
+                        input,
+                        'Press Enter for Start or Ctrl-Z for Cancel\n'
+                    )
                 else:
                     # Set initial local time from backtest data
                     self.time_operational['new'] = self.backtest['ticker_index_first'] / 1000
@@ -1854,32 +1859,13 @@ class StrategyBase:
 
 
 async def save_to_csv() -> None:
-    """
-    Header: ["TRADE",
-             "transaction_time",
-             "side",
-             "order_id",
-             "client_order_id",
-             "trade_id",
-             "order_quantity",
-             "order_price",
-             "cumulative_filled_quantity",
-             "quote_asset_transacted",
-             "last_executed_quantity",
-             "last_executed_price",
-             ]
-            ['TRANSFER',
-             "event_time",
-             "asset",
-             "balance_delta",
-             ]
-    :return:
-    """
     file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
-    with open(file_name, mode="a", buffering=1, newline='') as csvfile:
-        writer = csv.writer(csvfile)
+
+    async with aiofiles.open(file_name, mode="a", newline='') as afp:
+        writer = AsyncWriter(afp)
         while True:
-            writer.writerow(await SAVE_TRADE_QUEUE.get())
+            row_data = await SAVE_TRADE_QUEUE.get()
+            await writer.writerow(row_data)
             SAVE_TRADE_QUEUE.task_done()
 
 
