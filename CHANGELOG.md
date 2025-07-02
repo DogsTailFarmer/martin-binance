@@ -1,3 +1,8 @@
+## 3.0.33 - 2025-07-02
+🛠️ fix(client.py): remove redundant `else` in `register_client` method  
+🛠️ fix(strategy_base.py): adjust indentation and structure in `fetch_order` method  
+🛠️ fix(exchange_simulator.py): update return type and error handling in methods
+
 ## 3.0.33 - 2025-06-21
 **Version Updates:**
    - The version number has been updated to `3.0.33` in all relevant files (`__init__.py`, `client.py`, `strategy.py`, etc.).

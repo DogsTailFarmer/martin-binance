@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.33"
+__version__ = "3.0.34"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -74,9 +74,9 @@ class Trade:
             if status_code == Status.FAILED_PRECONDITION:
                 raise SystemExit(1) from ex
             raise UserWarning(f"Exception on register client: {status_code.name}, {ex.message}")
-        else:
-            logger.info(f"gRPC session started for client_id: {_client.client_id}, trade_id: {self.trade_id}")
-            return _client
+
+        logger.info(f"gRPC session started for client_id: {_client.client_id}, trade_id: {self.trade_id}")
+        return _client
 
     async def send_request(self, _request, _request_type, **kwargs):
         if not self.client:

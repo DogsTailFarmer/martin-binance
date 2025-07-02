@@ -6,11 +6,13 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.2"
+__version__ = "3.0.34"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 from decimal import Decimal
+from typing import Dict
+
 import pandas as pd
 
 
@@ -236,7 +238,7 @@ class Account:
                 'side': order.side,
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
-    def on_ticker_update(self, ticker: {}, ts: int) -> [dict]:
+    def on_ticker_update(self, ticker: {}, ts: int) -> list[Dict]:
         filled_buy_id = []
         filled_sell_id = []
         orders_id = []
@@ -339,13 +341,13 @@ class Account:
                 self.fee_taker if order_id in self.market_ids else self.fee_maker
             )
             #
-        self.orders_buy = self.orders_buy.drop(filled_buy_id)
-        self.orders_sell = self.orders_sell.drop(filled_sell_id)
+        self.orders_buy = self.orders_buy.drop(filled_buy_id, errors="ignore")
+        self.orders_sell = self.orders_sell.drop(filled_sell_id, errors="ignore")
         self.market_ids.clear()
 
         return orders_filled
 
-    def restore_state(self, symbol: str, lt: int, orders: [], sum_amount: ()):
+    def restore_state(self, symbol: str, lt: int, orders: list, sum_amount: ()):
         if sum_amount[0]:
             self.funds.base['free'] += sum_amount[1]
             self.funds.quote['free'] -= sum_amount[2]

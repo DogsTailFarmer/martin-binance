@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.33"
+__version__ = "3.0.34"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -761,7 +761,8 @@ class StrategyBase(metaclass=ABCMeta):
     async def fetch_order(self, _id: int, _client_order_id: str = None, _filled_update_call=False):
         try:
             res = await self.send_request(
-                self.stub.fetch_order, mr.FetchOrderRequest,
+                self.stub.fetch_order,
+                mr.FetchOrderRequest,
                 symbol=self.symbol,
                 order_id=_id,
                 client_order_id=_client_order_id,
@@ -771,13 +772,13 @@ class StrategyBase(metaclass=ABCMeta):
         except Exception as _ex:
             self.message_log(f"Exception in fetch_order: {_ex}", log_level=logging.ERROR)
             return {}
-        else:
-            self.message_log(f"For order {_id}({_client_order_id}) fetched status is {result.get('status')}",
-                             log_level=logging.INFO, color=Style.GREEN)
-            if result:
-                return result
-            self.message_log(f"Can't get status for order {_id}({_client_order_id})", log_level=logging.WARNING)
-            return {}
+
+        self.message_log(f"For order {_id}({_client_order_id}) fetched status is {result.get('status')}",
+                         log_level=logging.INFO, color=Style.GREEN)
+        if result:
+            return result
+        self.message_log(f"Can't get status for order {_id}({_client_order_id})", log_level=logging.WARNING)
+        return {}
 
     async def on_funds_update(self):
         if prm.MODE in ('T', 'TC'):
