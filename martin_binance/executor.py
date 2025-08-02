@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.32"
+__version__ = "3.0.35"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -648,7 +648,7 @@ class Strategy(StrategyBase):
                 self.message_log("Restore, wait TP order", tlg=True)
                 self.check_created_order(self.tp_wait_id, "TP order event was missed into reload")
             elif not self.tp_order_id and self.stable_state():
-                self.message_log("Restore, no TP order, replace", tlg=True)
+                self.message_log("Restore, no TP order, create", tlg=True)
                 self.place_profit_order()
 
     def start(self, profit_f: Decimal = O_DEC, profit_s: Decimal = O_DEC) -> None:
@@ -1151,11 +1151,13 @@ class Strategy(StrategyBase):
             tcm = self.get_trading_capability_manager()
             last_executed_grid_price = self.avg_rate if grid_update else O_DEC
             if buy_side:
-                _price = last_executed_grid_price or self.get_buffered_order_book().bids[0].price
+                best_price = self.get_buffered_order_book().bids[0].price
+                _price = min(best_price, last_executed_grid_price or best_price)
                 base_price = _price - PRICE_SHIFT * _price / 100
                 amount_min = tcm.get_min_buy_amount(base_price)
             else:
-                _price = last_executed_grid_price or self.get_buffered_order_book().asks[0].price
+                best_price = self.get_buffered_order_book().asks[0].price
+                _price = max(best_price, last_executed_grid_price or best_price)
                 base_price = _price + PRICE_SHIFT * _price / 100
                 amount_min = tcm.get_min_sell_amount(base_price)
             min_delta = tcm.get_minimal_price_change()
@@ -2687,6 +2689,9 @@ class Strategy(StrategyBase):
                 self.start()
 
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
+        if self.cancel_order_id == order_id:
+            self.cancel_order_id = None
+            self.tp_hold = False
         self.message_log(f"On cancel order {order_id} {error}", logging.ERROR)
 
     def restore_state_before_backtesting_ex(self, saved_state):

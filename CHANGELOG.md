@@ -1,31 +1,43 @@
-## 3.0.33 - 2025-07-02
+## 3.0.35 - 2025-08-02
+✨ feat(executor.py): update buy/sell order placement logic to use best_price
+🛠️ fix(executor.py): adjust restore state message from "replace" to "create"
+🛠️ fix(executor.py): add cancel_order_id and tp_hold reset on error handling
+
+## 3.0.34 - 2025-07-02
 🛠️ fix(client.py): remove redundant `else` in `register_client` method  
 🛠️ fix(strategy_base.py): adjust indentation and structure in `fetch_order` method  
 🛠️ fix(exchange_simulator.py): update return type and error handling in methods
 
 ## 3.0.33 - 2025-06-21
 **Version Updates:**
-   - The version number has been updated to `3.0.33` in all relevant files (`__init__.py`, `client.py`, `strategy.py`, etc.).
+   - The version number has been updated to `3.0.33` in all relevant files (`__init__.py`, `client.py`, `strategy.py`,
+etc.).
 
 **Error Handling:**
-   - Removed redundant error handling for `asyncio.CancelledError`. This exception is generally not needed because it indicates the task was cancelled, and further action is typically unnecessary.
+   - Removed redundant error handling for `asyncio.CancelledError`. This exception is generally not needed because it
+indicates the task was cancelled, and further action is typically unnecessary.
 
 **Asynchronous File Operations:**
-   - Replaced synchronous file operations with asynchronous ones using `aiofiles` in several places to improve performance:
+   - Replaced synchronous file operations with asynchronous ones using `aiofiles` in several places to improve
+performance:
      - Reading and writing JSON files.
      - Writing CSV files.
 
 **Input Handling:**
-   - Converted blocking input calls into non-blocking ones using `asyncio.to_thread` to prevent the event loop from being blocked during user interaction.
+   - Converted blocking input calls into non-blocking ones using `asyncio.to_thread` to prevent the event loop from
+being blocked during user interaction.
 
 **Exception Logging:**
-   - Added more descriptive logging for exceptions, such as when failing to get a command from the Telegram proxy or encountering other issues that might affect the operation of the bot.
+   - Added more descriptive logging for exceptions, such as when failing to get a command from the Telegram proxy or
+encountering other issues that might affect the operation of the bot.
 
 **Code Refactoring:**
-   - Improved code readability and maintainability by removing unnecessary comments and restructuring some sections of the code.
+   - Improved code readability and maintainability by removing unnecessary comments and restructuring some sections of
+the code.
 
 **CSV Writing:**
-   - Updated CSV writing logic to use `AsyncWriter` from `aiofiles` for asynchronous writing, ensuring that file operations do not block the event loop.
+   - Updated CSV writing logic to use `AsyncWriter` from `aiofiles` for asynchronous writing, ensuring that file
+operations do not block the event loop.
 
 ## 3.0.32 - 2025-05-30
 🔧 fix(executor): adjust conditions for currency deposits with GRID_ONLY logic
