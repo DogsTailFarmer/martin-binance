@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.23"
+__version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -141,7 +141,7 @@ def reset():
             metric.labels(**labels).set(0.0)
 
 
-def get_rate(_currency_rate) -> {}:
+def get_rate(_currency_rate) -> dict:
     global request_delay
     replace = {
         'UST': 'USDT',

@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.35"
+__version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -471,27 +471,13 @@ class Strategy(StrategyBase):
             self.place_profit_order()
 
     def event_grid_only_release(self):
-        if self.grid_only_restart:
+        if self.grid_only_restart and self.get_time() > self.grid_only_restart:
+            ff, fs, _, _ = self.get_free_assets(mode='available')
             if USE_ALL_FUND:
-                if self.cycle_buy:
-                    ds = self.get_buffered_funds().get(self.s_currency, O_DEC)
-                    ds = self.round_truncate(ds.available if ds else O_DEC, base=False)
-                    df = ds / self.avg_rate
-                else:
-                    df = self.get_buffered_funds().get(self.f_currency, O_DEC)
-                    df = self.round_truncate(df.available if df else O_DEC, base=True)
-                    ds = O_DEC
-                if self.check_min_amount(amount=df):
-                    self.grid_only_restart = 0
-                    if self.cycle_buy:
-                        self.deposit_second = ds
-                    else:
-                        self.deposit_first = self.round_truncate(df, base=True)
+                if self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
                     self.start()
-            elif AMOUNT_FIRST and START_ON_BUY and self.get_time() > self.grid_only_restart:
-                ff, fs, _, _ = self.get_free_assets(mode='available')
+            elif AMOUNT_FIRST and START_ON_BUY:
                 if ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
-                    self.grid_only_restart = 0
                     self.save_init_assets(ff, fs)
                     self.start()
 
@@ -748,6 +734,7 @@ class Strategy(StrategyBase):
             self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if GRID_ONLY:
+            self.grid_only_restart = 0
             if USE_ALL_FUND and not self.start_after_shift:
                 if self.cycle_buy:
                     self.deposit_second = fs
@@ -761,6 +748,7 @@ class Strategy(StrategyBase):
                     self.first_run = False
                 self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
                 self.message_log("Waiting for conditions for conversion", color=Style.B_WHITE)
+                self.message_log(f"Number of unreachable objects collected by GC: {gc.collect(generation=2)}")
                 return
 
         if not self.first_run and not self.start_after_shift and not self.reverse and not GRID_ONLY:
@@ -1012,7 +1000,7 @@ class Strategy(StrategyBase):
     ##############################################################
     # supplementary methods
     ##############################################################
-    def collect_assets(self) -> ():
+    def collect_assets(self) -> tuple:
         ff, fs, _, _ = self.get_free_assets(mode='free')
         tcm = self.get_trading_capability_manager()
         if ff >= f2d(tcm.min_qty):
@@ -1056,7 +1044,7 @@ class Strategy(StrategyBase):
                          f"! ======================================",
                          log_level=logging.DEBUG)
 
-    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total', backtest=False) -> ():
+    def get_free_assets(self, ff: Decimal = None, fs: Decimal = None, mode: str = 'total', backtest=False) -> tuple:
         """
         Get free asset for current trade pair
         :param fs:
@@ -1194,7 +1182,7 @@ class Strategy(StrategyBase):
                     return
                 except Exception as ex:
                     self.message_log(
-                        f"Can't set trade conditions: {ex}\n{traceback.format_exc()}", log_level=logging.ERROR
+                        f"Can't set trade conditions: {ex}", log_level=logging.ERROR
                     )
                     return
             else:
@@ -1658,7 +1646,7 @@ class Strategy(StrategyBase):
                      amount_first: Decimal,
                      amount_second: Decimal,
                      by_market: bool = False,
-                     print_info: bool = True) -> (Decimal, Decimal):
+                     print_info: bool = True) -> tuple[Decimal, Decimal]:
         """
         Calculate trade amount with Fee for grid order for both currency
         """
@@ -1677,7 +1665,7 @@ class Strategy(StrategyBase):
                    amount_first: Decimal,
                    amount_second: Decimal,
                    by_market=False,
-                   log_output=True) -> (Decimal, Decimal):
+                   log_output=True) -> tuple[Decimal, Decimal]:
         """
         Calculate trade amount with Fee for take profit order for both currency
         """
@@ -2363,7 +2351,8 @@ class Strategy(StrategyBase):
             self.grid_update_started = True
             self.cancel_grid()
 
-        if restart and self.grid_only_restart and USE_ALL_FUND:
+        active_orders = bool(self.orders_init or self.orders_grid or self.orders_hold) if GRID_ONLY else False
+        if restart and active_orders and self.grid_only_restart and USE_ALL_FUND:
             self.restart = True
             self.grid_only_restart = 0
             self.grid_remove = None

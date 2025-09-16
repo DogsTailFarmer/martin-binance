@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.34"
+__version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -23,7 +23,6 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from shutil import rmtree, copy, make_archive
-from typing import Dict, List
 
 import jsonpickle
 import orjson
@@ -41,8 +40,10 @@ from martin_binance import LAST_STATE_PATH, BACKTEST_PATH, HEARTBEAT, KLINES_INI
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 from martin_binance.backtest.optimizer import OPTIMIZER, PARAMS_FLOAT
 from martin_binance.client import Trade
-from martin_binance.lib import Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, \
-    any2str, PrivateTrade, Order, convert_from_minute, OrderUpdate, load_file, load_last_state, Klines
+from martin_binance.lib import (
+    Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, any2str, PrivateTrade, Order,
+    convert_from_minute, OrderUpdate, load_file, load_last_state, Klines, tasks_manage, tasks_cancel,
+)
 from martin_binance.telegram_proxy.tlg_client import TlgClient
 
 if prm.MODE == 'S':
@@ -200,9 +201,9 @@ class StrategyBase(metaclass=ABCMeta):
     def get_buffered_ticker(self) -> Ticker:
         return Ticker(self.ticker)
 
-    def get_buffered_funds(self) -> Dict[str, FundsEntry]:
+    def get_buffered_funds(self) -> dict[str, FundsEntry]:
         if self.get_time() - self.get_buffered_funds_last_time > self.rate_limiter:
-            self.tasks_manage(self.buffered_funds(print_info=False))
+            tasks_manage(self.tasks, self.buffered_funds(print_info=False))
             self.get_buffered_funds_last_time = self.get_time()
         return {self.base_asset: FundsEntry(self.funds[self.base_asset]),
                 self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
@@ -210,10 +211,10 @@ class StrategyBase(metaclass=ABCMeta):
     def get_buffered_order_book(self) -> OrderBook:
         return OrderBook(self.order_book, _tcm=self.tcm)
 
-    def get_buffered_completed_trades(self) -> List[PrivateTrade]:
+    def get_buffered_completed_trades(self) -> list[PrivateTrade]:
         return self.trades
 
-    def get_buffered_open_orders(self) -> List[Order]:
+    def get_buffered_open_orders(self) -> list[Order]:
         return list(self.orders.values())
 
     def get_buffered_open_order(self, _id) -> Order:
@@ -224,7 +225,7 @@ class StrategyBase(metaclass=ABCMeta):
             candle_size_in_minutes: int,
             number_of_candles: int = 50,
             include_current_building_candle: bool = False
-    ) -> List[Candle]:
+    ) -> list[Candle]:
         size = convert_from_minute(candle_size_in_minutes)
         kline = Klines.get_kline(size)
         if len(kline) > number_of_candles + 1:
@@ -246,25 +247,25 @@ class StrategyBase(metaclass=ABCMeta):
     def transfer_to(self, symbol: str, amount: str, email=None):
         if prm.MODE in ('T', 'TC'):
             if email:
-                self.tasks_manage(self.transfer2sub(email, symbol, amount))
+                tasks_manage(self.tasks, self.transfer2sub(email, symbol, amount))
             else:
-                self.tasks_manage(self.transfer2master(symbol, amount))
+                tasks_manage(self.tasks, self.transfer2master(symbol, amount))
 
     def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal) -> int:
         self.order_id += 1
         self.message_log(f"Send order id:{self.order_id} for {'BUY' if buy else 'SELL'}"
                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
                          color=Style.B_YELLOW)
-        self.tasks_manage(self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
+        tasks_manage(self.tasks, self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
         if self.exchange == 'huobi':
             time.sleep(0.02)
         return self.order_id
 
     def cancel_order(self, order_id: int, cancel_all=False) -> None:
-        self.tasks_manage(self.cancel_order_call(order_id, cancel_all))
+        tasks_manage(self.tasks, self.cancel_order_call(order_id, cancel_all))
 
     def check_created_order(self, order_id: int, msg: str) -> None:
-        self.tasks_manage(self.fetch_created_order(order_id, msg))
+        tasks_manage(self.tasks, self.fetch_created_order(order_id, msg))
 
     def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE, tlg_inline=False) -> None:
         if prm.LOGGING:
@@ -283,7 +284,8 @@ class StrategyBase(metaclass=ABCMeta):
                 logger.log(log_level, msg)
                 self.status_time = self.get_time()
                 if tlg and self.tlg_client:
-                    self.tasks_manage(
+                    tasks_manage(
+                        self.tasks,
                         self.tlg_client.post_message(msg, inline_buttons=tlg_inline and prm.TLG_INLINE)
                     )
         elif log_level >= logging.ERROR:
@@ -484,7 +486,7 @@ class StrategyBase(metaclass=ABCMeta):
                 raw_path, f"candles_{i.value}.parquet"), schema=schema
             )
 
-    def back_test_handler(self):
+    async def back_test_handler(self):
         # Test result handler
         s_profit = prm.SESSION_RESULT['profit'] = f"{self.get_sum_profit()}"
         s_free = prm.SESSION_RESULT['free'] = f"{self.get_free_assets(mode='free', backtest=True)[2]}"
@@ -498,7 +500,7 @@ class StrategyBase(metaclass=ABCMeta):
             self._back_test_handler_ext()
 
         self.session.channel.close()
-        self.wss_cancel_tasks()
+        await tasks_cancel(self.tasks, name='wss', log_out=prm.LOGGING)
         asyncio.get_event_loop().stop()
 
     def _back_test_handler_ext(self):
@@ -738,7 +740,7 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log(f"ask_exit: {ex}", log_level=logging.WARNING)
 
             self.session.channel.close()
-            self.wss_cancel_tasks()
+            await tasks_cancel(self.tasks, name='wss', log_out=prm.LOGGING)
 
             if prm.MODE == 'TC' and self.start_collect:
                 # Save stream data for backtesting
@@ -749,7 +751,7 @@ class StrategyBase(metaclass=ABCMeta):
                 print(f"Current state saved into {prm.LAST_STATE_FILE}")
 
             if self.tlg_client:
-                self.tlg_client.close()
+                await self.tlg_client.close()
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -790,7 +792,7 @@ class StrategyBase(metaclass=ABCMeta):
                         quote_asset=self.quote_asset
                 ):
                     funds = json.loads(_funds.event)
-                    if funds.get(self.base_asset) or funds.get(self.quote_asset):
+                    if self.base_asset in funds or self.quote_asset in funds:
                         self.on_funds_update_handler(funds)
             except Exception as ex:
                 self.message_log(f"Exception on WSS, on_funds_update loop closed: {ex}", log_level=logging.WARNING)
@@ -839,10 +841,11 @@ class StrategyBase(metaclass=ABCMeta):
         if ticker:
             self.backtest['ticker_index_last'] = index_prev * 1000
 
-    async def aiter_candles(self, _klines: {str: Klines}, _i: str):
+    async def aiter_candles(self, _klines: dict[str, Klines], _i: str):
         self.s_mode_break = None
         async for row in self.loop_ds(self.backtest[f"candles_{_i}"]):
             _klines.get(_i).refresh(row)
+            # noinspection PyUnreachableCode
             if self.s_mode_break:
                 break
         self.message_log(f"Backtest candles *** {_i} *** timeSeries ended")
@@ -1045,13 +1048,13 @@ class StrategyBase(metaclass=ABCMeta):
             klines[i.value] = kline_i
 
         if len(klines) == len(KLINES_INIT):
-            self.tasks_manage(self.on_klines_update(klines), name='wss')
+            tasks_manage(self.tasks, self.on_klines_update(klines), name='wss')
         else:
             self.message_log("Init buffered candle failed. try one else...", log_level=logging.WARNING)
             await asyncio.sleep(random.uniform(1, 5))
             self.wss_fire_up = True
 
-    async def on_klines_update(self, _klines: {str: Klines}):
+    async def on_klines_update(self, _klines: dict[str, Klines]):
         _intervals = list(_klines.keys())
         if prm.MODE in ('T', 'TC'):
             try:
@@ -1077,7 +1080,7 @@ class StrategyBase(metaclass=ABCMeta):
                 self.wss_fire_up = True
         else:
             for i in _intervals:
-                self.tasks_manage(self.aiter_candles(_klines, i), name='wss')
+                tasks_manage(self.tasks, self.aiter_candles(_klines, i), name='wss')
 
     async def create_limit_order(self, _id: int, buy: bool, amount: str, price: str) -> None:
         _fetch_order = False
@@ -1322,13 +1325,14 @@ class StrategyBase(metaclass=ABCMeta):
                 if prm.LOGGING:
                     # noinspection PyUnboundLocalVariable
                     pbar.update()
+                # noinspection PyUnreachableCode
                 if self.s_mode_break:
                     break
             if prm.LOGGING:
                 pbar.close()
             self.message_log("Backtest *** ticker *** timeSeries ended")
             self.s_mode_break = True
-            self.back_test_handler()
+            await self.back_test_handler()
 
     async def on_order_book_update(self):
         if prm.MODE in ('T', 'TC'):
@@ -1361,6 +1365,7 @@ class StrategyBase(metaclass=ABCMeta):
             async for row in self.loop_ds(self.backtest['order_book']):
                 self.order_book = row
                 self.on_new_order_book(OrderBook(row))
+                # noinspection PyUnreachableCode
                 if self.s_mode_break:
                     break
             self.message_log("Backtest *** order_book *** timeSeries ended")
@@ -1386,6 +1391,7 @@ class StrategyBase(metaclass=ABCMeta):
                 if restore:
                     self.message_log("Restore saved state after lost connection to host", color=Style.GREEN)
 
+                # noinspection PyUnreachableCode
                 if self.last_state:
                     self.message_log("Restore saved state after restart", color=Style.GREEN, tlg=True)
                     self.restore_strategy_state(restore=True)
@@ -1465,27 +1471,21 @@ class StrategyBase(metaclass=ABCMeta):
                 else:
                     self.message_log("WSS not active", log_level=logging.WARNING)
 
-    def tasks_manage(self, coro, name=None, add_done_callback=True):
-        _t = asyncio.create_task(coro, name=name)
-        self.tasks.add(_t)
-        if add_done_callback:
-            _t.add_done_callback(self.tasks.discard)
-
     async def wss_declare(self):
         # Market stream
-        self.tasks_manage(self.on_ticker_update(), name='wss')
+        tasks_manage(self.tasks, self.on_ticker_update(), name='wss')
         await self.buffered_candle()
-        self.tasks_manage(self.on_order_book_update(), name='wss')
+        tasks_manage(self.tasks, self.on_order_book_update(), name='wss')
         if prm.MODE in ('T', 'TC'):
             # User Stream
-            self.tasks_manage(self.on_funds_update(), name='wss')
-            self.tasks_manage(self.on_order_update(), name='wss')
-            self.tasks_manage(self.on_balance_update(), name='wss')
+            tasks_manage(self.tasks, self.on_funds_update(), name='wss')
+            tasks_manage(self.tasks, self.on_order_update(), name='wss')
+            tasks_manage(self.tasks, self.on_balance_update(), name='wss')
 
     async def wss_init(self):
         if self.client_id:
             self.message_log(f"Init WSS, client_id: {self.client_id}")
-            self.wss_cancel_tasks()
+            await tasks_cancel(self.tasks, name='wss', log_out=prm.LOGGING)
             await asyncio.sleep(HEARTBEAT)
             await self.wss_declare()
             # WSS start
@@ -1509,9 +1509,6 @@ class StrategyBase(metaclass=ABCMeta):
             await asyncio.sleep(random.randint(HEARTBEAT, HEARTBEAT * 5))  # NOSONAR python:S2245
             self.wss_fire_up = True
 
-    def wss_cancel_tasks(self):
-        [task.cancel() for task in self.tasks if not task.done() and task.get_name() == 'wss']
-
     async def tlg_get_command(self):
         while True:
             try:
@@ -1526,7 +1523,7 @@ class StrategyBase(metaclass=ABCMeta):
                 self.command = command
             await asyncio.sleep(TLG_DELAY)
 
-    async def main(self, _symbol):  # /NOSONAR
+    async def main(self, _symbol):  # NOSONAR
         restore_state = None
         last_state = {}
         active_orders = []
@@ -1547,6 +1544,7 @@ class StrategyBase(metaclass=ABCMeta):
                 #
                 await self.session.get_client()
                 self.update_vars(self.session)
+                # noinspection PyTypeChecker
                 send_request = self.session.send_request
                 if prm.LOGGING:
                     print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
@@ -1597,7 +1595,7 @@ class StrategyBase(metaclass=ABCMeta):
                         else:
                             [exch_orders_ids.append(int(_o['orderId'])) for _o in active_orders]
                 # Init section
-                self.tasks_manage(self.get_exchange_info(send_request, _symbol))
+                tasks_manage(self.tasks, self.get_exchange_info(send_request, _symbol))
                 while not self.info_symbol:
                     await asyncio.sleep(0.1)
                 if prm.LOGGING:
@@ -1753,21 +1751,21 @@ class StrategyBase(metaclass=ABCMeta):
             if prm.MODE in ('T', 'TC'):
                 if prm.TLG_SERVICE:
                     self.tlg_client = TlgClient(self.tlg_header, TLG_TOKEN, TLG_CHAT_ID)
-                    self.tasks_manage(self.tlg_client.connect())
-                    self.tasks_manage(self.tlg_get_command())
+                    tasks_manage(self.tasks, self.tlg_client.connect())
+                    tasks_manage(self.tasks, self.tlg_get_command())
                 await self.wss_init()
-                self.tasks_manage(save_to_csv())
-                self.tasks_manage(self.buffered_orders(), add_done_callback=False)
+                tasks_manage(self.tasks, save_to_csv())
+                tasks_manage(self.tasks, self.buffered_orders(), add_done_callback=False)
                 if self.session.client.real_market and prm.SAVE_ASSET:
-                    self.tasks_manage(self.save_asset(), add_done_callback=False)
+                    tasks_manage(self.tasks, self.save_asset(), add_done_callback=False)
                 if prm.MODE == 'TC':
-                    self.tasks_manage(self.backtest_control(), add_done_callback=False)
+                    tasks_manage(self.tasks, self.backtest_control(), add_done_callback=False)
                 if not restore_state:
                     self.start()
 
-            self.tasks_manage(self.heartbeat(self.session), add_done_callback=False)
+            tasks_manage(self.tasks, self.heartbeat(self.session), add_done_callback=False)
 
-        except (KeyboardInterrupt, SystemExit):  # /NOSONAR
+        except (KeyboardInterrupt, SystemExit):  # NOSONAR
             # noinspection PyProtectedMember, PyUnresolvedReferences
             os._exit(1)
 
@@ -1898,7 +1896,7 @@ def load_from_csv() -> list:
     return trades
 
 
-def order_book_prepare(_order_book) -> {}:
+def order_book_prepare(_order_book) -> dict:
     order_book = _order_book.to_pydict()
     order_book['bids'] = list(map(json.loads, order_book['bids']))
     order_book['asks'] = list(map(json.loads, order_book['asks']))

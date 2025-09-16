@@ -4,10 +4,12 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.29"
+__version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
+import asyncio
+import inspect
 import logging
 import time
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN
@@ -23,6 +25,30 @@ logger = logging.getLogger('logger')
 O_DEC = Decimal()
 
 
+def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
+    _t = asyncio.create_task(coro, name=name or inspect.stack()[1][3])
+    tasks_set.add(_t)
+    if add_done_callback:
+        _t.add_done_callback(tasks_set.discard)
+
+
+async def tasks_cancel(tasks_set: set, name=None, log_out=True):
+    tasks = tasks_set.copy()
+    for task in tasks:
+        if name and name != task.get_name():
+            continue
+        task.cancel()
+        flag = None
+        try:
+            await task
+        except asyncio.CancelledError:  # NOSONAR
+            flag = True
+        finally:
+            tasks_set.discard(task)
+            if log_out:
+                logger.info(f"The task {task.get_name()} was cancelled {'by force' if flag else ''}")
+
+
 def any2str(_x) -> str:
     return f"{_x:.10f}".rstrip('0').rstrip('.')
 
@@ -31,7 +57,7 @@ def f2d(_f: float) -> Decimal:
     return Decimal(str(_f))
 
 
-def solve(fn, value: Decimal, x: Decimal, **kwargs) -> (Decimal, str):
+def solve(fn, value: Decimal, x: Decimal, **kwargs) -> tuple[Decimal, str]:
     def _fn(_x):
         return abs(float(value) - fn(_x, **kwargs))
     res = minimize(_fn, x0=np.array([float(x)]), method='Nelder-Mead')
@@ -175,14 +201,14 @@ class Orders:
         """
         return [i['id'] for i in self.orders_list]
 
-    def get_first(self) -> ():
+    def get_first(self) -> tuple:
         """
         Get first order as tuple
         :return: (id, buy, amount, price)
         """
         return tuple(self.orders_list[0].values())
 
-    def get_last(self) -> ():
+    def get_last(self) -> tuple:
         """
         Get last order as tuple
         :return: (id, buy, amount, price)

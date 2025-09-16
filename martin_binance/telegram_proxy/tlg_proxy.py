@@ -10,7 +10,7 @@ markup for Telegram bot commands.
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.33"
+__version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -26,6 +26,7 @@ import ujson as json
 
 import martin_binance.tlg as tlg
 from martin_binance import LOG_FILE_TLG, CONFIG_FILE, CERT_DIR
+from martin_binance.lib import tasks_manage
 from exchanges_wrapper import Server, graceful_exit
 #
 logger = logging.getLogger('tlg_proxy')
@@ -235,19 +236,13 @@ class TlgProxy(tlg.TlgProxyBase):
     tasks = set()
     command = {}
 
-    def tasks_manage(self, coro, name=None, add_done_callback=True):
-        _t = asyncio.create_task(coro, name=name)
-        self.tasks.add(_t)
-        if add_done_callback:
-            _t.add_done_callback(self.tasks.discard)
-
     async def post_message(self, request: tlg.Request) -> tlg.Response:
         TlgProxy.bot_ids.add(request.bot_id)
         if request.token not in self.bot_tokens:
             TlgProxy.bot_tokens.add(request.token)
             set_bot_commands(request.token)
             # Start polling task
-            self.tasks_manage(poll_update(request), name='poll_update')
+            tasks_manage(self.tasks, poll_update(request), name='poll_update')
         # Post message
         res = requests_post(
             f'{TLG_URL}{request.token}/sendMessage',

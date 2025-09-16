@@ -1,3 +1,55 @@
+## 3.0.36 - 2025-09-xx
+### **Key Changes & Rationale**
+
+#### 1. **Grid-Only Restart Logic Optimization**
+   - **Change**:  
+     - Added `self.grid_only_restart = 0` in the constructor of `Executor` in `executor.py` and in `collect_assets()`.  
+     - Modified `event_grid_only_release()` to use `self.get_time() > self.grid_only_restart` for timing checks.  
+     - Introduced `active_orders` condition in `grid_update()` to prevent unnecessary restarts.  
+   - **Rationale**:  
+     - Prevents premature or incorrect grid restarts by ensuring the restart delay (`GRID_ONLY_DELAY`) is respected.  
+     - Ensures the grid is only restarted when all funds are used and no active orders exist, avoiding rapid or redundant cycles.  
+     - Resets the restart timer to 0 after initiating a restart, preventing repeated triggers.  
+
+#### 2. **Type Hinting Improvements**
+   - **Change**:  
+     - Replaced `()` with `tuple` in method return types (e.g., `get_free_assets()`, `calculate_profit_amounts()`).  
+   - **Rationale**:  
+     - Enhances code clarity and IDE support by explicitly stating that these methods return tuples of `Decimal` values.  
+     - Aligns with Python 3.10+ type hinting standards (e.g., `tuple[Decimal, Decimal]`).  
+
+#### 3. **API Update for Terminal Control**
+   - **Change**:  
+     - Replaced `window.attached_pane` with `window.active_pane` in `relaunch.py`.  
+   - **Rationale**:  
+     - Adapts to potential deprecations or changes in the terminal control library (e.g., `tmux` or `screen` bindings).  
+     - Ensures commands are sent to the correct active terminal pane for session relaunch.  
+
+#### 4. **Garbage Collection Monitoring**
+   - **Change**:  
+     - Added `gc.collect(generation=2)` logging in `collect_assets()`.  
+   - **Rationale**:  
+     - Monitors memory usage and garbage collection efficiency, aiding in performance debugging.  
+     - Helps identify potential memory leaks or excessive object creation.  
+
+#### 5. **Version & Copyright Updates**
+   - **Change**:  
+     - Updated `__version__` to `3.0.36b` and `3.0.36` in `__init__.py` and `relaunch.py`.  
+     - Extended `__copyright__` year to `2021-2025`.  
+   - **Rationale**:  
+     - Standard practice for version control and legal compliance.  
+     - Reflects ongoing maintenance and new features/fixes in the release.  
+
+### **Impact on System Behavior**
+1. **Stability**:  
+   - Grid restarts now occur only after the required delay and under correct conditions, reducing the risk of infinite loops or redundant trades.  
+2. **Maintainability**:  
+   - Improved type hints and clearer method signatures make the codebase easier to navigate and extend.  
+3. **Performance**:  
+   - Garbage collection logging provides insights into memory management, enabling proactive optimization.  
+4. **Compatibility**:  
+   - Updated API calls ensure compatibility with newer versions of dependencies (e.g., terminal control libraries).  
+
 ## 3.0.35 - 2025-08-02
 ✨ feat(executor.py): update buy/sell order placement logic to use best_price
 🛠️ fix(executor.py): adjust restore state message from "replace" to "create"

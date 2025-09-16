@@ -19,7 +19,7 @@ openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyou
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.33"
+__version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -33,8 +33,11 @@ import toml
 import random
 import logging.handlers
 
+from sqlalchemy.util import await_fallback
+
 import martin_binance.tlg as tlg
 from martin_binance import LOG_FILE_TLG, CONFIG_FILE, CERT_DIR
+from martin_binance.lib import tasks_manage, tasks_cancel
 
 from exchanges_wrapper import Channel, exceptions
 #
@@ -85,15 +88,6 @@ class TlgClient:
         #
         self.tasks = set()
 
-    def tasks_manage(self, coro, name=None, add_done_callback=True):
-        _t = asyncio.create_task(coro, name=name)
-        self.tasks.add(_t)
-        if add_done_callback:
-            _t.add_done_callback(self.tasks.discard)
-
-    def task_cancel(self):
-        [task.cancel() for task in self.tasks if not task.done()]  # skipcq: PYL-W0106
-
     async def connect(self):
         self.init_event.clear()
         delay = 0
@@ -129,9 +123,9 @@ class TlgClient:
                 )
             )
             return res
-        except (ConnectionRefusedError, ConnectionAbortedError, exceptions.StreamTerminatedError):
+        except (ConnectionRefusedError, ConnectionAbortedError, exceptions.StreamTerminatedError, TimeoutError):
             if self.init_event.is_set():
-                self.tasks_manage(self.connect())
+                tasks_manage(self.tasks, self.connect())
             elif reraise:
                 raise
         except ssl.SSLCertVerificationError as e:
@@ -149,12 +143,12 @@ class TlgClient:
             return json.loads(res.data) if res else None
         except (ConnectionRefusedError, exceptions.StreamTerminatedError):
             if self.init_event.is_set():
-                self.tasks_manage(self.connect())
+                tasks_manage(self.tasks, self.connect())
         except KeyboardInterrupt:
             pass  # user interrupt
         except ssl.SSLCertVerificationError as e:
             logger.error(f"Get update from Telegram proxy failed: {e}")
 
-    def close(self):
+    async def close(self):
         self.channel.close()
-        self.task_cancel()
+        await tasks_cancel(self.tasks)
