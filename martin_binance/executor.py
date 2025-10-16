@@ -2275,6 +2275,7 @@ class Strategy(StrategyBase):
                     if self.reverse:
                         profit = (self.reverse_target_amount - self.reverse_init_amount) / self.reverse_init_amount
                         self.deposit_first += delta
+                        self.initial_first += delta
                         self.initial_reverse_second += deposit_add
                         self.reverse_init_amount += delta
                         self.reverse_target_amount = self.round_truncate(
@@ -2327,6 +2328,7 @@ class Strategy(StrategyBase):
                     if self.reverse:
                         profit = (self.reverse_target_amount - self.reverse_init_amount) / self.reverse_init_amount
                         self.deposit_second += delta
+                        self.initial_second += delta
                         self.initial_reverse_first += deposit_add
                         self.reverse_init_amount += delta
                         self.reverse_target_amount = self.round_truncate(

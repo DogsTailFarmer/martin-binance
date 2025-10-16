@@ -1,4 +1,11 @@
-## 3.0.36 - 2025-09-xx
+## 3.0.36 - 2025-10-16
+🔧 fix(versions): update `exchanges-wrapper` to version `2.1.42` in `pyproject.toml` and `requirements.txt`  
+📦 fix(dependencies): upgrade `ujson` to version `5.11.0` in `pyproject.toml` and `requirements.txt`  
+📖 docs(changelog): update date for version `3.0.36` in `CHANGELOG.md`  
+🔧 fix(strategy_base): adjust `reset_backtest_vars` logic for better initialization in `martin_binance/strategy_base.py`  
+🔧 fix(executor): add `delta` to `initial_first` and `initial_second` in `martin_binance/executor.py`  
+🔧 fix(client): update version to `3.0.36` in `martin_binance/client.py` 
+
 ### **Key Changes & Rationale**
 
 #### 1. **Grid-Only Restart Logic Optimization**

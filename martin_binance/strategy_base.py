@@ -138,7 +138,8 @@ class StrategyBase(metaclass=ABCMeta):
         self.grid_buy = None
         self.grid_sell = None
         #
-        self.reset_backtest_vars()
+        if prm.MODE in ('TC', 'S'):
+            self.reset_backtest_vars()
         #
         self.cycle_time = None  # + Cycle start time
         self.command = None  # + External input command from Telegram
@@ -148,13 +149,12 @@ class StrategyBase(metaclass=ABCMeta):
         return self
 
     def reset_backtest_vars(self):
-        self.s_ticker: dict[str, pq.ParquetWriter | list] = {'pylist': []} if prm.MODE in ('TC', 'S') else None
-        self.s_order_book: dict[str, pq.ParquetWriter | list] = {'pylist': []} if prm.MODE in ('TC', 'S') else None
+        self.s_ticker: dict[str, pq.ParquetWriter | list] = {'pylist': []}
+        self.s_order_book: dict[str, pq.ParquetWriter | list] = {'pylist': []}
         self.klines = {}  # KLines snapshot
-        if prm.MODE in ('TC', 'S'):
-            self.candles = {}
-            for i in KLINES_INIT:
-                self.candles.update({f"pylist_{i.value}": []})
+        self.candles = {}
+        for i in KLINES_INIT:
+            self.candles.update({f"pylist_{i.value}": []})
         self.grid_buy = {}
         self.grid_sell = {}
 
@@ -1459,7 +1459,7 @@ class StrategyBase(metaclass=ABCMeta):
 
     async def wss_wait_init(self):
         while not self.operational_status:
-            await asyncio.sleep(HEARTBEAT)
+            await asyncio.sleep(HEARTBEAT * 2)
             try:
                 res = await self.send_request(self.stub.check_stream, mr.MarketRequest, symbol=self.symbol)
             except Exception as ex_1:

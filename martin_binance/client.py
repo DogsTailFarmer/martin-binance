@@ -4,7 +4,7 @@ gRPC async client for exchanges-wrapper
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.34"
+__version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -26,6 +26,17 @@ logger.addHandler(stream_handler)
 
 
 class Trade:
+    __slots__ = (
+        'channel',
+        'stub',
+        'account_name',
+        'rate_limiter',
+        'symbol',
+        'client',
+        'wait_connection',
+        'trade_id'
+    )
+
     def __init__(self, account_name, rate_limiter, symbol):
         self.channel = None
         self.stub = None
