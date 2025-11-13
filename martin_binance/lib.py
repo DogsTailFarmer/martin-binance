@@ -26,7 +26,8 @@ O_DEC = Decimal()
 
 
 def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
-    _t = asyncio.create_task(coro, name=name or inspect.stack()[1][3])
+    name = f"{name if name else ''}{'-' if name else ''}{coro.__name__}-{inspect.stack()[1][3]}"
+    _t = asyncio.create_task(coro, name=name)
     tasks_set.add(_t)
     if add_done_callback:
         _t.add_done_callback(tasks_set.discard)
@@ -35,7 +36,7 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
 async def tasks_cancel(tasks_set: set, name=None, log_out=True):
     tasks = tasks_set.copy()
     for task in tasks:
-        if name and name != task.get_name():
+        if name and f"{name}" not in task.get_name():
             continue
         task.cancel()
         flag = None

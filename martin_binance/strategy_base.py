@@ -57,13 +57,12 @@ RATE_LIMITER = HEARTBEAT * (60 if prm.GRID_ONLY else 10)
 KLINES_LIM = 50  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and par.LOAD_LAST_STATE = 0
 TRADES_LIST_LIMIT = 50
-TRY_LIMIT = 30
+TRY_LIMIT = 10
 PYARROW_BATCH_BUFFER_SIZE = 20480  # Rows
 ORDER_BOOK_PRKT = "order_book.parquet"
 TICKER_PRKT = "ticker.parquet"
 MS_ORDER_ID = 'ms.order_id'
 MS_ORDERS = 'ms.orders'
-CONTROLLED_ASSETS = ['BNB']  # which is not traded, but must be controlled
 O_DEC = Decimal()
 SAVE_TRADE_QUEUE = asyncio.Queue()
 
@@ -582,6 +581,8 @@ class StrategyBase(metaclass=ABCMeta):
                         except Exception as ex:
                             self.message_log(f"Exception on fire up WSS: {ex}", log_level=logging.WARNING)
                             self.wss_fire_up = True
+                        else:
+                            self.wss_fire_up = False
                 await asyncio.sleep(HEARTBEAT)
             except (KeyboardInterrupt, asyncio.CancelledError):
                 break
@@ -592,6 +593,9 @@ class StrategyBase(metaclass=ABCMeta):
         """
         connection_analytic = None
         balances = []
+        funding_wallet = []
+        assets = {}
+        assets_fw = {}
         while connection_analytic is None:
             connection_analytic = self.connection_analytic
             await asyncio.sleep(HEARTBEAT)
@@ -635,8 +639,8 @@ class StrategyBase(metaclass=ABCMeta):
                     self.quote_asset: balance_s
                 }
                 # Get asset balances from Funding Wallet
-                funding_wallet = []
-                assets_fw = {}
+                funding_wallet.clear()
+                assets_fw.clear()
                 if self.exchange not in ('bitfinex', 'huobi'):
                     try:
                         res = await self.send_request(self.stub.fetch_funding_wallet, mr.FetchFundingWalletRequest)
@@ -649,15 +653,13 @@ class StrategyBase(metaclass=ABCMeta):
                     for fw in funding_wallet:
                         assets_fw[fw['asset']] = Decimal(fw['free']) + Decimal(fw['locked']) + Decimal(fw['freeze'])
                 # Create list of cumulative asset from SPOT and Funding wallet
-                assets = {}
-                controlled_assets = [self.base_asset, self.quote_asset] + CONTROLLED_ASSETS
+                assets.clear()
                 for balance in balances:
                     if self.exchange != 'bitfinex':
                         total = assets_fw.pop(balance['asset'], O_DEC)
                     else:
                         total = O_DEC
-                    if balance['asset'] in controlled_assets or prm.GRID_ONLY:
-                        total += Decimal(balance['free']) + Decimal(balance['locked'])
+                    total += Decimal(balance['free']) + Decimal(balance['locked'])
                     assets[balance['asset']] = float(total)
 
                 cursor = connection_analytic.cursor()
@@ -672,10 +674,7 @@ class StrategyBase(metaclass=ABCMeta):
                         refresh_t_asset(cursor, key, value, used=0)
 
                     for key, value in assets.items():
-                        if prm.GRID_ONLY:
-                            refresh_t_asset(cursor, key, value, used=0)
-                        elif key in controlled_assets:
-                            refresh_t_asset(cursor, key, value, used=1)
+                        refresh_t_asset(cursor, key, value, used=0)
 
                     cursor.execute('COMMIT')
                     cursor.close()
@@ -1458,7 +1457,17 @@ class StrategyBase(metaclass=ABCMeta):
             await asyncio.sleep(self.rate_limiter)
 
     async def wss_wait_init(self):
+        try_count = 0
         while not self.operational_status:
+            try_count += 1
+            if try_count > TRY_LIMIT:
+                await self.session.restart_session()
+                self.wss_fire_up = True
+                while self.wss_fire_up and try_count:
+                    try_count -= 1
+                    await asyncio.sleep(HEARTBEAT)
+                self.message_log("WSS session init timeout", log_level=logging.WARNING)
+                break
             await asyncio.sleep(HEARTBEAT * 2)
             try:
                 res = await self.send_request(self.stub.check_stream, mr.MarketRequest, symbol=self.symbol)
@@ -1485,7 +1494,7 @@ class StrategyBase(metaclass=ABCMeta):
     async def wss_init(self):
         if self.client_id:
             self.message_log(f"Init WSS, client_id: {self.client_id}")
-            await tasks_cancel(self.tasks, name='wss', log_out=prm.LOGGING)
+            await tasks_cancel(self.tasks, name='wss-', log_out=prm.LOGGING)
             await asyncio.sleep(HEARTBEAT)
             await self.wss_declare()
             # WSS start
@@ -1502,7 +1511,6 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log("Start WSS failed, retry", log_level=logging.WARNING)
                 self.wss_fire_up = True
             else:
-                self.wss_fire_up = False
                 await self.wss_wait_init()
         else:
             self.message_log("Init WSS failed, retry", log_level=logging.WARNING)
@@ -1522,6 +1530,13 @@ class StrategyBase(metaclass=ABCMeta):
                     raise SystemExit(1)
                 self.command = command
             await asyncio.sleep(TLG_DELAY)
+
+    async def test_foo(self):
+        self.message_log("test_foo STARTED", log_level=logging.WARNING)
+        await asyncio.sleep(90)
+        self.message_log(f"test_foo 1: {self.tasks}", log_level=logging.WARNING)
+        await tasks_cancel(self.tasks, name='wss-', log_out=prm.LOGGING)
+        self.message_log(f"test_foo 2: {self.tasks}", log_level=logging.WARNING)
 
     async def main(self, _symbol):  # NOSONAR
         restore_state = None

@@ -47,6 +47,10 @@ class Trade:
         self.wait_connection = False
         self.trade_id = shortuuid.uuid()
 
+    async def restart_session(self):
+        await self.send_request(self.stub.client_restart, mr.MarketRequest, symbol=self.symbol)
+        await self.get_client()
+
     async def get_client(self):
         if self.wait_connection:
             return False

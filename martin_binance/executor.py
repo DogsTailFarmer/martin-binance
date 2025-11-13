@@ -626,7 +626,7 @@ class Strategy(StrategyBase):
                 for order_id in self.orders_init.get_id_list():
                     self.message_log("Restore, wait grid orders", tlg=True)
                     self.check_created_order(order_id, "Grid order event was missed into reload")
-            elif not grid_open_orders_len:
+            elif not grid_open_orders_len and not self.reverse_hold:
                 self.message_log("Place grid orders", tlg=True)
                 self.grid_update()
 
