@@ -12,7 +12,6 @@ import logging
 import sys
 import gc
 import statistics
-import traceback
 from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
 from threading import Thread
 import queue
@@ -25,6 +24,7 @@ import os
 import psutil
 import numpy as np
 import schedule
+import ctypes, ctypes.util
 
 from typing import Dict
 
@@ -44,6 +44,10 @@ def get_mode_details(mode):
         'S': ("Simulate", Style.GREEN)
     }
     return mode_mapping.get(mode, ("Unknown Mode", Style.RESET))
+
+
+def malloc_trim(trim_type: int = 0):
+    ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(trim_type)
 
 
 # noinspection PyTypeChecker
@@ -749,6 +753,7 @@ class Strategy(StrategyBase):
                 self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
                 self.message_log("Waiting for conditions for conversion", color=Style.B_WHITE)
                 self.message_log(f"Number of unreachable objects collected by GC: {gc.collect(generation=2)}")
+                malloc_trim()
                 return
 
         if not self.first_run and not self.start_after_shift and not self.reverse and not GRID_ONLY:
@@ -777,6 +782,7 @@ class Strategy(StrategyBase):
             return
 
         self.message_log(f"Number of unreachable objects collected by GC: {gc.collect(generation=2)}")
+        malloc_trim()
         if self.first_run or self.restart:
             self.message_log(f"Initial first: {ff}, second: {fs}", color=Style.B_WHITE)
         self.restart = None

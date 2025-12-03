@@ -18,7 +18,7 @@ import shortuuid
 
 from exchanges_wrapper import martin as mr, Channel, Status, GRPCError
 
-logger = logging.getLogger('logger.client')
+logger = logging.getLogger(f'logger.{__name__}')
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
 stream_handler.setLevel(logging.INFO)
@@ -56,6 +56,7 @@ class Trade:
             return False
         self.wait_connection = True
         client = None
+        # noinspection PyInconsistentReturns
         while client is None:
             if self.channel:
                 self.channel.close()

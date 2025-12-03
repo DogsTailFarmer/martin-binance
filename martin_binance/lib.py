@@ -10,7 +10,7 @@ __contact__ = "https://github.com/DogsTailFarmer"
 
 import asyncio
 import inspect
-import logging
+import logging.handlers
 import time
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN
 from enum import Enum
@@ -20,7 +20,11 @@ import numpy as np
 import ujson as json
 from scipy.optimize import minimize
 
-logger = logging.getLogger('logger')
+logger = logging.getLogger(f'logger.{__name__}')
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
+stream_handler.setLevel(logging.INFO)
+logger.addHandler(stream_handler)
 
 O_DEC = Decimal()
 
@@ -36,6 +40,7 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
 async def tasks_cancel(tasks_set: set, name=None, log_out=True):
     tasks = tasks_set.copy()
     for task in tasks:
+        logger.debug(f"tasks_cancel.task_name: {task.get_name()}")
         if name and f"{name}" not in task.get_name():
             continue
         task.cancel()

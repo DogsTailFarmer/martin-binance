@@ -49,7 +49,7 @@ from martin_binance.telegram_proxy.tlg_client import TlgClient
 if prm.MODE == 'S':
     logger = logging.getLogger('logger_S')
 else:
-    logger = logging.getLogger('logger')
+    logger = logging.getLogger(f'logger.{__name__}')
 
 color_init()
 
@@ -580,7 +580,6 @@ class StrategyBase(metaclass=ABCMeta):
                                 await self.wss_init()
                         except Exception as ex:
                             self.message_log(f"Exception on fire up WSS: {ex}", log_level=logging.WARNING)
-                            self.wss_fire_up = True
                         else:
                             self.wss_fire_up = False
                 await asyncio.sleep(HEARTBEAT)
@@ -647,7 +646,7 @@ class StrategyBase(metaclass=ABCMeta):
                     except (asyncio.CancelledError, KeyboardInterrupt):
                         break
                     except Exception as _ex:
-                        logger.warning(f"FetchFundingWallet: {_ex}")
+                        self.message_log(f"FetchFundingWallet: {_ex}", log_level=logging.WARNING)
                     else:
                         funding_wallet = list(map(json.loads, res.items))
                     for fw in funding_wallet:
@@ -719,7 +718,7 @@ class StrategyBase(metaclass=ABCMeta):
                     )
                     connection_analytic.commit()
                 except sqlite3.Error as err:
-                    logger.error(f"INSERT into t_control: {err}")
+                    self.message_log(f"INSERT into t_control: {err}", log_level=logging.ERROR)
                 else:
                     self.message_log(f"BNB request was generated from {bot_id} to {prm.FEE_BNB['email']}",
                                      color=Style.BLUE)
@@ -797,6 +796,8 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log(f"Exception on WSS, on_funds_update loop closed: {ex}", log_level=logging.WARNING)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
+            else:
+                self.message_log("WSS: on_funds_update loop closed", log_level=logging.DEBUG)
         else:
             funds = {}
             _funds = self.account.funds.get_funds()
@@ -1077,6 +1078,8 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log(f"Exception on WSS, on_klines_update loop closed: {ex}", log_level=logging.WARNING)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
+            else:
+                self.message_log("WSS: on_klines_update loop closed", log_level=logging.DEBUG)
         else:
             for i in _intervals:
                 tasks_manage(self.tasks, self.aiter_candles(_klines, i), name='wss')
@@ -1175,6 +1178,8 @@ class StrategyBase(metaclass=ABCMeta):
             self.message_log(f"Exception on WSS, on_balance_update loop closed: {ex}", log_level=logging.WARNING)
             # self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
             self.wss_fire_up = True
+        else:
+            self.message_log("WSS: on_balance_update loop closed", log_level=logging.DEBUG)
 
     async def on_order_update(self):
         try:
@@ -1186,6 +1191,8 @@ class StrategyBase(metaclass=ABCMeta):
             self.message_log(f"Exception on WSS, on_order_update loop closed: {ex}", log_level=logging.WARNING)
             self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
             self.wss_fire_up = True
+        else:
+            self.message_log("WSS: on_order_update loop closed", log_level=logging.DEBUG)
 
     async def on_order_update_handler(self, ed):
         if self.symbol != ed['symbol']:
@@ -1309,6 +1316,8 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log(f"Exception on WSS, on_ticker_update loop closed: {ex}", log_level=logging.WARNING)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
+            else:
+                self.message_log("WSS: on_ticker_update loop closed", log_level=logging.DEBUG)
         else:
             if prm.LOGGING:
                 pbar = tqdm(total=self.backtest['ticker'].metadata.num_rows)
@@ -1359,6 +1368,8 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log(f"Exception on WSS, on_order_book_update loop closed: {ex}", log_level=logging.WARNING)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 self.wss_fire_up = True
+            else:
+                self.message_log("WSS: on_order_book_update loop closed", log_level=logging.DEBUG)
         else:
             self.s_mode_break = None
             async for row in self.loop_ds(self.backtest['order_book']):
@@ -1530,13 +1541,6 @@ class StrategyBase(metaclass=ABCMeta):
                     raise SystemExit(1)
                 self.command = command
             await asyncio.sleep(TLG_DELAY)
-
-    async def test_foo(self):
-        self.message_log("test_foo STARTED", log_level=logging.WARNING)
-        await asyncio.sleep(90)
-        self.message_log(f"test_foo 1: {self.tasks}", log_level=logging.WARNING)
-        await tasks_cancel(self.tasks, name='wss-', log_out=prm.LOGGING)
-        self.message_log(f"test_foo 2: {self.tasks}", log_level=logging.WARNING)
 
     async def main(self, _symbol):  # NOSONAR
         restore_state = None
