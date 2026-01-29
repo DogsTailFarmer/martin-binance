@@ -1,3 +1,7 @@
+## 3.0.38 - 2026-01-29
+🔧 chore(pyproject.toml): update `requires-python` to require Python 3.12 for compatibility.  
+🐳 chore(Dockerfile): switch base image to Python 3.12 and update paths accordingly.
+
 ## 3.0.37 - 2026-01-29
 🔧 fix(dependencies): update `exchanges-wrapper`, `numpy`, `optuna`, `orjson`, `pandas`, `prometheus-client`, `psutil`, `pyarrow`, `scikit-learn`, and `scipy` versions in `pyproject.toml` and `requirements.txt` for compatibility.
 
