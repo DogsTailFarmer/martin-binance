@@ -1,3 +1,6 @@
+## 3.0.37 - 2026-01-29
+🔧 fix(dependencies): update `exchanges-wrapper`, `numpy`, `optuna`, `orjson`, `pandas`, `prometheus-client`, `psutil`, `pyarrow`, `scikit-learn`, and `scipy` versions in `pyproject.toml` and `requirements.txt` for compatibility.
+
 ## 3.0.36 - 2025-12-04 Release
 📦 fix(dependencies): update package versions in `pyproject.toml` and `requirements.txt` for compatibility  
 🔧 fix(logging): improve logger configuration in `martin_binance/lib.py` and `martin_binance/strategy_base.py`  
