@@ -258,12 +258,6 @@ class StrategyBase(metaclass=ABCMeta):
         tasks_manage(self.tasks, self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
         return self.order_id
 
-    def cancel_order(self, order_id: int, cancel_all=False) -> None:
-        tasks_manage(self.tasks, self.cancel_order_call(order_id, cancel_all))
-
-    def check_created_order(self, order_id: int, msg: str) -> None:
-        tasks_manage(self.tasks, self.fetch_created_order(order_id, msg))
-
     def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE, tlg_inline=False) -> None:
         if prm.LOGGING:
             if tlg and color == Style.WHITE:
@@ -528,10 +522,11 @@ class StrategyBase(metaclass=ABCMeta):
     async def heartbeat(self, _session):
         # print(f"tik-tak:' {int(time.time() * 1000)}")
         last_exec_time = time.time()
+        self.scheduler_start()
         while True:
             # print(f"tik-tak:' {int(time.time() * 1000)}")
             try:
-                self.refresh_scheduler()
+                # self.refresh_scheduler()
                 if prm.MODE in ('T', 'TC'):
                     last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
@@ -789,7 +784,7 @@ class StrategyBase(metaclass=ABCMeta):
                 ):
                     funds = json.loads(_funds.event)
                     if self.base_asset in funds or self.quote_asset in funds:
-                        self.on_funds_update_handler(funds)
+                        await self.on_funds_update_handler(funds)
             except Exception as ex:
                 self.message_log(f"Exception on WSS, on_funds_update loop closed: {ex}", log_level=logging.WARNING)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
@@ -800,13 +795,13 @@ class StrategyBase(metaclass=ABCMeta):
             funds = {}
             _funds = self.account.funds.get_funds()
             [funds.update({d.get('asset'): {'free': d.get('free'), 'locked': d.get('locked')}}) for d in _funds]
-            self.on_funds_update_handler(funds)
+            await self.on_funds_update_handler(funds)
 
-    def on_funds_update_handler(self, funds):
+    async def on_funds_update_handler(self, funds):
         self.funds.update(funds)
         funds = {self.base_asset: FundsEntry(self.funds[self.base_asset]),
                  self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
-        self.on_new_funds(funds)
+        await self.on_new_funds(funds)
         self.get_buffered_funds_last_time = self.get_time()
 
     async def loop_ds(self, ds, ticker=False):
@@ -859,12 +854,12 @@ class StrategyBase(metaclass=ABCMeta):
         self.grid_buy.update({ts or int(time.time() * 1000): pd.Series(orders_buy)})
         self.grid_sell.update({ts or int(time.time() * 1000): pd.Series(orders_sell)})
 
-    async def cancel_order_call(self, _id: int, cancel_all=False):
+    async def cancel_order(self, order_id: int, cancel_all=False):
         _fetch_order = False
         try:
             if prm.MODE in ('T', 'TC'):
                 if cancel_all:
-                    if _id not in self.bulk_orders_cancel:
+                    if order_id not in self.bulk_orders_cancel:
                         res = await self.send_request(
                             self.stub.cancel_all_orders,
                             mr.MarketRequest,
@@ -873,47 +868,47 @@ class StrategyBase(metaclass=ABCMeta):
                         if res:
                             for v in ast.literal_eval(json.loads(res.result)):
                                 self.bulk_orders_cancel.update({v['orderId']: v})
-                    result = self.bulk_orders_cancel.pop(_id, None)
+                    result = self.bulk_orders_cancel.pop(order_id, None)
                 else:
                     res = await self.send_request(
                         self.stub.cancel_order,
                         mr.CancelOrderRequest,
                         symbol=self.symbol,
-                        order_id=_id
+                        order_id=order_id
                     )
                     result = res.to_pydict()
             else:
-                result = self.account.cancel_order(order_id=_id, ts=int(self.get_time() * 1000))
+                result = self.account.cancel_order(order_id=order_id, ts=int(self.get_time() * 1000))
         except GRPCError as ex:
             _fetch_order = True
-            self.message_log(f"Exception on cancel order {_id}: {ex.status.name}, {ex.message}")
+            self.message_log(f"Exception on cancel order {order_id}: {ex.status.name}, {ex.message}")
         except UserWarning as ex:
             _fetch_order = True
-            self.message_log(f"Exception on cancel order call for {_id}: {ex}", log_level=logging.WARNING)
+            self.message_log(f"Exception on cancel order call for {order_id}: {ex}", log_level=logging.WARNING)
         except Exception as ex:
             _fetch_order = True
-            self.message_log(f"Exception on cancel order call for {_id}: {ex}", log_level=logging.ERROR)
+            self.message_log(f"Exception on cancel order call for {order_id}: {ex}", log_level=logging.ERROR)
             self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
         else:
             # print(f"cancel_order_call.result: {result}")
             # Remove from orders lists
             if result and result.get('status') == 'CANCELED':
-                await self.cancel_order_handler(_id, cancel_all)
+                await self.cancel_order_handler(order_id, cancel_all)
             else:
-                self.message_log(f"Cancel order {_id}: Warning, not result getting")
+                self.message_log(f"Cancel order {order_id}: Warning, not result getting")
                 _fetch_order = True
         finally:
             if prm.MODE in ('T', 'TC') and _fetch_order:
-                res = await self.fetch_order(_id, _filled_update_call=True)
+                res = await self.fetch_order(order_id, _filled_update_call=True)
                 if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
-                    await self.cancel_order_handler(_id, cancel_all)
+                    await self.cancel_order_handler(order_id, cancel_all)
                 else:
-                    self.on_cancel_order_error_string(_id, 'order not canceled')
+                    self.on_cancel_order_error_string(order_id, 'order not canceled')
 
     async def cancel_order_handler(self, _id, cancel_all):
         self.message_log(f"Cancel order {_id} success", color=Style.GREEN)
         self.remove_from_orders_lists([_id])
-        self.on_cancel_order_success(_id, cancel_all=cancel_all)
+        await self.on_cancel_order_success(_id, cancel_all=cancel_all)
         if prm.MODE == 'TC' and prm.SAVE_DS and self.start_collect:
             self.open_orders_snapshot()
         elif prm.MODE == 'S':
@@ -991,7 +986,7 @@ class StrategyBase(metaclass=ABCMeta):
             else:
                 funds = {self.base_asset: FundsEntry(self.funds[self.base_asset]),
                          self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
-                self.on_new_funds(funds)
+                await self.on_new_funds(funds)
 
     async def get_exchange_info(self, _request, _symbol):
         """
@@ -1112,7 +1107,7 @@ class StrategyBase(metaclass=ABCMeta):
             status_code = ex.status
             msg = f"Create order {_id}: {status_code.name}, {ex.message}"
             if status_code in (Status.FAILED_PRECONDITION, Status.DEADLINE_EXCEEDED):
-                self.on_place_order_error(_id, msg)
+                await self.on_place_order_error(_id, msg)
             else:
                 _fetch_order = True
         except Exception as _ex:
@@ -1134,14 +1129,14 @@ class StrategyBase(metaclass=ABCMeta):
         if res.get('status') in ('NEW', 'PARTIALLY_FILLED', 'FILLED'):
             await self.create_order_handler(_id, res)
         else:
-            self.on_place_order_error(_id, msg)
+            await self.on_place_order_error(_id, msg)
 
     async def create_order_handler(self, _id, result):
         # print(f"create_order_handler.result: {result}")
         if self.order_init_exist(_id):
             order = Order(result)
             self.orders[order.id] = order
-            self.on_place_order_success(_id, order)
+            await self.on_place_order_success(_id, order)
             self.message_log(
                 f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
                 f" {any2str(order.amount)} by {any2str(order.price)} = {any2str(order.amount * order.price)}",
@@ -1171,7 +1166,7 @@ class StrategyBase(metaclass=ABCMeta):
                      _res["asset"],
                      _res["balance_delta"]]
                 )
-                self.on_balance_update_ex(_res)
+                await self.on_balance_update_ex(_res)
         except Exception as ex:
             self.message_log(f"Exception on WSS, on_balance_update loop closed: {ex}", log_level=logging.WARNING)
             # self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
@@ -1219,7 +1214,7 @@ class StrategyBase(metaclass=ABCMeta):
             return
 
         if self.trade_not_exist(ed["order_id"], ed["trade_id"]):
-            self._on_order_update_handler_ext(ed)
+            await self._on_order_update_handler_ext(ed)
             if prm.MODE in ('T', 'TC'):
                 await SAVE_TRADE_QUEUE.put(
                     ["TRADE" if ed['is_maker_side'] else "TRADE_BY_MARKET",
@@ -1263,7 +1258,7 @@ class StrategyBase(metaclass=ABCMeta):
             if prm.SAVE_DS:
                 self.open_orders_snapshot()
 
-    def _on_order_update_handler_ext(self, ed):
+    async def _on_order_update_handler_ext(self, ed):
         trade = {
             "qty": ed['last_executed_quantity'],
             "isBuyer": ed['side'] == 'BUY',
@@ -1281,7 +1276,7 @@ class StrategyBase(metaclass=ABCMeta):
         if ed['order_status'] == 'FILLED' and self.order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
             self.message_log(f"Order: {ed['order_id']} was missed partially filling event", log_level=logging.INFO)
             ed['order_status'] = 'PARTIALLY_FILLED'
-        self.on_order_update_ex(OrderUpdate(ed, self.trades))
+        await self.on_order_update_ex(OrderUpdate(ed, self.trades))
 
     async def on_ticker_update(self):
         """
@@ -1296,7 +1291,7 @@ class StrategyBase(metaclass=ABCMeta):
                         symbol=self.symbol
                 ):
                     self.ticker = _ticker.to_pydict()
-                    self.on_new_ticker(Ticker(self.ticker))
+                    await self.on_new_ticker(Ticker(self.ticker))
                     #
                     if prm.MODE == 'TC' and self.start_collect:
                         ts = int(time.time() * 1000)
@@ -1323,7 +1318,7 @@ class StrategyBase(metaclass=ABCMeta):
             async for row in self.loop_ds(self.backtest['ticker'], ticker=True):
                 self.delay_ordering_s = row.pop('delay', 0)
                 self.ticker = row
-                self.on_new_ticker(Ticker(row))
+                await self.on_new_ticker(Ticker(row))
                 res = self.account.on_ticker_update(row, int(self.get_time() * 1000))
                 for _res in res:
                     await self.on_order_update_handler(_res)
@@ -1402,7 +1397,7 @@ class StrategyBase(metaclass=ABCMeta):
                 # noinspection PyUnreachableCode
                 if self.last_state:
                     self.message_log("Restore saved state after restart", color=Style.GREEN, tlg=True)
-                    self.restore_strategy_state(restore=True)
+                    await self.restore_strategy_state(restore=True)
 
                 for order in orders:
                     _id = int(order['orderId'])
@@ -1736,7 +1731,7 @@ class StrategyBase(metaclass=ABCMeta):
                             )
                     [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                     #
-                    self.restore_strategy_state(strategy_state=last_state, restore=False)
+                    await self.restore_strategy_state(strategy_state=last_state, restore=False)
                     #
                     self.init(check_funds=False)
                 else:
@@ -1763,7 +1758,7 @@ class StrategyBase(metaclass=ABCMeta):
                         self.start_collect = True
                     else:
                         self.init()
-                        self.start()
+                        await self.start()
 
             if prm.MODE in ('T', 'TC'):
                 if prm.TLG_SERVICE:
@@ -1778,7 +1773,7 @@ class StrategyBase(metaclass=ABCMeta):
                 if prm.MODE == 'TC':
                     tasks_manage(self.tasks, self.backtest_control(), add_done_callback=False)
                 if not restore_state:
-                    self.start()
+                    await self.start()
 
             tasks_manage(self.tasks, self.heartbeat(self.session), add_done_callback=False)
 
@@ -1800,7 +1795,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def on_new_funds(self, *args):
+    async def on_new_funds(self, *args):
         raise NotImplementedError
 
     @abstractmethod
@@ -1808,11 +1803,11 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def on_cancel_order_success(self, *args, **kwargs):
+    async def on_cancel_order_success(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
-    def on_place_order_error(self, *args):
+    async def on_place_order_error(self, *args):
         raise NotImplementedError
 
     @abstractmethod
@@ -1820,19 +1815,19 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def on_place_order_success(self, *args):
+    async def on_place_order_success(self, *args):
         raise NotImplementedError
 
     @abstractmethod
-    def on_balance_update_ex(self, *args):
+    async def on_balance_update_ex(self, *args):
         raise NotImplementedError
 
     @abstractmethod
-    def on_order_update_ex(self, *args):
+    async def on_order_update_ex(self, *args):
         raise NotImplementedError
 
     @abstractmethod
-    def on_new_ticker(self, *args):
+    async def on_new_ticker(self, *args):
         raise NotImplementedError
 
     @abstractmethod
@@ -1848,11 +1843,11 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def restore_strategy_state(self, **kwargs):
+    async def restore_strategy_state(self, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
-    def start(self, *args):
+    async def start(self, *args):
         raise NotImplementedError
 
     @abstractmethod
@@ -1864,7 +1859,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def refresh_scheduler(self):
+    def scheduler_start(self):
         raise NotImplementedError
 
     @abstractmethod
