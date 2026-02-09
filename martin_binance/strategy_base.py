@@ -256,8 +256,6 @@ class StrategyBase(metaclass=ABCMeta):
                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
                          color=Style.B_YELLOW)
         tasks_manage(self.tasks, self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
-        if self.exchange == 'huobi':
-            time.sleep(0.02)
         return self.order_id
 
     def cancel_order(self, order_id: int, cancel_all=False) -> None:

@@ -4,10 +4,11 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.36"
+__version__ = "3.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
+import asyncio
 import logging
 import sys
 import gc
@@ -23,6 +24,7 @@ from datetime import datetime, timezone
 import os
 import psutil
 import numpy as np
+# noinspection PyPackageRequirements
 import schedule
 import ctypes, ctypes.util
 
@@ -134,7 +136,7 @@ class Strategy(StrategyBase):
         self.ts_grid_update = self.get_time()  # - When updated grid
         self.wait_wss_refresh = {}  # -
         self.place_grid_part_after_tp = True  # -
-        #
+        self.started_balance_detail = ()  # + (base, quote, rate), all Decimal, used for balance control subsystem
         schedule.every(5).minutes.do(self.event_grid_update)
         schedule.every(5).seconds.do(self.event_processing)
         schedule.every().minute.at(":35").do(self.event_update_tp)
@@ -196,6 +198,10 @@ class Strategy(StrategyBase):
         if last_price := self.get_buffered_ticker().last_price:
             self.message_log(f"Last ticker price: {last_price}")
             self.avg_rate = last_price
+
+            if not self.started_balance_detail and MODE in ('T', 'TC') and not GRID_ONLY:
+                self.started_balance_detail = self.get_free_assets()[:2] + (self.avg_rate,)
+
             if self.first_run and check_funds:
                 if self.cycle_buy:
                     ds = self.get_buffered_funds().get(self.s_currency, O_DEC)
@@ -254,6 +260,7 @@ class Strategy(StrategyBase):
             'reverse_price': json.dumps(self.reverse_price),
             'reverse_target_amount': json.dumps(self.reverse_target_amount),
             'shift_grid_threshold': json.dumps(self.shift_grid_threshold),
+            'started_balance_detail': json.dumps(str(self.started_balance_detail)),
             'status_time': json.dumps(self.status_time),
             'sum_amount_first': json.dumps(self.sum_amount_first),
             'sum_amount_second': json.dumps(self.sum_amount_second),
@@ -576,6 +583,7 @@ class Strategy(StrategyBase):
             self.shift_grid_threshold = json.loads(strategy_state.get('shift_grid_threshold'))
             if self.shift_grid_threshold:
                 self.shift_grid_threshold = f2d(self.shift_grid_threshold)
+            self.started_balance_detail = eval(json.loads(strategy_state.get('started_balance_detail', "\"()\"")))
             self.status_time = json.loads(strategy_state.get('status_time'))
             self.sum_amount_first = f2d(json.loads(strategy_state.get('sum_amount_first')))
             self.sum_amount_second = f2d(json.loads(strategy_state.get('sum_amount_second')))
@@ -641,7 +649,7 @@ class Strategy(StrategyBase):
                 self.message_log("Restore, no TP order, create", tlg=True)
                 self.place_profit_order()
 
-    def start(self, profit_f: Decimal = O_DEC, profit_s: Decimal = O_DEC) -> None:
+    async def start(self, profit_f: Decimal = O_DEC, profit_s: Decimal = O_DEC) -> None:
         self.message_log('Start')
         if self.command == 'stopped':
             self.message_log('Strategy stopped, waiting manual action')
@@ -662,6 +670,7 @@ class Strategy(StrategyBase):
             return
         ff, fs, _, _ = self.get_free_assets(mode='available')
         # Save initial funds and cycle statistics to .db for external analytics
+        await self.trade_control()
         if self.first_run:
             self.save_init_assets(ff, fs)
         if self.restart:
@@ -867,6 +876,47 @@ class Strategy(StrategyBase):
                                  color=Style.B_RED)
                 if self.first_run:
                     raise SystemExit(1)
+
+    def started_balance(self) -> Decimal:
+        return self.round_truncate(
+            self.started_balance_detail[0] * self.started_balance_detail[2] + self.started_balance_detail[1],
+            base=False
+        )
+
+    async def trade_control(self):
+        if not TRADE_CONTROL or MODE not in ('T', 'TC') or GRID_ONLY:
+            return
+
+        is_start_on_buy = START_ON_BUY and not self.reverse
+        is_start_on_sell = not START_ON_BUY and self.reverse
+        if not (is_start_on_buy or is_start_on_sell):
+            return
+
+        balance_diff = self.get_free_assets()[2] - self.started_balance()
+        balance_diff_percent = (
+                100 * balance_diff / self.started_balance()
+        ).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
+
+        self.message_log(
+            f"Balance diff: {balance_diff_percent} %",
+            color=Style.GREEN if balance_diff_percent >= 0 else Style.RED
+        )
+
+        while True:
+            try:
+                adx_data = self.adx(TC_ADX_CANDLE_SIZE_IN_MINUTES, TC_ADX_NUMBER_OF_CANDLES, TC_ADX_PERIOD)
+                wait_for_conditions = adx_data['-DI'] > adx_data['+DI']
+            except (ZeroDivisionError, statistics.StatisticsError):
+                break
+
+            if not wait_for_conditions:
+                break
+
+            self.message_log('Waiting for optimal trading conditions')
+            self.message_log(
+                'adx: {}, +DI: {}, -DI: {}'.format(adx_data['adx'], adx_data['+DI'], adx_data['-DI'])
+            )
+            await asyncio.sleep(60)
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -1094,7 +1144,7 @@ class Strategy(StrategyBase):
                     fs = self.initial_reverse_second if self.reverse else self.initial_second
         ff = self.round_truncate(ff, base=True)
         fs = self.round_truncate(fs, base=False)
-        ft = ff * self.avg_rate + fs
+        ft = self.round_truncate(ff * self.avg_rate + fs, base=False)
         return ff, fs, ft, f"{mode.capitalize()}: First: {ff}, Second: {fs}"
 
     def round_truncate(self, _x: Decimal, base: bool = None, fee=False, _rounding=ROUND_FLOOR) -> Decimal:
@@ -2242,6 +2292,15 @@ class Strategy(StrategyBase):
                          color=Style.UNDERLINE, tlg=True)
         #
         self.debug_output()
+
+        if self.started_balance_detail:
+            (first, second, rate) = self.started_balance_detail
+            if asset == self.f_currency:
+                first += delta
+            elif asset == self.s_currency:
+                second += delta
+            self.started_balance_detail = (first, second, rate)
+
         update_grid = False
         if self.cycle_buy:
             if asset == self.s_currency:
