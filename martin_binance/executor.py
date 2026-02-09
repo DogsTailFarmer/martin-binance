@@ -441,12 +441,12 @@ class Strategy(StrategyBase):
 
     async def event_processing(self):
         if self.wait_wss_refresh and self.get_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
-            self.place_grid(self.wait_wss_refresh['buy_side'],
-                            self.wait_wss_refresh['depo'],
-                            self.reverse_target_amount,
-                            self.wait_wss_refresh['allow_grid_shift'],
-                            self.wait_wss_refresh['additional_grid'],
-                            self.wait_wss_refresh['grid_update'])
+            await self.place_grid(self.wait_wss_refresh['buy_side'],
+                                  self.wait_wss_refresh['depo'],
+                                  self.reverse_target_amount,
+                                  self.wait_wss_refresh['allow_grid_shift'],
+                                  self.wait_wss_refresh['additional_grid'],
+                                  self.wait_wss_refresh['grid_update'])
         if self.wait_refunding_for_start or self.tp_order_hold or self.grid_hold:
             self.get_buffered_funds()
         if self.reverse_hold:
@@ -620,7 +620,7 @@ class Strategy(StrategyBase):
                 await self.cancel_grid()
             elif not grid_open_orders_len and self.orders_hold:
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
-                self.place_grid_part()
+                await self.place_grid_part()
             elif self.grid_update_started and not self.orders_grid and not self.orders_hold and not self.orders_save:
                 self.message_log("Continue update grid", tlg=True)
                 self.grid_remove = True
@@ -825,7 +825,7 @@ class Strategy(StrategyBase):
         if MODE in ('TC', 'S') and self.start_collect is None:
             self.start_collect = True
         self.first_run = False
-        self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
+        await self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
 
     def stop(self) -> None:
         self.message_log('Stop')
@@ -1168,7 +1168,7 @@ class Strategy(StrategyBase):
     ##############################################################
     # strategy function
     ##############################################################
-    def place_grid(self,
+    async def place_grid(self,
                    buy_side: bool,
                    depo: Decimal,
                    reverse_target_amount: Decimal,
@@ -1284,7 +1284,7 @@ class Strategy(StrategyBase):
                 i, amount, price = order
                 # create order for grid
                 if i < GRID_MAX_COUNT:
-                    waiting_order_id = self.place_limit_order(buy_side, amount, price)
+                    waiting_order_id = await self.place_limit_order(buy_side, amount, price)
                     self.orders_init.append_order(waiting_order_id, buy_side, amount, price)
                 else:
                     self.orders_hold.append_order(i, buy_side, amount, price)
@@ -1325,7 +1325,7 @@ class Strategy(StrategyBase):
             self.message_log("Replace take profit order after place additional grid orders")
             self.tp_hold = False
             self.tp_hold_additional = False
-            self.place_profit_order()
+            await self.place_profit_order()
 
     def calc_grid(self, over_price: Decimal, calc_avg_amount=True, **kwargs):
         if isinstance(over_price, np.ndarray):
@@ -1418,7 +1418,7 @@ class Strategy(StrategyBase):
 
     async def event_grid_update(self):
         if not self.orders_grid:
-            self.place_grid_part()
+            await self.place_grid_part()
             return
         #
         do_it = False
@@ -1500,7 +1500,9 @@ class Strategy(StrategyBase):
                                      f" vlm: {amount}, price: {price}, profit (incl.fee): {profit}%")
                     self.tp_target = target
                     self.tp_order = (buy_side, amount, price, self.get_time())
-                    self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=after_error)
+                    self.tp_wait_id = await self.place_limit_order_check(
+                        buy_side, amount, price, check=after_error, wait=True
+                    )
         elif self.tp_order_id and self.tp_cancel:
             self.cancel_order_id = self.tp_order_id
             await self.cancel_order(self.tp_order_id)
@@ -1918,7 +1920,7 @@ class Strategy(StrategyBase):
             self.debug_output()
             await self.start(profit_f, profit_s)
 
-    def place_grid_part(self) -> None:
+    async def place_grid_part(self) -> None:
         if self.orders_hold and not self.orders_init and not self.grid_remove:
             n = len(self.orders_grid) + len(self.orders_init)
             if n < ORDER_Q:
@@ -1927,7 +1929,7 @@ class Strategy(StrategyBase):
                 for i in self.orders_hold:
                     if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
                         break
-                    waiting_order_id = self.place_limit_order_check(
+                    waiting_order_id = await self.place_limit_order_check(
                         i['buy'],
                         i['amount'],
                         i['price'],
@@ -2034,7 +2036,7 @@ class Strategy(StrategyBase):
         else:
             self.restore_orders_fire()
             if after_full_fill:
-                self.place_grid_part()
+                await self.place_grid_part()
             if self.tp_was_filled:
                 # Exist filled but non processing TP
                 await self.after_filled_tp(one_else_grid=True)
@@ -2211,7 +2213,7 @@ class Strategy(StrategyBase):
                     _amount = self.deposit_first
         return self.round_truncate(_amount, base=True) >= min_trade_amount
 
-    def place_limit_order_check(self, buy: bool, amount: Decimal, price: Decimal, check=False) -> int:
+    async def place_limit_order_check(self, buy: bool, amount: Decimal, price: Decimal, check=False, wait=False) -> int:
         """
         Before place limit order checking trade conditions and correct price
         """
@@ -2225,7 +2227,7 @@ class Strategy(StrategyBase):
             elif not buy and order_book.asks:
                 price = max(_price, order_book.asks[0].price)
 
-        waiting_order_id = self.place_limit_order(buy, amount, price)
+        waiting_order_id = await self.place_limit_order(buy, amount, price, wait)
         if _price != price:
             self.message_log(f"For order {waiting_order_id} price was updated from {_price} to {price}",
                              log_level=logging.WARNING)
@@ -2455,12 +2457,12 @@ class Strategy(StrategyBase):
             else:
                 available_fund = ff.available if ff else O_DEC
             if available_fund >= self.grid_hold['depo']:
-                self.place_grid(self.grid_hold['buy_side'],
-                                self.grid_hold['depo'],
-                                self.grid_hold['reverse_target_amount'],
-                                self.grid_hold['allow_grid_shift'],
-                                self.grid_hold['additional_grid'],
-                                self.grid_hold['grid_update'])
+                await self.place_grid(self.grid_hold['buy_side'],
+                                      self.grid_hold['depo'],
+                                      self.grid_hold['reverse_target_amount'],
+                                      self.grid_hold['allow_grid_shift'],
+                                      self.grid_hold['additional_grid'],
+                                      self.grid_hold['grid_update'])
 
     async def on_order_update_ex(self, update: OrderUpdate) -> None:
         # self.message_log(f"Order {update.original_order.id}: {update.status}", log_level=logging.DEBUG)
@@ -2644,7 +2646,7 @@ class Strategy(StrategyBase):
                     self.cancel_grid_hold = False
                     await self.cancel_grid()
                 elif GRID_ONLY or not self.shift_grid_threshold:
-                    self.place_grid_part()
+                    await self.place_grid_part()
             if not self.orders_hold and not self.orders_init:
                 self.message_log('All grid orders have been successfully placed', color=Style.B_WHITE)
         elif place_order_id == self.tp_wait_id:
@@ -2654,7 +2656,7 @@ class Strategy(StrategyBase):
                 self.cancel_order_id = self.tp_order_id
                 await self.cancel_order(self.tp_order_id)
             elif self.place_grid_part_after_tp:
-                self.place_grid_part()
+                await self.place_grid_part()
         else:
             self.message_log(f"Did not have waiting order {place_order_id}", logging.ERROR)
 

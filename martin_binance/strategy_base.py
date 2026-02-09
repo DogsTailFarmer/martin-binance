@@ -250,12 +250,15 @@ class StrategyBase(metaclass=ABCMeta):
             else:
                 tasks_manage(self.tasks, self.transfer2master(symbol, amount))
 
-    def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal) -> int:
+    async def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal, wait=False) -> int:
         self.order_id += 1
         self.message_log(f"Send order id:{self.order_id} for {'BUY' if buy else 'SELL'}"
                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
                          color=Style.B_YELLOW)
-        tasks_manage(self.tasks, self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
+        if wait:
+            await self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price))
+        else:
+            tasks_manage(self.tasks, self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
         return self.order_id
 
     def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE, tlg_inline=False) -> None:
