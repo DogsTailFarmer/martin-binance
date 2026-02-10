@@ -8,7 +8,6 @@ __version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
-import inspect
 import ast
 import asyncio
 import aiofiles
