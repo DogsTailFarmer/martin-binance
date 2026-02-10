@@ -8,6 +8,7 @@ __version__ = "3.0.36"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
+import inspect
 import ast
 import asyncio
 import aiofiles
@@ -250,15 +251,12 @@ class StrategyBase(metaclass=ABCMeta):
             else:
                 tasks_manage(self.tasks, self.transfer2master(symbol, amount))
 
-    async def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal, wait=False) -> int:
+    def place_limit_order(self, buy: bool, amount: Decimal, price: Decimal) -> int:
         self.order_id += 1
         self.message_log(f"Send order id:{self.order_id} for {'BUY' if buy else 'SELL'}"
                          f" {any2str(amount)} by {any2str(price)} = {any2str(amount * price)}",
                          color=Style.B_YELLOW)
-        if wait:
-            await self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price))
-        else:
-            tasks_manage(self.tasks, self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
+        tasks_manage(self.tasks, self.create_limit_order(self.order_id, buy, any2str(amount), any2str(price)))
         return self.order_id
 
     def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE, tlg_inline=False) -> None:
@@ -1135,15 +1133,15 @@ class StrategyBase(metaclass=ABCMeta):
             await self.on_place_order_error(_id, msg)
 
     async def create_order_handler(self, _id, result):
-        # print(f"create_order_handler.result: {result}")
         if self.order_init_exist(_id):
             order = Order(result)
             self.orders[order.id] = order
-            await self.on_place_order_success(_id, order)
             self.message_log(
                 f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
                 f" {any2str(order.amount)} by {any2str(order.price)} = {any2str(order.amount * order.price)}",
                 color=Style.GREEN)
+
+            await self.on_place_order_success(_id, order)
 
             if prm.MODE == 'S':
                 await self.on_funds_update()
