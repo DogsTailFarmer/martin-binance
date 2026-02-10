@@ -356,7 +356,7 @@ class Strategy(StrategyBase):
             self.stop()
             os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
 
-    def event_report(self):
+    async def event_report(self):  # NOSONAR S7503
         is_time_for_report_update = STATUS_DELAY and (self.get_time() - self.status_time) / 60 > STATUS_DELAY
         if self.command == 'status' or is_time_for_report_update:
             if self.command == 'status':
@@ -439,6 +439,9 @@ class Strategy(StrategyBase):
     def scheduler_start(self):
         scheduler.start()
 
+    def scheduler_stop(self):
+        scheduler.shutdown()
+
     async def event_processing(self):
         if self.wait_wss_refresh and self.get_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
             await self.place_grid(self.wait_wss_refresh['buy_side'],
@@ -471,7 +474,7 @@ class Strategy(StrategyBase):
             else:
                 self.start_reverse_time = self.get_time()
 
-    def event_update_tp(self):
+    async def event_update_tp(self):
         if (
             ADAPTIVE_TRADE_CONDITION
             and self.stable_state()
@@ -480,7 +483,7 @@ class Strategy(StrategyBase):
             and not self.tp_part_amount_first
         ):
             self.message_log("Update TP order", color=Style.B_WHITE)
-            self.place_profit_order()
+            await self.place_profit_order()
 
     async def event_grid_only_release(self):
         if self.grid_only_restart and self.get_time() > self.grid_only_restart:

@@ -743,6 +743,8 @@ class StrategyBase(metaclass=ABCMeta):
 
             if self.tlg_client:
                 await self.tlg_client.close()
+
+            self.scheduler_stop()
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -1860,6 +1862,10 @@ class StrategyBase(metaclass=ABCMeta):
 
     @abstractmethod
     def scheduler_start(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def scheduler_stop(self):
         raise NotImplementedError
 
     @abstractmethod
