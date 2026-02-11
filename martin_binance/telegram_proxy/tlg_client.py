@@ -19,7 +19,7 @@ openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyou
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.36"
+__version__ = "3.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -32,8 +32,6 @@ import ujson as json
 import toml
 import random
 import logging.handlers
-
-from sqlalchemy.util import await_fallback
 
 import martin_binance.tlg as tlg
 from martin_binance import LOG_FILE_TLG, CONFIG_FILE, CERT_DIR

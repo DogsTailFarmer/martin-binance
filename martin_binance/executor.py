@@ -644,7 +644,7 @@ class Strategy(StrategyBase):
                     await self.fetch_created_order(order_id, "Grid order event was missed into reload")
             elif not grid_open_orders_len and not self.reverse_hold:
                 self.message_log("Place grid orders", tlg=True)
-                self.grid_update()
+                await self.grid_update()
 
             if self.tp_wait_id:
                 self.message_log("Restore, wait TP order", tlg=True)
@@ -672,9 +672,10 @@ class Strategy(StrategyBase):
             # Wait tp order and cancel in on_cancel_order_success and restart
             self.tp_cancel = True
             return
-        ff, fs, _, _ = self.get_free_assets(mode='available')
-        # Save initial funds and cycle statistics to .db for external analytics
+        # Checking for optimal trading conditions
         await self.trade_control()
+        # Save initial funds and cycle statistics to .db for external analytics
+        ff, fs, _, _ = self.get_free_assets(mode='available')
         if self.first_run:
             self.save_init_assets(ff, fs)
         if self.restart:
@@ -906,6 +907,7 @@ class Strategy(StrategyBase):
             color=Style.GREEN if balance_diff_percent >= 0 else Style.RED
         )
 
+        first_iteration = True
         while True:
             try:
                 adx_data = self.adx(TC_ADX_CANDLE_SIZE_IN_MINUTES, TC_ADX_NUMBER_OF_CANDLES, TC_ADX_PERIOD)
@@ -916,7 +918,10 @@ class Strategy(StrategyBase):
             if not wait_for_conditions:
                 break
 
-            self.message_log('Waiting for optimal trading conditions')
+            if first_iteration:
+                self.message_log('Waiting for optimal trading conditions')
+                first_iteration = False
+
             self.message_log(
                 'adx: {}, +DI: {}, -DI: {}'.format(adx_data['adx'], adx_data['+DI'], adx_data['-DI'])
             )
@@ -2164,14 +2169,14 @@ class Strategy(StrategyBase):
                     self.grid_update_started = None
                     await self.after_filled_tp(one_else_grid=False)
                 elif self.grid_update_started:
-                    self.grid_update()
+                    await self.grid_update()
                 else:
                     self.grid_update_started = None
                     await self.start()
         else:
             self.grid_remove = None
 
-    def grid_update(self):
+    async def grid_update(self):
         _depo = self.depo_unused()
         self.message_log(f"Start update (place) grid orders, depo: {_depo}", color=Style.B_WHITE)
         if self.reverse:
@@ -2186,7 +2191,7 @@ class Strategy(StrategyBase):
             self.message_log(f"Partially filled TP order amount was utilised:"
                              f" first: {self.tp_part_amount_first}, second: {self.tp_part_amount_second}")
             self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-        self.place_grid(self.cycle_buy,
+        await self.place_grid(self.cycle_buy,
                         _depo,
                         _reverse_target_amount,
                         allow_grid_shift=False,

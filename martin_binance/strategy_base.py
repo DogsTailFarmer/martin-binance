@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.36"
+__version__ = "3.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -308,6 +308,8 @@ class StrategyBase(metaclass=ABCMeta):
         """
         Managing backtest and optimization cycles
         """
+        while self.start_collect is None:
+            await asyncio.sleep(HEARTBEAT)
         delay = HEARTBEAT * 30  # 1 min
         ts = time.time()
         restart = False
@@ -526,7 +528,6 @@ class StrategyBase(metaclass=ABCMeta):
         while True:
             # print(f"tik-tak:' {int(time.time() * 1000)}")
             try:
-                # self.refresh_scheduler()
                 if prm.MODE in ('T', 'TC'):
                     last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
