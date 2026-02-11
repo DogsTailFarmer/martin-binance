@@ -35,6 +35,7 @@ dependencies = [
     "prometheus-client==0.24.1",
     "psutil==7.2.2",
     "pyarrow~=23.0.0",
+    "pymannkendall==1.4.3",
     "requests==2.32.5",
     "schedule~=1.2.2",
     "scikit-learn==1.8.0",

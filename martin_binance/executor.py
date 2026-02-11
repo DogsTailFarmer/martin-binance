@@ -19,6 +19,7 @@ import queue
 import math
 import sqlite3
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import pymannkendall as mk
 
 import ujson as json
 from datetime import datetime, timezone
@@ -277,6 +278,13 @@ class Strategy(StrategyBase):
             'tp_wait_id': json.dumps(self.tp_wait_id)
         }
 
+    def scheduler_start(self):
+        scheduler.start()
+
+    def scheduler_stop(self):
+        if scheduler.running:
+            scheduler.shutdown()
+
     def event_export_operational_status(self):
         ts = self.get_time()
         has_grid_hold_timeout = ts - self.grid_hold.get('timestamp', ts) > HOLD_TP_ORDER_TIMEOUT
@@ -435,12 +443,6 @@ class Strategy(StrategyBase):
                                  f"{'-   ***   ***   ***   -' if self.command == 'stop' else ''}\n"
                                  f"{'Waiting for end of cycle for manual action' if command else ''}",
                                  tlg=True)
-
-    def scheduler_start(self):
-        scheduler.start()
-
-    def scheduler_stop(self):
-        scheduler.shutdown()
 
     async def event_processing(self):
         if self.wait_wss_refresh and self.get_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
@@ -908,23 +910,32 @@ class Strategy(StrategyBase):
         )
 
         first_iteration = True
+        diff_data = []
         while True:
             try:
                 adx_data = self.adx(TC_ADX_CANDLE_SIZE_IN_MINUTES, TC_ADX_NUMBER_OF_CANDLES, TC_ADX_PERIOD)
-                wait_for_conditions = adx_data['-DI'] > adx_data['+DI']
             except (ZeroDivisionError, statistics.StatisticsError):
                 break
 
-            if not wait_for_conditions:
+            diff = adx_data['+DI'] - adx_data['-DI']
+            if diff > 0:
                 break
 
             if first_iteration:
-                self.message_log('Waiting for optimal trading conditions')
+                self.message_log('Waiting for optimal trading conditions', tlg=True)
                 first_iteration = False
 
-            self.message_log(
-                'adx: {}, +DI: {}, -DI: {}'.format(adx_data['adx'], adx_data['+DI'], adx_data['-DI'])
-            )
+            diff_data.append(diff)
+            diff_data = diff_data[-TC_ADX_CANDLE_SIZE_IN_MINUTES:]
+
+            if len(diff_data) > 5:
+                result = mk.original_test(diff_data)
+                self.message_log(f"Last diff: {diff}, Trend: {result.trend} {'significant' if result.p < 0.05 else ''}")
+                if result.p < 0.05 and result.z > 0 and diff > -TC_DI_DIFF:
+                    break
+            else:
+                self.message_log(f"Waiting for enough data, last diff {diff}")
+
             await asyncio.sleep(60)
 
     def save_init_assets(self, ff, fs):
