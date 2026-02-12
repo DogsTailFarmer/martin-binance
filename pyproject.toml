@@ -25,11 +25,11 @@ dependencies = [
     "colorama==0.4.6",
     "dash==2.18.2",
     "inquirer==3.4.0",
-    "jsonpickle==4.0.2",
-    "libtmux==0.46.2",
-    "numpy~=2.4.1",
+    "jsonpickle==4.1.1",
+    "libtmux==0.53.0",
+    "numpy~=2.4.2",
     "optuna==4.7.0",
-    "orjson~=3.11.6",
+    "orjson~=3.11.7",
     "pandas==3.0.0",
     "plotly==6.0.0",
     "prometheus-client==0.24.1",
@@ -42,7 +42,7 @@ dependencies = [
     "scipy==1.17.0",
     "shortuuid~=1.0.13",
     "toml~=0.10.2",
-    "tqdm==4.67.1",
+    "tqdm==4.67.3",
     "ujson~=5.11.0"
 ]
 

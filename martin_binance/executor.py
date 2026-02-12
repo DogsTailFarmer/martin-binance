@@ -627,8 +627,8 @@ class Strategy(StrategyBase):
                 self.message_log("Restore, no grid orders, place from hold now", tlg=True)
                 self.place_grid_part()
             elif self.grid_update_started and not self.orders_grid and not self.orders_hold and not self.orders_save:
-                self.message_log("Continue update grid", tlg=True)
                 self.grid_remove = True
+                self.message_log("Continue update grid", tlg=True)
                 await self.cancel_grid()
             elif (
                     not self.orders_grid
@@ -1341,9 +1341,9 @@ class Strategy(StrategyBase):
             self.message_log(f"Hold grid for {'Buy' if buy_side else 'Sell'} cycle with {depo} {currency} depo."
                              f" Available funds is {fund} {currency}", tlg=False)
         if self.tp_hold_additional:
-            self.message_log("Replace take profit order after place additional grid orders")
             self.tp_hold = False
             self.tp_hold_additional = False
+            self.message_log("Replace take profit order after place additional grid orders")
             await self.place_profit_order()
 
     def calc_grid(self, over_price: Decimal, calc_avg_amount=True, **kwargs):
@@ -1483,8 +1483,8 @@ class Strategy(StrategyBase):
                 # Cancel take profit order, place new
                 self.tp_hold = True
                 self.cancel_order_id = self.tp_order_id
-                await self.cancel_order(self.tp_order_id)
                 self.message_log('Hold take profit order, replace existing', color=Style.B_WHITE)
+                await self.cancel_order(self.tp_order_id)
             else:
                 buy_side = not self.cycle_buy
                 tp = self.calc_profit_order(buy_side, by_market=by_market)
@@ -1522,8 +1522,8 @@ class Strategy(StrategyBase):
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=after_error)
         elif self.tp_order_id and self.tp_cancel:
             self.cancel_order_id = self.tp_order_id
-            await self.cancel_order(self.tp_order_id)
             self.message_log('Try cancel TP, then Start', color=Style.B_WHITE)
+            await self.cancel_order(self.tp_order_id)
 
     def set_trade_conditions(self,
                              buy_side: bool,
@@ -1788,7 +1788,7 @@ class Strategy(StrategyBase):
         if one_else_grid:
             self.message_log("Some grid orders was execute after TP was filled")
             self.tp_was_filled = ()
-            if self.convert_tp(amount_first_fee - profit_first, amount_second_fee - profit_second):
+            if await self.convert_tp(amount_first_fee - profit_first, amount_second_fee - profit_second):
                 return
             self.message_log("Transfer filled TP amount to the next cycle")
             transfer_sum_amount_first = self.sum_amount_first
@@ -1924,9 +1924,9 @@ class Strategy(StrategyBase):
                 self.message_log('Start reverse cycle', tlg=True)
                 self.reverse = True
                 self.command = 'stop' if REVERSE_STOP else None
-            else:
-                self.message_log('Hold reverse cycle', color=Style.B_WHITE)
                 self.reverse_hold = True
+                self.message_log('Hold reverse cycle', color=Style.B_WHITE)
+            else:
                 await self.place_profit_order()
         if not self.reverse_hold:
             # Reverse
@@ -2038,7 +2038,7 @@ class Strategy(StrategyBase):
             if GRID_ONLY:
                 self.shift_grid_threshold = None
                 self.grid_only_stop()
-            elif self.tp_part_amount_first and self.convert_tp(
+            elif self.tp_part_amount_first and await self.convert_tp(
                     self.tp_part_amount_first,
                     self.tp_part_amount_second,
                     _update_sum_amount=False):
@@ -2070,7 +2070,7 @@ class Strategy(StrategyBase):
         else:
             self.grid_remove = None
 
-    def convert_tp(
+    async def convert_tp(
             self,
             _amount_f: Decimal,
             _amount_s: Decimal,
@@ -2110,7 +2110,7 @@ class Strategy(StrategyBase):
             if replace_tp:
                 self.tp_hold_additional = True
                 self.message_log("Replace TP")
-            self.place_grid(self.cycle_buy,
+            await self.place_grid(self.cycle_buy,
                             amount,
                             reverse_target_amount,
                             allow_grid_shift=False,
@@ -2132,7 +2132,7 @@ class Strategy(StrategyBase):
             _order_updated = self.get_buffered_open_order(_order[0])
             _order[2] = _order_updated.remaining_amount + ((amount / _order[3]) if self.cycle_buy else amount)
             self.cancel_grid_order_id = _order[0]
-            self.cancel_order(_order[0])
+            await self.cancel_order(_order[0])
             self.orders_hold.append_order(*_order)
             return True
 
@@ -2527,23 +2527,25 @@ class Strategy(StrategyBase):
                     self.orders_save.remove(update.original_order.id)
                     if not self.orders_save:
                         self.restore_orders = False
-                await self.grid_handler(_amount_first=amount_first,
-                                  _amount_second=amount_second,
-                                  by_market=by_market,
-                                  after_full_fill=True,
-                                  order_id=update.original_order.id)
+                await self.grid_handler(
+                    _amount_first=amount_first,
+                    _amount_second=amount_second,
+                    by_market=by_market,
+                    after_full_fill=True,
+                    order_id=update.original_order.id
+                )
             elif self.tp_order_id == update.original_order.id:
                 # Filled take profit order, restart
                 self.tp_order_id = None
                 self.cancel_order_id = None
                 self.tp_order = ()
+                self.tp_was_filled = (amount_first, amount_second, by_market)
                 if self.reverse_hold:
                     self.cancel_reverse_hold()
                 if self.tp_part_amount_first:
                     self.update_sum_amount(- self.tp_part_amount_first, - self.tp_part_amount_second)
                     self.tp_part_free = False
                     self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
-                self.tp_was_filled = (amount_first, amount_second, by_market)
                 # print(f"on_order_update.was_filled_tp: {self.tp_was_filled}")
                 if self.tp_hold:
                     # After place but before execute TP was filled some grid
@@ -2626,7 +2628,7 @@ class Strategy(StrategyBase):
                 self.update_sum_amount(first_fee_profit, second_fee_profit)
                 if self.reverse_hold:
                     self.start_reverse_time = self.get_time()
-                    if self.convert_tp(self.tp_part_amount_first,
+                    if await self.convert_tp(self.tp_part_amount_first,
                                        self.tp_part_amount_second,
                                        _update_sum_amount=False,
                                        replace_tp=False):
@@ -2744,7 +2746,11 @@ class Strategy(StrategyBase):
             if self.tp_part_amount_first:
                 self.message_log(f"Partially filled TP order {order_id} was canceled")
                 if self.tp_part_free:
-                    self.convert_tp(self.tp_part_amount_first, self.tp_part_amount_second, _update_sum_amount=False)
+                    await self.convert_tp(
+                        self.tp_part_amount_first,
+                        self.tp_part_amount_second,
+                        _update_sum_amount=False
+                    )
                     self.tp_part_free = False
                 self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
             # Save part profit
