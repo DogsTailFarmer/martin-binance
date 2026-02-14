@@ -674,8 +674,6 @@ class Strategy(StrategyBase):
             # Wait tp order and cancel in on_cancel_order_success and restart
             self.tp_cancel = True
             return
-        # Checking for optimal trading conditions
-        await self.trade_control()
         # Save initial funds and cycle statistics to .db for external analytics
         ff, fs, _, _ = self.get_free_assets(mode='available')
         if self.first_run:
@@ -747,6 +745,9 @@ class Strategy(StrategyBase):
                 self.wait_refunding_for_start = True
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
+        # Checking for optimal trading conditions
+        if not self.first_run and not self.start_after_shift:
+            await self.trade_control()
         #
         self.wait_refunding_for_start = False
         self.avg_rate = self.get_buffered_ticker().last_price
@@ -823,6 +824,8 @@ class Strategy(StrategyBase):
                 self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                  f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
                                  f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
+        if start_cycle_output:
+            self.get_started_balance_diff()
         #
         if self.reverse:
             self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
@@ -884,30 +887,27 @@ class Strategy(StrategyBase):
                 if self.first_run:
                     raise SystemExit(1)
 
-    def started_balance(self) -> Decimal:
-        return self.round_truncate(
-            self.started_balance_detail[0] * self.started_balance_detail[2] + self.started_balance_detail[1],
-            base=False
-        )
+    def get_started_balance_diff(self):
+        if MODE in ('T', 'TC'):
+            started_balance = self.round_truncate(
+                self.started_balance_detail[0] * self.started_balance_detail[2] + self.started_balance_detail[1],
+                base=False
+            )
+
+            balance_diff = self.get_free_assets()[2] - started_balance
+            balance_diff_percent = (
+                    100 * balance_diff / started_balance
+            ).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
+
+            self.message_log(
+                f"Balance diff: {balance_diff_percent}%",
+                color=Style.GREEN if balance_diff_percent >= 0 else Style.RED,
+                tlg=True
+            )
 
     async def trade_control(self):
-        if not TRADE_CONTROL or MODE not in ('T', 'TC') or GRID_ONLY:
+        if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy:
             return
-
-        is_start_on_buy = START_ON_BUY and not self.reverse
-        is_start_on_sell = not START_ON_BUY and self.reverse
-        if not (is_start_on_buy or is_start_on_sell):
-            return
-
-        balance_diff = self.get_free_assets()[2] - self.started_balance()
-        balance_diff_percent = (
-                100 * balance_diff / self.started_balance()
-        ).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
-
-        self.message_log(
-            f"Balance diff: {balance_diff_percent} %",
-            color=Style.GREEN if balance_diff_percent >= 0 else Style.RED
-        )
 
         first_iteration = True
         diff_data = []
@@ -1924,9 +1924,9 @@ class Strategy(StrategyBase):
                 self.message_log('Start reverse cycle', tlg=True)
                 self.reverse = True
                 self.command = 'stop' if REVERSE_STOP else None
-                self.reverse_hold = True
-                self.message_log('Hold reverse cycle', color=Style.B_WHITE)
             else:
+                self.message_log('Hold reverse cycle', color=Style.B_WHITE)
+                self.reverse_hold = True
                 await self.place_profit_order()
         if not self.reverse_hold:
             # Reverse
@@ -2773,7 +2773,6 @@ class Strategy(StrategyBase):
     def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         if self.cancel_order_id == order_id:
             self.cancel_order_id = None
-            self.tp_hold = False
         self.message_log(f"On cancel order {order_id} {error}", logging.ERROR)
 
     def restore_state_before_backtesting_ex(self, saved_state):
