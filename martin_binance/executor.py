@@ -426,7 +426,8 @@ class Strategy(StrategyBase):
                               f"First: {self.sum_profit_first}\n"
                               f"Second: {self.sum_profit_second}\n"
                               f"Summary: {self.get_sum_profit()}\n"
-                              f"{self.get_free_assets(mode='free')[3]}"
+                              f"{self.get_free_assets(mode='free')[3]}\n"
+                              f"{self.get_started_balance_diff()}"
                               )
                 self.message_log(f"{header}\n"
                                  f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* **  **  ** *'}\n"
@@ -824,8 +825,6 @@ class Strategy(StrategyBase):
                 self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                  f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
                                  f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
-        if start_cycle_output:
-            self.get_started_balance_diff()
         #
         if self.reverse:
             self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
@@ -888,22 +887,18 @@ class Strategy(StrategyBase):
                     raise SystemExit(1)
 
     def get_started_balance_diff(self):
+        msg = str()
         if MODE in ('T', 'TC'):
             started_balance = self.round_truncate(
                 self.started_balance_detail[0] * self.started_balance_detail[2] + self.started_balance_detail[1],
                 base=False
             )
-
             balance_diff = self.get_free_assets()[2] - started_balance
             balance_diff_percent = (
                     100 * balance_diff / started_balance
             ).quantize(Decimal("1.0123"), rounding=ROUND_FLOOR)
-
-            self.message_log(
-                f"Balance diff: {balance_diff_percent}%",
-                color=Style.GREEN if balance_diff_percent >= 0 else Style.RED,
-                tlg=True
-            )
+            msg = f"Balance diff: {balance_diff_percent}%"
+        return msg
 
     async def trade_control(self):
         if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy:
@@ -918,7 +913,10 @@ class Strategy(StrategyBase):
                 break
 
             diff = adx_data['+DI'] - adx_data['-DI']
+            if first_iteration:
+                self.message_log(f"+DI = {adx_data['+DI']}, -DI = {adx_data['-DI']}, diff = {diff}")
             if diff > 0:
+                self.message_log('The conditions are favorable, we continue')
                 break
 
             if first_iteration:
@@ -930,7 +928,9 @@ class Strategy(StrategyBase):
 
             if len(diff_data) > 5:
                 result = mk.original_test(diff_data)
-                self.message_log(f"Last diff: {diff}, Trend: {result.trend} {'significant' if result.p < 0.05 else ''}")
+                self.message_log(
+                    f"Last diff: {diff}, Trend: {result.trend} {'significant' if result.p < 0.05 else ''}"
+                )
                 if result.p < 0.05 and result.z > 0 and diff > -TC_DI_DIFF:
                     break
             else:
