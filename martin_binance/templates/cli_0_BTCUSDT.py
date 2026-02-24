@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.33"
+__version__ = "3.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -66,6 +66,12 @@ ex.OVER_PRICE = Decimal('0.6')  # Overlap price in one direction
 ex.ORDER_Q = 12  # Target grid orders quantity in moment
 ex.MARTIN = Decimal('10')  # 5-20, % increments volume of orders in the grid
 ex.SHIFT_GRID_DELAY = 15  # sec delay for shift grid action
+# Trade Control
+ex.TRADE_CONTROL = True  # experimental, delay the start of the cycle during a negative trend
+ex.TC_ADX_DATA_LIMIT = 60
+ex.TC_ADX_PERIOD = 14
+ex.TC_DI_DIFF = 5
+ex.TC_K = {'1m': 1.0, '15m': 2.0, '1h': 0.5}  # weighting factors for timeframes
 # Other
 ex.STATUS_DELAY = 180  # Minute between sending Tlg message about current status, 0 - disable
 ex.TLG_SERVICE = False  # Enable Tlg bot service

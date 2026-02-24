@@ -8,5 +8,6 @@
   "MARTIN": {"type": "float", "range": [5, 15], "step": 0.5},
   "SHIFT_GRID_DELAY": {"type": "int", "range": [10, 150], "step": 10},
   "KBB": {"type": "float", "range": [0.5, 4], "step": 0.5},
-  "LINEAR_GRID_K": {"type": "int", "range": [0, 500], "step": 50}
+  "LINEAR_GRID_K": {"type": "int", "range": [0, 500], "step": 50},
+  "TC_DI_DIFF": {"type": "int", "range": [0, 10], "step": 1}
 }

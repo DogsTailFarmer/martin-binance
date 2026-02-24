@@ -30,7 +30,7 @@ import ctypes, ctypes.util
 
 from typing import Dict
 
-from martin_binance import DB_FILE
+from martin_binance import DB_FILE, KLINES_INIT
 from martin_binance.db_utils import db_management, save_to_db
 from martin_binance.strategy_base import StrategyBase, __version__ as msb_ver
 from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, any2str, Order, OrderUpdate, Orders, f2d, solve
@@ -138,16 +138,20 @@ class Strategy(StrategyBase):
         self.wait_wss_refresh = {}  # -
         self.place_grid_part_after_tp = True  # -
         self.started_balance_detail = ()  # + (base, quote, rate), all Decimal, used for balance control subsystem
+        self.adx_di_avg_delta = []  # -
+        #
         scheduler.add_job(self.event_grid_update, "interval",  minutes=5)
         scheduler.add_job(self.event_processing, "interval",  seconds=5)
-        scheduler.add_job(self.event_update_tp, 'cron', minute='*', second='35')
+        scheduler.add_job(self.event_update_tp, 'cron', minute='*', second='15')
         scheduler.add_job(self.event_exec_command, "interval",  seconds=2)
+        if not GRID_ONLY:
+            scheduler.add_job(self.event_di, 'cron', minute='*', second='25')
         if MODE in ('T', 'TC'):
-            scheduler.add_job(self.event_export_operational_status, 'cron', minute='*', second='15')
+            scheduler.add_job(self.event_export_operational_status, 'cron', minute='*', second='35')
             scheduler.add_job(self.event_get_external_command, "interval", seconds=30)
             scheduler.add_job(self.event_report, "interval", seconds=6)
             if GRID_ONLY:
-                scheduler.add_job(self.event_grid_only_release, 'cron', minute='*', second='30')
+                scheduler.add_job(self.event_grid_only_release, 'cron', minute='*', second='45')
 
 
     def init(self, check_funds=True) -> None:
@@ -314,7 +318,7 @@ class Strategy(StrategyBase):
         else:
             self.cycle_status = ()
 
-    def event_get_external_command(self):
+    async def event_get_external_command(self):
         if self.connection_analytic:
             cursor_analytic = self.connection_analytic.cursor()
             try:
@@ -332,7 +336,7 @@ class Strategy(StrategyBase):
                 print(f"SELECT from t_control: {err}")
             if row and row[0] and 'BNB_request' in row[1]:
                 params = json.loads(row[1])[1]
-                self.transfer_to(
+                await self.transfer_to(
                     'BNB',
                     any2str(
                         max(
@@ -353,6 +357,23 @@ class Strategy(StrategyBase):
                     self.connection_analytic.commit()
                 except sqlite3.Error as err:
                     print(f"UPDATE t_control: {err}")
+
+    def event_di(self):
+        k_sum = 0.0
+        diff_sum = 0.0
+        for tf in KLINES_INIT:
+            try:
+                adx_data = self.adx(tf.value, TC_ADX_DATA_LIMIT, TC_ADX_PERIOD)
+            except (ZeroDivisionError, statistics.StatisticsError) as e:
+                self.message_log(f"No data for ADX analysis on {tf.name} timeframe, {e}", log_level=logging.DEBUG)
+                continue
+            else:
+                k = TC_K.get(tf.value, 0.0)
+                k_sum += k
+                diff_sum += k * (adx_data['+DI'] - adx_data['-DI'])
+        if k_sum:
+            self.adx_di_avg_delta.append(diff_sum / k_sum)
+            self.adx_di_avg_delta = self.adx_di_avg_delta[-TC_ADX_DATA_LIMIT:]
 
     def event_exec_command(self):
         if self.command == 'stopped' and type(self.start_collect) is int:
@@ -738,7 +759,7 @@ class Strategy(StrategyBase):
                         self.queue_to_db.put(data_to_db)
                 self.save_init_assets(ff, fs)
                 if COLLECT_ASSETS and MODE != 'S':
-                    _ff, _fs = self.collect_assets()
+                    _ff, _fs = await self.collect_assets()
                     ff -= _ff
                     fs -= _fs
             else:
@@ -901,21 +922,15 @@ class Strategy(StrategyBase):
         return msg
 
     async def trade_control(self):
-        if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy:
+        if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy or not self.adx_di_avg_delta:
             return
 
         first_iteration = True
-        diff_data = []
         while True:
-            try:
-                adx_data = self.adx(TC_ADX_CANDLE_SIZE_IN_MINUTES, TC_ADX_NUMBER_OF_CANDLES, TC_ADX_PERIOD)
-            except (ZeroDivisionError, statistics.StatisticsError):
-                break
-
-            diff = adx_data['+DI'] - adx_data['-DI']
+            last_diff = self.adx_di_avg_delta[-1]
             if first_iteration:
-                self.message_log(f"+DI = {adx_data['+DI']}, -DI = {adx_data['-DI']}, diff = {diff}")
-            if diff > 0:
+                self.message_log(f"Weighted average multi-frame directional index: {last_diff}")
+            if last_diff > 0:
                 self.message_log('The conditions are favorable, we continue')
                 break
 
@@ -923,18 +938,15 @@ class Strategy(StrategyBase):
                 self.message_log('Waiting for optimal trading conditions', tlg=True)
                 first_iteration = False
 
-            diff_data.append(diff)
-            diff_data = diff_data[-TC_ADX_CANDLE_SIZE_IN_MINUTES:]
-
-            if len(diff_data) > 5:
-                result = mk.original_test(diff_data)
+            if len(self.adx_di_avg_delta) >= 5:
+                result = mk.original_test(self.adx_di_avg_delta)
                 self.message_log(
-                    f"Last diff: {diff}, Trend: {result.trend} {'significant' if result.p < 0.05 else ''}"
+                    f"Last DI diff: {last_diff}, Trend: {result.trend} {'significant' if result.h else ''}"
                 )
-                if result.p < 0.05 and result.z > 0 and diff > -TC_DI_DIFF:
+                if result.h and result.z > 0 and last_diff > -TC_DI_DIFF:
                     break
             else:
-                self.message_log(f"Waiting for enough data, last diff {diff}")
+                self.message_log("Not enough data for analysis, collecting it")
 
             await asyncio.sleep(60)
 
@@ -1003,10 +1015,12 @@ class Strategy(StrategyBase):
         high = []
         low = []
         close = []
-        candle = self.get_buffered_recent_candles(candle_size_in_minutes=adx_candle_size_in_minutes,
-                                                  number_of_candles=adx_number_of_candles,
-                                                  include_current_building_candle=True)
-        for i in candle:
+        candles = self.get_buffered_recent_candles(
+            candle_size_in_minutes=adx_candle_size_in_minutes,
+            number_of_candles=adx_number_of_candles,
+            include_current_building_candle=True
+        )
+        for i in candles:
             high.append(i.high)
             low.append(i.low)
             close.append(i.close)
@@ -1076,17 +1090,17 @@ class Strategy(StrategyBase):
     ##############################################################
     # supplementary methods
     ##############################################################
-    def collect_assets(self) -> tuple:
+    async def collect_assets(self) -> tuple:
         ff, fs, _, _ = self.get_free_assets(mode='free')
         tcm = self.get_trading_capability_manager()
         if ff >= f2d(tcm.min_qty):
             self.message_log(f"Sending {ff} {self.f_currency} to main account", color=Style.UNDERLINE)
-            self.transfer_to(self.f_currency, any2str(ff))
+            await self.transfer_to(self.f_currency, any2str(ff))
         else:
             ff = O_DEC
         if fs >= f2d(tcm.min_notional):
             self.message_log(f"Sending {fs} {self.s_currency} to main account", color=Style.UNDERLINE)
-            self.transfer_to(self.s_currency, any2str(fs))
+            await self.transfer_to(self.s_currency, any2str(fs))
         else:
             fs = O_DEC
         return ff, fs
@@ -1885,15 +1899,18 @@ class Strategy(StrategyBase):
                 self.message_log("Strategy have a negative cycle result, STOP", log_level=logging.CRITICAL)
                 self.command = 'end'
         else:
-            try:
-                adx = self.adx(ADX_CANDLE_SIZE_IN_MINUTES, ADX_NUMBER_OF_CANDLES, ADX_PERIOD)
-            except (ZeroDivisionError, statistics.StatisticsError):
-                trend_up = True
-                trend_down = True
-            else:
-                trend_up = adx.get('adx') > ADX_THRESHOLD and adx.get('+DI') > adx.get('-DI')
-                trend_down = adx.get('adx') > ADX_THRESHOLD and adx.get('-DI') > adx.get('+DI')
-                # print('adx: {}, +DI: {}, -DI: {}'.format(adx.get('adx'), adx.get('+DI'), adx.get('-DI')))
+            trend_up = True
+            trend_down = True
+            if len(self.adx_di_avg_delta) >= 5:
+                result = mk.original_test(self.adx_di_avg_delta)
+                self.message_log(
+                    f"Trend: {result.trend} {'significant' if result.h else ''}"
+                )
+                if result.h:
+                    if result.z > 0:
+                        trend_down = False
+                    else:
+                        trend_up = False
             self.cycle_time_reverse = self.cycle_time or datetime.now(timezone.utc).replace(tzinfo=None)
             self.start_reverse_time = self.get_time()
             # Calculate target return amount

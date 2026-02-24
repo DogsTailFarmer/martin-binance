@@ -4,7 +4,7 @@ martin-binance strategy parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.20"
+__version__ = "3.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -22,8 +22,7 @@ __all__ = [
     'ADX_NUMBER_OF_CANDLES', 'ADX_PERIOD', 'ADX_THRESHOLD', 'ADX_PRICE_THRESHOLD', 'REVERSE', 'REVERSE_TARGET_AMOUNT',
     'REVERSE_INIT_AMOUNT', 'REVERSE_STOP', 'HEAD_VERSION', 'LOAD_LAST_STATE', 'LAST_STATE_FILE', 'VPS_NAME', 'PARAMS',
     'TELEGRAM_CONFIG', 'MODE', 'XTIME', 'SAVE_DS', 'SAVE_PERIOD', 'LOGGING', 'SELF_OPTIMIZATION', 'N_TRIALS',
-    'SESSION_RESULT', 'TRADE_CONTROL', 'TC_ADX_CANDLE_SIZE_IN_MINUTES', 'TC_ADX_NUMBER_OF_CANDLES', 'TC_ADX_PERIOD',
-    'TC_DI_DIFF',
+    'SESSION_RESULT', 'TRADE_CONTROL', 'TC_ADX_DATA_LIMIT', 'TC_ADX_PERIOD', 'TC_DI_DIFF', 'TC_K'
 ]
 
 SYMBOL = str()
@@ -107,7 +106,7 @@ SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together wit
 N_TRIALS = 250  # Number of optimization cycles for optuna study
 SESSION_RESULT = {}
 TRADE_CONTROL = True
-TC_ADX_CANDLE_SIZE_IN_MINUTES = 15
-TC_ADX_NUMBER_OF_CANDLES = 50
+TC_ADX_DATA_LIMIT = 60
 TC_ADX_PERIOD = 14
 TC_DI_DIFF = 5
+TC_K = {'1m': 1.0, '15m': 2.0, '1h': 0.5}

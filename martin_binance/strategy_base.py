@@ -221,11 +221,14 @@ class StrategyBase(metaclass=ABCMeta):
 
     @staticmethod
     def get_buffered_recent_candles(
-            candle_size_in_minutes: int,
+            candle_size_in_minutes: int | str,
             number_of_candles: int = 50,
             include_current_building_candle: bool = False
     ) -> list[Candle]:
-        size = convert_from_minute(candle_size_in_minutes)
+        if isinstance(candle_size_in_minutes, int):
+            size = convert_from_minute(candle_size_in_minutes)
+        else:
+            size = candle_size_in_minutes
         kline = Klines.get_kline(size)
         if len(kline) > number_of_candles + 1:
             return kline[-number_of_candles - (0 if include_current_building_candle else 1):
@@ -243,7 +246,7 @@ class StrategyBase(metaclass=ABCMeta):
             last = current_time
         return last
 
-    def transfer_to(self, symbol: str, amount: str, email=None):
+    async def transfer_to(self, symbol: str, amount: str, email=None):  # NOSONAR S7503
         if prm.MODE in ('T', 'TC'):
             if email:
                 tasks_manage(self.tasks, self.transfer2sub(email, symbol, amount))
