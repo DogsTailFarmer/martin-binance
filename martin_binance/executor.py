@@ -922,7 +922,7 @@ class Strategy(StrategyBase):
         return msg
 
     async def trade_control(self):
-        if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy or not self.adx_di_avg_delta:
+        if not TRADE_CONTROL or GRID_ONLY or not self.adx_di_avg_delta:
             return
 
         first_iteration = True
@@ -931,7 +931,6 @@ class Strategy(StrategyBase):
             if first_iteration:
                 self.message_log(f"Weighted average multi-frame directional index: {last_diff}")
             if last_diff > 0:
-                self.message_log('The conditions are favorable, we continue')
                 break
 
             if first_iteration:
@@ -949,6 +948,8 @@ class Strategy(StrategyBase):
                 self.message_log("Not enough data for analysis, collecting it")
 
             await asyncio.sleep(60)
+        #
+        self.message_log('The conditions are favorable, continue trading', tlg=True)
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
