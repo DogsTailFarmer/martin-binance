@@ -2,9 +2,9 @@
 Functions for managing and saving data to a SQLite database from martin-binance strategy
 """
 __author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
+__copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.9"
+__version__ = "3.1.0"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -31,6 +31,12 @@ def db_management(exchange) -> None:
                   order_hold    INTEGER             NOT NULL,\
                   PRIMARY KEY(id_exchange, f_currency, s_currency))")
     conn.commit()
+    try:
+        conn.execute("DELETE FROM t_orders")
+    except sqlite3.Error as ex:
+        logger.error(f"DELETE from table t_orders failed: {ex}")
+    else:
+        conn.commit()
     #
     try:
         conn.execute('SELECT active FROM t_funds LIMIT 1')

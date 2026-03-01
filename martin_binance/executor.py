@@ -139,6 +139,7 @@ class Strategy(StrategyBase):
         self.place_grid_part_after_tp = True  # -
         self.started_balance_detail = ()  # + (base, quote, rate), all Decimal, used for balance control subsystem
         self.adx_di_avg_delta = []  # -
+        self.trade_control_is_waiting_state = False  # -
         #
         scheduler.add_job(self.event_grid_update, "interval",  minutes=5)
         scheduler.add_job(self.event_processing, "interval",  seconds=5)
@@ -450,8 +451,16 @@ class Strategy(StrategyBase):
                               f"{self.get_free_assets(mode='free')[3]}\n"
                               f"{self.get_started_balance_diff()}"
                               )
+
+                if self.trade_control_is_waiting_state:
+                    state_msg = '*** Trade conditions waiting state ***'
+                elif self.shift_grid_threshold:
+                    state_msg = '*** Shift grid mode ***'
+                else:
+                    state_msg = '* **  **  ** *'
+
                 self.message_log(f"{header}\n"
-                                 f"{'*** Shift grid mode ***' if self.shift_grid_threshold else '* **  **  ** *'}\n"
+                                 f"{state_msg}\n"
                                  f"{'Buy' if self.cycle_buy else 'Sell'}{' Reverse' if self.reverse else ''}"
                                  f"{' Hold reverse' if self.reverse_hold else ''} "
                                  f"{MODE}{'-SO' if MODE == 'TC' and SELF_OPTIMIZATION else ''}-cycle with"
@@ -545,6 +554,7 @@ class Strategy(StrategyBase):
             self._common_stable_conditions()
             and self.shift_grid_threshold is None
             and not self.reverse_hold
+            and not self.trade_control_is_waiting_state
         )
 
     def stable_state_backtest(self):
@@ -922,7 +932,7 @@ class Strategy(StrategyBase):
         return msg
 
     async def trade_control(self):
-        if not TRADE_CONTROL or GRID_ONLY or not self.adx_di_avg_delta:
+        if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy or not self.adx_di_avg_delta:
             return
 
         first_iteration = True
@@ -935,6 +945,7 @@ class Strategy(StrategyBase):
 
             if first_iteration:
                 self.message_log('Waiting for optimal trading conditions', tlg=True)
+                self.trade_control_is_waiting_state = True
                 first_iteration = False
 
             if len(self.adx_di_avg_delta) >= 5:
@@ -949,7 +960,8 @@ class Strategy(StrategyBase):
 
             await asyncio.sleep(60)
         #
-        self.message_log('The conditions are favorable, continue trading', tlg=True)
+        self.trade_control_is_waiting_state = False
+        self.message_log('The conditions are favorable, continue trading')
 
     def save_init_assets(self, ff, fs):
         if self.reverse:

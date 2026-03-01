@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.0"
+__version__ = "3.1.0rc06"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -1219,6 +1219,22 @@ class StrategyBase(metaclass=ABCMeta):
         if not Decimal(ed["cumulative_filled_quantity"]):
             return
 
+        if ed['order_status'] == 'FILLED':
+            # Remove from orders dict
+            self.remove_from_orders_lists([ed['order_id']])
+        elif ed['order_status'] == 'PARTIALLY_FILLED':
+            # Update order in orders dict
+            _order = {
+                "orderId": ed['order_id'],
+                "price": ed['order_price'],
+                "origQty": ed['order_quantity'],
+                "executedQty": ed['cumulative_filled_quantity'],
+                "type": ed['order_type'],
+                "side": ed['side'],
+                "transactTime": ed['transaction_time'],
+            }
+            self.orders |= {ed['order_id']: Order(_order)}
+
         if self.trade_not_exist(ed["order_id"], ed["trade_id"]):
             await self._on_order_update_handler_ext(ed)
             if prm.MODE in ('T', 'TC'):
@@ -1236,22 +1252,6 @@ class StrategyBase(metaclass=ABCMeta):
                      ed["last_executed_quantity"],
                      ed["last_executed_price"]]
                 )
-
-        if ed['order_status'] == 'FILLED':
-            # Remove from orders dict
-            self.remove_from_orders_lists([ed['order_id']])
-        elif ed['order_status'] == 'PARTIALLY_FILLED':
-            # Update order in orders dict
-            _order = {
-                "orderId": ed['order_id'],
-                "price": ed['order_price'],
-                "origQty": ed['order_quantity'],
-                "executedQty": ed['cumulative_filled_quantity'],
-                "type": ed['order_type'],
-                "side": ed['side'],
-                "transactTime": ed['transaction_time'],
-            }
-            self.orders |= {ed['order_id']: Order(_order)}
 
         if prm.MODE == 'TC' and self.start_collect and self.s_ticker['pylist']:
             s_tic = self.s_ticker['pylist'].pop()
