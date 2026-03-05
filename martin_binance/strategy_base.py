@@ -909,7 +909,7 @@ class StrategyBase(metaclass=ABCMeta):
                 if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                     await self.cancel_order_handler(order_id, cancel_all)
                 else:
-                    self.on_cancel_order_error_string(order_id, 'order not canceled')
+                    await self.on_cancel_order_error_string(order_id, 'order not canceled')
 
     async def cancel_order_handler(self, _id, cancel_all):
         self.message_log(f"Cancel order {_id} success", color=Style.GREEN)
@@ -1805,7 +1805,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def on_cancel_order_error_string(self, *args):
+    async def on_cancel_order_error_string(self, *args):
         raise NotImplementedError
 
     @abstractmethod

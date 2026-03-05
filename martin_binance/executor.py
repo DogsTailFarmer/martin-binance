@@ -30,7 +30,7 @@ import ctypes, ctypes.util
 
 from typing import Dict
 
-from martin_binance import DB_FILE, KLINES_INIT
+from martin_binance import DB_FILE, KLINES_INIT, HEARTBEAT
 from martin_binance.db_utils import db_management, save_to_db
 from martin_binance.strategy_base import StrategyBase, __version__ as msb_ver
 from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, any2str, Order, OrderUpdate, Orders, f2d, solve
@@ -2800,10 +2800,13 @@ class Strategy(StrategyBase):
                 self.tp_cancel = False
                 await self.start()
 
-    def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
+    async def on_cancel_order_error_string(self, order_id: int, error: str) -> None:
         if self.cancel_order_id == order_id:
             self.cancel_order_id = None
         self.message_log(f"On cancel order {order_id} {error}", logging.ERROR)
+        if self.orders_grid.exist(order_id) and self.grid_remove:
+            await asyncio.sleep(np.random.default_rng().integers(HEARTBEAT, HEARTBEAT * 10))  # NOSONAR S6709
+            await self.cancel_grid()
 
     def restore_state_before_backtesting_ex(self, saved_state):
         self.cycle_buy = json.loads(saved_state.get('cycle_buy'))
