@@ -1,3 +1,20 @@
+## 3.1.0 - 2026-03-08
+This patch introduces several significant changes to the `martin_binance` trading bot, primarily focused on enhancing its trading capabilities, improving stability, and refining its internal logic.
+
+Here's a breakdown of the key business logic changes:
+
+*   **Introduction of Trade Control (`TRADE_CONTROL`):** A new feature, "Trade Control," has been implemented. This system, controlled by `TRADE_CONTROL = True`, aims to delay the start of trading cycles during periods of negative market trends. This is achieved by analyzing directional index (DI) data using `pymannkendall` and `APScheduler`, introducing a more cautious approach to entering trades.
+*   **Enhanced Scheduling with `APScheduler`:** The `schedule` library has been replaced with `APScheduler` for managing recurring tasks. This provides more robust and flexible scheduling capabilities, including cron-like job scheduling, which is now used for events like `event_update_tp` and `event_export_operational_status`.
+*   **Improved Balance Tracking:** New functionality has been added to track the `started_balance_detail` (base, quote, and rate) at the beginning of a trading cycle. This allows for better monitoring of balance changes and profitability over time, with a new `get_started_balance_diff` method to report these differences.
+*   **Asynchronous Operations:** Several core methods have been converted to `async`, including `event_get_external_command`, `event_report`, `event_processing`, `event_update_tp`, `event_grid_only_release`, `restore_strategy_state`, `start`, `collect_assets`, `grid_handler`, `convert_tp`, `reverse_after_grid_ending`, `cancel_grid`, `grid_update`, `after_filled_tp`, `place_profit_order`, `transfer_to`, `on_new_ticker`, `on_balance_update_ex`, `on_new_funds`, `on_order_update_ex`, `on_place_order_success`, `on_place_order_error`, `on_cancel_order_success`, `on_cancel_order_error_string`, and `on_funds_update_handler`. This transition to asynchronous programming is crucial for handling concurrent operations efficiently, especially in a high-frequency trading environment.
+*   **Refined Order Management:** The logic for handling order cancellations and updates has been refined, with more specific error handling and clearer state management for various order types (grid, TP, etc.). The `cancel_order` method is now asynchronous and handles bulk cancellations more robustly.
+*   **Data Persistence and Initialization:** Changes in `db_utils.py` indicate potential improvements in how data is managed and initialized in the SQLite database, including a `DELETE FROM t_orders` operation, possibly for clearing stale order data.
+*   **Dependency Updates:** Several dependencies have been updated, including `exchanges-wrapper` to `2.1.47`, and new ones like `apscheduler` and `pymannkendall` have been added. These updates likely bring performance improvements, bug fixes, and new functionalities to the underlying libraries.
+*   **Backtesting Enhancements:** Minor adjustments were made to the backtesting modules (`OoTSP.py`, `VCoSEL.py`), including a change in the default number of trials for optimization and a correction in the server run command.
+*   **Parameter Additions:** New parameters have been introduced related to the "Trade Control" feature, such as `TRADE_CONTROL`, `TC_ADX_DATA_LIMIT`, `TC_ADX_PERIOD`, `TC_DI_DIFF`, and `TC_K`, allowing for fine-tuning of this new trading logic.
+
+In summary, this patch represents a significant evolution of the `martin_binance` bot, moving towards a more intelligent, robust, and asynchronous trading system with enhanced risk management capabilities through the new "Trade Control" feature and improved scheduling.
+
 ## 3.0.38 - 2026-01-29
 🔧 chore(pyproject.toml): update `requires-python` to require Python 3.12 for compatibility.  
 🐳 chore(Dockerfile): switch base image to Python 3.12 and update paths accordingly.
