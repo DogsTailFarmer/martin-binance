@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.0"
+__version__ = "3.1.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -26,7 +26,8 @@ from datetime import datetime, timezone
 import os
 import psutil
 import numpy as np
-import ctypes, ctypes.util
+import ctypes
+import ctypes.util
 
 from typing import Dict
 
@@ -153,7 +154,6 @@ class Strategy(StrategyBase):
             scheduler.add_job(self.event_report, "interval", seconds=6)
             if GRID_ONLY:
                 scheduler.add_job(self.event_grid_only_release, 'cron', minute='*', second='45')
-
 
     def init(self, check_funds=True) -> None:
         self.message_log('Start Init section')
@@ -1215,12 +1215,12 @@ class Strategy(StrategyBase):
     # strategy function
     ##############################################################
     async def place_grid(self,
-                   buy_side: bool,
-                   depo: Decimal,
-                   reverse_target_amount: Decimal,
-                   allow_grid_shift: bool = True,
-                   additional_grid: bool = False,
-                   grid_update: bool = False) -> None:
+                         buy_side: bool,
+                         depo: Decimal,
+                         reverse_target_amount: Decimal,
+                         allow_grid_shift: bool = True,
+                         additional_grid: bool = False,
+                         grid_update: bool = False) -> None:
         self.message_log(f"place_grid: buy_side: {buy_side}, depo: {depo},"
                          f" reverse_target_amount: {reverse_target_amount},"
                          f" allow_grid_shift: {allow_grid_shift},"
@@ -2141,10 +2141,10 @@ class Strategy(StrategyBase):
                 self.tp_hold_additional = True
                 self.message_log("Replace TP")
             await self.place_grid(self.cycle_buy,
-                            amount,
-                            reverse_target_amount,
-                            allow_grid_shift=False,
-                            additional_grid=True)
+                                  amount,
+                                  reverse_target_amount,
+                                  allow_grid_shift=False,
+                                  additional_grid=True)
             return True
         if self.orders_hold:
             self.message_log("Small amount was added to last held grid order")
@@ -2233,10 +2233,10 @@ class Strategy(StrategyBase):
                              f" first: {self.tp_part_amount_first}, second: {self.tp_part_amount_second}")
             self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
         await self.place_grid(self.cycle_buy,
-                        _depo,
-                        _reverse_target_amount,
-                        allow_grid_shift=False,
-                        grid_update=True)
+                              _depo,
+                              _reverse_target_amount,
+                              allow_grid_shift=False,
+                              grid_update=True)
 
     def check_min_amount(self, amount=O_DEC, price=O_DEC, for_tp=True, by_market=False) -> bool:
         _price = price or self.avg_rate
@@ -2659,9 +2659,9 @@ class Strategy(StrategyBase):
                 if self.reverse_hold:
                     self.start_reverse_time = self.get_time()
                     if await self.convert_tp(self.tp_part_amount_first,
-                                       self.tp_part_amount_second,
-                                       _update_sum_amount=False,
-                                       replace_tp=False):
+                                             self.tp_part_amount_second,
+                                             _update_sum_amount=False,
+                                             replace_tp=False):
                         self.tp_part_free = False
                         self.cancel_reverse_hold()
                         self.message_log("Part filled TP was converted to grid")

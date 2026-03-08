@@ -1,3 +1,6 @@
+## 3.1.1 - 2026-03-08
+🔧 fix(executor.py): Refactor import statements and update method arguments for better readability and consistency
+
 ## 3.1.0 - 2026-03-08
 This patch introduces several significant changes to the `martin_binance` trading bot, primarily focused on enhancing its trading capabilities, improving stability, and refining its internal logic.
 
