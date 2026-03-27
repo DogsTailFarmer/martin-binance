@@ -1,3 +1,7 @@
+## 3.1.2 - 2026-03-xx
+🔧 fix(strategy_base.py): Update log level for session end message to warning
+🔧 fix(executor.py): Set command to None before restarting process
+
 ## 3.1.1 - 2026-03-08
 🔧 fix(executor.py): Refactor import statements and update method arguments for better readability and consistency
 

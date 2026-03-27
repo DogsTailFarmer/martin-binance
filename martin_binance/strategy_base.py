@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.0"
+__version__ = "3.1.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -415,7 +415,7 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log(f"Backtest control: {err}", log_level=logging.ERROR)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                 break
-        self.message_log("Backtest data collect and optimize session ended", tlg=True)
+        self.message_log("Backtest data collect and optimize session ended", log_level=logging.WARNING, tlg=True)
 
     def session_data_handler(self):
         """
