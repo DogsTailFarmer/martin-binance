@@ -19,14 +19,14 @@ openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyou
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.0"
+__version__ = "3.1.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 import ssl
 from pathlib import Path
 import asyncio
-from typing import Any
+from typing import Any, Coroutine
 
 import ujson as json
 import toml
@@ -73,6 +73,21 @@ def create_secure_context(client_cert: Path, client_key: Path, *, trusted: Path)
 SSL_CONTEXT = create_secure_context(CLIENT_CERT, CLIENT_KEY, trusted=SERVER_CERT)
 
 
+def handle_connection_error(
+    error: Exception,
+    init_event: asyncio.Event,
+    tasks: set,
+    coro
+) -> None:
+    """
+    Handle connection-related errors by clearing the init event and restarting the connection.
+    """
+    logger.warning(f"TLG client connection error: {error}")
+    if init_event.is_set():
+        init_event.clear()
+        tasks_manage(tasks, coro())
+
+
 class TlgClient:
     def __init__(self, bot_id, token, chat_id):
         self.bot_id = bot_id
@@ -96,18 +111,21 @@ class TlgClient:
                 self.channel = Channel(TLG_PROXY_HOST, TLG_PROXY_PORT, ssl=SSL_CONTEXT)
                 self.stub = tlg.TlgProxyStub(self.channel)
                 await self.post_message("Connected", reraise=True)
-                self.init_event.set()
                 break
-            except ConnectionRefusedError:
-                delay += random.randint(1, 15)  # NOSONAR python:S2245
-                logger.warning(f"Try connecting to Telegram proxy, retrying in {delay} second... ")
-                await asyncio.sleep(delay)
             except ssl.SSLCertVerificationError as e:
                 logger.error(f"Connect to Telegram proxy server failed: {e}")
                 break
+            except OSError as e:
+                if e.errno == 101 or isinstance(e, (ConnectionError, TimeoutError)):
+                    delay += random.randint(1, 15)  # NOSONAR python:S2245
+                    logger.warning(f"Try connecting to Telegram proxy, retrying in {delay} second... ")
+                    await asyncio.sleep(delay)
+                else:
+                    raise
             except Exception as e:
                 logger.error(f"Connect to Telegram proxy server failed, check certificate expiration date first: {e}")
                 break
+        self.init_event.set()
 
     async def post_message(self, text, inline_buttons=False, reraise=False):
         try:
@@ -121,13 +139,17 @@ class TlgClient:
                 )
             )
             return res
-        except (ConnectionRefusedError, ConnectionAbortedError, exceptions.StreamTerminatedError, TimeoutError):
-            if self.init_event.is_set():
-                tasks_manage(self.tasks, self.connect())
-            elif reraise:
+        except OSError as e:
+            if e.errno == 101 or isinstance(e, (ConnectionError, TimeoutError)):
+                handle_connection_error(e, self.init_event, self.tasks, self.connect)
+                if reraise:
+                    raise
+            else:
                 raise
-        except ssl.SSLCertVerificationError as e:
-            logger.error(f"Post message to Telegram proxy failed: {e}")
+        except exceptions.StreamTerminatedError as e:
+            handle_connection_error(e, self.init_event, self.tasks, self.connect)
+            if reraise:
+                raise
         except KeyboardInterrupt:
             pass  # user interrupt
 
@@ -139,13 +161,13 @@ class TlgClient:
                 )
             )
             return json.loads(res.data) if res else None
-        except (ConnectionRefusedError, exceptions.StreamTerminatedError):
-            if self.init_event.is_set():
-                tasks_manage(self.tasks, self.connect())
-        except KeyboardInterrupt:
-            pass  # user interrupt
-        except ssl.SSLCertVerificationError as e:
-            logger.error(f"Get update from Telegram proxy failed: {e}")
+        except OSError as e:
+            if e.errno == 101 or isinstance(e, (ConnectionError, TimeoutError)):
+                handle_connection_error(e, self.init_event, self.tasks, self.connect)
+            else:
+                raise
+        except exceptions.StreamTerminatedError as e:
+            handle_connection_error(e, self.init_event, self.tasks, self.connect)
 
     async def close(self):
         self.channel.close()

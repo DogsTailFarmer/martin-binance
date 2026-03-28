@@ -40,8 +40,10 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
 async def tasks_cancel(tasks_set: set, name=None, log_out=True):
     tasks = tasks_set.copy()
     for task in tasks:
-        logger.debug(f"tasks_cancel.task_name: {task.get_name()}")
-        if name and f"{name}" not in task.get_name():
+        task_name = task.get_name()
+        if log_out:
+            logger.debug(f"tasks_cancel.task_name: {task_name}")
+        if name and f"{name}" not in task_name:
             continue
         task.cancel()
         flag = None
@@ -52,7 +54,7 @@ async def tasks_cancel(tasks_set: set, name=None, log_out=True):
         finally:
             tasks_set.discard(task)
             if log_out:
-                logger.info(f"The task {task.get_name()} was cancelled {'by force' if flag else ''}")
+                logger.info(f"The task {task_name} was cancelled {'by force' if flag else ''}")
 
 
 def any2str(_x) -> str:
