@@ -26,7 +26,7 @@ __contact__ = "https://github.com/DogsTailFarmer"
 import ssl
 from pathlib import Path
 import asyncio
-from typing import Any, Coroutine
+from typing import Any
 
 import ujson as json
 import toml

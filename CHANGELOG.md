@@ -1,6 +1,11 @@
 ## 3.1.2 - 2026-03-xx
 🔧 fix(strategy_base.py): Update log level for session end message to warning
 🔧 fix(executor.py): Set command to None before restarting process
+🔧 fix(lib): enhance logging for task cancellation with task names
+🚀 fix(tlg_client): Improve error handling in `heartbeat` and connection retry logic  
+🔧 fix(executor): Set operational status to False on command stop  
+🔧 fix(tlg_client): Enhance logging for task management in `wss_declare`  
+🔧 update(requirements): Upgrade `requests` to version 2.33.0
 
 ## 3.1.1 - 2026-03-08
 🔧 fix(executor.py): Refactor import statements and update method arguments for better readability and consistency

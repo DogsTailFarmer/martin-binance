@@ -827,6 +827,7 @@ class Strategy(StrategyBase):
         if self.command == 'end' or (self.command == 'stop' and
                                      (not self.reverse or (self.reverse and REVERSE_STOP))):
             self.command = 'stopped'
+            self.operational_status = False
             self.start_collect = 1
             self.message_log('Stop, waiting manual action', tlg=True)
             return

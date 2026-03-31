@@ -526,6 +526,17 @@ class StrategyBase(metaclass=ABCMeta):
 
     async def heartbeat(self, _session):
         # print(f"tik-tak:' {int(time.time() * 1000)}")
+        try_count = 0
+        continue_restore = True
+
+        async def continue_delay():
+            nonlocal continue_restore
+            continue_restore = False
+            delay = random.randint(10, 30) * try_count  # NOSONAR python:S2245
+            self.message_log(f"Try restore WSS connection after {delay} seconds...")
+            await asyncio.sleep(delay)
+            continue_restore = True
+
         last_exec_time = time.time()
         self.scheduler_start()
         while True:
@@ -564,7 +575,7 @@ class StrategyBase(metaclass=ABCMeta):
                                                  f" restart request sent", log_level=logging.WARNING)
                                 self.wss_fire_up = True
                     #
-                    if self.wss_fire_up:
+                    if self.wss_fire_up and continue_restore:
                         self.operational_status = False
                         try:
                             if self.session.client:
@@ -574,10 +585,14 @@ class StrategyBase(metaclass=ABCMeta):
                                     mr.MarketRequest,
                                     symbol=self.symbol
                                 )
-                                await self.wss_init()
+                                await self.wss_init(rerise=True)
+                        except UserWarning:
+                            try_count += 1
+                            tasks_manage(self.tasks, continue_delay())
                         except Exception as ex:
                             self.message_log(f"Exception on fire up WSS: {ex}", log_level=logging.WARNING)
                         else:
+                            try_count = 0
                             self.wss_fire_up = False
                 await asyncio.sleep(HEARTBEAT)
             except (KeyboardInterrupt, asyncio.CancelledError):
@@ -1033,6 +1048,7 @@ class StrategyBase(metaclass=ABCMeta):
                     )
                 except Exception as ex:
                     self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
+                    raise UserWarning
                 else:
                     if res:
                         kline = list(map(json.loads, res.items))
@@ -1492,8 +1508,8 @@ class StrategyBase(metaclass=ABCMeta):
 
     async def wss_declare(self):
         # Market stream
-        tasks_manage(self.tasks, self.on_ticker_update(), name='wss')
         await self.buffered_candle()
+        tasks_manage(self.tasks, self.on_ticker_update(), name='wss')
         tasks_manage(self.tasks, self.on_order_book_update(), name='wss')
         if prm.MODE in ('T', 'TC'):
             # User Stream
@@ -1501,25 +1517,27 @@ class StrategyBase(metaclass=ABCMeta):
             tasks_manage(self.tasks, self.on_order_update(), name='wss')
             tasks_manage(self.tasks, self.on_balance_update(), name='wss')
 
-    async def wss_init(self):
+    async def wss_init(self, rerise=False):
         if self.client_id:
             self.message_log(f"Init WSS, client_id: {self.client_id}")
             await tasks_cancel(self.tasks, name='wss-', log_out=prm.LOGGING)
             await asyncio.sleep(HEARTBEAT)
-            await self.wss_declare()
-            # WSS start
-            '''
-            market_stream_count=5
-            These values directly depend on the number of market ws streams used in the strategy and declared above
-            '''
             try:
+                await self.wss_declare()
+                # WSS start
+                market_stream_count = 5
+                '''
+                These values directly depend on the number of market ws streams used in the strategy and declared above
+                '''
                 await self.send_request(self.stub.start_stream,
                                         mr.StartStreamRequest,
                                         symbol=self.symbol,
-                                        market_stream_count=5)
+                                        market_stream_count=market_stream_count)
             except UserWarning:
                 self.message_log("Start WSS failed, retry", log_level=logging.WARNING)
                 self.wss_fire_up = True
+                if rerise:
+                    raise
             else:
                 await self.wss_wait_init()
         else:
