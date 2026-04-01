@@ -1475,6 +1475,8 @@ class StrategyBase(metaclass=ABCMeta):
                         self.message_log(f"Exception buffered_orders 4: Set RATE_LIMITER failed: {ex_4}",
                                          log_level=logging.WARNING)
                 else:
+                    if status_code == Status.OUT_OF_RANGE:
+                        self.wss_fire_up = True
                     restore = True
             except Exception as ex_5:
                 self.message_log(f"Exception buffered_orders 5: {ex_5}", log_level=logging.ERROR)
