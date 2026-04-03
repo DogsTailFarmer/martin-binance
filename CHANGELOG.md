@@ -6,6 +6,14 @@
 🔧 fix(executor): Set operational status to False on command stop  
 🔧 fix(tlg_client): Enhance logging for task management in `wss_declare`  
 🔧 update(requirements): Upgrade `requests` to version 2.33.0
+🚀 feat(strategy_base): enable websocket fire-up on OUT_OF_RANGE status code in buffered_orders method
+🚀 feat(strategy_base): continue loop in **backtest_control** on non-PARAMS_FLOAT values  
+🔧 fix(requirements): update **exchanges-wrapper** to 2.1.48  
+🔧 fix(requirements): update **dash** to 4.1.0  
+🔧 fix(requirements): update **numpy** to 2.4.4  
+🔧 fix(requirements): update **optuna** to 4.8.0  
+🔧 fix(requirements): update **pandas** to 3.0.2  
+🔧 fix(requirements): update **ujson** to 5.12.0
 
 ## 3.1.1 - 2026-03-08
 🔧 fix(executor.py): Refactor import statements and update method arguments for better readability and consistency

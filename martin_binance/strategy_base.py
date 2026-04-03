@@ -370,7 +370,7 @@ class StrategyBase(metaclass=ABCMeta):
                                         value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
                                     )
                             else:
-                                break
+                                continue
                         # noinspection PyTypeChecker
                         l_m = str(
                             datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)

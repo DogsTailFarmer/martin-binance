@@ -17,20 +17,20 @@ dynamic = ["version", "description"]
 requires-python = ">=3.12"
 
 dependencies = [
-    "exchanges-wrapper==2.1.47",
+    "exchanges-wrapper==2.1.48",
     "aiofiles==25.1.0",
     "aiocsv==1.4.0",
     "apscheduler==3.11.2",
     "betterproto==2.0.0b7",
     "colorama==0.4.6",
-    "dash==4.0.0",
+    "dash==4.1.0",
     "inquirer==3.4.1",
     "jsonpickle==4.1.1",
     "libtmux==0.55.0",
-    "numpy~=2.4.2",
-    "optuna==4.7.0",
+    "numpy~=2.4.4",
+    "optuna==4.8.0",
     "orjson~=3.11.7",
-    "pandas==3.0.1",
+    "pandas==3.0.2",
     "plotly==6.6.0",
     "prometheus-client==0.24.1",
     "psutil==7.2.2",
@@ -43,7 +43,7 @@ dependencies = [
     "shortuuid~=1.0.13",
     "toml~=0.10.2",
     "tqdm==4.67.3",
-    "ujson~=5.11.0"
+    "ujson~=5.12.0"
 ]
 
 [tool.flit.module]
