@@ -1,4 +1,4 @@
-## 3.1.3 - 2026-03-xx
+## 3.1.3 - 2026-04-03
 🔧 fix(strategy_base.py): Update log level for session end message to warning
 🔧 fix(executor.py): Set command to None before restarting process
 🔧 fix(lib): enhance logging for task cancellation with task names
@@ -8,7 +8,7 @@
 🚀 feat(strategy_base): enable websocket fire-up on OUT_OF_RANGE status code in buffered_orders method
 🚀 feat(strategy_base): continue loop in **backtest_control** on non-PARAMS_FLOAT values  
 🔧 fix(requirements): update **exchanges-wrapper** to 2.1.48  
-🔧 update(requirements): Upgrade `requests` to version 2.33.1
+🔧 fix(requirements): update **requests** to 2.33.1
 🔧 fix(requirements): update **dash** to 4.1.0  
 🔧 fix(requirements): update **numpy** to 2.4.4  
 🔧 fix(requirements): update **optuna** to 4.8.0  
