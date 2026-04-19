@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.2"
+__version__ = "3.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -525,7 +525,6 @@ class StrategyBase(metaclass=ABCMeta):
         self.restore_state_before_backtesting_ex(saved_state)
 
     async def heartbeat(self, _session):
-        # print(f"tik-tak:' {int(time.time() * 1000)}")
         try_count = 0
         continue_restore = True
 
@@ -540,7 +539,6 @@ class StrategyBase(metaclass=ABCMeta):
         last_exec_time = time.time()
         self.scheduler_start()
         while True:
-            # print(f"tik-tak:' {int(time.time() * 1000)}")
             try:
                 if prm.MODE in ('T', 'TC'):
                     last_state = self.save_strategy_state()

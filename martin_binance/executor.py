@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.2"
+__version__ = "3.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -39,6 +39,7 @@ from martin_binance.params import *  # NOSONAR python:S2208
 
 O_DEC = Decimal()
 scheduler = AsyncIOScheduler()
+TICKER_UPDATE_TIMEOUT = 600
 
 
 def get_mode_details(mode):
@@ -292,10 +293,14 @@ class Strategy(StrategyBase):
 
     def event_export_operational_status(self):
         ts = self.get_time()
+        if ts - self.last_ticker_update > TICKER_UPDATE_TIMEOUT:
+            self.wss_fire_up = True
+            self.message_log("WSS timeout, sending restart request", log_level=logging.DEBUG)
+
         has_grid_hold_timeout = ts - self.grid_hold.get('timestamp', ts) > HOLD_TP_ORDER_TIMEOUT
         has_tp_order_hold_timeout = ts - self.tp_order_hold.get('timestamp', ts) > HOLD_TP_ORDER_TIMEOUT
 
-        if self.stable_state() or has_grid_hold_timeout or has_tp_order_hold_timeout:
+        if self.stable_state(alarm_mode=True) or has_grid_hold_timeout or has_tp_order_hold_timeout:
             orders = self.get_buffered_open_orders()
             order_buy = len([i for i in orders if i.buy is True])
             order_sell = len([i for i in orders if i.buy is False])
@@ -360,6 +365,8 @@ class Strategy(StrategyBase):
                     print(f"UPDATE t_control: {err}")
 
     def event_di(self):
+        if self.command == 'stopped':
+            return
         k_sum = 0.0
         diff_sum = 0.0
         for tf in KLINES_INIT:
@@ -376,7 +383,7 @@ class Strategy(StrategyBase):
             self.adx_di_avg_delta.append(diff_sum / k_sum)
             self.adx_di_avg_delta = self.adx_di_avg_delta[-TC_ADX_DATA_LIMIT:]
 
-    def event_exec_command(self):
+    async def event_exec_command(self):
         if self.command == 'stopped' and type(self.start_collect) is int:
             if self.start_collect < 5:
                 self.start_collect += 1
@@ -384,6 +391,7 @@ class Strategy(StrategyBase):
                 self.start_collect = False
         if self.command == 'restart':
             self.command = None
+            await asyncio.sleep(HEARTBEAT)
             self.stop()
             os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
 
@@ -530,29 +538,37 @@ class Strategy(StrategyBase):
                     self.save_init_assets(ff, fs)
                     await self.start()
 
+    def _alarm_stable_conditions(self):
+        """
+        Checks the alarm conditions for stability in both live and backtest modes.
+        """
+        return (
+            self.grid_remove is None
+            and not GRID_ONLY
+            and not self.grid_update_started
+            and not self.tp_hold
+            and not self.tp_order_hold
+            and not self.tp_wait_id
+            and not self.orders_init
+        )
+
     def _common_stable_conditions(self):
         """
         Checks the common conditions for stability in both live and backtest modes.
         """
         return (
-            self.operational_status
-            and self.grid_remove is None
-            and not GRID_ONLY
-            and not self.grid_update_started
+            self._alarm_stable_conditions()
             and not self.start_after_shift
-            and not self.tp_hold
-            and not self.tp_order_hold
-            and not self.tp_wait_id
-            and not self.orders_init
+            and self.operational_status
             and self.command != 'stopped'
         )
 
-    def stable_state(self):
+    def stable_state(self, alarm_mode=False):
         """
         Checks if the system is in a stable state for live trading.
         """
         return (
-            self._common_stable_conditions()
+            (self._alarm_stable_conditions() if alarm_mode else self._common_stable_conditions())
             and self.shift_grid_threshold is None
             and not self.reverse_hold
             and not self.trade_control_is_waiting_state
@@ -838,8 +854,7 @@ class Strategy(StrategyBase):
             self.message_log(f"Initial first: {ff}, second: {fs}", color=Style.B_WHITE)
         self.restart = None
         # Init variable
-        self.profit_first = O_DEC
-        self.profit_second = O_DEC
+        self.profit_first = self.profit_second = O_DEC
         self.over_price = OVER_PRICE
         self.order_q = ORDER_Q
         self.grid_update_started = None
@@ -1390,8 +1405,7 @@ class Strategy(StrategyBase):
         delta_price = over_price * base_price / (100 * (self.order_q - 1))
         price_prev = base_price
         avg_amount = O_DEC
-        total_grid_amount_f = O_DEC
-        total_grid_amount_s = O_DEC
+        total_grid_amount_f = total_grid_amount_s = O_DEC
         depo_i = O_DEC
         rounding = ROUND_CEILING
         last_order_pass = False
@@ -1739,8 +1753,8 @@ class Strategy(StrategyBase):
             over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
 
             if over_price == 0:
-                self.message_log(f"{msg}, use previous or over_price_coarse * 3", log_level=logging.WARNING)
-                over_price = max(over_price_previous, 3 * over_price_coarse)
+                self.message_log(f"{msg}, use previous or over_price_coarse * 2", log_level=logging.WARNING)
+                over_price = max(over_price_previous, 2 * over_price_coarse)
             else:
                 self.message_log(msg)
         else:

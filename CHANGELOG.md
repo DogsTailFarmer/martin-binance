@@ -1,3 +1,10 @@
+## 3.1.4 - 2026-04-xx
+🔧 fix(executor.py): Update `event_exec_command` to be async  
+🔧 fix(executor.py): Refactor `_common_stable_conditions` for clarity  
+🔧 fix(executor.py): Adjust `stable_state` for alarm mode handling  
+🔧 fix(funds_rate_exporter.py): Include total profit calculation in metrics  
+🔧 fix(funds_rate_exporter.py): Update documentation for profit calculations  
+
 ## 3.1.3 - 2026-04-03
 🔧 fix(strategy_base.py): Update log level for session end message to warning
 🔧 fix(executor.py): Set command to None before restarting process

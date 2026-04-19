@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.36"
+__version__ = "3.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -190,7 +190,8 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
                     tf.f_currency, tf.s_currency,\
                     count(*) as cycle_count,\
                     sum(f_profit) as sum_f_profit,\
-                    sum(s_profit) as sum_s_profit\
+                    sum(s_profit) as sum_s_profit,\
+                    sum(f_profit*rate+s_profit) as sum_profit\
                     FROM t_funds as tf LEFT JOIN t_exchange tex USING(id_exchange)\
                     GROUP BY tex.name, tf.id_exchange, tf.f_currency, tf.s_currency')
     records = cursor.fetchall()
@@ -235,10 +236,13 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
         s_currency = str(row[3])
         pair = f"{f_currency}/{s_currency}"
         CYCLE_COUNT.labels(exchange, pair, VPS_NAME).set(int(row[4]))
+        # Sum profit
         sum_f_profit = float(row[5])
         SUM_F_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_f_profit)
         sum_s_profit = float(row[6])
         SUM_S_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_s_profit)
+        sum_profit = float(row[7])
+        SUM_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_profit)
         # Alarm
         cursor.execute('SELECT order_buy, order_sell\
                         FROM t_orders\
@@ -266,9 +270,6 @@ def db_handler(sql_conn, _currency_rate, currency_rate_last_time):
             LAST_RATE.labels(exchange, pair, VPS_NAME).set(last_rate)
         else:
             last_rate = 0.0
-        # Sum profit
-        sum_profit = sum_f_profit * last_rate + sum_s_profit
-        SUM_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_profit)
         # Convert sum profit to USD by last rate
         sum_profit_usd = -1
         if _currency_rate.get(s_currency):
