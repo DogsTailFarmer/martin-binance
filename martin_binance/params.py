@@ -106,6 +106,7 @@ LOGGING = True
 SELF_OPTIMIZATION = True  # Cyclic self-optimization of parameters, together with MODE == 'TC'
 N_TRIALS = 250  # Number of optimization cycles for optuna study
 SESSION_RESULT = {}
+# Trade control
 TRADE_CONTROL = True
 TC_ADX_DATA_LIMIT = 60
 TC_ADX_PERIOD = 14

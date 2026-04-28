@@ -733,6 +733,7 @@ class StrategyBase(metaclass=ABCMeta):
                     self.message_log(f"BNB request was generated from {bot_id} to {prm.FEE_BNB['email']}",
                                      color=Style.BLUE)
 
+    @staticmethod
     async def raise_keyboard_interrupt(self):
         raise KeyboardInterrupt
 
@@ -1426,7 +1427,7 @@ class StrategyBase(metaclass=ABCMeta):
                     self.message_log(
                         "Restore saved state after restart",
                         color=Style.GREEN,
-                        tlg=False if prm.GRID_ONLY else True
+                        tlg=not prm.GRID_ONLY
                     )
                     await self.restore_strategy_state(restore=True)
 

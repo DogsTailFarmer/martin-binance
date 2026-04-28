@@ -539,7 +539,7 @@ class Strategy(StrategyBase):
                     await self.start()
                 elif GRID_ONLY_EXIT:
                     self.message_log("Exit from sell asset cycle after time limit", color=Style.B_WHITE)
-                    tasks_manage(self.tasks, self.raise_keyboard_interrupt(), add_done_callback=False)
+                    tasks_manage(self.tasks, self.raise_keyboard_interrupt(self), add_done_callback=False)
             elif AMOUNT_FIRST and START_ON_BUY:
                 if ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
                     self.save_init_assets(ff, fs)
@@ -697,7 +697,7 @@ class Strategy(StrategyBase):
                     and not self.tp_order_id
                     and not self.tp_wait_id
             ):
-                self.message_log("Restore, Restart", tlg=False if GRID_ONLY else True)
+                self.message_log("Restore, Restart", tlg=not GRID_ONLY)
                 await self.start()
             elif self.orders_init:
                 for order_id in self.orders_init.get_id_list():
@@ -706,9 +706,11 @@ class Strategy(StrategyBase):
             elif not grid_open_orders_len and not self.reverse_hold:
                 self.message_log("Place grid orders", tlg=True)
                 await self.grid_update()
-            elif grid_open_orders_len and GRID_ONLY:
-                self.grid_remove = True
-                await self.cancel_grid(cancel_all=True)
+            elif GRID_ONLY and grid_open_orders_len:
+                ff, fs, _, _ = self.get_free_assets(mode='available')
+                if self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
+                    self.grid_remove = True
+                    await self.cancel_grid(cancel_all=True)
 
             if self.tp_wait_id:
                 self.message_log("Restore, wait TP order", tlg=True)

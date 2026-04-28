@@ -21,8 +21,10 @@ ID_EXCHANGE = 0
 BASE_ASSET = 'USDT'
 ASSETS = ['BTC', 'ETH']
 
+
 def malloc_trim(trim_type: int = 0):
     ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(trim_type)
+
 
 def sell_assets():
     for asset in itertools.cycle(ASSETS):

@@ -1,3 +1,10 @@
+## 3.1.4post1 - 2026-04-28
+✨ feat(strategy_base.py): add `raise_keyboard_interrupt` static method  
+✨ feat(params.py): enable trade control option  
+🔧 fix(executor.py): correct `raise_keyboard_interrupt` method call  
+🔧 fix(executor.py): update `message_log` call with correct `tlg` argument  
+🔧 fix(CHANGELOG.md): add release notes for version 3.1.4post1
+
 ## 3.1.4 - 2026-04-28
 ✨ feat(cli_0_ASLISTUSDT.py): add asset selling script for grid mode  
 ✨ feat(executor.py): implement `raise_keyboard_interrupt` method  
