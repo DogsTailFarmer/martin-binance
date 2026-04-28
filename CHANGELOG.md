@@ -1,9 +1,20 @@
-## 3.1.4 - 2026-04-xx
+## 3.1.4 - 2026-04-28
+✨ feat(cli_0_ASLISTUSDT.py): add asset selling script for grid mode  
+✨ feat(executor.py): implement `raise_keyboard_interrupt` method  
+✨ feat(strategy_base.py): enhance `message_log` for state restoration  
+✨ feat(params.py): add `GRID_ONLY_EXIT` parameter for exit after selling  
+✨ fix(executor.py): adjust logging level for task cancellation  
+✨ fix(executor.py): ensure proper handling of `start_after_shift` flag  
+✨ fix(relaunch.py): allow launching ASLIST scripts without last state  
+✨ fix(cli_0_BTCUSDT.py): synchronize version and settings with others  
+✨ feat(cli_1_BTCUSDT.py): introduce `GRID_ONLY_EXIT` setting  
+✨ fix(cli_2_TESTBTCTESTUSDT.py): update version and include new parameter  
+✨ feat(cli_3_BTCUSDT.py): include `GRID_ONLY_EXIT` configuration  
 🔧 fix(executor.py): Update `event_exec_command` to be async  
 🔧 fix(executor.py): Refactor `_common_stable_conditions` for clarity  
 🔧 fix(executor.py): Adjust `stable_state` for alarm mode handling  
 🔧 fix(funds_rate_exporter.py): Include total profit calculation in metrics  
-🔧 fix(funds_rate_exporter.py): Update documentation for profit calculations  
+✨ chore(all): update version to 3.1.4 across all relevant files
 
 ## 3.1.3 - 2026-04-03
 🔧 fix(strategy_base.py): Update log level for session end message to warning

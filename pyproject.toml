@@ -1,5 +1,5 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
+requires = ["flit_core >=3.12.0,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
@@ -17,7 +17,7 @@ dynamic = ["version", "description"]
 requires-python = ">=3.12"
 
 dependencies = [
-    "exchanges-wrapper==2.1.48",
+    "exchanges-wrapper==2.1.49",
     "aiofiles==25.1.0",
     "aiocsv==1.4.0",
     "apscheduler==3.11.2",
@@ -26,15 +26,15 @@ dependencies = [
     "dash==4.1.0",
     "inquirer==3.4.1",
     "jsonpickle==4.1.1",
-    "libtmux==0.55.0",
+    "libtmux==0.55.1",
     "numpy~=2.4.4",
     "optuna==4.8.0",
     "orjson~=3.11.7",
     "pandas==3.0.2",
     "plotly==6.6.0",
-    "prometheus-client==0.24.1",
+    "prometheus-client==0.25.0",
     "psutil==7.2.2",
-    "pyarrow~=23.0.1",
+    "pyarrow~=24.0.0",
     "pymannkendall==1.4.3",
     "requests==2.33.1",
     "schedule~=1.2.2",

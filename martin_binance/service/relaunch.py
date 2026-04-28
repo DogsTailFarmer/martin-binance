@@ -6,7 +6,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.36"
+__version__ = "3.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -29,6 +29,6 @@ for window in session.windows:
     else:
         last_state = Path(LAST_STATE_PATH, f"{window.name.replace('-', '_').replace('/', '')}.json")
         pair = Path(WORK_PATH, f"cli_{window.name.replace('-', '_').replace('/', '')}.py")
-        if pair.exists() and last_state.exists():
+        if pair.exists() and (last_state.exists() or 'ASLIST' in window.name):
             window.active_pane.send_keys(f"{pair} 1", enter=True)
     time.sleep(4)

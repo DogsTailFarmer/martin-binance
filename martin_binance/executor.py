@@ -34,11 +34,15 @@ from typing import Dict
 from martin_binance import DB_FILE, KLINES_INIT, HEARTBEAT
 from martin_binance.db_utils import db_management, save_to_db
 from martin_binance.strategy_base import StrategyBase, __version__ as msb_ver
-from martin_binance.lib import Ticker, FundsEntry, OrderBook, Style, any2str, Order, OrderUpdate, Orders, f2d, solve
+from martin_binance.lib import (
+    Ticker, FundsEntry, OrderBook, Style, any2str, Order, OrderUpdate, Orders, f2d, solve, tasks_manage
+)
 from martin_binance.params import *  # NOSONAR python:S2208
 
-O_DEC = Decimal()
 scheduler = AsyncIOScheduler()
+logging.getLogger("apscheduler.executors.default").setLevel(logging.CRITICAL)
+
+O_DEC = Decimal()
 TICKER_UPDATE_TIMEOUT = 600
 
 
@@ -94,7 +98,7 @@ class Strategy(StrategyBase):
         self.sum_profit_second = O_DEC  # + Sum profit from start
         self.cycle_buy_count = 0  # + Count for buy cycle
         self.cycle_sell_count = 0  # + Count for sale cycle
-        self.shift_grid_threshold = None  # - Price level of shift grid threshold for current cycle
+        self.shift_grid_threshold = None  # + Price level of shift grid threshold for current cycle
         self.f_currency = ''  # - First currency name
         self.s_currency = ''  # - Second currency name
         self.last_shift_time = None  # -
@@ -133,7 +137,7 @@ class Strategy(StrategyBase):
         self.restore_orders = False  # + Flag when was filled grid order during grid cancellation
         self.round_base = '1.0123456789'  # - Round pattern for 0.00000 = 0.00
         self.round_quote = '1.0123456789'  # - Round pattern for 0.00000 = 0.00
-        self.start_after_shift = False  # - Flag set before shift, clear after place grid
+        self.start_after_shift = 0  # + Flag set before shift, clear after place grid
         self.start_reverse_time = None  # -
         self.tp_part_free = False  # + Can use TP part amount for converting to grid orders
         self.ts_grid_update = self.get_time()  # - When updated grid
@@ -182,7 +186,6 @@ class Strategy(StrategyBase):
             db_management(EXCHANGE)
             self.start_process()
         self.status_time = int(self.get_time())
-        self.start_after_shift = True
         self.over_price = OVER_PRICE
         self.order_q = ORDER_Q
         self.martin = (MARTIN + 100) / 100
@@ -268,6 +271,7 @@ class Strategy(StrategyBase):
             'reverse_price': json.dumps(self.reverse_price),
             'reverse_target_amount': json.dumps(self.reverse_target_amount),
             'shift_grid_threshold': json.dumps(self.shift_grid_threshold),
+            'start_after_shift': json.dumps(self.start_after_shift),
             'started_balance_detail': json.dumps(str(self.started_balance_detail)),
             'status_time': json.dumps(self.status_time),
             'sum_amount_first': json.dumps(self.sum_amount_first),
@@ -533,6 +537,9 @@ class Strategy(StrategyBase):
             if USE_ALL_FUND:
                 if self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
                     await self.start()
+                elif GRID_ONLY_EXIT:
+                    self.message_log("Exit from sell asset cycle after time limit", color=Style.B_WHITE)
+                    tasks_manage(self.tasks, self.raise_keyboard_interrupt(), add_done_callback=False)
             elif AMOUNT_FIRST and START_ON_BUY:
                 if ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
                     self.save_init_assets(ff, fs)
@@ -638,6 +645,10 @@ class Strategy(StrategyBase):
             self.shift_grid_threshold = json.loads(strategy_state.get('shift_grid_threshold'))
             if self.shift_grid_threshold:
                 self.shift_grid_threshold = f2d(self.shift_grid_threshold)
+            self.start_after_shift = json.loads(strategy_state.get('start_after_shift', "0"))
+            if self.start_after_shift:
+                self.start_after_shift = f2d(self.start_after_shift)
+
             self.started_balance_detail = eval(json.loads(strategy_state.get('started_balance_detail', "\"()\"")))
             self.status_time = json.loads(strategy_state.get('status_time'))
             self.sum_amount_first = f2d(json.loads(strategy_state.get('sum_amount_first')))
@@ -661,7 +672,6 @@ class Strategy(StrategyBase):
             if self.command == 'stopped':
                 self.message_log("Restore, strategy stopped. Need manual action", tlg=True)
                 return
-            self.start_after_shift = False
             self.last_shift_time = self.get_time()
             self.avg_rate = self.get_buffered_ticker().last_price
             #
@@ -687,7 +697,7 @@ class Strategy(StrategyBase):
                     and not self.tp_order_id
                     and not self.tp_wait_id
             ):
-                self.message_log("Restore, Restart", tlg=True)
+                self.message_log("Restore, Restart", tlg=False if GRID_ONLY else True)
                 await self.start()
             elif self.orders_init:
                 for order_id in self.orders_init.get_id_list():
@@ -696,6 +706,9 @@ class Strategy(StrategyBase):
             elif not grid_open_orders_len and not self.reverse_hold:
                 self.message_log("Place grid orders", tlg=True)
                 await self.grid_update()
+            elif grid_open_orders_len and GRID_ONLY:
+                self.grid_remove = True
+                await self.cancel_grid(cancel_all=True)
 
             if self.tp_wait_id:
                 self.message_log("Restore, wait TP order", tlg=True)
@@ -795,7 +808,7 @@ class Strategy(StrategyBase):
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
         # Checking for optimal trading conditions
-        if not self.first_run and not self.start_after_shift:
+        if not self.first_run:
             await self.trade_control()
         #
         self.wait_refunding_for_start = False
@@ -804,7 +817,6 @@ class Strategy(StrategyBase):
             self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if GRID_ONLY:
-            self.grid_only_restart = 0
             if USE_ALL_FUND and not self.start_after_shift:
                 if self.cycle_buy:
                     self.deposit_second = fs
@@ -812,7 +824,7 @@ class Strategy(StrategyBase):
                     self.deposit_first = ff
                 self.save_init_assets(ff, fs)
             if (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
-                    or not self.check_min_amount(for_tp=False):
+                    or not self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
                 if self.first_run:
                     self.message_log("Grid only mode started", tlg=True)
                     self.first_run = False
@@ -961,7 +973,7 @@ class Strategy(StrategyBase):
                 break
 
             if first_iteration:
-                self.message_log('Waiting for optimal trading conditions', tlg=True)
+                self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
                 self.trade_control_is_waiting_state = True
                 first_iteration = False
 
@@ -978,7 +990,7 @@ class Strategy(StrategyBase):
             await asyncio.sleep(60)
         #
         self.trade_control_is_waiting_state = False
-        self.message_log('The conditions are favorable, continue trading')
+        self.message_log('The conditions are favorable, continue trading', color=Style.GREEN)
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -1341,7 +1353,7 @@ class Strategy(StrategyBase):
                 total_grid_amount_f = grid_calc['total_grid_amount_f']
                 total_grid_amount_s = grid_calc['total_grid_amount_s']
                 self.message_log(f"Total grid amount: first: {total_grid_amount_f}, second: {total_grid_amount_s}",
-                                 log_level=logging.DEBUG, color=Style.CYAN)
+                                 log_level=logging.INFO, color=Style.CYAN)
             #
             for order in orders:
                 i, amount, price = order
@@ -1371,7 +1383,7 @@ class Strategy(StrategyBase):
                         self.shift_grid_threshold = base_price - 2 * PRICE_SHIFT * base_price / 100
                 self.message_log(f"Shift grid threshold: {self.shift_grid_threshold:f}")
             #
-            self.start_after_shift = False
+            self.start_after_shift = 0
             if self.grid_update_started:
                 self.grid_update_started = None
         else:
@@ -2020,12 +2032,12 @@ class Strategy(StrategyBase):
                              f"Average rate is {avg_rate}", tlg=True)
         self.sum_amount_first = self.sum_amount_second = O_DEC
         if USE_ALL_FUND:
-            self.grid_only_restart = self.get_time()
+            self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
             self.message_log("Waiting funding for convert", color=Style.B_WHITE)
             return
         if START_ON_BUY and AMOUNT_FIRST:
             self.deposit_second = AMOUNT_SECOND
-            self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
+            self.grid_only_restart = self.get_time()
             self.message_log(f"Keep the level {self.f_currency} at {AMOUNT_FIRST}", color=Style.B_WHITE)
             return
         self.command = 'stop'
@@ -2262,11 +2274,11 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         if self.cycle_buy:
             min_trade_amount = tcm.get_min_sell_amount(_price)
-            if not _amount:
+            if not _amount and not GRID_ONLY:
                 _amount = self.sum_amount_first if for_tp else (self.deposit_second / _price)
         else:
             min_trade_amount = tcm.get_min_buy_amount(_price)
-            if not _amount:
+            if not _amount and not GRID_ONLY:
                 if for_tp and self.sum_amount_first:
                     _tp = self.calc_profit_order(not self.cycle_buy, by_market=by_market, log_output=False)
                     if _tp['target'] * _tp['price'] < tcm.min_notional:
@@ -2313,8 +2325,8 @@ class Strategy(StrategyBase):
 
         if price_above_threshold or price_below_threshold:
             self.message_log('Shift grid', color=Style.B_WHITE)
+            self.start_after_shift = self.shift_grid_threshold
             self.shift_grid_threshold = None
-            self.start_after_shift = True
             if self.part_amount:
                 self.message_log("Grid order was small partially filled, correct depo")
                 _k, part_amount = self.part_amount.popitem()
@@ -2484,10 +2496,8 @@ class Strategy(StrategyBase):
             self.grid_update_started = True
             await self.cancel_grid()
 
-        active_orders = bool(self.orders_init or self.orders_grid or self.orders_hold) if GRID_ONLY else False
-        if restart and active_orders and self.grid_only_restart and USE_ALL_FUND:
+        if restart and GRID_ONLY and USE_ALL_FUND:
             self.restart = True
-            self.grid_only_restart = 0
             self.grid_remove = None
             await self.cancel_grid(cancel_all=True)
 
@@ -2713,6 +2723,11 @@ class Strategy(StrategyBase):
                 elif GRID_ONLY or not self.shift_grid_threshold:
                     self.place_grid_part()
             if not self.orders_hold and not self.orders_init:
+                if GRID_ONLY:
+                    if USE_ALL_FUND:
+                        self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
+                    elif AMOUNT_FIRST:
+                        self.grid_only_restart = 0
                 self.message_log('All grid orders have been successfully placed', color=Style.B_WHITE)
         elif place_order_id == self.tp_wait_id:
             self.tp_wait_id = None
@@ -2781,6 +2796,10 @@ class Strategy(StrategyBase):
                     self.restore_orders = False
                     self.orders_hold.sort(self.cycle_buy)
                     self.grid_remove = None
+                    if isinstance(self.start_after_shift, Decimal):
+                        if GRID_ONLY or not self.check_min_amount():
+                            self.shift_grid_threshold = self.start_after_shift
+                        self.start_after_shift = 0
                     await self.place_profit_order()
             elif self.grid_remove:
                 await self.cancel_grid(cancel_all=cancel_all)

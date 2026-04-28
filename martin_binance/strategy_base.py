@@ -733,6 +733,9 @@ class StrategyBase(metaclass=ABCMeta):
                     self.message_log(f"BNB request was generated from {bot_id} to {prm.FEE_BNB['email']}",
                                      color=Style.BLUE)
 
+    async def raise_keyboard_interrupt(self):
+        raise KeyboardInterrupt
+
     async def ask_exit(self):
         self.message_log("Got signal for exit", color=Style.MAGENTA)
         self.operational_status = False
@@ -764,10 +767,14 @@ class StrategyBase(metaclass=ABCMeta):
             self.scheduler_stop()
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
-            await asyncio.gather(*tasks, return_exceptions=True)
+            try:
+                async with asyncio.timeout(HEARTBEAT * 5):
+                    await asyncio.gather(*tasks, return_exceptions=True)
+            except TimeoutError:
+                self.message_log("Task cancel timed out")
+
             if prm.LOGGING:
                 print(f"Cancelling {len(tasks)} outstanding tasks")
-
             self.stop()
 
     async def fetch_order(self, _id: int, _client_order_id: str = None, _filled_update_call=False):
@@ -1416,7 +1423,11 @@ class StrategyBase(metaclass=ABCMeta):
 
                 # noinspection PyUnreachableCode
                 if self.last_state:
-                    self.message_log("Restore saved state after restart", color=Style.GREEN, tlg=True)
+                    self.message_log(
+                        "Restore saved state after restart",
+                        color=Style.GREEN,
+                        tlg=False if prm.GRID_ONLY else True
+                    )
                     await self.restore_strategy_state(restore=True)
 
                 for order in orders:

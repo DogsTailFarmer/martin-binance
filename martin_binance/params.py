@@ -4,7 +4,7 @@ martin-binance strategy parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.0"
+__version__ = "3.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -22,7 +22,7 @@ __all__ = [
     'ADX_NUMBER_OF_CANDLES', 'ADX_PERIOD', 'ADX_THRESHOLD', 'ADX_PRICE_THRESHOLD', 'REVERSE', 'REVERSE_TARGET_AMOUNT',
     'REVERSE_INIT_AMOUNT', 'REVERSE_STOP', 'HEAD_VERSION', 'LOAD_LAST_STATE', 'LAST_STATE_FILE', 'VPS_NAME', 'PARAMS',
     'TELEGRAM_CONFIG', 'MODE', 'XTIME', 'SAVE_DS', 'SAVE_PERIOD', 'LOGGING', 'SELF_OPTIMIZATION', 'N_TRIALS',
-    'SESSION_RESULT', 'TRADE_CONTROL', 'TC_ADX_DATA_LIMIT', 'TC_ADX_PERIOD', 'TC_DI_DIFF', 'TC_K'
+    'SESSION_RESULT', 'TRADE_CONTROL', 'TC_ADX_DATA_LIMIT', 'TC_ADX_PERIOD', 'TC_DI_DIFF', 'TC_K', 'GRID_ONLY_EXIT'
 ]
 
 SYMBOL = str()
@@ -61,12 +61,13 @@ SHIFT_GRID_DELAY = int()
 GRID_UPDATE_INTERVAL = 60 * 60  # sec between grid update in Reverse cycle
 # Other
 STATUS_DELAY = int()
-GRID_ONLY = bool()
 LOG_LEVEL = logging.DEBUG  # Default level for console output
 HOLD_TP_ORDER_TIMEOUT = 30
 COLLECT_ASSETS = bool()
-GRID_ONLY_DELAY = 150  # sec delay before try restart GRID_ONLY cycle
-TP_REFRESH = 60 * 10  # sec between TP refresh
+GRID_ONLY = bool()
+GRID_ONLY_DELAY = 25 * 60  # sec delay before try Restart GRID_ONLY cycle or Exit
+GRID_ONLY_EXIT = False  # Exit after sell asset (in continues cycle)
+TP_REFRESH = 10 * 60  # sec between TP refresh
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()

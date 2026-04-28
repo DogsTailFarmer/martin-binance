@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.0"
+__version__ = "3.1.4"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -77,6 +77,7 @@ ex.STATUS_DELAY = 180  # Minute between sending Tlg message about current status
 ex.TLG_SERVICE = False  # Enable Tlg bot service
 ex.TLG_INLINE = False  # Show inline keyboard in Tlg bot, global setting
 ex.GRID_ONLY = False  # Only place grid orders for buy/sell asset
+ex.GRID_ONLY_EXIT = False  # Exit after sell asset
 ex.LOG_LEVEL = logging.DEBUG  # Default level for console output
 ex.COLLECT_ASSETS = False  # Transfer free asset to main account, valid for subaccount only
 # Parameter for calculate grid over price and grid orders quantity in set_trade_condition()
