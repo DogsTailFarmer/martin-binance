@@ -1,3 +1,7 @@
+## 3.1.4post2 - 2026-04-28
+✨ fix(executor.py): call `raise_keyboard_interrupt` without `self`  
+🔧 refactor(strategy_base.py): simplify `raise_keyboard_interrupt` method  
+
 ## 3.1.4post1 - 2026-04-28
 ✨ feat(strategy_base.py): add `raise_keyboard_interrupt` static method  
 ✨ feat(params.py): enable trade control option  

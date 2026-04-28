@@ -734,7 +734,7 @@ class StrategyBase(metaclass=ABCMeta):
                                      color=Style.BLUE)
 
     @staticmethod
-    async def raise_keyboard_interrupt(self):
+    async def raise_keyboard_interrupt():
         raise KeyboardInterrupt
 
     async def ask_exit(self):
@@ -1055,11 +1055,10 @@ class StrategyBase(metaclass=ABCMeta):
                 except Exception as ex:
                     self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
                     raise UserWarning
-                else:
-                    if res:
-                        kline = list(map(json.loads, res.items))
-                        if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
-                            self.klines[i.value] = kline
+                if res:
+                    kline = list(map(json.loads, res.items))
+                    if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
+                        self.klines[i.value] = kline
             else:
                 kline = klines_from_file.get(i.value, [])
 

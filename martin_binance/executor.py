@@ -539,7 +539,7 @@ class Strategy(StrategyBase):
                     await self.start()
                 elif GRID_ONLY_EXIT:
                     self.message_log("Exit from sell asset cycle after time limit", color=Style.B_WHITE)
-                    tasks_manage(self.tasks, self.raise_keyboard_interrupt(self), add_done_callback=False)
+                    tasks_manage(self.tasks, self.raise_keyboard_interrupt(), add_done_callback=False)
             elif AMOUNT_FIRST and START_ON_BUY:
                 if ff < AMOUNT_FIRST and fs > AMOUNT_SECOND:
                     self.save_init_assets(ff, fs)
