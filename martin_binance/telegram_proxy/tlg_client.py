@@ -19,7 +19,7 @@ openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyou
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.4"
+__version__ = "3.1.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -101,7 +101,7 @@ class TlgClient:
         #
         self.tasks = set()
 
-    async def connect(self):
+    async def connect(self, send_init_message=True):
         self.init_event.clear()
         delay = 0
         while True:
@@ -110,10 +110,11 @@ class TlgClient:
                     self.channel.close()
                 self.channel = Channel(TLG_PROXY_HOST, TLG_PROXY_PORT, ssl=SSL_CONTEXT)
                 self.stub = tlg.TlgProxyStub(self.channel)
-                await self.post_message("Connected", reraise=True)
+                if send_init_message:
+                    await self.post_message("Connected", reraise=True)
                 break
             except ssl.SSLCertVerificationError as e:
-                logger.error(f"Connect to Telegram proxy server failed: {e}")
+                logger.error(f"Connect to Telegram proxy server failed: {e}")  # NOSONAR S8572
                 break
             except OSError as e:
                 if e.errno == 101 or isinstance(e, (ConnectionError, TimeoutError)):
@@ -123,7 +124,7 @@ class TlgClient:
                 else:
                     raise
             except Exception as e:
-                logger.error(f"Connect to Telegram proxy server failed, check certificate expiration date first: {e}")
+                logger.error(f"Connect to Telegram proxy server failed, check certificate expiration date first: {e}")  # NOSONAR S8572
                 break
         self.init_event.set()
 

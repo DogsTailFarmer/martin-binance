@@ -1,3 +1,9 @@
+## 3.1.5 - 2026-05-24
+🔧 fix(executor.py): update `self.message_log` call for logging level  
+🔧 fix(strategy_base.py): update `self.message_log` call for logging level  
+🔧 refactor(executor.py): clean up `await self.send_request` formatting  
+✨ feat(telegram_proxy/tlg_client.py): modify `connect` method to accept `send_init_message` parameter  
+
 ## 3.1.4post2 - 2026-04-28
 ✨ fix(executor.py): call `raise_keyboard_interrupt` without `self`  
 🔧 refactor(strategy_base.py): simplify `raise_keyboard_interrupt` method  

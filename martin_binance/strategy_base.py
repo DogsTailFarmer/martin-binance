@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.4"
+__version__ = "3.1.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -44,6 +44,7 @@ from martin_binance.lib import (
     Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, any2str, PrivateTrade, Order,
     convert_from_minute, OrderUpdate, load_file, load_last_state, Klines, tasks_manage, tasks_cancel,
 )
+from martin_binance.params import GRID_ONLY, LOG_LEVEL
 from martin_binance.telegram_proxy.tlg_client import TlgClient
 
 if prm.MODE == 'S':
@@ -361,7 +362,7 @@ class StrategyBase(metaclass=ABCMeta):
                                     f"Updating parameters from backtest,"
                                     f" predicted value {prm_best.pop('_value')} -> {prm_best.pop('new_value')}",
                                     color=Style.B_WHITE,
-                                    tlg=True
+                                    tlg=LOG_LEVEL == logging.DEBUG
                                 )
                                 for key, value in prm_best.items():
                                     self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
@@ -378,7 +379,7 @@ class StrategyBase(metaclass=ABCMeta):
                         self.message_log(
                             f"Strategy parameters are optimal now. Optimization cycle duration {l_m}",
                             color=Style.B_WHITE,
-                            tlg=True
+                            tlg=LOG_LEVEL == logging.DEBUG
                         )
                         restart = True
                     else:
@@ -389,10 +390,12 @@ class StrategyBase(metaclass=ABCMeta):
                     # Refresh klines init
                     try:
                         for i in KLINES_INIT:
-                            res = await self.send_request(self.stub.fetch_klines, mr.FetchKlinesRequest,
-                                                          symbol=self.symbol,
-                                                          interval=i.value,
-                                                          limit=KLINES_LIM)
+                            res = await self.send_request(
+                                self.stub.fetch_klines, mr.FetchKlinesRequest,
+                                symbol=self.symbol,
+                                interval=i.value,
+                                limit=KLINES_LIM
+                            )
                             self.klines[i.value] = list(map(json.loads, res.items))
                     except Exception as ex:
                         restart = True
@@ -408,7 +411,7 @@ class StrategyBase(metaclass=ABCMeta):
                     #
                     self.start_collect = True
                     ts = time.time()
-                    self.message_log("Start data collect", tlg=True)
+                    self.message_log("Start data collect", tlg=LOG_LEVEL == logging.DEBUG)
             except (asyncio.CancelledError, KeyboardInterrupt):
                 break
             except Exception as err:
@@ -929,6 +932,11 @@ class StrategyBase(metaclass=ABCMeta):
                 res = await self.fetch_order(order_id, _filled_update_call=True)
                 if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                     await self.cancel_order_handler(order_id, cancel_all)
+                elif res.get('status') == 'NEW':
+                    self.message_log(
+                        f"Cancel order {order_id}: Not deleted, I'll try later",
+                        log_level=logging.WARNING
+                    )
                 else:
                     await self.on_cancel_order_error_string(order_id, 'order not canceled')
 
@@ -1798,7 +1806,10 @@ class StrategyBase(metaclass=ABCMeta):
             if prm.MODE in ('T', 'TC'):
                 if prm.TLG_SERVICE:
                     self.tlg_client = TlgClient(self.tlg_header, TLG_TOKEN, TLG_CHAT_ID)
-                    tasks_manage(self.tasks, self.tlg_client.connect())
+                    tasks_manage(
+                        self.tasks,
+                        self.tlg_client.connect(send_init_message=(not GRID_ONLY or LOG_LEVEL == logging.DEBUG))
+                    )
                     tasks_manage(self.tasks, self.tlg_get_command())
                 await self.wss_init()
                 tasks_manage(self.tasks, save_to_csv())

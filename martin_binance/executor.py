@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.4"
+__version__ = "3.1.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -59,7 +59,6 @@ def malloc_trim(trim_type: int = 0):
     ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(trim_type)
 
 
-# noinspection PyTypeChecker
 class Strategy(StrategyBase):
     def __init__(self, call_super=True):
         if call_super:
@@ -117,7 +116,7 @@ class Strategy(StrategyBase):
         self.cycle_status = ()  # - Operational status for current cycle, orders count
         self.cycle_time_reverse = None  # + Reverse cycle start time
         self.first_run = True  # -
-        self.grid_only_restart = 0  # + Time to restart GRID_ONLY mode
+        self.grid_only_restart = 0  # - Time to restart GRID_ONLY mode
         self.grid_remove = None  # + Flag when starting cancel grid orders
         self.grid_update_started = None  # + Flag when grid update process started
         self.last_ticker_update = 0  # -
@@ -248,7 +247,6 @@ class Strategy(StrategyBase):
             'cycle_time_reverse': json.dumps(self.cycle_time_reverse, default=str),
             'deposit_first': json.dumps(self.deposit_first),
             'deposit_second': json.dumps(self.deposit_second),
-            'grid_only_restart': json.dumps(self.grid_only_restart),
             'grid_remove': json.dumps(self.grid_remove),
             'grid_update_started': json.dumps(self.grid_update_started),
             'initial_first': json.dumps(self.initial_first),
@@ -536,7 +534,8 @@ class Strategy(StrategyBase):
             ff, fs, _, _ = self.get_free_assets(mode='available')
             if USE_ALL_FUND:
                 if self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
-                    await self.start()
+                    self.grid_remove = True
+                    await self.cancel_grid(cancel_all=True)
                 elif GRID_ONLY_EXIT:
                     self.message_log("Exit from sell asset cycle after time limit", color=Style.B_WHITE)
                     tasks_manage(self.tasks, self.raise_keyboard_interrupt(), add_done_callback=False)
@@ -598,7 +597,6 @@ class Strategy(StrategyBase):
             #
             self.command = json.loads(strategy_state.get('command'))
             self.grid_remove = json.loads(strategy_state.get('grid_remove', 'null'))
-            self.grid_only_restart = json.loads(strategy_state.get('grid_only_restart', "0"))
             self.grid_update_started = json.loads(strategy_state.get('grid_update_started', 'null'))
             #
             self.cycle_buy = json.loads(strategy_state.get('cycle_buy'))
@@ -711,6 +709,8 @@ class Strategy(StrategyBase):
                 if self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
                     self.grid_remove = True
                     await self.cancel_grid(cancel_all=True)
+                elif USE_ALL_FUND:
+                    self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
 
             if self.tp_wait_id:
                 self.message_log("Restore, wait TP order", tlg=True)
@@ -825,6 +825,8 @@ class Strategy(StrategyBase):
                 else:
                     self.deposit_first = ff
                 self.save_init_assets(ff, fs)
+                self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
+
             if (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
                     or not self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
                 if self.first_run:
@@ -2243,6 +2245,8 @@ class Strategy(StrategyBase):
                     await self.grid_update()
                 else:
                     self.grid_update_started = None
+                    if GRID_ONLY:
+                        await asyncio.sleep(HEARTBEAT)
                     await self.start()
         else:
             self.grid_remove = None
