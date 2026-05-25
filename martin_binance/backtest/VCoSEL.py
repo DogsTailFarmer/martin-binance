@@ -67,7 +67,7 @@ for col in s_sell_df.columns:
                               y=s_sell_df[col],
                               mode='lines',
                               showlegend=False,
-                              line={color: 'indianred', width: 5, dash: 'dot'}))
+                              line={'color': 'indianred', 'width': 5, 'dash': 'dot'}))
 
 for col in s_buy_df.columns:
     # noinspection PyTypeChecker
@@ -75,7 +75,7 @@ for col in s_buy_df.columns:
                               y=s_buy_df[col],
                               mode='lines',
                               showlegend=False,
-                              line={color: 'forestgreen', width: 5, dash: 'dot'}))
+                              line={'color': 'forestgreen', 'width': 5, 'dash': 'dot'}))
 
 
 fig.update_layout(xaxis_tickformat="%H:%M:%S.%L", height=700, autosize=True)
