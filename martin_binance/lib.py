@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.36"
+__version__ = "3.1.6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -181,9 +181,9 @@ class Orders:
         order = None
         for i in self.orders_list:
             if i['id'] == place_order_id:
-                for k, o in enumerate(in_orders):
+                for o in in_orders:
                     if o.buy == i['buy'] and o.amount == i['amount'] and o.price == i['price']:
-                        order = in_orders[k]
+                        order = o
                         break
             if order:
                 break
