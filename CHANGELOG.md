@@ -1,3 +1,7 @@
+## 3.1.6 - 2026-05-25
+✨ feat(VCoSEL.py): format `fig.add_traces` calls for improved readability  
+🔧 fix(requirements.txt): update `numpy`, `pandas`, `requests`, and `ujson` versions  
+
 ## 3.1.5 - 2026-05-24
 🔧 fix(executor.py): update `self.message_log` call for logging level  
 🔧 fix(strategy_base.py): update `self.message_log` call for logging level  
