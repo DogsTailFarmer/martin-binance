@@ -1,3 +1,9 @@
+## 3.1.7 - 2026-06-17
+⬆️ feat(requirements.txt): upgrade package versions for compatibility
+⬆️ feat(pyproject.toml): synchronize package versions with requirements
+🔧 fix(funds_rate_exporter.py): update version to 3.1.7 and add CoinMarketCap API error handling
+✨ feat(executor.py): update version to 3.1.7 and introduce order quantity limit mechanism
+
 ## 3.1.6 - 2026-05-25
 ✨ feat(VCoSEL.py): format `fig.add_traces` calls for improved readability  
 🔧 fix(requirements.txt): update `numpy`, `pandas`, `requests`, and `ujson` versions  

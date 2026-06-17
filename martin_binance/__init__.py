@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Free trading system for Binance SPOT API
+Free trading system for SPOT exchanges
 """
 __author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
+__copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.6"
+__version__ = "3.1.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 

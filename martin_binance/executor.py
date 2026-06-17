@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.5"
+__version__ = "3.1.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -121,7 +121,8 @@ class Strategy(StrategyBase):
         self.grid_update_started = None  # + Flag when grid update process started
         self.last_ticker_update = 0  # -
         self.martin = Decimal(0)  # + Operational increment volume of orders in the grid
-        self.order_q = None  # + Adaptive order quantity
+        self.order_q = None  # + Adaptive order quantity for grid
+        self.order_q_limit = None  # - Adaptive limit of placed orders
         self.over_price = None  # + Adaptive over price
         self.pr_db = None  # - Process for save data to .db
         self.profit_first = O_DEC  # + Cycle profit
@@ -186,7 +187,7 @@ class Strategy(StrategyBase):
             self.start_process()
         self.status_time = int(self.get_time())
         self.over_price = OVER_PRICE
-        self.order_q = ORDER_Q
+        self.order_q = self.order_q_limit = ORDER_Q
         self.martin = (MARTIN + 100) / 100
         if not check_funds:
             self.first_run = False
@@ -588,6 +589,7 @@ class Strategy(StrategyBase):
             self._common_stable_conditions()
             and not self.part_amount
             and not self.tp_part_amount_first
+            and not self.trade_control_is_waiting_state
         )
 
     async def restore_strategy_state(self, strategy_state: Dict[str, str] = None, restore=True) -> None:
@@ -872,7 +874,7 @@ class Strategy(StrategyBase):
         # Init variable
         self.profit_first = self.profit_second = O_DEC
         self.over_price = OVER_PRICE
-        self.order_q = ORDER_Q
+        self.order_q = self.order_q_limit = ORDER_Q
         self.grid_update_started = None
         self.place_grid_part_after_tp = True
         #
@@ -2002,11 +2004,11 @@ class Strategy(StrategyBase):
     def place_grid_part(self) -> None:
         if self.orders_hold and not self.orders_init and not self.grid_remove:
             n = len(self.orders_grid) + len(self.orders_init)
-            if n < ORDER_Q:
+            if n < self.order_q_limit:
                 self.message_log(f"Place next part of grid orders, hold {len(self.orders_hold)}", color=Style.B_WHITE)
                 k = 0
                 for i in self.orders_hold:
-                    if k == GRID_MAX_COUNT or k + n >= ORDER_Q:
+                    if k == GRID_MAX_COUNT or k + n >= self.order_q_limit:
                         break
                     waiting_order_id = self.place_limit_order_check(
                         i['buy'],
@@ -2747,7 +2749,6 @@ class Strategy(StrategyBase):
             self.message_log(f"Did not have waiting order {place_order_id}", logging.ERROR)
 
     async def on_place_order_error(self, place_order_id: int, error: str) -> None:
-        # Check all orders on exchange if exists required
         self.message_log(f"On place order {place_order_id} error: {error}", logging.ERROR, tlg=True)
         if self.orders_init.exist(place_order_id):
             _order = self.orders_init.get_by_id(place_order_id)
@@ -2755,6 +2756,12 @@ class Strategy(StrategyBase):
             self.orders_hold.orders_list.append(_order)
             self.orders_hold.sort(self.cycle_buy)
             self.place_grid_part_after_tp = False
+            if self.order_q_limit > GRID_MAX_COUNT:
+                self.order_q_limit -= 1
+                self.message_log(
+                    f'The limit for placed grid orders has been changed to: {self.order_q_limit}',
+                    log_level=logging.WARNING
+                )
             if self.cancel_grid_hold:
                 self.message_log('Continue remove grid orders', color=Style.B_WHITE)
                 self.cancel_grid_hold = False

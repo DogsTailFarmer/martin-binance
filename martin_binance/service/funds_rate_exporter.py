@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.4"
+__version__ = "3.1.7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -147,7 +147,8 @@ def get_rate(_currency_rate) -> dict:
         'UST': 'USDT',
         'IOT': 'MIOTA',
         'TESTUSDT': 'USDT',
-        'TESTBTC': 'BTC'
+        'TESTBTC': 'BTC',
+        'TON': 'GRAM',
     }
     headers = {'Accepts': 'application/json', 'X-CMC_PRO_API_KEY': API}
     session = Session()
@@ -174,7 +175,10 @@ def get_rate(_currency_rate) -> dict:
                         print(er)
                 if response.status_code == 200:
                     data = response.json()
-                    price = data['data'][0]['quote'][_currency]['price'] or -1
+                    try:
+                        price = data['data'][0]['quote'][_currency]['price']
+                    except KeyError:
+                        price = -1
                     buffer_rate[_currency] = price
         _currency_rate[currency] = price if GET_RATE else 1
     return _currency_rate
