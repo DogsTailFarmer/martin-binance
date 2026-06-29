@@ -142,6 +142,7 @@ def reset():
 
 
 def get_rate(_currency_rate) -> dict:
+    print('Start GET_RATE')
     global request_delay
     replace = {
         'UST': 'USDT',
@@ -157,6 +158,10 @@ def get_rate(_currency_rate) -> dict:
 
     for currency in _currency_rate:
         _currency = replace.get(currency, currency)
+
+        print('+++++++++++++++++++++++++++++++++++++++++++++++++++++')
+        print(f"_currency: {_currency}")
+
         price = buffer_rate.get(_currency)
         if price is None and GET_RATE:
             price = -1
@@ -166,6 +171,9 @@ def get_rate(_currency_rate) -> dict:
             except Exception as er:
                 print(er)
             else:
+
+                print(f"response: {response}")
+
                 if response.status_code == 429:
                     time.sleep(61)
                     request_delay *= 1.5
@@ -175,12 +183,22 @@ def get_rate(_currency_rate) -> dict:
                         print(er)
                 if response.status_code == 200:
                     data = response.json()
+
+                    print(f"data: {data}")
+
                     try:
                         price = data['data'][0]['quote'][_currency]['price']
                     except KeyError:
                         price = -1
                     buffer_rate[_currency] = price
         _currency_rate[currency] = price if GET_RATE else 1
+
+    print('+++++++++++++++++++++++++++++++++++++++++++++++++++++')
+    print(f"buffer_rate: {buffer_rate}")
+    print('+++++++++++++++++++++++++++++++++++++++++++++++++++++')
+    print(f"_currency_rate: {_currency_rate}")
+    print('+++++++++++++++++++++++++++++++++++++++++++++++++++++')
+
     return _currency_rate
 
 
