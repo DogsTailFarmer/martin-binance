@@ -26,26 +26,19 @@ from prometheus_client import start_http_server, Gauge
 from martin_binance import Path, CONFIG_FILE, DB_FILE
 from exchanges_wrapper import CONFIG_FILE as SRV_CONFIG_FILE
 
-def load_config():
-    global CONFIG_FILE, SRV_CONFIG_FILE, DB_FILE
-    if not CONFIG_FILE.exists():
-        if platform.system() == 'Darwin':
-            user = os.environ.get("USERNAME") or os.environ.get("USER")
-            work_path = Path("Users", user, ".margin")
-        else:
-            work_path = Path().resolve()
-        CONFIG_FILE = Path(work_path, "ms_cfg.toml")
-        SRV_CONFIG_FILE = Path(work_path, "exch_srv_cfg.toml")
-        DB_FILE = Path(work_path, "funds_rate.db")
-    return {
-        'config': toml.load(str(CONFIG_FILE)).get('Exporter', {}),
-        'accounts': toml.load(str(SRV_CONFIG_FILE)).get('accounts', [])
-    }
+if not CONFIG_FILE.exists():
+    if platform.system() == 'Darwin':
+        user = os.environ.get("USERNAME") or os.environ.get("USER")
+        work_path = Path("Users", user, ".margin")
+    else:
+        work_path = Path().resolve()
+    CONFIG_FILE = Path(work_path, "ms_cfg.toml")
+    SRV_CONFIG_FILE = Path(work_path, "exch_srv_cfg.toml")
+    DB_FILE = Path(work_path, "funds_rate.db")
 
 # Load configs at startup
-config_data = load_config()
-config = config_data['config']
-accounts = config_data['accounts']
+config = toml.load(str(CONFIG_FILE)).get('Exporter', {})
+accounts = toml.load(str(SRV_CONFIG_FILE)).get('accounts', [])
 
 names = {acc['name']: acc['exchange'] for acc in accounts}
 PORT = config.get('port')
@@ -129,7 +122,7 @@ async def set_active():
     try:
         await sql_conn.execute('UPDATE t_funds SET active = 1 WHERE active = 0')
         await sql_conn.commit()
-    except sqlite3.Error as ex:
+    except aiosqlite.Error as ex:
         print(f"Update t_funds failed: {ex}")
 
 async def get_rate(_currency_rate, tries=5):

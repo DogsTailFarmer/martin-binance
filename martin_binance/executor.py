@@ -14,10 +14,8 @@ import sys
 import gc
 import statistics
 from decimal import Decimal, ROUND_HALF_EVEN, ROUND_FLOOR, ROUND_CEILING, ROUND_HALF_DOWN, ROUND_HALF_UP
-from threading import Thread
-import queue
 import math
-import sqlite3
+import aiosqlite
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pymannkendall as mk
 
@@ -127,7 +125,7 @@ class Strategy(StrategyBase):
         self.pr_db = None  # - Process for save data to .db
         self.profit_first = O_DEC  # + Cycle profit
         self.profit_second = O_DEC  # + Cycle profit
-        self.queue_to_db = queue.Queue() if MODE != 'S' else None  # - Queue for save data to .db
+        self.queue_to_db = asyncio.Queue() if MODE != 'S' else None  # - Queue for save data to .db
         self.restart = None  # - Set after execute take profit order and restart cycle
         self.reverse = REVERSE  # + Current cycle is Reverse
         self.reverse_hold = False  # + Exist unreleased reverse state
@@ -160,7 +158,7 @@ class Strategy(StrategyBase):
             if GRID_ONLY:
                 scheduler.add_job(self.event_grid_only_release, 'cron', minute='*', second='45')
 
-    def init(self, check_funds=True) -> None:
+    async def init(self, check_funds=True) -> None:
         self.message_log('Start Init section')
         if COLLECT_ASSETS and GRID_ONLY:
             init_params_error = 'COLLECT_ASSETS and GRID_ONLY: one only allowed'
@@ -183,8 +181,9 @@ class Strategy(StrategyBase):
             self.sum_profit_first = self.sum_profit_second = O_DEC
             self.part_profit_first = self.part_profit_second = O_DEC
         else:
-            db_management(EXCHANGE)
-            self.start_process()
+            await self.start_process()
+            if not GRID_ONLY_EXIT:
+                await db_management(EXCHANGE)
         self.status_time = int(self.get_time())
         self.over_price = OVER_PRICE
         self.order_q = self.order_q_limit = ORDER_Q
@@ -294,7 +293,7 @@ class Strategy(StrategyBase):
         if scheduler.running:
             scheduler.shutdown()
 
-    def event_export_operational_status(self):
+    async def event_export_operational_status(self):
         ts = self.get_time()
         if ts - self.last_ticker_update > TICKER_UPDATE_TIMEOUT:
             self.wss_fire_up = True
@@ -311,61 +310,57 @@ class Strategy(StrategyBase):
             cycle_status = (self.cycle_buy, order_buy, order_sell, order_hold)
             if self.cycle_status != cycle_status:
                 self.cycle_status = cycle_status
-                if self.queue_to_db:
-                    self.queue_to_db.put(
-                        {
-                            'ID_EXCHANGE': ID_EXCHANGE,
-                            'f_currency': self.f_currency,
-                            's_currency': self.s_currency,
-                            'cycle_buy': self.cycle_buy,
-                            'order_buy': order_buy,
-                            'order_sell': order_sell,
-                            'order_hold': order_hold,
-                            'destination': 't_orders'
-                        }
-                    )
+                await self.queue_to_db.put(
+                    {
+                        'ID_EXCHANGE': ID_EXCHANGE,
+                        'f_currency': self.f_currency,
+                        's_currency': self.s_currency,
+                        'cycle_buy': self.cycle_buy,
+                        'order_buy': order_buy,
+                        'order_sell': order_sell,
+                        'order_hold': order_hold,
+                        'destination': 't_orders'
+                    }
+                )
         else:
             self.cycle_status = ()
 
     async def event_get_external_command(self):
-        if self.connection_analytic:
-            cursor_analytic = self.connection_analytic.cursor()
+        try:
+            cursor_analytic = await self.connection_db.execute(
+                'SELECT max(message_id), text_in, bot_id \
+                 FROM t_control \
+                 WHERE bot_id=:bot_id',
+                {'bot_id': self.tlg_header}
+            )
+            row = await cursor_analytic.fetchone()
+            await cursor_analytic.close()
+        except aiosqlite.Error as err:
+            row = None
+            self.message_log(f"SELECT from t_control: {err}")
+        if row and row[0] and 'BNB_request' in row[1]:
+            params = json.loads(row[1])[1]
+            await self.transfer_to(
+                'BNB',
+                any2str(
+                    max(
+                        Decimal(params['tranche_volume']),
+                        self.get_trading_capability_manager().min_notional
+                    ) / self.get_buffered_ticker().last_price
+                ),
+                params['email']
+            )
+            # Remove applied command from .db
             try:
-                cursor_analytic.execute(
-                    'SELECT max(message_id), text_in, bot_id \
-                     FROM t_control \
-                     WHERE bot_id=:bot_id',
-                    {'bot_id': self.tlg_header}
+                await self.connection_db.execute(
+                    'UPDATE t_control \
+                     SET apply = 1 \
+                     WHERE message_id=:message_id',
+                    {'message_id': row[0]}
                 )
-                row = cursor_analytic.fetchone()
-                cursor_analytic.close()
-            except sqlite3.Error as err:
-                cursor_analytic.close()
-                row = None
-                print(f"SELECT from t_control: {err}")
-            if row and row[0] and 'BNB_request' in row[1]:
-                params = json.loads(row[1])[1]
-                await self.transfer_to(
-                    'BNB',
-                    any2str(
-                        max(
-                            Decimal(params['tranche_volume']),
-                            self.get_trading_capability_manager().min_notional
-                        ) / self.get_buffered_ticker().last_price
-                    ),
-                    params['email']
-                )
-                # Remove applied command from .db
-                try:
-                    self.connection_analytic.execute(
-                        'UPDATE t_control \
-                         SET apply = 1 \
-                         WHERE message_id=:message_id',
-                        {'message_id': row[0]}
-                    )
-                    self.connection_analytic.commit()
-                except sqlite3.Error as err:
-                    print(f"UPDATE t_control: {err}")
+                await self.connection_db.commit()
+            except aiosqlite.Error as err:
+                self.message_log(f"UPDATE t_control: {err}")
 
     def event_di(self):
         if self.command == 'stopped':
@@ -395,7 +390,7 @@ class Strategy(StrategyBase):
         if self.command == 'restart':
             self.command = None
             await asyncio.sleep(HEARTBEAT)
-            self.stop()
+            await self.stop()
             os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
 
     async def event_report(self):  # NOSONAR S7503
@@ -798,9 +793,8 @@ class Strategy(StrategyBase):
                         'cycle_time': ct,
                         'destination': 't_funds'
                     }
-                    if self.queue_to_db:
-                        print('Send data to .db t_funds')
-                        self.queue_to_db.put(data_to_db)
+                    self.message_log('Send data to .db t_funds')
+                    await self.queue_to_db.put(data_to_db)
                 self.save_init_assets(ff, fs)
                 if COLLECT_ASSETS and MODE != 'S':
                     _ff, _fs = await self.collect_assets()
@@ -901,24 +895,24 @@ class Strategy(StrategyBase):
         self.first_run = False
         await self.place_grid(self.cycle_buy, amount, self.reverse_target_amount)
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         self.message_log('Stop')
         if self.queue_to_db:
-            self.queue_to_db.put({'stop_signal': True})
-        if self.connection_analytic:
+            await self.queue_to_db.put({'stop_signal': True})
+        if self.connection_db:
             try:
-                self.connection_analytic.execute("DELETE FROM t_orders\
-                                                  WHERE id_exchange=:id_exchange\
-                                                  AND f_currency=:f_currency\
-                                                  AND s_currency=:s_currency",
-                                                 {'id_exchange': ID_EXCHANGE,
-                                                  'f_currency': self.f_currency,
-                                                  's_currency': self.s_currency})
-                self.connection_analytic.commit()
-            except sqlite3.Error as err:
+                await self.connection_db.execute(
+                    "DELETE FROM t_orders\
+                     WHERE id_exchange=:id_exchange\
+                     AND f_currency=:f_currency\
+                     AND s_currency=:s_currency",
+                     {'id_exchange': ID_EXCHANGE, 'f_currency': self.f_currency, 's_currency': self.s_currency}
+                )
+                await self.connection_db.commit()
+            except aiosqlite.Error as err:
                 self.message_log(f"DELETE from t_order: {err}")
-            self.connection_analytic.close()
-        self.connection_analytic = None
+            await self.connection_db.close()
+        self.connection_db = None
 
     def init_warning(self, _amount_first_grid: Decimal):
         if self.cycle_buy:
@@ -1006,19 +1000,10 @@ class Strategy(StrategyBase):
             self.initial_first = ff
             self.initial_second = fs
 
-    def start_process(self):
+    async def start_process(self):
         # Init analytic
-        self.connection_analytic = (
-                self.connection_analytic or
-                sqlite3.connect(DB_FILE, check_same_thread=False, timeout=10)
-        )
-        self.pr_db = Thread(target=save_to_db, args=(self.queue_to_db,), daemon=True)
-        if not self.pr_db.is_alive():
-            self.message_log('Start process for .db save')
-            try:
-                self.pr_db.start()
-            except AssertionError as error:
-                self.message_log(str(error), log_level=logging.ERROR, color=Style.B_RED)
+        self.connection_db = await aiosqlite.connect(DB_FILE)
+        tasks_manage(self.tasks, save_to_db(self.queue_to_db))
 
     ##############################################################
     # Technical analysis

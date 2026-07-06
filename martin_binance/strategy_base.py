@@ -15,7 +15,6 @@ from aiocsv import AsyncWriter
 import logging
 import os
 import random
-import sqlite3
 import time
 import traceback
 from abc import ABCMeta, abstractmethod
@@ -75,15 +74,15 @@ for bot in prm.TELEGRAM_CONFIG['Bots']:
         break
 
 
-def refresh_t_asset(cursor, key, value, used):
-    cursor.execute(
+async def refresh_t_asset(connection_db, key, value, used):
+    await connection_db.execute(
         'DELETE FROM t_asset\
          WHERE id_exchange=:id_exchange\
          AND currency=:currency\
          AND use=:use',
         {'id_exchange': prm.ID_EXCHANGE, 'currency': key, 'use': used}
     )
-    cursor.execute(
+    await connection_db.execute(
         'INSERT into t_asset values(?, ?, ?, ?, ?)',
         (prm.ID_EXCHANGE, key, float(value), used, int(time.time()))
     )
@@ -143,7 +142,7 @@ class StrategyBase(metaclass=ABCMeta):
         #
         self.cycle_time = None  # + Cycle start time
         self.command = None  # + External input command from Telegram
-        self.connection_analytic = None  # - Connection to .db
+        self.connection_db = None  # - Connection to .db
 
     def __call__(self):
         return self
@@ -603,13 +602,11 @@ class StrategyBase(metaclass=ABCMeta):
         """
         Update account asset list and value in t_asset
         """
-        connection_analytic = None
         balances = []
         funding_wallet = []
         assets = {}
         assets_fw = {}
-        while connection_analytic is None:
-            connection_analytic = self.connection_analytic
+        while self.connection_db is None:
             await asyncio.sleep(HEARTBEAT)
         delay = 600  # 10 min
         max_use_update = 25 * 60  # 25 min if the row has not been updated that the instance is down
@@ -632,7 +629,7 @@ class StrategyBase(metaclass=ABCMeta):
                 if self.exchange == 'binance' and Decimal(prm.FEE_BNB["target_amount"]) and \
                         not (prm.FEE_FIRST and prm.FEE_SECOND) and (prm.FEE_MAKER or prm.FEE_TAKER):
 
-                    await self.fee_generate_bnb_request(balances, connection_analytic, default_balance)
+                    await self.fee_generate_bnb_request(balances, self.connection_db, default_balance)
 
                 balance_f = next(
                     (item for item in balances if item["asset"] == self.base_asset),
@@ -674,29 +671,24 @@ class StrategyBase(metaclass=ABCMeta):
                     total += Decimal(balance['free']) + Decimal(balance['locked'])
                     assets[balance['asset']] = float(total)
 
-                cursor = connection_analytic.cursor()
                 try:
-                    cursor.execute('BEGIN')
-                    cursor.execute(
+                    await self.connection_db.execute('BEGIN')
+                    await self.connection_db.execute(
                         'DELETE FROM t_asset WHERE timestamp<:timestamp',
                         {'timestamp': time.time() - max_use_update}
                     )
-
                     for key, value in assets_fw.items():
-                        refresh_t_asset(cursor, key, value, used=0)
-
+                        await refresh_t_asset(self.connection_db, key, value, used=0)
                     for key, value in assets.items():
-                        refresh_t_asset(cursor, key, value, used=0)
+                        await refresh_t_asset(self.connection_db, key, value, used=0)
+                    await self.connection_db.commit()
+                except aiosqlite.Error as err:
+                    self.message_log(f"Refresh t_asset: {err}")
+                    await self.connection_db.rollback()
 
-                    cursor.execute('COMMIT')
-                    cursor.close()
-                except sqlite3.Error as err:
-                    cursor.execute('ROLLBACK')
-                    cursor.close()
-                    self.message_log(f"Refresh t_asset: {err}", log_level=logging.WARNING)
             await asyncio.sleep(delay)
 
-    async def fee_generate_bnb_request(self, balances, connection_analytic, default_balance):
+    async def fee_generate_bnb_request(self, balances, connection_db, default_balance):
         bnb = next((item for item in balances if item["asset"] == 'BNB'), default_balance)['free']
         _price = await self.send_request(
             self.stub.fetch_symbol_price_ticker,
@@ -707,30 +699,28 @@ class StrategyBase(metaclass=ABCMeta):
         if (Decimal(bnb) * Decimal(price) <=
                 max(self.tcm.min_notional, Decimal(prm.FEE_BNB['target_amount']))):
             bot_id = f"{prm.EXCHANGE[prm.FEE_BNB['id_exchange']]}, {prm.FEE_BNB['symbol']}"
-            cursor = connection_analytic.cursor()
             try:
-                cursor.execute(
+                cursor = await connection_db.execute(
                     'SELECT max(message_id), text_in\
                      FROM t_control \
                      WHERE bot_id=:bot_id',
                     {'bot_id': bot_id}
                 )
-                row = cursor.fetchone()
-                cursor.close()
-            except sqlite3.Error as err:
-                cursor.close()
+                row = await cursor.fetchone()
+                await cursor.close()
+            except aiosqlite.Error as err:
                 row = None
-                print(f"SELECT from t_control: {err}")
+                self.message_log(f"SELECT from t_control: {err}")
 
             if row and (row[0] is None or prm.FEE_BNB['email'] not in row[1]):
                 msg = json.dumps(['BNB_request', prm.FEE_BNB])
                 try:
-                    connection_analytic.execute(
+                    await connection_db.execute(
                         'insert into t_control values(?,?,?,?)',
                         ((row[0] or 0) + 1, msg, bot_id, None)
                     )
-                    connection_analytic.commit()
-                except sqlite3.Error as err:
+                    await connection_db.commit()
+                except aiosqlite.Error as err:
                     self.message_log(f"INSERT into t_control: {err}", log_level=logging.ERROR)
                 else:
                     self.message_log(f"BNB request was generated from {bot_id} to {prm.FEE_BNB['email']}",
@@ -779,7 +769,7 @@ class StrategyBase(metaclass=ABCMeta):
 
             if prm.LOGGING:
                 print(f"Cancelling {len(tasks)} outstanding tasks")
-            self.stop()
+            await self.stop()
 
     async def fetch_order(self, _id: int, _client_order_id: str = None, _filled_update_call=False):
         try:
@@ -1776,13 +1766,13 @@ class StrategyBase(metaclass=ABCMeta):
                     #
                     await self.restore_strategy_state(strategy_state=last_state, restore=False)
                     #
-                    self.init(check_funds=False)
+                    await self.init(check_funds=False)
                 else:
                     restore_state = False
 
             if not restore_state:
                 if prm.MODE in ('T', 'TC'):
-                    self.init()
+                    await self.init()
                     await asyncio.to_thread(
                         input,
                         'Press Enter for Start or Ctrl-Z for Cancel\n'
@@ -1797,10 +1787,10 @@ class StrategyBase(metaclass=ABCMeta):
                     await self.wss_declare()
                     if self.state_file.exists():
                         self.restore_state_before_backtesting()
-                        self.init(check_funds=False)
+                        await self.init(check_funds=False)
                         self.start_collect = True
                     else:
-                        self.init()
+                        await self.init()
                         await self.start()
 
             if prm.MODE in ('T', 'TC'):
@@ -1837,7 +1827,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def stop(self):
+    async def stop(self):
         raise NotImplementedError
 
     @abstractmethod
@@ -1897,7 +1887,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def init(self, **kwargs):
+    async def init(self, **kwargs):
         raise NotImplementedError
 
     @abstractmethod

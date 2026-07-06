@@ -1,3 +1,11 @@
+## 3.1.8 - 2026-07-06
+✨ feat(__init__.py): Update version to 3.1.8
+🔧 refactor(db_utils.py): Convert to aiosqlite and improve database operations
+💰 feat(funds_rate_exporter.py): Add support for aiosqlite and improve database operations
+📁 chore(martin_binance.py): Update configuration loading and accounts management
+🔧 refactor(strategy_base.py): Improve `refresh_t_asset` and database operations for better performance
+🔧 refactor(executor.py): Convert to aiosqlite and improve database handling
+
 ## 3.1.7 - 2026-06-17
 ⬆️ feat(requirements.txt): upgrade package versions for compatibility
 ⬆️ feat(pyproject.toml): synchronize package versions with requirements
@@ -12,7 +20,7 @@
 🔧 fix(executor.py): update `self.message_log` call for logging level  
 🔧 fix(strategy_base.py): update `self.message_log` call for logging level  
 🔧 refactor(executor.py): clean up `await self.send_request` formatting  
-✨ feat(telegram_proxy/tlg_client.py): modify `connect` method to accept `send_init_message` parameter  
+✨ feat(telegram_proxy/tlg_client.py): modify `connect` method to accept `send_init_message` parameter
 
 ## 3.1.4post2 - 2026-04-28
 ✨ fix(executor.py): call `raise_keyboard_interrupt` without `self`  

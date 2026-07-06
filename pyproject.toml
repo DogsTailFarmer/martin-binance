@@ -43,7 +43,9 @@ dependencies = [
     "shortuuid~=1.0.13",
     "toml~=0.10.2",
     "tqdm==4.68.3",
-    "ujson==5.12.1"
+    "ujson==5.12.1",
+    "aiohttp==3.14.1",
+    "aiosqlite==0.22.1",
 ]
 
 [tool.flit.module]
