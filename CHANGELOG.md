@@ -1,3 +1,9 @@
+## 3.1.8post01 - 2026-07-06
+✨ feat(__init__.py): Update version to 3.1.8post01
+🔧 refactor(db_utils.py): Update SQLite error handling syntax
+🔧 refactor(strategy_base.py): Update version to 3.1.8
+✨ feat(funds_rate_exporter.py): Improve code formatting and readability
+
 ## 3.1.8 - 2026-07-06
 ✨ feat(__init__.py): Update version to 3.1.8
 🔧 refactor(db_utils.py): Convert to aiosqlite and improve database operations

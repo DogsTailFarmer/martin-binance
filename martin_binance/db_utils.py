@@ -30,8 +30,8 @@ async def db_management(exchange) -> None:
         # Compliance check t_exchange and EXCHANGE() = exchange() from ms_cfg.toml
         try:
             cursor = await db_connect.execute("SELECT id_exchange, name FROM t_exchange")
-        except SqliteError.Error as err:
-            logger.error(f"SELECT from t_exchange: {err}")
+        except SqliteError as ex:
+            logger.error(f"SELECT from t_exchange: {ex}")
         else:
             rows = await cursor.fetchall()
             row_n = len(rows)
@@ -40,8 +40,8 @@ async def db_management(exchange) -> None:
                     logger.info(f"save_to_db: Add exchange {i}, {exch}")
                     try:
                         await db_connect.execute("INSERT into t_exchange values(?,?)", (i, exch))
-                    except SqliteError.Error as err:
-                        logger.error(f"INSERT into t_exchange: {err}")
+                    except SqliteError as ex:
+                        logger.error(f"INSERT into t_exchange: {ex}")
                     else:
                         await db_connect.commit()
 
@@ -123,4 +123,3 @@ async def save_to_db(queue_to_db) -> None:
                     await db_connect.commit()
 
             queue_to_db.task_done()
-

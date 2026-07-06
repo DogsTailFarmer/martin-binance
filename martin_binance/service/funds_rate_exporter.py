@@ -106,6 +106,8 @@ ADAPTIVE_TRADE_CONDITION = Gauge("margin_adaptive_trade_condition", "adaptive_tr
 KB = Gauge("margin_kb", "bollinger band k bottom", ['exchange', 'pair'])
 KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
 '''
+
+
 # endregion
 
 async def init():
@@ -114,9 +116,11 @@ async def init():
     sql_conn = await aiosqlite.connect(str(DB_FILE))
     start_http_server(PORT, addr='::')
 
+
 async def close():
     await session.close()
     await sql_conn.close()
+
 
 async def set_active():
     try:
@@ -124,6 +128,7 @@ async def set_active():
         await sql_conn.commit()
     except aiosqlite.Error as ex:
         print(f"Update t_funds failed: {ex}")
+
 
 async def get_rate(_currency_rate, tries=5):
     buffer_rate = {}
@@ -145,13 +150,14 @@ async def get_rate(_currency_rate, tries=5):
                             pass
                         buffer_rate[_currency] = price
                         break
-                    elif response.status == 429:
+                    if response.status == 429:
                         if i >= tries:
                             break
                     else:
                         break
         _currency_rate[currency] = price
     return _currency_rate
+
 
 async def db_handler(_currency_rate, currency_rate_last_time):
     async with sql_conn.cursor() as cursor:
@@ -221,7 +227,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                  WHERE id_exchange=:id_exchange\
                  AND f_currency=:f_currency\
                  AND s_currency=:s_currency',
-                 {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
+                {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
             )
             status_alarm = await cursor.fetchone()
             alarm = 0
@@ -238,7 +244,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                  AND f_currency=:f_currency\
                  AND s_currency=:s_currency\
                  ORDER BY id DESC LIMIT 1',
-                 {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
+                {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
             )
             if last_rate_row := await cursor.fetchone():
                 last_rate = float(last_rate_row[0])
@@ -263,7 +269,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                  AND f_currency=:f_currency\
                  AND s_currency=:s_currency\
                  AND cycle_buy = 1',
-                 {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
+                {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
             )
             cycle_buy_row = await cursor.fetchone()
             cycle_buy_count = int(cycle_buy_row[0]) if cycle_buy_row[0] else 0
@@ -274,7 +280,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                  AND f_currency=:f_currency\
                  AND s_currency=:s_currency\
                  AND cycle_buy = 0',
-                 {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
+                {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
             )
             cycle_sell_row = await cursor.fetchone()
             cycle_sell_count = int(cycle_sell_row[0]) if cycle_sell_row[0] else 0
@@ -290,7 +296,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                  AND s_currency=:s_currency\
                  AND cycle_buy = 1\
                  AND active = 0',
-                 {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
+                {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
             )
             cycle_buy_row = await cursor.fetchone()
             cycle_buy_interest = float(cycle_buy_row[0]) if cycle_buy_row[0] else 0.0
@@ -304,7 +310,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                  AND s_currency=:s_currency\
                  AND cycle_buy = 0\
                  AND active = 0',
-                 {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
+                {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
             )
             cycle_sell_row = await cursor.fetchone()
             cycle_sell_interest = float(cycle_sell_row[0]) if cycle_sell_row[0] else 0.0
@@ -323,7 +329,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                  AND f_currency=:f_currency\
                  AND s_currency=:s_currency\
                  ORDER BY id DESC LIMIT 1',
-                 {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
+                {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
             )
             if balance_row := await cursor.fetchone():
                 f_balance = balance_row[0]
@@ -348,6 +354,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                     BALANCE_USD.labels(names.get(asset[1]), asset[1], asset[2], VPS_NAME).set(usd_amount)
 
         return currency_rate_last_time
+
 
 async def main_loop():
     global CURRENCY_RATE_LAST_TIME
@@ -375,12 +382,14 @@ async def main_loop():
     except (KeyboardInterrupt, asyncio.exceptions.CancelledError):
         pass  # Not error
 
+
 async def main():
     await init()
     try:
         await main_loop()
     finally:
         await close()
+
 
 if __name__ == '__main__':
     asyncio.run(main())
