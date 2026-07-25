@@ -4,7 +4,7 @@ martin-binance strategy parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.4"
+__version__ = "3.1.9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -21,8 +21,9 @@ __all__ = [
     'BB_CANDLE_SIZE_IN_MINUTES', 'BB_NUMBER_OF_CANDLES', 'KBB', 'LINEAR_GRID_K', 'ADX_CANDLE_SIZE_IN_MINUTES',
     'ADX_NUMBER_OF_CANDLES', 'ADX_PERIOD', 'ADX_THRESHOLD', 'ADX_PRICE_THRESHOLD', 'REVERSE', 'REVERSE_TARGET_AMOUNT',
     'REVERSE_INIT_AMOUNT', 'REVERSE_STOP', 'HEAD_VERSION', 'LOAD_LAST_STATE', 'LAST_STATE_FILE', 'VPS_NAME', 'PARAMS',
-    'TELEGRAM_CONFIG', 'MODE', 'XTIME', 'SAVE_DS', 'SAVE_PERIOD', 'LOGGING', 'SELF_OPTIMIZATION', 'N_TRIALS',
-    'SESSION_RESULT', 'TRADE_CONTROL', 'TC_ADX_DATA_LIMIT', 'TC_ADX_PERIOD', 'TC_DI_DIFF', 'TC_K', 'GRID_ONLY_EXIT'
+    'TLG_SERVICE', 'TELEGRAM_CONFIG', 'TLG_INLINE', 'MODE', 'XTIME', 'SAVE_DS', 'SAVE_PERIOD', 'LOGGING',
+    'SELF_OPTIMIZATION', 'N_TRIALS', 'SESSION_RESULT', 'TRADE_CONTROL', 'TC_ADX_DATA_LIMIT', 'TC_ADX_PERIOD',
+    'TC_DI_DIFF', 'TC_K', 'GRID_ONLY_EXIT'
 ]
 
 SYMBOL = str()

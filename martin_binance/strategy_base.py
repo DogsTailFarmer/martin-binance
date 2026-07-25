@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.8"
+__version__ = "3.1.9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -35,7 +35,6 @@ from tqdm import tqdm
 
 from exchanges_wrapper import martin as mr, Status, GRPCError
 
-import martin_binance.params as prm
 from martin_binance import LAST_STATE_PATH, BACKTEST_PATH, HEARTBEAT, KLINES_INIT, EQUAL_STR, ORDER_TIMEOUT
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 from martin_binance.backtest.optimizer import OPTIMIZER, PARAMS_FLOAT
@@ -44,17 +43,17 @@ from martin_binance.lib import (
     Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, any2str, PrivateTrade, Order,
     convert_from_minute, OrderUpdate, load_file, load_last_state, Klines, tasks_manage, tasks_cancel,
 )
-from martin_binance.params import GRID_ONLY, LOG_LEVEL
+from martin_binance.params import *  # NOSONAR python:S2208
 from martin_binance.telegram_proxy.tlg_client import TlgClient
 
-if prm.MODE == 'S':
+if MODE == 'S':
     logger = logging.getLogger('logger_S')
 else:
     logger = logging.getLogger(f'logger.{__name__}')
 
 color_init()
 
-RATE_LIMITER = HEARTBEAT * (60 if prm.GRID_ONLY else 10)
+RATE_LIMITER = HEARTBEAT * (60 if GRID_ONLY else 10)
 KLINES_LIM = 50  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and par.LOAD_LAST_STATE = 0
 TRADES_LIST_LIMIT = 50
@@ -67,10 +66,10 @@ MS_ORDERS = 'ms.orders'
 O_DEC = Decimal()
 SAVE_TRADE_QUEUE = asyncio.Queue()
 
-TLG_CHAT_ID = prm.TELEGRAM_CONFIG['chat_id']
-TLG_DELAY = prm.TELEGRAM_CONFIG['heartbeat']
-for bot in prm.TELEGRAM_CONFIG['Bots']:
-    if prm.ID_EXCHANGE in bot['id_exchange']:
+TLG_CHAT_ID = TELEGRAM_CONFIG['chat_id']
+TLG_DELAY = TELEGRAM_CONFIG['heartbeat']
+for bot in TELEGRAM_CONFIG['Bots']:
+    if ID_EXCHANGE in bot['id_exchange']:
         TLG_TOKEN = bot['token']
         break
 
@@ -81,11 +80,11 @@ async def refresh_t_asset(connection_db, key, value, used):
          WHERE id_exchange=:id_exchange\
          AND currency=:currency\
          AND use=:use',
-        {'id_exchange': prm.ID_EXCHANGE, 'currency': key, 'use': used}
+        {'id_exchange': ID_EXCHANGE, 'currency': key, 'use': used}
     )
     await connection_db.execute(
         'INSERT into t_asset values(?, ?, ?, ?, ?)',
-        (prm.ID_EXCHANGE, key, float(value), used, int(time.time()))
+        (ID_EXCHANGE, key, float(value), used, int(time.time()))
     )
 
 
@@ -138,7 +137,7 @@ class StrategyBase(metaclass=ABCMeta):
         self.grid_buy = None
         self.grid_sell = None
         #
-        if prm.MODE in ('TC', 'S'):
+        if MODE in ('TC', 'S'):
             self.reset_backtest_vars()
         #
         self.cycle_time = None  # + Cycle start time
@@ -248,7 +247,7 @@ class StrategyBase(metaclass=ABCMeta):
         return last
 
     async def transfer_to(self, symbol: str, amount: str, email=None):  # NOSONAR S7503
-        if prm.MODE in ('T', 'TC'):
+        if MODE in ('T', 'TC'):
             if email:
                 tasks_manage(self.tasks, self.transfer2sub(email, symbol, amount))
             else:
@@ -263,25 +262,25 @@ class StrategyBase(metaclass=ABCMeta):
         return self.order_id
 
     def message_log(self, msg: str, log_level=logging.INFO, tlg=False, color=Style.WHITE, tlg_inline=False) -> None:
-        if prm.LOGGING:
+        if LOGGING:
             if tlg and color == Style.WHITE:
                 color = Style.B_WHITE
             if log_level >= logging.ERROR:
                 tlg = True
                 color = Style.B_RED
             color_msg = color + msg + Style.RESET if color else msg
-            if log_level >= prm.LOG_LEVEL:
-                if prm.MODE in ('T', 'TC'):
+            if log_level >= LOG_LEVEL:
+                if MODE in ('T', 'TC'):
                     print(f"{datetime.now().strftime('%d/%m %H:%M:%S')} {color_msg}")
                 else:
                     tqdm.write(f"{datetime.fromtimestamp(self.get_time()).strftime('%H:%M:%S.%f')[:-3]} {color_msg}")
-            if prm.MODE in ('T', 'TC'):
+            if MODE in ('T', 'TC'):
                 logger.log(log_level, msg)
                 self.status_time = self.get_time()
                 if tlg and self.tlg_client:
                     tasks_manage(
                         self.tasks,
-                        self.tlg_client.post_message(msg, inline_buttons=tlg_inline and prm.TLG_INLINE)
+                        self.tlg_client.post_message(msg, inline_buttons=tlg_inline and TLG_INLINE)
                     )
         elif log_level >= logging.ERROR:
             logger.log(log_level, msg)
@@ -323,22 +322,22 @@ class StrategyBase(metaclass=ABCMeta):
         while True:
             await asyncio.sleep(delay)
             try:
-                if self.operational_status and self.start_collect and time.time() - ts > prm.SAVE_PERIOD:
+                if self.operational_status and self.start_collect and time.time() - ts > SAVE_PERIOD:
                     self.start_collect = False
                     self.session_data_handler()
                     self.reset_backtest_vars()
-                    if prm.SELF_OPTIMIZATION and self.command != 'stopped':
+                    if SELF_OPTIMIZATION and self.command != 'stopped':
                         _ts = datetime.now(timezone.utc).replace(tzinfo=None)
                         storage_name = Path(self.session_root, "_study.db")
                         try:
                             self.backtest_process = await asyncio.create_subprocess_exec(
                                 OPTIMIZER,
                                 f"{self.exchange}_{self.symbol}",
-                                Path(self.session_root, Path(prm.PARAMS).name),
-                                str(prm.N_TRIALS),
+                                Path(self.session_root, Path(PARAMS).name),
+                                str(N_TRIALS),
                                 f"sqlite:///{storage_name}",
                                 json.dumps(prm_best or _prm_best),
-                                f"{prm.ID_EXCHANGE}_{prm.SYMBOL}_S.log",
+                                f"{ID_EXCHANGE}_{SYMBOL}_S.log",
                                 stdout=asyncio.subprocess.PIPE
                             )
                             stdout, _ = await self.backtest_process.communicate()
@@ -365,16 +364,16 @@ class StrategyBase(metaclass=ABCMeta):
                                     tlg=LOG_LEVEL == logging.DEBUG
                                 )
                                 for key, value in prm_best.items():
-                                    self.message_log(f"{key}: {getattr(prm, key)} -> {value}")
-                                    setattr(
-                                        prm, key,
-                                        value if isinstance(value, int) or key in PARAMS_FLOAT else Decimal(f"{value}")
-                                    )
+                                    self.message_log(f"{key}: {globals().get(key)} -> {value}")
+                                    if isinstance(value, int) or key in PARAMS_FLOAT:
+                                        globals()[key] = value
+                                    else:
+                                        globals()[key] = Decimal(f"{value}")
                             else:
                                 continue
                         # noinspection PyTypeChecker
                         l_m = str(
-                            datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=prm.SAVE_PERIOD)
+                            datetime.now(timezone.utc).replace(tzinfo=None) - _ts + timedelta(seconds=SAVE_PERIOD)
                         ).rsplit('.')[0]
                         self.message_log(
                             f"Strategy parameters are optimal now. Optimization cycle duration {l_m}",
@@ -457,7 +456,7 @@ class StrategyBase(metaclass=ABCMeta):
                 self.candles[f"pylist_{i.value}"].clear()
             self.candles[f"writer_{i.value}"].close()
 
-        if prm.SAVE_DS:
+        if SAVE_DS:
             # Save session detail for analytics
             session_data = Path(self.session_root, "snapshot")
             session_data.mkdir(parents=True, exist_ok=True)
@@ -487,19 +486,19 @@ class StrategyBase(metaclass=ABCMeta):
 
     async def back_test_handler(self):
         # Test result handler
-        s_profit = prm.SESSION_RESULT['profit'] = f"{self.get_sum_profit()}"
-        s_free = prm.SESSION_RESULT['free'] = f"{self.get_free_assets(mode='free', backtest=True)[2]}"
-        if prm.LOGGING:
+        s_profit = SESSION_RESULT['profit'] = f"{self.get_sum_profit()}"
+        s_free = SESSION_RESULT['free'] = f"{self.get_free_assets(mode='free', backtest=True)[2]}"
+        if LOGGING:
             print(f"Session profit: {s_profit}, free: {s_free}, total: {float(s_profit) + float(s_free)}")
             test_time = datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time
             original_time = (self.backtest['ticker_index_last'] - self.backtest['ticker_index_first']) / 1000
             original_time = timedelta(seconds=original_time)
             print(f"Original time: {original_time}, test time: {test_time}, x = {original_time / test_time:.2f}")
-        if prm.SAVE_DS:
+        if SAVE_DS:
             self._back_test_handler_ext()
 
         self.session.channel.close()
-        await tasks_cancel(self.tasks, name='wss', log_out=prm.LOGGING)
+        await tasks_cancel(self.tasks, name='wss', log_out=LOGGING)
         asyncio.get_event_loop().stop()
 
     def _back_test_handler_ext(self):
@@ -517,8 +516,8 @@ class StrategyBase(metaclass=ABCMeta):
         ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
         df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
         df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
-        copy(prm.PARAMS, Path(session_path, Path(prm.PARAMS).name))
-        if prm.LOGGING:
+        copy(PARAMS, Path(session_path, Path(PARAMS).name))
+        if LOGGING:
             print(f"Session data saved to: {session_path}")
 
     def restore_state_before_backtesting(self):
@@ -543,13 +542,13 @@ class StrategyBase(metaclass=ABCMeta):
         self.scheduler_start()
         while True:
             try:
-                if prm.MODE in ('T', 'TC'):
+                if MODE in ('T', 'TC'):
                     last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
                     # print(f"heartbeat.last_state: {last_state}")
-                    if prm.LAST_STATE_FILE.exists():
-                        prm.LAST_STATE_FILE.replace(prm.LAST_STATE_FILE.with_suffix('.prev'))
-                    with prm.LAST_STATE_FILE.open(mode='w') as outfile:
+                    if LAST_STATE_FILE.exists():
+                        LAST_STATE_FILE.replace(LAST_STATE_FILE.with_suffix('.prev'))
+                    with LAST_STATE_FILE.open(mode='w') as outfile:
                         # noinspection PyTypeChecker
                         json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     #
@@ -627,8 +626,8 @@ class StrategyBase(metaclass=ABCMeta):
                 # Refresh actual balance
                 default_balance = {'free': '0.0', 'locked': '0.0'}
 
-                if self.exchange == 'binance' and Decimal(prm.FEE_BNB["target_amount"]) and \
-                        not (prm.FEE_FIRST and prm.FEE_SECOND) and (prm.FEE_MAKER or prm.FEE_TAKER):
+                if self.exchange == 'binance' and Decimal(FEE_BNB["target_amount"]) and \
+                        not (FEE_FIRST and FEE_SECOND) and (FEE_MAKER or FEE_TAKER):
 
                     await self.fee_generate_bnb_request(balances, self.connection_db, default_balance)
 
@@ -694,12 +693,12 @@ class StrategyBase(metaclass=ABCMeta):
         _price = await self.send_request(
             self.stub.fetch_symbol_price_ticker,
             mr.MarketRequest,
-            symbol=prm.FEE_BNB['symbol'].replace('/', '')
+            symbol=FEE_BNB['symbol'].replace('/', '')
         )
         price = _price.to_pydict()['price']
         if (Decimal(bnb) * Decimal(price) <=
-                max(self.tcm.min_notional, Decimal(prm.FEE_BNB['target_amount']))):
-            bot_id = f"{prm.EXCHANGE[prm.FEE_BNB['id_exchange']]}, {prm.FEE_BNB['symbol']}"
+                max(self.tcm.min_notional, Decimal(FEE_BNB['target_amount']))):
+            bot_id = f"{EXCHANGE[FEE_BNB['id_exchange']]}, {FEE_BNB['symbol']}"
             try:
                 cursor = await connection_db.execute(
                     'SELECT max(message_id), text_in\
@@ -713,8 +712,8 @@ class StrategyBase(metaclass=ABCMeta):
                 row = None
                 self.message_log(f"SELECT from t_control: {err}")
 
-            if row and (row[0] is None or prm.FEE_BNB['email'] not in row[1]):
-                msg = json.dumps(['BNB_request', prm.FEE_BNB])
+            if row and (row[0] is None or FEE_BNB['email'] not in row[1]):
+                msg = json.dumps(['BNB_request', FEE_BNB])
                 try:
                     await connection_db.execute(
                         'insert into t_control values(?,?,?,?)',
@@ -724,7 +723,7 @@ class StrategyBase(metaclass=ABCMeta):
                 except aiosqlite.Error as err:
                     self.message_log(f"INSERT into t_control: {err}", log_level=logging.ERROR)
                 else:
-                    self.message_log(f"BNB request was generated from {bot_id} to {prm.FEE_BNB['email']}",
+                    self.message_log(f"BNB request was generated from {bot_id} to {FEE_BNB['email']}",
                                      color=Style.BLUE)
 
     @staticmethod
@@ -739,22 +738,22 @@ class StrategyBase(metaclass=ABCMeta):
             self.backtest_process.terminate()
             self.message_log("Backtest process was terminated", color=Style.GREEN)
         await asyncio.sleep(HEARTBEAT)
-        if prm.MODE in ('T', 'TC'):
+        if MODE in ('T', 'TC'):
             try:
                 await self.send_request(self.stub.stop_stream, mr.MarketRequest, symbol=self.symbol)
             except Exception as ex:
                 self.message_log(f"ask_exit: {ex}", log_level=logging.WARNING)
 
             self.session.channel.close()
-            await tasks_cancel(self.tasks, name='wss', log_out=prm.LOGGING)
+            await tasks_cancel(self.tasks, name='wss', log_out=LOGGING)
 
-            if prm.MODE == 'TC' and self.start_collect:
+            if MODE == 'TC' and self.start_collect:
                 # Save stream data for backtesting
                 self.start_collect = False
                 self.session_data_handler()
 
-            if prm.LAST_STATE_FILE.exists():
-                print(f"Current state saved into {prm.LAST_STATE_FILE}")
+            if LAST_STATE_FILE.exists():
+                print(f"Current state saved into {LAST_STATE_FILE}")
 
             if self.tlg_client:
                 await self.tlg_client.close()
@@ -768,7 +767,7 @@ class StrategyBase(metaclass=ABCMeta):
             except TimeoutError:
                 self.message_log("Task cancel timed out")
 
-            if prm.LOGGING:
+            if LOGGING:
                 print(f"Cancelling {len(tasks)} outstanding tasks")
             await self.stop()
 
@@ -795,7 +794,7 @@ class StrategyBase(metaclass=ABCMeta):
         return {}
 
     async def on_funds_update(self):
-        if prm.MODE in ('T', 'TC'):
+        if MODE in ('T', 'TC'):
             try:
                 async for _funds in self.for_request(
                         self.stub.on_funds_update, mr.OnFundsUpdateRequest,
@@ -842,7 +841,7 @@ class StrategyBase(metaclass=ABCMeta):
                     delay = index - self.get_time()
 
                 if delay > 0:
-                    delay /= prm.XTIME
+                    delay /= XTIME
                     await asyncio.sleep(delay)
                 yield orjson.loads(row['row'])
 
@@ -878,7 +877,7 @@ class StrategyBase(metaclass=ABCMeta):
     async def cancel_order(self, order_id: int, cancel_all=False):
         _fetch_order = False
         try:
-            if prm.MODE in ('T', 'TC'):
+            if MODE in ('T', 'TC'):
                 if cancel_all:
                     if order_id not in self.bulk_orders_cancel:
                         res = await self.send_request(
@@ -911,33 +910,33 @@ class StrategyBase(metaclass=ABCMeta):
             self.message_log(f"Exception on cancel order call for {order_id}: {ex}", log_level=logging.ERROR)
             self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
         else:
-            # print(f"cancel_order_call.result: {result}")
-            # Remove from orders lists
-            if result and result.get('status') == 'CANCELED':
-                await self.cancel_order_handler(order_id, cancel_all)
+            if result:
+                if float(result.get('executedQty', '0')):
+                    self.message_log(f"Order {order_id} was (partially) filled")
+                    _fetch_order = True
+                elif result.get('status') == 'CANCELED':
+                    await self.cancel_order_handler(order_id, cancel_all)
             else:
                 self.message_log(f"Cancel order {order_id}: Warning, not result getting")
                 _fetch_order = True
         finally:
-            if prm.MODE in ('T', 'TC') and _fetch_order:
+            if MODE in ('T', 'TC') and _fetch_order:
                 res = await self.fetch_order(order_id, _filled_update_call=True)
+                await asyncio.sleep(HEARTBEAT)
                 if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                     await self.cancel_order_handler(order_id, cancel_all)
-                elif res.get('status') == 'NEW':
-                    self.message_log(
-                        f"Cancel order {order_id}: Not deleted, I'll try later",
-                        log_level=logging.WARNING
-                    )
+                elif res.get('status') == 'FILLED':
+                    await self.on_cancel_order_error_string(order_id, "Not deleted, it was FILLED")
                 else:
-                    await self.on_cancel_order_error_string(order_id, 'order not canceled')
+                    await self.on_cancel_order_error_string(order_id, "Not deleted, I'll try later")
 
     async def cancel_order_handler(self, _id, cancel_all):
         self.message_log(f"Cancel order {_id} success", color=Style.GREEN)
         self.remove_from_orders_lists([_id])
         await self.on_cancel_order_success(_id, cancel_all=cancel_all)
-        if prm.MODE == 'TC' and prm.SAVE_DS and self.start_collect:
+        if MODE == 'TC' and SAVE_DS and self.start_collect:
             self.open_orders_snapshot()
-        elif prm.MODE == 'S':
+        elif MODE == 'S':
             await self.on_funds_update()
 
     async def transfer2master(self, symbol: str, amount: str):
@@ -983,7 +982,7 @@ class StrategyBase(metaclass=ABCMeta):
 
     async def buffered_funds(self, print_info: bool = True):
         try:
-            if prm.MODE in ('T', 'TC'):
+            if MODE in ('T', 'TC'):
                 res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
                 balances = list(map(json.loads, res.items))
             else:
@@ -1004,7 +1003,7 @@ class StrategyBase(metaclass=ABCMeta):
             funds = {self.base_asset: {'free': balance_f['free'], 'locked': balance_f['locked']},
                      self.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
             self.funds = funds
-            if print_info and prm.LOGGING:
+            if print_info and LOGGING:
                 print(EQUAL_STR)
                 print(f"Base asset balance: {balance_f}")
                 print(f"Quote asset balance: {balance_s}")
@@ -1028,7 +1027,7 @@ class StrategyBase(metaclass=ABCMeta):
             else:
                 self.info_symbol = _exchange_info_symbol.to_pydict()
                 self.tcm = TradingCapabilityManager(self.info_symbol)
-                if prm.MODE == 'S':
+                if MODE == 'S':
                     break
             await asyncio.sleep(600)
 
@@ -1037,13 +1036,13 @@ class StrategyBase(metaclass=ABCMeta):
         klines = {}
         klines_from_file = {}
         kline = []
-        if prm.MODE == 'S':
+        if MODE == 'S':
             async with aiofiles.open(Path(self.session_root, "raw/klines.json"), "r") as file:
                 klines_from_file = await file.read()
                 klines_from_file = json.loads(klines_from_file)
 
         for i in KLINES_INIT:
-            if prm.MODE in ('T', 'TC'):
+            if MODE in ('T', 'TC'):
                 try:
                     res = await self.send_request(
                         self.stub.fetch_klines, mr.FetchKlinesRequest,
@@ -1056,7 +1055,7 @@ class StrategyBase(metaclass=ABCMeta):
                     raise UserWarning
                 if res:
                     kline = list(map(json.loads, res.items))
-                    if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
+                    if MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         self.klines[i.value] = kline
             else:
                 kline = klines_from_file.get(i.value, [])
@@ -1075,14 +1074,14 @@ class StrategyBase(metaclass=ABCMeta):
 
     async def on_klines_update(self, _klines: dict[str, Klines]):
         _intervals = list(_klines.keys())
-        if prm.MODE in ('T', 'TC'):
+        if MODE in ('T', 'TC'):
             try:
                 async for res in self.for_request(self.stub.on_klines_update, mr.FetchKlinesRequest,
                                                   symbol=self.symbol,
                                                   interval=json.dumps(_intervals)):
                     candle = json.loads(res.candle)
                     _klines.get(res.interval).refresh(candle)
-                    if prm.MODE == 'TC' and (self.start_collect or self.start_collect is None):
+                    if MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         if len(self.candles[f"pylist_{res.interval}"]) > PYARROW_BATCH_BUFFER_SIZE:
                             # noinspection PyArgumentList
                             self.candles[f"writer_{res.interval}"].write_batch(
@@ -1107,7 +1106,7 @@ class StrategyBase(metaclass=ABCMeta):
         _fetch_order = False
         msg = None
         try:
-            if prm.MODE in ('T', 'TC'):
+            if MODE in ('T', 'TC'):
                 ts = time.time()
                 res = await self.send_request(
                     self.stub.create_limit_order, mr.CreateLimitOrderRequest,
@@ -1120,7 +1119,7 @@ class StrategyBase(metaclass=ABCMeta):
                 result = res.to_pydict()
                 self.delay_ordering_s = time.time() - ts
             else:
-                await asyncio.sleep(self.delay_ordering_s / prm.XTIME)
+                await asyncio.sleep(self.delay_ordering_s / XTIME)
                 result = self.account.create_order(
                     symbol=self.symbol,
                     client_order_id=str(_id),
@@ -1146,7 +1145,7 @@ class StrategyBase(metaclass=ABCMeta):
                 _fetch_order = True
                 msg = f"Creating order {_id}: no result getting"
         finally:
-            if prm.MODE in ('T', 'TC') and _fetch_order:
+            if MODE in ('T', 'TC') and _fetch_order:
                 await asyncio.sleep(HEARTBEAT)
                 await self.fetch_created_order(_id, msg)
 
@@ -1168,9 +1167,9 @@ class StrategyBase(metaclass=ABCMeta):
 
             await self.on_place_order_success(_id, order)
 
-            if prm.MODE == 'S':
+            if MODE == 'S':
                 await self.on_funds_update()
-            elif prm.MODE == 'TC' and self.start_collect:
+            elif MODE == 'TC' and self.start_collect:
                 executed_qty = Decimal(result['executedQty'])
                 cummulative_quote_qty = Decimal(result['cummulativeQuoteQty'])
                 if executed_qty > 0 and self.s_ticker['pylist']:
@@ -1179,7 +1178,7 @@ class StrategyBase(metaclass=ABCMeta):
                     s_tic_row['lastPrice'] = str(cummulative_quote_qty / executed_qty)
                     s_tic['row'] = orjson.dumps(s_tic_row)
                     self.s_ticker['pylist'].append(s_tic)
-                if prm.SAVE_DS:
+                if SAVE_DS:
                     self.open_orders_snapshot()
 
     async def on_balance_update(self):
@@ -1257,7 +1256,7 @@ class StrategyBase(metaclass=ABCMeta):
 
         if self.trade_not_exist(ed["order_id"], ed["trade_id"]):
             await self._on_order_update_handler_ext(ed)
-            if prm.MODE in ('T', 'TC'):
+            if MODE in ('T', 'TC'):
                 await SAVE_TRADE_QUEUE.put(
                     ["TRADE" if ed['is_maker_side'] else "TRADE_BY_MARKET",
                      ed["transaction_time"],
@@ -1273,7 +1272,7 @@ class StrategyBase(metaclass=ABCMeta):
                      ed["last_executed_price"]]
                 )
 
-        if prm.MODE == 'TC' and self.start_collect and self.s_ticker['pylist']:
+        if MODE == 'TC' and self.start_collect and self.s_ticker['pylist']:
             s_tic = self.s_ticker['pylist'].pop()
             s_tic_row = orjson.loads(s_tic['row'])
             s_tic_row['lastPrice'] = ed['last_executed_price']
@@ -1281,7 +1280,7 @@ class StrategyBase(metaclass=ABCMeta):
                 s_tic_row['Qty'] = ed['last_executed_quantity']
             s_tic['row'] = orjson.dumps(s_tic_row)
             self.s_ticker['pylist'].append(s_tic)
-            if prm.SAVE_DS:
+            if SAVE_DS:
                 self.open_orders_snapshot()
 
     async def _on_order_update_handler_ext(self, ed):
@@ -1309,7 +1308,7 @@ class StrategyBase(metaclass=ABCMeta):
         row = {'openPrice': '26923.97000000', 'lastPrice': '26882.51000000', 'closeTime': 1684572464013}
         :return:
         """
-        if prm.MODE in ('T', 'TC'):
+        if MODE in ('T', 'TC'):
             try:
                 async for _ticker in self.for_request(
                         self.stub.on_ticker_update,
@@ -1319,7 +1318,7 @@ class StrategyBase(metaclass=ABCMeta):
                     self.ticker = _ticker.to_pydict()
                     await self.on_new_ticker(Ticker(self.ticker))
                     #
-                    if prm.MODE == 'TC' and self.start_collect:
+                    if MODE == 'TC' and self.start_collect:
                         ts = int(time.time() * 1000)
                         self.ticker |= {'delay': self.delay_ordering_s, 'Qty': "0"}
                         if len(self.s_ticker['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
@@ -1329,7 +1328,7 @@ class StrategyBase(metaclass=ABCMeta):
                             )
                             self.s_ticker['pylist'].clear()
                         self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(self.ticker)})
-                        if prm.SAVE_DS:
+                        if SAVE_DS:
                             self.open_orders_snapshot(ts=ts)
             except Exception as ex:
                 self.message_log(f"Exception on WSS, on_ticker_update loop closed: {ex}", log_level=logging.WARNING)
@@ -1338,7 +1337,7 @@ class StrategyBase(metaclass=ABCMeta):
             else:
                 self.message_log("WSS: on_ticker_update loop closed", log_level=logging.DEBUG)
         else:
-            if prm.LOGGING:
+            if LOGGING:
                 pbar = tqdm(total=self.backtest['ticker'].metadata.num_rows)
             self.s_mode_break = None
             async for row in self.loop_ds(self.backtest['ticker'], ticker=True):
@@ -1349,20 +1348,20 @@ class StrategyBase(metaclass=ABCMeta):
                 for _res in res:
                     await self.on_order_update_handler(_res)
                     await self.on_funds_update()
-                if prm.LOGGING:
+                if LOGGING:
                     # noinspection PyUnboundLocalVariable
                     pbar.update()
                 # noinspection PyUnreachableCode
                 if self.s_mode_break:
                     break
-            if prm.LOGGING:
+            if LOGGING:
                 pbar.close()
             self.message_log("Backtest *** ticker *** timeSeries ended")
             self.s_mode_break = True
             await self.back_test_handler()
 
     async def on_order_book_update(self):
-        if prm.MODE in ('T', 'TC'):
+        if MODE in ('T', 'TC'):
             try:
                 async for _order_book in self.for_request(
                         self.stub.on_order_book_update,
@@ -1371,7 +1370,7 @@ class StrategyBase(metaclass=ABCMeta):
                 ):
                     self.order_book = order_book_prepare(_order_book)
                     self.on_new_order_book(OrderBook(self.order_book))
-                    if prm.MODE == 'TC' and self.start_collect:
+                    if MODE == 'TC' and self.start_collect:
                         self.order_book['bids'] = self.order_book['bids'][:1]
                         self.order_book['asks'] = self.order_book['asks'][:1]
                         if len(self.s_order_book['pylist']) > PYARROW_BATCH_BUFFER_SIZE:
@@ -1425,7 +1424,7 @@ class StrategyBase(metaclass=ABCMeta):
                     self.message_log(
                         "Restore saved state after restart",
                         color=Style.GREEN,
-                        tlg=not prm.GRID_ONLY
+                        tlg=not GRID_ONLY
                     )
                     await self.restore_strategy_state(restore=True)
 
@@ -1446,7 +1445,7 @@ class StrategyBase(metaclass=ABCMeta):
                         if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                             await self.cancel_order_handler(_id, cancel_all=False)
 
-                if self.last_state and prm.MODE == 'TC':
+                if self.last_state and MODE == 'TC':
                     last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
                     with self.state_file.open(mode='w') as outfile:
@@ -1521,7 +1520,7 @@ class StrategyBase(metaclass=ABCMeta):
         await self.buffered_candle()
         tasks_manage(self.tasks, self.on_ticker_update(), name='wss')
         tasks_manage(self.tasks, self.on_order_book_update(), name='wss')
-        if prm.MODE in ('T', 'TC'):
+        if MODE in ('T', 'TC'):
             # User Stream
             tasks_manage(self.tasks, self.on_funds_update(), name='wss')
             tasks_manage(self.tasks, self.on_order_update(), name='wss')
@@ -1530,7 +1529,7 @@ class StrategyBase(metaclass=ABCMeta):
     async def wss_init(self, rerise=False):
         if self.client_id:
             self.message_log(f"Init WSS, client_id: {self.client_id}")
-            await tasks_cancel(self.tasks, name='wss-', log_out=prm.LOGGING)
+            await tasks_cancel(self.tasks, name='wss-', log_out=LOGGING)
             await asyncio.sleep(HEARTBEAT)
             try:
                 await self.wss_declare()
@@ -1577,10 +1576,10 @@ class StrategyBase(metaclass=ABCMeta):
         try:
             if self.session is None:
                 self.symbol = _symbol
-                if len(prm.EXCHANGE) > prm.ID_EXCHANGE:
-                    account_name = prm.EXCHANGE[prm.ID_EXCHANGE]
+                if len(EXCHANGE) > ID_EXCHANGE:
+                    account_name = EXCHANGE[ID_EXCHANGE]
                 else:
-                    print(f"ID_EXCHANGE = {prm.ID_EXCHANGE} not in list. See readme 'Add new exchange'")
+                    print(f"ID_EXCHANGE = {ID_EXCHANGE} not in list. See readme 'Add new exchange'")
                     raise SystemExit(1)
                 self.session = Trade(
                     account_name=account_name,
@@ -1592,13 +1591,13 @@ class StrategyBase(metaclass=ABCMeta):
                 self.update_vars(self.session)
                 # noinspection PyTypeChecker
                 send_request = self.session.send_request
-                if prm.LOGGING:
+                if LOGGING:
                     print(f"main.account_name: {account_name}")  # lgtm [py/clear-text-logging-sensitive-data]
                     print(f"main.exchange: {self.exchange}")
                     print(f"main.client_id: {self.client_id}")
                     print(f"main.srv_version: {self.session.client.srv_version}")
                 #
-                if prm.MODE in ('T', 'TC'):
+                if MODE in ('T', 'TC'):
                     # Check and Cancel ALL ACTIVE ORDER
                     try:
                         _active_orders = await send_request(
@@ -1614,10 +1613,10 @@ class StrategyBase(metaclass=ABCMeta):
                             print(f"Order: {order['orderId']}({order['clientOrderId']}), side: {order['side']},"
                                   f" amount: {order['origQty']}, price:{order['price']}, status: {order['status']}")
                     # Try load last strategy state from saved files
-                    last_state = load_last_state(prm.LAST_STATE_FILE)
+                    last_state = load_last_state(LAST_STATE_FILE)
                     restore_state = bool(last_state)
                     print(f"main.restore_state: {restore_state}")
-                    if CANCEL_ALL_ORDERS and active_orders and not prm.LOAD_LAST_STATE:
+                    if CANCEL_ALL_ORDERS and active_orders and not LOAD_LAST_STATE:
                         answer = await asyncio.to_thread(
                             input,
                             'Are you want cancel all active order for this pair? Y:\n'
@@ -1644,14 +1643,14 @@ class StrategyBase(metaclass=ABCMeta):
                 tasks_manage(self.tasks, self.get_exchange_info(send_request, _symbol))
                 while not self.info_symbol:
                     await asyncio.sleep(0.1)
-                if prm.LOGGING:
+                if LOGGING:
                     filters = self.info_symbol.get('filters')
                     for _filter in filters:
                         print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
                 # init Strategy class var
                 self.base_asset = self.info_symbol.get('baseAsset')
                 self.quote_asset = self.info_symbol.get('quoteAsset')
-                if prm.MODE in ('T', 'TC'):
+                if MODE in ('T', 'TC'):
                     # region Get and processing Order book
                     _order_book = await self.send_request(
                         self.stub.fetch_order_book,
@@ -1679,17 +1678,17 @@ class StrategyBase(metaclass=ABCMeta):
                     )
                     self.ticker = _ticker.to_pydict()
                 #
-                if prm.MODE in ('TC', 'S'):
+                if MODE in ('TC', 'S'):
                     self.session_root = Path(BACKTEST_PATH, f"{self.exchange}_{self.symbol}")
                     self.state_file = Path(self.session_root, "saved_state.json")
                     raw_path = Path(self.session_root, "raw")
-                    if prm.MODE == 'TC':
+                    if MODE == 'TC':
                         BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
                         rmtree(self.session_root, ignore_errors=True)
                         self.session_root.mkdir(parents=True, exist_ok=True)
                         raw_path.mkdir(parents=True, exist_ok=True)
                         #
-                        copy(prm.PARAMS, Path(self.session_root, Path(prm.PARAMS).name))
+                        copy(PARAMS, Path(self.session_root, Path(PARAMS).name))
                         self.parquet_declare(raw_path)
             #
             else:
@@ -1698,20 +1697,20 @@ class StrategyBase(metaclass=ABCMeta):
                 self.reset_vars()
                 self.reset_vars_ex()
             #
-            if prm.MODE == 'S':
-                self.account = backTestAccount(prm.SAVE_DS)
+            if MODE == 'S':
+                self.account = backTestAccount(SAVE_DS)
                 self.account.funds.base = {
                     'asset': self.base_asset,
-                    'free': prm.AMOUNT_FIRST,
+                    'free': AMOUNT_FIRST,
                     'locked': Decimal()
                 }
                 self.account.funds.quote = {
                     'asset': self.quote_asset,
-                    'free': prm.AMOUNT_SECOND,
+                    'free': AMOUNT_SECOND,
                     'locked': Decimal()
                 }
-                self.account.fee_maker = prm.FEE_MAKER
-                self.account.fee_taker = prm.FEE_TAKER
+                self.account.fee_maker = FEE_MAKER
+                self.account.fee_taker = FEE_TAKER
                 # ticker
                 # noinspection PyUnboundLocalVariable
                 self.backtest['ticker'] = pq.ParquetFile(Path(raw_path, TICKER_PRKT))
@@ -1737,12 +1736,12 @@ class StrategyBase(metaclass=ABCMeta):
                         'Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n'
                     )
                     last_state["command"] = 'null'
-                if not prm.LOAD_LAST_STATE:
+                if not LOAD_LAST_STATE:
                     answer = await asyncio.to_thread(
                         input,
                         'Restore saved state after restart? Y:\n'
                     )
-                if prm.LOAD_LAST_STATE or answer.lower() == 'y':
+                if LOAD_LAST_STATE or answer.lower() == 'y':
                     self.message_log("Load saved state after restart", color=Style.GREEN)
                     self.last_state = last_state
                     # Restore StrategyBase class var
@@ -1772,7 +1771,7 @@ class StrategyBase(metaclass=ABCMeta):
                     restore_state = False
 
             if not restore_state:
-                if prm.MODE in ('T', 'TC'):
+                if MODE in ('T', 'TC'):
                     await self.init()
                     await asyncio.to_thread(
                         input,
@@ -1794,8 +1793,8 @@ class StrategyBase(metaclass=ABCMeta):
                         await self.init()
                         await self.start()
 
-            if prm.MODE in ('T', 'TC'):
-                if prm.TLG_SERVICE:
+            if MODE in ('T', 'TC'):
+                if TLG_SERVICE:
                     self.tlg_client = TlgClient(self.tlg_header, TLG_TOKEN, TLG_CHAT_ID)
                     tasks_manage(
                         self.tasks,
@@ -1805,9 +1804,9 @@ class StrategyBase(metaclass=ABCMeta):
                 await self.wss_init()
                 tasks_manage(self.tasks, save_to_csv())
                 tasks_manage(self.tasks, self.buffered_orders(), add_done_callback=False)
-                if self.session.client.real_market and prm.SAVE_ASSET:
+                if self.session.client.real_market and SAVE_ASSET:
                     tasks_manage(self.tasks, self.save_asset(), add_done_callback=False)
-                if prm.MODE == 'TC':
+                if MODE == 'TC':
                     tasks_manage(self.tasks, self.backtest_control(), add_done_callback=False)
                 if not restore_state:
                     await self.start()
@@ -1911,7 +1910,7 @@ class StrategyBase(metaclass=ABCMeta):
 
 
 async def save_to_csv() -> None:
-    file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
+    file_name = Path(LAST_STATE_PATH, f"{ID_EXCHANGE}_{SYMBOL}.csv")
 
     async with aiofiles.open(file_name, mode="a", newline='') as afp:
         writer = AsyncWriter(afp)
@@ -1922,7 +1921,7 @@ async def save_to_csv() -> None:
 
 
 def load_from_csv() -> list:
-    file_name = Path(LAST_STATE_PATH, f"{prm.ID_EXCHANGE}_{prm.SYMBOL}.csv")
+    file_name = Path(LAST_STATE_PATH, f"{ID_EXCHANGE}_{SYMBOL}.csv")
     trades = []
     if file_name.exists() and file_name.stat().st_size:
         data = []

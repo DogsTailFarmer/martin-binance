@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.8"
+__version__ = "3.1.9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -147,7 +147,7 @@ async def get_rate(_currency_rate, tries=5):
                         try:
                             price = data['data'][0]['quote'][_currency]['price'] or -1
                         except KeyError:
-                            pass
+                            print(f"The {_currency} rate is not available")
                         buffer_rate[_currency] = price
                         break
                     if response.status == 429:

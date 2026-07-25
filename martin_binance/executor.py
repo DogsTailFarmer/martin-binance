@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.7"
+__version__ = "3.1.9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -144,6 +144,7 @@ class Strategy(StrategyBase):
         self.started_balance_detail = ()  # + (base, quote, rate), all Decimal, used for balance control subsystem
         self.adx_di_avg_delta = []  # -
         self.trade_control_is_waiting_state = False  # -
+        self.sum_fee_f = self.sum_fee_s = O_DEC  # -
         #
         scheduler.add_job(self.event_grid_update, "interval",  minutes=5)
         scheduler.add_job(self.event_processing, "interval",  seconds=5)
@@ -742,25 +743,34 @@ class Strategy(StrategyBase):
         if self.restart:
             # Check refunding before restart
             if self.cycle_buy:
-                init_s = self.round_truncate(self.initial_reverse_second if self.reverse else self.initial_second,
-                                             base=False)
+                init_s = self.initial_reverse_second if self.reverse else self.initial_second
                 go_trade = fs >= init_s
                 if go_trade:
-                    if FEE_MAKER:
-                        fs = self.initial_reverse_second if self.reverse else self.initial_second
+                    fs = init_s
                     _ff = ff
                     _fs = fs - profit_s
             else:
-                init_f = self.round_truncate(self.initial_reverse_first if self.reverse else self.initial_first,
-                                             base=True)
+                init_f = self.initial_reverse_first if self.reverse else self.initial_first
                 go_trade = ff >= init_f
                 if go_trade:
-                    if FEE_MAKER:
-                        ff = self.initial_reverse_first if self.reverse else self.initial_first
+                    ff = init_f
                     _ff = ff - profit_f
                     _fs = fs
             if go_trade:
+                self.save_init_assets(ff, fs)
                 if MODE in ('T', 'TC') and not GRID_ONLY:
+                    if COLLECT_ASSETS:
+                        _fw, _sw = await self.collect_assets()
+                        ff -= _fw
+                        fs -= _sw
+                        if self.exchange in ('binance', 'huobi'):
+                            _fw -= self.sum_fee_f
+                            _sw -= self.sum_fee_s
+                        self.sum_profit_first += _fw
+                        self.sum_profit_second += _sw
+                    else:
+                        _fw = _sw = O_DEC
+                    #
                     if self.cycle_buy:
                         df = O_DEC
                         ds = self.deposit_second - self.profit_second
@@ -780,8 +790,8 @@ class Strategy(StrategyBase):
                         'cycle_buy': self.cycle_buy,
                         'f_depo': df,
                         's_depo': ds,
-                        'f_profit': self.profit_first,
-                        's_profit': self.profit_second,
+                        'f_profit': self.profit_first + _fw,
+                        's_profit': self.profit_second + _sw,
                         'PRICE_SHIFT': PRICE_SHIFT,
                         'PROFIT': PROFIT,
                         'order_q': self.order_q,
@@ -795,11 +805,6 @@ class Strategy(StrategyBase):
                     }
                     self.message_log('Send data to .db t_funds')
                     await self.queue_to_db.put(data_to_db)
-                self.save_init_assets(ff, fs)
-                if COLLECT_ASSETS and MODE != 'S':
-                    _ff, _fs = await self.collect_assets()
-                    ff -= _ff
-                    fs -= _fs
             else:
                 self.first_run = False
                 self.wait_refunding_for_start = True
@@ -871,6 +876,7 @@ class Strategy(StrategyBase):
         self.order_q = self.order_q_limit = ORDER_Q
         self.grid_update_started = None
         self.place_grid_part_after_tp = True
+        self.sum_fee_f = self.sum_fee_s = O_DEC
         #
         start_cycle_output = not self.start_after_shift or self.first_run
         if self.cycle_buy:
@@ -1160,6 +1166,7 @@ class Strategy(StrategyBase):
                          f"! tp_part_amount_first: {self.tp_part_amount_first},"
                          f" tp_part_amount_second: {self.tp_part_amount_second}\n"
                          f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
+                         f"! sum_fee_first: {self.sum_fee_f}, sum_fee_second: {self.sum_fee_s}\n"
                          f"! part_profit_first: {self.part_profit_first},"
                          f" part_profit_second: {self.part_profit_second}\n"
                          f"! command: {self.command}\n"
@@ -1814,6 +1821,8 @@ class Strategy(StrategyBase):
                          f" one_else_grid: {one_else_grid}", log_level=logging.DEBUG)
         self.debug_output()
         amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second, by_market)
+        self.sum_fee_f += (amount_first - amount_first_fee)
+        self.sum_fee_s += (amount_second - amount_second_fee)
         # Calculate cycle and total profit, refresh depo
         profit_first = profit_second = O_DEC
         if self.cycle_buy:
@@ -2047,6 +2056,8 @@ class Strategy(StrategyBase):
         if after_full_fill and _amount_first:
             # Calculate trade amount with Fee
             amount_first_fee, amount_second_fee = self.fee_for_grid(_amount_first, _amount_second, by_market)
+            self.sum_fee_f += (_amount_first - amount_first_fee)
+            self.sum_fee_s += (_amount_second - amount_second_fee)
             # Get partially filled amount
             if order_id:
                 part_amount = self.part_amount.pop(order_id, (O_DEC, O_DEC))

@@ -1,3 +1,12 @@
+## 3.1.9 - 2026-07-25
+✨ bump(__init__.py): Bump version to 3.1.9
+🔧 refactor(params.py): Add new parameters to export list
+🔧 refactor(strategy_base.py): Remove unused module imports and replace global params access with globals()
+🐛 fix(funds_rate_exporter.py): Improve error message for unavailable currency rate
+🔧 refactor(executor.py): Update asset calculations logic and fee tracking implementation
+📦 deps(pyproject.toml): Upgrade package dependencies
+📝 docs(CHANGELOG.md): Update changelog with changes
+
 ## 3.1.8post01 - 2026-07-06
 ✨ feat(__init__.py): Update version to 3.1.8post01
 🔧 refactor(db_utils.py): Update SQLite error handling syntax
