@@ -1,3 +1,20 @@
+## 3.1.10 - 2026-08-18
+🔧 build(requirements.txt): Bump dependencies versions
+✨ feat(lib.py): Add **task_active** function to check active tasks
+🔧 refactor(lib.py): Improve debug message in **tasks_cancel** function
+🔧 refactor(executor.py): Import **task_active** from lib.py
+🔧 refactor(executor.py): Format profit values with **any2str** function
+🔧 feat(executor.py): Add trade control waiting state check
+🔧 refactor(executor.py): Optimize trade control execution flow
+🔧 refactor(executor.py): Format fee values with **any2str** function
+🔧 refactor(executor.py): Prevent grid cancellation if order exists in **cancel_grid**
+🔧 feat(executor.py): Skip ticker processing if active task is running
+🔧 feat(executor.py): Add small delay after grid cancellation
+🔧 refactor(executor.py): Adjust saved order amount using **round_truncate** method
+🔧 refactor(executor.py): Simplify grid removal logic in **on_new_ticker**
+🔧 refactor(executor.py): Update import list in executor.py
+🔧 build(pyproject.toml): Bump dependencies versions
+
 ## 3.1.9 - 2026-07-25
 ✨ bump(__init__.py): Bump version to 3.1.9
 🔧 refactor(params.py): Add new parameters to export list

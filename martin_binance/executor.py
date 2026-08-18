@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.9"
+__version__ = "3.1.10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -33,7 +33,18 @@ from martin_binance import DB_FILE, KLINES_INIT, HEARTBEAT
 from martin_binance.db_utils import db_management, save_to_db
 from martin_binance.strategy_base import StrategyBase, __version__ as msb_ver
 from martin_binance.lib import (
-    Ticker, FundsEntry, OrderBook, Style, any2str, Order, OrderUpdate, Orders, f2d, solve, tasks_manage
+    Ticker,
+    FundsEntry,
+    OrderBook,
+    Style,
+    any2str,
+    Order,
+    OrderUpdate,
+    Orders,
+    f2d,
+    solve,
+    tasks_manage,
+    task_active
 )
 from martin_binance.params import *  # NOSONAR python:S2208
 
@@ -453,8 +464,8 @@ class Strategy(StrategyBase):
                 else:
                     header = (f"Complete {self.cycle_buy_count} buy cycle and {self.cycle_sell_count} sell cycle\n"
                               f"For all cycles profit:\n"
-                              f"First: {self.sum_profit_first}\n"
-                              f"Second: {self.sum_profit_second}\n"
+                              f"First: {any2str(self.sum_profit_first)}\n"
+                              f"Second: {any2str(self.sum_profit_second)}\n"
                               f"Summary: {self.get_sum_profit()}\n"
                               f"{self.get_free_assets(mode='free')[3]}\n"
                               f"{self.get_started_balance_diff()}"
@@ -722,6 +733,10 @@ class Strategy(StrategyBase):
         if self.command == 'stopped':
             self.message_log('Strategy stopped, waiting manual action')
             return
+        if self.trade_control_is_waiting_state:
+            self.message_log('Waiting for favorable trading conditions', log_level=logging.WARNING)
+            return
+
         # Cancel take profit order in all state
         self.tp_order_hold.clear()
         self.tp_hold = False
@@ -810,11 +825,11 @@ class Strategy(StrategyBase):
                 self.wait_refunding_for_start = True
                 self.message_log(f"Wait refunding for start, having now: first: {ff}, second: {fs}")
                 return
+        self.wait_refunding_for_start = False
         # Checking for optimal trading conditions
         if not self.first_run:
             await self.trade_control()
         #
-        self.wait_refunding_for_start = False
         self.avg_rate = self.get_buffered_ticker().last_price
         if self.first_run or MODE in ('T', 'TC'):
             self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -1166,7 +1181,7 @@ class Strategy(StrategyBase):
                          f"! tp_part_amount_first: {self.tp_part_amount_first},"
                          f" tp_part_amount_second: {self.tp_part_amount_second}\n"
                          f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
-                         f"! sum_fee_first: {self.sum_fee_f}, sum_fee_second: {self.sum_fee_s}\n"
+                         f"! sum_fee_first: {any2str(self.sum_fee_f)}, sum_fee_second: {any2str(self.sum_fee_s)}\n"
                          f"! part_profit_first: {self.part_profit_first},"
                          f" part_profit_second: {self.part_profit_second}\n"
                          f"! command: {self.command}\n"
@@ -2227,7 +2242,7 @@ class Strategy(StrategyBase):
                 # Sequential removal orders from grid and make this 'atomic'
                 # - on_cancel_order_success: save canceled order to orders_save
                 _id, _, _, _ = self.orders_grid.get_first()
-                if not cancel_all:
+                if not cancel_all and not self.orders_save.exist(_id):
                     self.orders_save.orders_list.append(self.orders_grid.get_by_id(_id))
                 self.message_log(f"cancel_grid order: {_id}", log_level=logging.DEBUG)
                 await self.cancel_order(_id, cancel_all=cancel_all)
@@ -2318,6 +2333,10 @@ class Strategy(StrategyBase):
     async def on_new_ticker(self, ticker: Ticker) -> None:
         # print(f"on_new_ticker:{datetime.fromtimestamp(ticker.timestamp/1000)}: last_price: {ticker.last_price}")
         self.last_ticker_update = int(self.get_time())
+
+        if task_active(self.tasks, "cancel_grid-on_new_ticker"):
+            return
+
         shift_time_elapsed = self.shift_grid_threshold and self.last_shift_time and (
                     self.get_time() - self.last_shift_time > SHIFT_GRID_DELAY)
 
@@ -2351,7 +2370,8 @@ class Strategy(StrategyBase):
                         self.initial_first += part_amount_first
                     self.message_log(f"New first depo: {self.deposit_first}")
             self.grid_remove = None
-            await self.cancel_grid(cancel_all=True)
+            tasks_manage(self.tasks, self.cancel_grid(cancel_all=True))
+            await asyncio.sleep(HEARTBEAT / 20)
 
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")
@@ -2625,10 +2645,10 @@ class Strategy(StrategyBase):
                 self.message_log("Grid order partially filled", color=Style.B_WHITE)
                 self.ts_grid_update = self.get_time()
                 amount_first_fee, amount_second_fee = self.fee_for_grid(amount_first, amount_second)
-                # Correction amount for saved order, if exists
+                # Adjusting amount for saved order, if exists
                 if _order := self.orders_save.get_by_id(update.original_order.id):
                     self.orders_save.remove(update.original_order.id)
-                    _order['amount'] -= amount_first
+                    _order['amount'] -= self.round_truncate(amount_first, base=True, _rounding=ROUND_CEILING)
                     if _order['amount'] > 0:
                         self.orders_save.orders_list.append(_order)
                 # Increase trade result and if next fill order is grid decrease trade result

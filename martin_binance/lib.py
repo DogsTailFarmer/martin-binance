@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.6"
+__version__ = "3.1.10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -42,7 +42,7 @@ async def tasks_cancel(tasks_set: set, name=None, log_out=True):
     for task in tasks:
         task_name = task.get_name()
         if log_out:
-            logger.debug(f"tasks_cancel.task_name: {task_name}")
+            logger.debug(f"Active background task: {task_name}")
         if name and f"{name}" not in task_name:
             continue
         task.cancel()
@@ -55,6 +55,13 @@ async def tasks_cancel(tasks_set: set, name=None, log_out=True):
             tasks_set.discard(task)
             if log_out:
                 logger.info(f"The task {task_name} was cancelled {'by force' if flag else ''}")
+
+
+def task_active(tasks_set: set, name: str):
+    for task in tasks_set:
+        if name in task.get_name():
+            return True
+    return False
 
 
 def any2str(_x) -> str:

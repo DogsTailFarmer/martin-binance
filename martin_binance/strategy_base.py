@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.9"
+__version__ = "3.1.10"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -922,7 +922,6 @@ class StrategyBase(metaclass=ABCMeta):
         finally:
             if MODE in ('T', 'TC') and _fetch_order:
                 res = await self.fetch_order(order_id, _filled_update_call=True)
-                await asyncio.sleep(HEARTBEAT)
                 if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                     await self.cancel_order_handler(order_id, cancel_all)
                 elif res.get('status') == 'FILLED':
@@ -1255,7 +1254,7 @@ class StrategyBase(metaclass=ABCMeta):
             self.orders |= {ed['order_id']: Order(_order)}
 
         if self.trade_not_exist(ed["order_id"], ed["trade_id"]):
-            await self._on_order_update_handler_ext(ed)
+            self._on_order_update_handler_ext(ed)
             if MODE in ('T', 'TC'):
                 await SAVE_TRADE_QUEUE.put(
                     ["TRADE" if ed['is_maker_side'] else "TRADE_BY_MARKET",
@@ -1283,7 +1282,7 @@ class StrategyBase(metaclass=ABCMeta):
             if SAVE_DS:
                 self.open_orders_snapshot()
 
-    async def _on_order_update_handler_ext(self, ed):
+    def _on_order_update_handler_ext(self, ed):
         trade = {
             "qty": ed['last_executed_quantity'],
             "isBuyer": ed['side'] == 'BUY',
@@ -1301,7 +1300,7 @@ class StrategyBase(metaclass=ABCMeta):
         if ed['order_status'] == 'FILLED' and self.order_trades_sum(ed['order_id']) < Decimal(ed['order_quantity']):
             self.message_log(f"Order: {ed['order_id']} was missed partially filling event", log_level=logging.INFO)
             ed['order_status'] = 'PARTIALLY_FILLED'
-        await self.on_order_update_ex(OrderUpdate(ed, self.trades))
+        tasks_manage(self.tasks, self.on_order_update_ex(OrderUpdate(ed, self.trades)))
 
     async def on_ticker_update(self):
         """
