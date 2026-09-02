@@ -4,7 +4,7 @@ martin-binance classes and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.10"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -15,9 +15,11 @@ import time
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN
 from enum import Enum
 from pathlib import Path
+import orjson
+from typing import Any, List
 
 import numpy as np
-import ujson as json
+import ujson
 from scipy.optimize import minimize
 
 logger = logging.getLogger(f'logger.{__name__}')
@@ -27,6 +29,10 @@ stream_handler.setLevel(logging.INFO)
 logger.addHandler(stream_handler)
 
 O_DEC = Decimal()
+
+
+def parse_bytes_response(response: Any) -> List[dict]:
+    return [orjson.loads(item) for item in getattr(response, 'items', [])]
 
 
 def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
@@ -117,8 +123,8 @@ def load_file(name: Path) -> dict:
     if name.exists():
         try:
             with name.open() as state_file:
-                _last_state = json.load(state_file)
-        except json.JSONDecodeError as er:
+                _last_state = ujson.load(state_file)
+        except ujson.JSONDecodeError as er:
             print(f"Exception on decode last state file: {er}")
         else:
             if _last_state.get('ms_start_time_ms', None):
@@ -135,7 +141,7 @@ def load_last_state(last_state_file) -> dict:
             res = load_file(last_state_file.with_suffix('.prev'))
         if res:
             with last_state_file.with_suffix('.bak').open(mode='w') as outfile:
-                json.dump(res, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                ujson.dump(res, outfile, sort_keys=True, indent=4, ensure_ascii=False)
     return res
 
 

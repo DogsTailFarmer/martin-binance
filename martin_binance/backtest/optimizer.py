@@ -6,7 +6,7 @@ Searches for optimal parameters for a strategy under given conditions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2024 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.5"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -19,7 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import optuna
-import ujson as json
+import orjson
 
 from martin_binance import LOG_PATH, TRIAL_PARAMS
 
@@ -58,8 +58,7 @@ def optimize(study_name, cli, n_trials, storage_name=None, _prm_best=None, skip_
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
     # Load parameter definitions from JSON file
-    with open(TRIAL_PARAMS) as f:
-        param_defs = json.load(f)
+    param_defs = orjson.loads(TRIAL_PARAMS.read_bytes())
 
     spec = iu.spec_from_file_location("strategy", cli)
     mbs = iu.module_from_spec(spec)
@@ -99,7 +98,7 @@ if __name__ == "__main__":
     fh.setLevel(logging.INFO)
     logger.addHandler(fh)
     #
-    prm_best = json.loads(sys.argv[5])
+    prm_best = orjson.loads(sys.argv[5])
     logger.info(f"Previous best params: {prm_best}")
     try:
         study = optimize(
@@ -125,6 +124,6 @@ if __name__ == "__main__":
 
         if not prm_best or new_value > _value:
             bp |= {'new_value': any2str(new_value), '_value': any2str(_value)}
-            print(json.dumps(bp))
+            print(orjson.dumps(bp).decode())
         else:
-            print(json.dumps({}))
+            print(orjson.dumps({}).decode())

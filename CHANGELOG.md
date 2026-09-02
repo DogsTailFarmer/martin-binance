@@ -1,3 +1,11 @@
+## 3.2.1rc1 - 2026-09-02
+🔧 fix(db_utils): improve logger configuration
+🔧 fix(lib): replace ujson with orjson for better performance
+🔧 fix(strategy_base): migrate to orjson for JSON handling
+🔧 fix(optimizer): update orjson usage in optimizer
+🔧 fix(requirements): bump dependencies versions
+🔧 fix(executor): migrate to orjson and refactor legacy code
+
 ## 3.1.10 - 2026-08-18
 🔧 build(requirements.txt): Bump dependencies versions
 ✨ feat(lib.py): Add **task_active** function to check active tasks

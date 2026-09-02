@@ -6,9 +6,12 @@ Free trading system for SPOT exchanges
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.10"
+__version__ = "3.2.1rc1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
+
+# TODO Dir name for backtest data might not be unique
+# TODO Export cycle time into t_orders -> grafana
 
 from pathlib import Path
 from shutil import copy

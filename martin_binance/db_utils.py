@@ -4,7 +4,7 @@ Functions for managing and saving data to a SQLite database from martin-binance 
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.8"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -16,7 +16,11 @@ import logging
 
 from martin_binance import DB_FILE
 
-logger = logging.getLogger('logger')
+logger = logging.getLogger(f'logger.{__name__}')
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
+stream_handler.setLevel(logging.INFO)
+logger.addHandler(stream_handler)
 
 
 async def db_management(exchange) -> None:
@@ -94,7 +98,6 @@ async def save_to_db(queue_to_db) -> None:
                     await db_connect.commit()
                     result = True
             elif data.get('destination') == 't_orders':
-                # logger.info("save_to_db: Record row into t_orders")
                 try:
                     await db_connect.execute(
                         "INSERT INTO t_orders VALUES(:id_exchange,\

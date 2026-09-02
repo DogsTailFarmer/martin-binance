@@ -4,11 +4,10 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.10"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
-import ast
 import asyncio
 import aiofiles
 import aiosqlite
@@ -29,7 +28,7 @@ import orjson
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import ujson as json
+import ujson
 from colorama import init as color_init
 from tqdm import tqdm
 
@@ -42,6 +41,7 @@ from martin_binance.client import Trade
 from martin_binance.lib import (
     Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, any2str, PrivateTrade, Order,
     convert_from_minute, OrderUpdate, load_file, load_last_state, Klines, tasks_manage, tasks_cancel,
+    parse_bytes_response
 )
 from martin_binance.params import *  # NOSONAR python:S2208
 from martin_binance.telegram_proxy.tlg_client import TlgClient
@@ -183,8 +183,8 @@ class StrategyBase(metaclass=ABCMeta):
     ###
 
     def last_state_update(self, last_state):
-        last_state[MS_ORDER_ID] = json.dumps(self.order_id)
-        last_state['ms_start_time_ms'] = json.dumps(self.start_time_ms)
+        last_state[MS_ORDER_ID] = ujson.dumps(self.order_id)
+        last_state['ms_start_time_ms'] = ujson.dumps(self.start_time_ms)
         last_state[MS_ORDERS] = jsonpickle.encode(self.orders, keys=True)
     ###
 
@@ -336,7 +336,7 @@ class StrategyBase(metaclass=ABCMeta):
                                 Path(self.session_root, Path(PARAMS).name),
                                 str(N_TRIALS),
                                 f"sqlite:///{storage_name}",
-                                json.dumps(prm_best or _prm_best),
+                                orjson.dumps(prm_best or _prm_best),
                                 f"{ID_EXCHANGE}_{SYMBOL}_S.log",
                                 stdout=asyncio.subprocess.PIPE
                             )
@@ -395,7 +395,7 @@ class StrategyBase(metaclass=ABCMeta):
                                 interval=i.value,
                                 limit=KLINES_LIM
                             )
-                            self.klines[i.value] = list(map(json.loads, res.items))
+                            self.klines[i.value] = parse_bytes_response(res)
                     except Exception as ex:
                         restart = True
                         self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
@@ -406,7 +406,7 @@ class StrategyBase(metaclass=ABCMeta):
                     last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
                     with self.state_file.open(mode='w') as outfile:
-                        json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                        ujson.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     #
                     self.start_collect = True
                     ts = time.time()
@@ -443,8 +443,7 @@ class StrategyBase(metaclass=ABCMeta):
 
         # Save klines snapshot
         if _klines := self.klines:
-            with open(Path(self.session_root, "raw", "klines.json"), 'w') as f:
-                json.dump(_klines, f)
+            Path(self.session_root, "raw/klines.json").write_bytes(orjson.dumps(_klines))
 
         # Finalize candles files
         for i in KLINES_INIT:
@@ -522,7 +521,7 @@ class StrategyBase(metaclass=ABCMeta):
 
     def restore_state_before_backtesting(self):
         saved_state = load_file(self.state_file)
-        self.order_id = json.loads(saved_state.pop(MS_ORDER_ID, "0"))
+        self.order_id = ujson.loads(saved_state.pop(MS_ORDER_ID, "0"))
         self.orders = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
         self.restore_state_before_backtesting_ex(saved_state)
 
@@ -549,8 +548,7 @@ class StrategyBase(metaclass=ABCMeta):
                     if LAST_STATE_FILE.exists():
                         LAST_STATE_FILE.replace(LAST_STATE_FILE.with_suffix('.prev'))
                     with LAST_STATE_FILE.open(mode='w') as outfile:
-                        # noinspection PyTypeChecker
-                        json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                        ujson.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     #
                     if (
                         not self.wss_fire_up
@@ -622,7 +620,7 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log(f"Exception save_asset: {_ex}", log_level=logging.WARNING)
             else:
                 if res:
-                    balances = list(map(json.loads, res.items))
+                    balances = parse_bytes_response(res)
                 # Refresh actual balance
                 default_balance = {'free': '0.0', 'locked': '0.0'}
 
@@ -658,7 +656,7 @@ class StrategyBase(metaclass=ABCMeta):
                     except Exception as _ex:
                         self.message_log(f"FetchFundingWallet: {_ex}", log_level=logging.WARNING)
                     else:
-                        funding_wallet = list(map(json.loads, res.items))
+                        funding_wallet = parse_bytes_response(res)
                     for fw in funding_wallet:
                         assets_fw[fw['asset']] = Decimal(fw['free']) + Decimal(fw['locked']) + Decimal(fw['freeze'])
                 # Create list of cumulative asset from SPOT and Funding wallet
@@ -713,7 +711,7 @@ class StrategyBase(metaclass=ABCMeta):
                 self.message_log(f"SELECT from t_control: {err}")
 
             if row and (row[0] is None or FEE_BNB['email'] not in row[1]):
-                msg = json.dumps(['BNB_request', FEE_BNB])
+                msg = orjson.dumps(['BNB_request', FEE_BNB]).decode()
                 try:
                     await connection_db.execute(
                         'insert into t_control values(?,?,?,?)',
@@ -802,7 +800,7 @@ class StrategyBase(metaclass=ABCMeta):
                         base_asset=self.base_asset,
                         quote_asset=self.quote_asset
                 ):
-                    funds = json.loads(_funds.event)
+                    funds = orjson.loads(_funds.event)
                     if self.base_asset in funds or self.quote_asset in funds:
                         await self.on_funds_update_handler(funds)
             except Exception as ex:
@@ -886,7 +884,7 @@ class StrategyBase(metaclass=ABCMeta):
                             symbol=self.symbol
                         )
                         if res:
-                            for v in ast.literal_eval(json.loads(res.result)):
+                            for v in orjson.loads(res.result):
                                 self.bulk_orders_cancel.update({v['orderId']: v})
                     result = self.bulk_orders_cancel.pop(order_id, None)
                 else:
@@ -983,7 +981,7 @@ class StrategyBase(metaclass=ABCMeta):
         try:
             if MODE in ('T', 'TC'):
                 res = await self.send_request(self.stub.fetch_account_information, mr.OpenClientConnectionId)
-                balances = list(map(json.loads, res.items))
+                balances = parse_bytes_response(res)
             else:
                 balances = self.account.funds.get_funds()
         except UserWarning as _ex:
@@ -1036,9 +1034,7 @@ class StrategyBase(metaclass=ABCMeta):
         klines_from_file = {}
         kline = []
         if MODE == 'S':
-            async with aiofiles.open(Path(self.session_root, "raw/klines.json"), "r") as file:
-                klines_from_file = await file.read()
-                klines_from_file = json.loads(klines_from_file)
+            klines_from_file = orjson.loads(Path(self.session_root, "raw/klines.json").read_bytes())
 
         for i in KLINES_INIT:
             if MODE in ('T', 'TC'):
@@ -1053,7 +1049,7 @@ class StrategyBase(metaclass=ABCMeta):
                     self.message_log(f"FetchKlines: {ex}", log_level=logging.WARNING)
                     raise UserWarning
                 if res:
-                    kline = list(map(json.loads, res.items))
+                    kline = parse_bytes_response(res)
                     if MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         self.klines[i.value] = kline
             else:
@@ -1077,9 +1073,8 @@ class StrategyBase(metaclass=ABCMeta):
             try:
                 async for res in self.for_request(self.stub.on_klines_update, mr.FetchKlinesRequest,
                                                   symbol=self.symbol,
-                                                  interval=json.dumps(_intervals)):
-                    candle = json.loads(res.candle)
-                    _klines.get(res.interval).refresh(candle)
+                                                  intervals=orjson.dumps(_intervals)):
+                    _klines.get(res.interval).refresh(orjson.loads(res.candle))
                     if MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         if len(self.candles[f"pylist_{res.interval}"]) > PYARROW_BATCH_BUFFER_SIZE:
                             # noinspection PyArgumentList
@@ -1089,7 +1084,7 @@ class StrategyBase(metaclass=ABCMeta):
                             self.candles[f"pylist_{res.interval}"].clear()
 
                         self.candles[f"pylist_{res.interval}"].append(
-                            {"key": int(time.time() * 1000), "row": orjson.dumps(candle)}
+                            {"key": int(time.time() * 1000), "row": res.candle}
                         )
             except Exception as ex:
                 self.message_log(f"Exception on WSS, on_klines_update loop closed: {ex}", log_level=logging.WARNING)
@@ -1183,7 +1178,7 @@ class StrategyBase(metaclass=ABCMeta):
     async def on_balance_update(self):
         try:
             async for res in self.for_request(self.stub.on_balance_update, mr.MarketRequest, symbol=self.symbol):
-                _res = json.loads(res.event)
+                _res = orjson.loads(res.event)
                 await SAVE_TRADE_QUEUE.put(
                     ['TRANSFER',
                      _res["event_time"],
@@ -1202,7 +1197,7 @@ class StrategyBase(metaclass=ABCMeta):
         try:
             async for event in self.for_request(self.stub.on_order_update, mr.MarketRequest, symbol=self.symbol):
                 # Only for registered orders on own pair
-                ed = json.loads(event.result)
+                ed = orjson.loads(event.result)
                 await self.on_order_update_handler(ed)
         except Exception as ex:
             self.message_log(f"Exception on WSS, on_order_update loop closed: {ex}", log_level=logging.WARNING)
@@ -1412,7 +1407,7 @@ class StrategyBase(metaclass=ABCMeta):
 
                 self.rate_limiter = max(self.rate_limiter, _orders.rate_limiter)
 
-                orders = list(map(json.loads, _orders.orders))
+                orders = list(map(orjson.loads, _orders.orders))
                 [exch_orders.append(int(_o['orderId'])) for _o in orders]
 
                 if restore:
@@ -1448,7 +1443,7 @@ class StrategyBase(metaclass=ABCMeta):
                     last_state = self.save_strategy_state()
                     self.last_state_update(last_state)
                     with self.state_file.open(mode='w') as outfile:
-                        json.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                        ujson.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     self.start_collect = True
                 exch_orders.clear()
                 diff_id.clear()
@@ -1607,7 +1602,7 @@ class StrategyBase(metaclass=ABCMeta):
                     except Exception as ex:
                         print(f"Can't get active orders: {ex}")
                     else:
-                        active_orders = list(map(json.loads, _active_orders.orders))
+                        active_orders = list(map(orjson.loads, _active_orders.orders))
                         for order in active_orders:
                             print(f"Order: {order['orderId']}({order['clientOrderId']}), side: {order['side']},"
                                   f" amount: {order['origQty']}, price:{order['price']}, status: {order['status']}")
@@ -1628,7 +1623,7 @@ class StrategyBase(metaclass=ABCMeta):
                                     mr.MarketRequest,
                                     symbol=_symbol
                                 )
-                                cancel_orders = ast.literal_eval(json.loads(res.result))
+                                cancel_orders = orjson.loads(res.result)
                                 print('Before start was canceled orders:')
                                 for i in cancel_orders:
                                     print(f"Order: {i['orderId']}, side:{i['side']},"
@@ -1744,10 +1739,10 @@ class StrategyBase(metaclass=ABCMeta):
                     self.message_log("Load saved state after restart", color=Style.GREEN)
                     self.last_state = last_state
                     # Restore StrategyBase class var
-                    self.order_id = json.loads(
+                    self.order_id = ujson.loads(
                         last_state.pop(MS_ORDER_ID, str(int(datetime.now().strftime("%S%M")) * 1000))
                     )
-                    self.start_time_ms = json.loads(
+                    self.start_time_ms = ujson.loads(
                         last_state.pop('ms_start_time_ms', str(int(time.time() * 1000)))
                     )
 
@@ -1948,7 +1943,8 @@ def load_from_csv() -> list:
 
 
 def order_book_prepare(_order_book) -> dict:
-    order_book = _order_book.to_pydict()
-    order_book['bids'] = list(map(json.loads, order_book['bids']))
-    order_book['asks'] = list(map(json.loads, order_book['asks']))
-    return order_book
+    return {
+        "lastUpdateId": _order_book.last_update_id,
+        "bids": [orjson.loads(v) for v in _order_book.bids],
+        "asks": [orjson.loads(v) for v in _order_book.asks]
+    }

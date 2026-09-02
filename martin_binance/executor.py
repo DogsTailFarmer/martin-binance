@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.10"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -19,7 +19,8 @@ import aiosqlite
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pymannkendall as mk
 
-import ujson as json
+import ujson
+import orjson
 from datetime import datetime, timezone
 import os
 import psutil
@@ -122,7 +123,6 @@ class Strategy(StrategyBase):
         #
         self.cancel_grid_order_id = None  # - id individual canceled grid order
         self.cancel_order_id = None  # - Exist canceled not confirmed order
-        self.cycle_status = ()  # - Operational status for current cycle, orders count
         self.cycle_time_reverse = None  # + Reverse cycle start time
         self.first_run = True  # -
         self.grid_only_restart = 0  # - Time to restart GRID_ONLY mode
@@ -164,7 +164,7 @@ class Strategy(StrategyBase):
         if not GRID_ONLY:
             scheduler.add_job(self.event_di, 'cron', minute='*', second='25')
         if MODE in ('T', 'TC'):
-            scheduler.add_job(self.event_export_operational_status, 'cron', minute='*', second='35')
+            scheduler.add_job(self.event_export_operational_status, 'cron', minute='*', jitter=25)
             scheduler.add_job(self.event_get_external_command, "interval", seconds=30)
             scheduler.add_job(self.event_report, "interval", seconds=6)
             if GRID_ONLY:
@@ -251,51 +251,51 @@ class Strategy(StrategyBase):
 
     def save_strategy_state(self) -> Dict[str, str]:
         return {
-            'command': json.dumps(self.command),
-            'cycle_buy': json.dumps(self.cycle_buy),
-            'cycle_buy_count': json.dumps(self.cycle_buy_count),
-            'cycle_sell_count': json.dumps(self.cycle_sell_count),
-            'cycle_time': json.dumps(self.cycle_time, default=str),
-            'cycle_time_reverse': json.dumps(self.cycle_time_reverse, default=str),
-            'deposit_first': json.dumps(self.deposit_first),
-            'deposit_second': json.dumps(self.deposit_second),
-            'grid_remove': json.dumps(self.grid_remove),
-            'grid_update_started': json.dumps(self.grid_update_started),
-            'initial_first': json.dumps(self.initial_first),
-            'initial_reverse_first': json.dumps(self.initial_reverse_first),
-            'initial_reverse_second': json.dumps(self.initial_reverse_second),
-            'initial_second': json.dumps(self.initial_second),
-            'martin': json.dumps(self.martin),
-            'order_q': json.dumps(self.order_q),
-            'orders': json.dumps(self.orders_grid.get()),
-            'orders_hold': json.dumps(self.orders_hold.get()),
-            'orders_save': json.dumps(self.orders_save.get()),
-            'over_price': json.dumps(self.over_price),
-            'part_amount': json.dumps(str(self.part_amount)),
-            'profit_first': json.dumps(self.profit_first),
-            'profit_second': json.dumps(self.profit_second),
-            'restore_orders': json.dumps(self.restore_orders),
-            'reverse': json.dumps(self.reverse),
-            'reverse_hold': json.dumps(self.reverse_hold),
-            'reverse_init_amount': json.dumps(self.reverse_init_amount),
-            'reverse_price': json.dumps(self.reverse_price),
-            'reverse_target_amount': json.dumps(self.reverse_target_amount),
-            'shift_grid_threshold': json.dumps(self.shift_grid_threshold),
-            'start_after_shift': json.dumps(self.start_after_shift),
-            'started_balance_detail': json.dumps(str(self.started_balance_detail)),
-            'status_time': json.dumps(self.status_time),
-            'sum_amount_first': json.dumps(self.sum_amount_first),
-            'sum_amount_second': json.dumps(self.sum_amount_second),
-            'sum_profit_first': json.dumps(self.sum_profit_first),
-            'sum_profit_second': json.dumps(self.sum_profit_second),
-            'tp_amount': json.dumps(self.tp_amount),
-            'tp_order': json.dumps(str(self.tp_order)),
-            'tp_order_id': json.dumps(self.tp_order_id),
-            'tp_part_amount_first': json.dumps(self.tp_part_amount_first),
-            'tp_part_amount_second': json.dumps(self.tp_part_amount_second),
-            'tp_part_free': json.dumps(self.tp_part_free),
-            'tp_target': json.dumps(self.tp_target),
-            'tp_wait_id': json.dumps(self.tp_wait_id)
+            'command': ujson.dumps(self.command),
+            'cycle_buy': ujson.dumps(self.cycle_buy),
+            'cycle_buy_count': ujson.dumps(self.cycle_buy_count),
+            'cycle_sell_count': ujson.dumps(self.cycle_sell_count),
+            'cycle_time': ujson.dumps(self.cycle_time, default=str),
+            'cycle_time_reverse': ujson.dumps(self.cycle_time_reverse, default=str),
+            'deposit_first': ujson.dumps(self.deposit_first),
+            'deposit_second': ujson.dumps(self.deposit_second),
+            'grid_remove': ujson.dumps(self.grid_remove),
+            'grid_update_started': ujson.dumps(self.grid_update_started),
+            'initial_first': ujson.dumps(self.initial_first),
+            'initial_reverse_first': ujson.dumps(self.initial_reverse_first),
+            'initial_reverse_second': ujson.dumps(self.initial_reverse_second),
+            'initial_second': ujson.dumps(self.initial_second),
+            'martin': ujson.dumps(self.martin),
+            'order_q': ujson.dumps(self.order_q),
+            'orders': ujson.dumps(self.orders_grid.get()),
+            'orders_hold': ujson.dumps(self.orders_hold.get()),
+            'orders_save': ujson.dumps(self.orders_save.get()),
+            'over_price': ujson.dumps(self.over_price),
+            'part_amount': ujson.dumps(str(self.part_amount)),
+            'profit_first': ujson.dumps(self.profit_first),
+            'profit_second': ujson.dumps(self.profit_second),
+            'restore_orders': ujson.dumps(self.restore_orders),
+            'reverse': ujson.dumps(self.reverse),
+            'reverse_hold': ujson.dumps(self.reverse_hold),
+            'reverse_init_amount': ujson.dumps(self.reverse_init_amount),
+            'reverse_price': ujson.dumps(self.reverse_price),
+            'reverse_target_amount': ujson.dumps(self.reverse_target_amount),
+            'shift_grid_threshold': ujson.dumps(self.shift_grid_threshold),
+            'start_after_shift': ujson.dumps(self.start_after_shift),
+            'started_balance_detail': ujson.dumps(str(self.started_balance_detail)),
+            'status_time': ujson.dumps(self.status_time),
+            'sum_amount_first': ujson.dumps(self.sum_amount_first),
+            'sum_amount_second': ujson.dumps(self.sum_amount_second),
+            'sum_profit_first': ujson.dumps(self.sum_profit_first),
+            'sum_profit_second': ujson.dumps(self.sum_profit_second),
+            'tp_amount': ujson.dumps(self.tp_amount),
+            'tp_order': ujson.dumps(str(self.tp_order)),
+            'tp_order_id': ujson.dumps(self.tp_order_id),
+            'tp_part_amount_first': ujson.dumps(self.tp_part_amount_first),
+            'tp_part_amount_second': ujson.dumps(self.tp_part_amount_second),
+            'tp_part_free': ujson.dumps(self.tp_part_free),
+            'tp_target': ujson.dumps(self.tp_target),
+            'tp_wait_id': ujson.dumps(self.tp_wait_id)
         }
 
     def scheduler_start(self):
@@ -315,27 +315,19 @@ class Strategy(StrategyBase):
         has_tp_order_hold_timeout = ts - self.tp_order_hold.get('timestamp', ts) > HOLD_TP_ORDER_TIMEOUT
 
         if self.stable_state(alarm_mode=True) or has_grid_hold_timeout or has_tp_order_hold_timeout:
-            orders = self.get_buffered_open_orders()
-            order_buy = len([i for i in orders if i.buy is True])
-            order_sell = len([i for i in orders if i.buy is False])
-            order_hold = len(self.orders_hold)
-            cycle_status = (self.cycle_buy, order_buy, order_sell, order_hold)
-            if self.cycle_status != cycle_status:
-                self.cycle_status = cycle_status
-                await self.queue_to_db.put(
-                    {
-                        'ID_EXCHANGE': ID_EXCHANGE,
-                        'f_currency': self.f_currency,
-                        's_currency': self.s_currency,
-                        'cycle_buy': self.cycle_buy,
-                        'order_buy': order_buy,
-                        'order_sell': order_sell,
-                        'order_hold': order_hold,
-                        'destination': 't_orders'
-                    }
-                )
-        else:
-            self.cycle_status = ()
+            order_buy, order_hold, order_sell = self.get_orders_status()
+            await self.queue_to_db.put(
+                {
+                    'ID_EXCHANGE': ID_EXCHANGE,
+                    'f_currency': self.f_currency,
+                    's_currency': self.s_currency,
+                    'cycle_buy': self.cycle_buy,
+                    'order_buy': order_buy,
+                    'order_sell': order_sell,
+                    'order_hold': order_hold,
+                    'destination': 't_orders'
+                }
+            )
 
     async def event_get_external_command(self):
         try:
@@ -351,7 +343,7 @@ class Strategy(StrategyBase):
             row = None
             self.message_log(f"SELECT from t_control: {err}")
         if row and row[0] and 'BNB_request' in row[1]:
-            params = json.loads(row[1])[1]
+            params = orjson.loads(row[1])[1]
             await self.transfer_to(
                 'BNB',
                 any2str(
@@ -445,15 +437,7 @@ class Strategy(StrategyBase):
                                          f"From start {ct}\n"
                                          f"Delay: {time_diff} sec", tlg=True)
             else:
-                if self.cycle_status:
-                    order_buy = self.cycle_status[1]
-                    order_sell = self.cycle_status[2]
-                    order_hold = self.cycle_status[3]
-                else:
-                    orders = self.get_buffered_open_orders()
-                    order_buy = len([i for i in orders if i.buy is True])
-                    order_sell = len([i for i in orders if i.buy is False])
-                    order_hold = len(self.orders_hold)
+                order_buy, order_hold, order_sell = self.get_orders_status()
 
                 command = bool(self.command in ('end', 'stop'))
                 if GRID_ONLY:
@@ -493,6 +477,13 @@ class Strategy(StrategyBase):
                                  f"{'-   ***   ***   ***   -' if self.command == 'stop' else ''}\n"
                                  f"{'Waiting for end of cycle for manual action' if command else ''}",
                                  tlg=True)
+
+    def get_orders_status(self) -> tuple[int, int, int]:
+        orders = self.get_buffered_open_orders()
+        order_buy = len([i for i in orders if i.buy is True])
+        order_sell = len([i for i in orders if i.buy is False])
+        order_hold = len(self.orders_hold)
+        return order_buy, order_hold, order_sell
 
     async def event_processing(self):
         if self.wait_wss_refresh and self.get_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
@@ -604,43 +595,43 @@ class Strategy(StrategyBase):
             self.message_log("Restore strategy state from saved state:", log_level=logging.INFO)
             self.message_log("\n".join(f"{k}\t{v}" for k, v in strategy_state.items()), log_level=logging.DEBUG)
             #
-            self.command = json.loads(strategy_state.get('command'))
-            self.grid_remove = json.loads(strategy_state.get('grid_remove', 'null'))
-            self.grid_update_started = json.loads(strategy_state.get('grid_update_started', 'null'))
+            self.command = ujson.loads(strategy_state.get('command'))
+            self.grid_remove = ujson.loads(strategy_state.get('grid_remove', 'null'))
+            self.grid_update_started = ujson.loads(strategy_state.get('grid_update_started', 'null'))
             #
-            self.cycle_buy = json.loads(strategy_state.get('cycle_buy'))
-            self.cycle_buy_count = json.loads(strategy_state.get('cycle_buy_count'))
-            self.cycle_sell_count = json.loads(strategy_state.get('cycle_sell_count'))
-            self.cycle_time = json.loads(strategy_state.get('cycle_time'))
+            self.cycle_buy = ujson.loads(strategy_state.get('cycle_buy'))
+            self.cycle_buy_count = ujson.loads(strategy_state.get('cycle_buy_count'))
+            self.cycle_sell_count = ujson.loads(strategy_state.get('cycle_sell_count'))
+            self.cycle_time = ujson.loads(strategy_state.get('cycle_time'))
             if self.cycle_time:
                 self.cycle_time = datetime.strptime(self.cycle_time, '%Y-%m-%d %H:%M:%S.%f')
-            self.cycle_time_reverse = json.loads(strategy_state.get('cycle_time_reverse'))
+            self.cycle_time_reverse = ujson.loads(strategy_state.get('cycle_time_reverse'))
             if self.cycle_time_reverse:
                 self.cycle_time_reverse = datetime.strptime(
                     self.cycle_time_reverse,
                     '%Y-%m-%d %H:%M:%S.%f'
                 )
-            self.deposit_first = f2d(json.loads(strategy_state.get('deposit_first')))
-            self.deposit_second = f2d(json.loads(strategy_state.get('deposit_second')))
-            self.martin = f2d(json.loads(strategy_state.get('martin')))
-            self.order_q = json.loads(strategy_state.get('order_q'))
-            self.orders_grid.restore(json.loads(strategy_state.get('orders')))
-            self.orders_hold.restore(json.loads(strategy_state.get('orders_hold')))
-            self.orders_save.restore(json.loads(strategy_state.get('orders_save')))
-            self.over_price = json.loads(strategy_state.get('over_price'))
-            self.part_amount = eval(json.loads(strategy_state.get('part_amount')))
-            self.initial_first = f2d(json.loads(strategy_state.get('initial_first')))
-            self.initial_second = f2d(json.loads(strategy_state.get('initial_second')))
-            self.initial_reverse_first = f2d(json.loads(strategy_state.get('initial_reverse_first')))
-            self.initial_reverse_second = f2d(json.loads(strategy_state.get('initial_reverse_second')))
-            self.profit_first = f2d(json.loads(strategy_state.get('profit_first')))
-            self.profit_second = f2d(json.loads(strategy_state.get('profit_second')))
-            self.reverse = json.loads(strategy_state.get('reverse'))
-            self.reverse_hold = json.loads(strategy_state.get('reverse_hold'))
-            self.reverse_init_amount = f2d(json.loads(strategy_state.get('reverse_init_amount')))
-            self.reverse_target_amount = f2d(json.loads(strategy_state.get('reverse_target_amount')))
+            self.deposit_first = f2d(ujson.loads(strategy_state.get('deposit_first')))
+            self.deposit_second = f2d(ujson.loads(strategy_state.get('deposit_second')))
+            self.martin = f2d(ujson.loads(strategy_state.get('martin')))
+            self.order_q = ujson.loads(strategy_state.get('order_q'))
+            self.orders_grid.restore(ujson.loads(strategy_state.get('orders')))
+            self.orders_hold.restore(ujson.loads(strategy_state.get('orders_hold')))
+            self.orders_save.restore(ujson.loads(strategy_state.get('orders_save')))
+            self.over_price = ujson.loads(strategy_state.get('over_price'))
+            self.part_amount = eval(ujson.loads(strategy_state.get('part_amount')))
+            self.initial_first = f2d(ujson.loads(strategy_state.get('initial_first')))
+            self.initial_second = f2d(ujson.loads(strategy_state.get('initial_second')))
+            self.initial_reverse_first = f2d(ujson.loads(strategy_state.get('initial_reverse_first')))
+            self.initial_reverse_second = f2d(ujson.loads(strategy_state.get('initial_reverse_second')))
+            self.profit_first = f2d(ujson.loads(strategy_state.get('profit_first')))
+            self.profit_second = f2d(ujson.loads(strategy_state.get('profit_second')))
+            self.reverse = ujson.loads(strategy_state.get('reverse'))
+            self.reverse_hold = ujson.loads(strategy_state.get('reverse_hold'))
+            self.reverse_init_amount = f2d(ujson.loads(strategy_state.get('reverse_init_amount')))
+            self.reverse_target_amount = f2d(ujson.loads(strategy_state.get('reverse_target_amount')))
 
-            self.reverse_price = json.loads(strategy_state.get('reverse_price'))
+            self.reverse_price = ujson.loads(strategy_state.get('reverse_price'))
             if self.reverse_price:
                 self.reverse_price = f2d(self.reverse_price)
             elif self.reverse:
@@ -649,30 +640,30 @@ class Strategy(StrategyBase):
                 else:
                     self.reverse_price = self.reverse_target_amount / self.deposit_first
 
-            self.shift_grid_threshold = json.loads(strategy_state.get('shift_grid_threshold'))
+            self.shift_grid_threshold = ujson.loads(strategy_state.get('shift_grid_threshold'))
             if self.shift_grid_threshold:
                 self.shift_grid_threshold = f2d(self.shift_grid_threshold)
-            self.start_after_shift = json.loads(strategy_state.get('start_after_shift', "0"))
+            self.start_after_shift = ujson.loads(strategy_state.get('start_after_shift', "0"))
             if self.start_after_shift:
                 self.start_after_shift = f2d(self.start_after_shift)
 
-            self.started_balance_detail = eval(json.loads(strategy_state.get('started_balance_detail', "\"()\"")))
-            self.status_time = json.loads(strategy_state.get('status_time'))
-            self.sum_amount_first = f2d(json.loads(strategy_state.get('sum_amount_first')))
-            self.sum_amount_second = f2d(json.loads(strategy_state.get('sum_amount_second')))
-            self.sum_profit_first = f2d(json.loads(strategy_state.get('sum_profit_first')))
-            self.sum_profit_second = f2d(json.loads(strategy_state.get('sum_profit_second')))
-            self.tp_amount = f2d(json.loads(strategy_state.get('tp_amount')))
-            self.tp_order_id = json.loads(strategy_state.get('tp_order_id'))
-            self.tp_part_amount_first = f2d(json.loads(strategy_state.get('tp_part_amount_first')))
-            self.tp_part_amount_second = f2d(json.loads(strategy_state.get('tp_part_amount_second')))
-            self.tp_target = f2d(json.loads(strategy_state.get('tp_target')))
-            self.tp_order = eval(json.loads(strategy_state.get('tp_order')))
+            self.started_balance_detail = eval(ujson.loads(strategy_state.get('started_balance_detail', "\"()\"")))
+            self.status_time = ujson.loads(strategy_state.get('status_time'))
+            self.sum_amount_first = f2d(ujson.loads(strategy_state.get('sum_amount_first')))
+            self.sum_amount_second = f2d(ujson.loads(strategy_state.get('sum_amount_second')))
+            self.sum_profit_first = f2d(ujson.loads(strategy_state.get('sum_profit_first')))
+            self.sum_profit_second = f2d(ujson.loads(strategy_state.get('sum_profit_second')))
+            self.tp_amount = f2d(ujson.loads(strategy_state.get('tp_amount')))
+            self.tp_order_id = ujson.loads(strategy_state.get('tp_order_id'))
+            self.tp_part_amount_first = f2d(ujson.loads(strategy_state.get('tp_part_amount_first')))
+            self.tp_part_amount_second = f2d(ujson.loads(strategy_state.get('tp_part_amount_second')))
+            self.tp_target = f2d(ujson.loads(strategy_state.get('tp_target')))
+            self.tp_order = eval(ujson.loads(strategy_state.get('tp_order')))
             if self.tp_order:
                 self.tp_order = self.tp_order[:3] + (self.get_time(),)
-            self.tp_wait_id = json.loads(strategy_state.get('tp_wait_id'))
-            self.restore_orders = json.loads(strategy_state.get('restore_orders', 'false'))
-            self.tp_part_free = json.loads(strategy_state.get('tp_part_free', 'false'))
+            self.tp_wait_id = ujson.loads(strategy_state.get('tp_wait_id'))
+            self.restore_orders = ujson.loads(strategy_state.get('restore_orders', 'false'))
+            self.tp_part_free = ujson.loads(strategy_state.get('tp_part_free', 'false'))
             self.first_run = False
         #
         if restore:
@@ -2832,7 +2823,7 @@ class Strategy(StrategyBase):
                     await self.place_profit_order()
             elif self.grid_remove:
                 await self.cancel_grid(cancel_all=cancel_all)
-        elif order_id == self.cancel_order_id:
+        elif order_id in (self.cancel_order_id, self.tp_order_id):
             self.message_log(f"Processing canceled TP order {order_id}")
             self.cancel_order_id = None
             self.tp_order_id = None
@@ -2873,32 +2864,32 @@ class Strategy(StrategyBase):
             await self.cancel_grid()
 
     def restore_state_before_backtesting_ex(self, saved_state):
-        self.cycle_buy = json.loads(saved_state.get('cycle_buy'))
-        self.reverse = json.loads(saved_state.get('reverse'))
-        self.deposit_first = f2d(json.loads(saved_state.get('deposit_first')))
-        self.deposit_second = f2d(json.loads(saved_state.get('deposit_second')))
+        self.cycle_buy = ujson.loads(saved_state.get('cycle_buy'))
+        self.reverse = ujson.loads(saved_state.get('reverse'))
+        self.deposit_first = f2d(ujson.loads(saved_state.get('deposit_first')))
+        self.deposit_second = f2d(ujson.loads(saved_state.get('deposit_second')))
         self.last_shift_time = self.get_time()
-        self.order_q = json.loads(saved_state.get('order_q'))
-        self.orders_grid.restore(json.loads(saved_state.get('orders')))
-        self.orders_hold.restore(json.loads(saved_state.get('orders_hold')))
-        self.orders_save.restore(json.loads(saved_state.get('orders_save')))
-        self.over_price = json.loads(saved_state.get('over_price'))
-        self.reverse_hold = json.loads(saved_state.get('reverse_hold'))
-        self.reverse_init_amount = f2d(json.loads(saved_state.get('reverse_init_amount')))
-        self.reverse_price = json.loads(saved_state.get('reverse_price'))
+        self.order_q = ujson.loads(saved_state.get('order_q'))
+        self.orders_grid.restore(ujson.loads(saved_state.get('orders')))
+        self.orders_hold.restore(ujson.loads(saved_state.get('orders_hold')))
+        self.orders_save.restore(ujson.loads(saved_state.get('orders_save')))
+        self.over_price = ujson.loads(saved_state.get('over_price'))
+        self.reverse_hold = ujson.loads(saved_state.get('reverse_hold'))
+        self.reverse_init_amount = f2d(ujson.loads(saved_state.get('reverse_init_amount')))
+        self.reverse_price = ujson.loads(saved_state.get('reverse_price'))
         if self.reverse_price:
             self.reverse_price = f2d(self.reverse_price)
-        self.reverse_target_amount = f2d(json.loads(saved_state.get('reverse_target_amount')))
-        self.shift_grid_threshold = json.loads(saved_state.get('shift_grid_threshold'))
+        self.reverse_target_amount = f2d(ujson.loads(saved_state.get('reverse_target_amount')))
+        self.shift_grid_threshold = ujson.loads(saved_state.get('shift_grid_threshold'))
         if self.shift_grid_threshold:
             self.shift_grid_threshold = f2d(self.shift_grid_threshold)
-        self.sum_amount_first = f2d(json.loads(saved_state.get('sum_amount_first')))
-        self.sum_amount_second = f2d(json.loads(saved_state.get('sum_amount_second')))
-        self.tp_amount = f2d(json.loads(saved_state.get('tp_amount')))
-        self.tp_order_id = json.loads(saved_state.get('tp_order_id'))
-        self.tp_target = f2d(json.loads(saved_state.get('tp_target')))
-        self.tp_order = eval(json.loads(saved_state.get('tp_order')))
-        self.tp_wait_id = json.loads(saved_state.get('tp_wait_id'))
+        self.sum_amount_first = f2d(ujson.loads(saved_state.get('sum_amount_first')))
+        self.sum_amount_second = f2d(ujson.loads(saved_state.get('sum_amount_second')))
+        self.tp_amount = f2d(ujson.loads(saved_state.get('tp_amount')))
+        self.tp_order_id = ujson.loads(saved_state.get('tp_order_id'))
+        self.tp_target = f2d(ujson.loads(saved_state.get('tp_target')))
+        self.tp_order = eval(ujson.loads(saved_state.get('tp_order')))
+        self.tp_wait_id = ujson.loads(saved_state.get('tp_wait_id'))
 
         if self.reverse:
             if self.cycle_buy:
@@ -2919,7 +2910,7 @@ class Strategy(StrategyBase):
         self.account.funds.quote = {'asset': self.quote_asset, 'free': free_s, 'locked': Decimal()}
 
         # Restore orders
-        orders = json.loads(saved_state.get('orders'))
+        orders = ujson.loads(saved_state.get('orders'))
         if self.tp_order_id:
             orders.append(
                 {
