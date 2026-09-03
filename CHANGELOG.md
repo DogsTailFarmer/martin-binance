@@ -1,3 +1,6 @@
+## 3.2.1rc2 - 2026-09-03
+🔧 fix(executor): correct fee calculation logic for grid and take profit orders
+
 ## 3.2.1rc1 - 2026-09-02
 🔧 fix(db_utils): improve logger configuration
 🔧 fix(lib): replace ujson with orjson for better performance

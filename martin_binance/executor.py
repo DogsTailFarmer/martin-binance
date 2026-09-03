@@ -1786,9 +1786,13 @@ class Strategy(StrategyBase):
         Calculate trade amount with Fee for grid order for both currency
         """
         fee = FEE_TAKER if by_market else FEE_MAKER
-        if FEE_FIRST or (self.cycle_buy and not FEE_SECOND):
-            amount_first -= self.round_fee(fee, amount_first, base=True)
-            message = f"For grid order First - fee: {any2str(amount_first)}"
+        if FEE_FIRST:
+            if self.cycle_buy:
+                amount_first -= self.round_fee(fee, amount_first, base=True)
+                message = f"For grid order First - fee: {any2str(amount_first)}"
+            else:
+                amount_first += self.round_fee(fee, amount_first, base=True)
+                message = f"For grid order First + fee: {any2str(amount_first)}"
         else:
             amount_second -= self.round_fee(fee, amount_second, base=False)
             message = f"For grid order Second - fee: {any2str(amount_second)}"
@@ -1805,12 +1809,17 @@ class Strategy(StrategyBase):
         Calculate trade amount with Fee for take profit order for both currency
         """
         fee = FEE_TAKER if by_market else FEE_MAKER
-        if FEE_SECOND or (self.cycle_buy and not FEE_FIRST):
+
+        if FEE_FIRST and not self.cycle_buy:
+            amount_first += self.round_fee(fee, amount_first, base=True)
+            log_text = f"Take profit order First + fee: {amount_first}"
+        elif FEE_SECOND:
             amount_second -= self.round_fee(fee, amount_second, base=False)
             log_text = f"Take profit order Second - fee: {amount_second}"
         else:
             amount_first -= self.round_fee(fee, amount_first, base=True)
             log_text = f"Take profit order First - fee: {amount_first}"
+
         if log_output:
             self.message_log(log_text, log_level=logging.DEBUG)
         return self.round_truncate(amount_first, fee=True), self.round_truncate(amount_second, fee=True)
@@ -1827,8 +1836,8 @@ class Strategy(StrategyBase):
                          f" one_else_grid: {one_else_grid}", log_level=logging.DEBUG)
         self.debug_output()
         amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second, by_market)
-        self.sum_fee_f += (amount_first - amount_first_fee)
-        self.sum_fee_s += (amount_second - amount_second_fee)
+        self.sum_fee_f += abs(amount_first - amount_first_fee)
+        self.sum_fee_s += abs(amount_second - amount_second_fee)
         # Calculate cycle and total profit, refresh depo
         profit_first = profit_second = O_DEC
         if self.cycle_buy:
@@ -2062,8 +2071,8 @@ class Strategy(StrategyBase):
         if after_full_fill and _amount_first:
             # Calculate trade amount with Fee
             amount_first_fee, amount_second_fee = self.fee_for_grid(_amount_first, _amount_second, by_market)
-            self.sum_fee_f += (_amount_first - amount_first_fee)
-            self.sum_fee_s += (_amount_second - amount_second_fee)
+            self.sum_fee_f += abs(_amount_first - amount_first_fee)
+            self.sum_fee_s += abs(_amount_second - amount_second_fee)
             # Get partially filled amount
             if order_id:
                 part_amount = self.part_amount.pop(order_id, (O_DEC, O_DEC))
