@@ -13,13 +13,11 @@ import inspect
 import logging.handlers
 import time
 from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_EVEN
-from enum import Enum
-from pathlib import Path
+from enum import StrEnum
 import orjson
-from typing import Any, List
+from typing import Any, List, Dict, Optional, Tuple
 
 import numpy as np
-import ujson
 from scipy.optimize import minimize
 
 logger = logging.getLogger(f'logger.{__name__}')
@@ -41,7 +39,6 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
     tasks_set.add(_t)
     if add_done_callback:
         _t.add_done_callback(tasks_set.discard)
-
 
 async def tasks_cancel(tasks_set: set, name=None, log_out=True):
     tasks = tasks_set.copy()
@@ -118,33 +115,6 @@ def convert_from_minute(m: int) -> str:
     return '1m'  # Default case
 
 
-def load_file(name: Path) -> dict:
-    _res = {}
-    if name.exists():
-        try:
-            with name.open() as state_file:
-                _last_state = ujson.load(state_file)
-        except ujson.JSONDecodeError as er:
-            print(f"Exception on decode last state file: {er}")
-        else:
-            if _last_state.get('ms_start_time_ms', None):
-                _res = _last_state
-    return _res
-
-
-def load_last_state(last_state_file) -> dict:
-    res = {}
-    if last_state_file.exists():
-        res = load_file(last_state_file)
-        if not res:
-            print("Can't load last state, try load previous saved state")
-            res = load_file(last_state_file.with_suffix('.prev'))
-        if res:
-            with last_state_file.with_suffix('.bak').open(mode='w') as outfile:
-                ujson.dump(res, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-    return res
-
-
 class Style:
     __slots__ = ()
 
@@ -166,96 +136,6 @@ class Style:
     @classmethod
     def __add__(cls, b):
         return Style() + b
-
-
-class Orders:
-    __slots__ = ("orders_list",)
-
-    def __init__(self):
-        self.orders_list = []
-
-    def __iter__(self):
-        yield from self.orders_list
-
-    def __len__(self):
-        return len(self.orders_list)
-
-    def append_order(self, _id: int, buy: bool, amount: Decimal, price: Decimal):
-        self.orders_list.append({'id': _id, 'buy': buy, 'amount': amount, 'price': price})
-
-    def remove(self, _id: int):
-        self.orders_list[:] = [i for i in self.orders_list if i['id'] != _id]
-
-    def find_order(self, in_orders: list, place_order_id: int):
-        """
-        Find equal order in_orders[] and self.orders_list[] where in_orders[].id == place_order_id
-        If exist return order: Order
-        """
-        order = None
-        for i in self.orders_list:
-            if i['id'] == place_order_id:
-                for o in in_orders:
-                    if o.buy == i['buy'] and o.amount == i['amount'] and o.price == i['price']:
-                        order = o
-                        break
-            if order:
-                break
-        return order
-
-    def get_by_id(self, _id: int) -> dict:
-        return next((i for i in self.orders_list if i['id'] == _id), None)
-
-    def exist(self, _id: int) -> bool:
-        return any(i['id'] == _id for i in self.orders_list)
-
-    def get(self) -> list:
-        """
-        Get List of Dict for orders
-        :return: []
-        """
-        return self.orders_list
-
-    def get_id_list(self) -> list:
-        """
-        Get List of orders id
-        :return: []
-        """
-        return [i['id'] for i in self.orders_list]
-
-    def get_first(self) -> tuple:
-        """
-        Get first order as tuple
-        :return: (id, buy, amount, price)
-        """
-        return tuple(self.orders_list[0].values())
-
-    def get_last(self) -> tuple:
-        """
-        Get last order as tuple
-        :return: (id, buy, amount, price)
-        """
-        return tuple(self.orders_list[-1].values())
-
-    def restore(self, order_list: list):
-        self.orders_list.clear()
-        for i in order_list:
-            i_dec = {'id': i.get('id'),
-                     'buy': i.get('buy'),
-                     'amount': f2d(i.get('amount')),
-                     'price': f2d(i.get('price'))}
-            self.orders_list.append(i_dec)
-
-    def sort(self, cycle_buy: bool):
-        if cycle_buy:
-            self.orders_list.sort(key=lambda x: x['price'], reverse=True)
-        else:
-            self.orders_list.sort(key=lambda x: x['price'], reverse=False)
-
-    def sum_amount(self, cycle_buy: bool) -> Decimal:
-        _sum = O_DEC
-        for i in self.orders_list:
-            _sum += i['amount'] * (i['price'] if cycle_buy else 1)
-        return _sum
 
 
 class PrivateTrade:
@@ -287,55 +167,27 @@ class PrivateTrade:
 
 
 class OrderUpdate:
-    __slots__ = ("original_order", "resulting_trades", "status", "timestamp", "updated_order")
+    __slots__ = ("order_id", "resulting_trades", "status", "timestamp", "updated_order")
 
-    class Status(Enum):
-        """
-        Update status defining what happened to the order since the last update.
-        """
-        FILLED = 0
-        ADAPTED = 1
-        CANCELED = 2
-        NO_CHANGE = 3
-        REAPPEARED = 4
-        DISAPPEARED = 5
-        OTHER_CHANGE = 6
-        PARTIALLY_FILLED = 7
-        ADAPTED_AND_FILLED = 8
-
-    ADAPTED = Status.ADAPTED
-    ADAPTED_AND_FILLED = Status.ADAPTED_AND_FILLED
-    CANCELED = Status.CANCELED
-    DISAPPEARED = Status.DISAPPEARED
-    FILLED = Status.FILLED
-    NO_CHANGE = Status.NO_CHANGE
-    OTHER_CHANGE = Status.OTHER_CHANGE
-    PARTIALLY_FILLED = Status.PARTIALLY_FILLED
-    REAPPEARED = Status.REAPPEARED
+    class Status(StrEnum):
+        FILLED = "FILLED"
+        ADAPTED = "ADAPTED"
+        CANCELED = "CANCELED"
+        NO_CHANGE = "NO_CHANGE"
+        REAPPEARED = "REAPPEARED"
+        DISAPPEARED = "DISAPPEARED"
+        OTHER_CHANGE = "OTHER_CHANGE"
+        PARTIALLY_FILLED = "PARTIALLY_FILLED"
+        ADAPTED_AND_FILLED = "ADAPTED_AND_FILLED"
 
     def __init__(self, event: dict, trades: list) -> None:
-
-        class OriginalOrder:
-            __slots__ = ("id",)
-
-            def __init__(self, _event: dict):
-                self.id = _event['order_id']
-
-        self.original_order = OriginalOrder(event)
-        self.resulting_trades = []
-        for trade in trades:
-            if trade.order_id == event['order_id']:
-                self.resulting_trades.append(trade)
-        if event['order_status'] == 'FILLED':
-            self.status = OrderUpdate.FILLED
-        elif event['order_status'] == 'PARTIALLY_FILLED':
-            self.status = OrderUpdate.PARTIALLY_FILLED
-        elif event['order_status'] == 'CANCELED':
-            self.status = OrderUpdate.CANCELED
-        else:
-            self.status = OrderUpdate.OTHER_CHANGE
+        self.order_id = event['order_id']
         self.timestamp = event['transaction_time']
-        self.updated_order = None
+        self.resulting_trades = [t for t in trades if t.order_id == self.order_id]
+        try:
+            self.status = self.Status(event['order_status'])
+        except ValueError:
+            self.status = self.Status.OTHER_CHANGE
 
     def __call__(self):
         return self
@@ -345,21 +197,161 @@ class Order:
     __slots__ = ("amount", "buy", "id", "order_type", "price", "received_amount", "remaining_amount", "timestamp")
 
     def __init__(self, order: dict):
-        self.amount = Decimal(order['origQty'])
-        self.buy = order['side'] == 'BUY'
+        if 'amount' in order and 'origQty' not in order:
+            self.id = int(order['id'])
+            self.buy = bool(order['buy'])
+            self.amount = f2d(order['amount'])
+            self.order_type = order.get('order_type', 'LIMIT')
+            self.received_amount = f2d(order.get('received_amount', 0))
+            self.price = f2d(order['price'])
+            self.remaining_amount = f2d(order.get('remaining_amount', self.amount))
+            self.timestamp = int(order.get('timestamp', time.time() * 1000))
+            return
         self.id = int(order['orderId'])
+        self.buy = order['side'] == 'BUY'
+        self.amount = f2d(order['origQty'])
         self.order_type = order['type']
-        self.received_amount = Decimal(order['executedQty'])
+        self.received_amount = f2d(order['executedQty'])
         cummulative_quote_qty = order.get('cummulativeQuoteQty')
         if self.received_amount > 0 and cummulative_quote_qty:
-            self.price = Decimal(cummulative_quote_qty) / self.received_amount
+            self.price = f2d(cummulative_quote_qty) / self.received_amount
         else:
-            self.price = Decimal(order['price'])
+            self.price = f2d(order['price'])
+
         self.remaining_amount = self.amount - self.received_amount
-        self.timestamp = int(order.get('transactTime', order.get('time', time.time())))
+        self.timestamp = int(order.get('transactTime', order.get('time', time.time() * 1000)))
 
     def __call__(self):
         return self
+
+
+class Orders:
+    __slots__ = ("_orders", "tp_order_id",)
+
+    def __init__(self):
+        self._orders: Dict[int, Order] = {}
+        self.tp_order_id: Optional[int] = None
+
+    def __iter__(self):
+        yield from self._orders.values()
+
+    def __len__(self) -> int:
+        return len(self._orders) - bool(self.tp_order_id)
+
+    def keys(self, delay: int = 0):
+        if not delay:
+            return self._orders.keys()
+        current_time_ms = int(time.time() * 1000)
+        return {
+            order_id
+            for order_id, order in self._orders.items()
+            if (current_time_ms - order.timestamp) >= delay
+        }
+
+    def get_counts_by_side(self) -> Tuple[int, int]:
+        buy_count = 0
+        sell_count = 0
+        for o in self._orders.values():
+            if o.buy:
+                buy_count += 1
+            else:
+                sell_count += 1
+        return buy_count, sell_count
+
+    def clear(self):
+        self._orders.clear()
+
+    def update(self, order: Order) -> None:
+        self._orders[order.id] = order
+
+    def extend(self, orders: Dict[int, Order]):
+        self._orders |= orders
+
+    def append_order(self, _id: int, buy: bool, amount: Decimal, price: Decimal) -> None:
+        """Creates and adds an Order object directly to the pool"""
+        order_data = {'id': _id, 'buy': buy, 'amount': amount, 'price': price}
+        self._orders[_id] = Order(order_data)
+
+    def add_raw_order(self, order: dict) -> Order:
+        """Adds an order directly from the raw exchange response"""
+        new_order = Order(order)
+        self._orders[new_order.id] = new_order
+        return new_order
+
+    def remove(self, _id: int | str) -> None:
+        """Removes an order from the pool by ID"""
+        if self.tp_order_id == int(_id):
+            self.tp_order_id = None
+        self._orders.pop(int(_id), None)
+
+    def remove_ids(self, _ids: List[int]) -> None:
+        """Removes an orders from the pool by IDs"""
+        [self._orders.pop(o, None) for o in _ids]
+
+    def exist(self, _id: int | str) -> bool:
+        return int(_id) in self._orders
+
+    def exist_grid(self, _id: int | str) -> bool:
+        return int(_id) != self.tp_order_id and int(_id) in self._orders
+
+    def get_by_id(self, _id: int) -> Optional[Order]:
+        """Returns a full-fledged Order object"""
+        return self._orders.get(_id)
+
+    def get_id_list(self) -> List[int]:
+        return list(self._orders.keys())
+
+    def get(self) -> Dict[int, Order]:
+        return self._orders
+
+    def get_list(self) -> List[dict]:
+        """Returns a list of old flat dictionaries (for compatibility with legacy code)"""
+        return [{'id': o.id, 'buy': o.buy, 'amount': o.amount, 'price': o.price} for o in self._orders.values()]
+
+    def find_order(self, in_orders: List[Order], place_order_id: int) -> Optional[Order]:
+        """Searches for an equivalent order in the external list"""
+        local = self._orders.get(place_order_id)
+        if not local:
+            return None
+
+        l_buy, l_amount, l_price = local.buy, local.amount, local.price
+        return next((o for o in in_orders if o.buy == l_buy and o.amount == l_amount and o.price == l_price), None)
+
+    def get_first(self) -> Optional[Order]:
+        items = self._orders.items()
+        return next((order for k, order in items if k != self.tp_order_id), None)
+
+    def get_last(self) -> Optional[Order]:
+        reversed_items = reversed(self._orders.items())
+        return next((order for k, order in reversed_items if k != self.tp_order_id), None)
+
+    def restore(self, order_list: list):
+        """Restores the entire grid from a saved state"""
+        self._orders.clear()
+        for i in order_list:
+            new_order = Order(i)
+            self._orders[new_order.id] = new_order
+
+    def sort(self, cycle_buy: bool) -> None:
+        """Sorts the internal dictionary by order price"""
+        sorted_items = sorted(
+            self._orders.items(),
+            key=lambda item: item[1].price,
+            reverse=cycle_buy
+        )
+        self._orders = dict(sorted_items)
+
+    def p_filled(self, _id: int | str) -> bool:
+        """Check if order partially or fulfilled"""
+        if order := self.get_by_id(int(_id)):
+            return bool(order.remaining_amount == 0 or order.amount > order.received_amount > 0)
+        return False
+
+    def sum_amount(self, cycle_buy: bool) -> Decimal:
+        """Efficient mesh volume calculation directly from objects"""
+        if cycle_buy:
+            return sum((o.amount * o.price for o in self._orders.values()), Decimal('0'))
+        return sum((o.amount for o in self._orders.values()), Decimal('0'))
 
 
 class Candle:

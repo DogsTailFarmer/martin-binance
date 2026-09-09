@@ -1,3 +1,15 @@
+## 3.2.1rc3 - 2026-09-09
+🏷 build(__init__.py): bump version to 3.2.1rc3
+✨ feat(backup.py): add Pydantic state model, `save2json()`, `load_state()`, `init_dynamic_model()`
+♻️ refactor(lib.py): rewrite `Orders` as dict-backed pool with `tp_order_id`, `p_filled()`, `get_counts_by_side()`
+♻️ refactor(lib.py): convert `OrderUpdate.Status` to `StrEnum`, simplify `OrderUpdate.__init__`
+🔥 chore(lib.py): remove `load_file()`, `load_last_state()`, and `ujson` import
+♻️ refactor(strategy_base.py): integrate `Orders` pool, add `load_strategy_state()`, drop `last_state_update()`
+♻️ refactor(executor.py): migrate `orders_grid` → `self.orders`, `tp_order_id` → `self.orders.tp_order_id`
+♻️ refactor(executor.py): extract `_calculate_fee()` shared by `fee_for_grid()` and `fee_for_tp()`
+♻️ refactor(executor.py): rewrite `save_strategy_state()` / `load_strategy_state()` via Pydantic + `BACKUP_REGISTRY`
+📝 docs(CHANGELOG.md): add 3.2.1rc3 release entry
+
 ## 3.2.1rc2 - 2026-09-03
 🔧 fix(executor): correct fee calculation logic for grid and take profit orders
 

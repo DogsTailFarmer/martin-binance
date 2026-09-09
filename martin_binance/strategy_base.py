@@ -22,6 +22,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from shutil import rmtree, copy, make_archive
+from typing import Optional
 
 import jsonpickle
 import orjson
@@ -40,7 +41,7 @@ from martin_binance.backtest.optimizer import OPTIMIZER, PARAMS_FLOAT
 from martin_binance.client import Trade
 from martin_binance.lib import (
     Candle, TradingCapabilityManager, Ticker, FundsEntry, OrderBook, Style, any2str, PrivateTrade, Order,
-    convert_from_minute, OrderUpdate, load_file, load_last_state, Klines, tasks_manage, tasks_cancel,
+    Orders, convert_from_minute, OrderUpdate, Klines, tasks_manage, tasks_cancel,
     parse_bytes_response
 )
 from martin_binance.params import *  # NOSONAR python:S2208
@@ -104,9 +105,9 @@ class StrategyBase(metaclass=ABCMeta):
         self.order_book = {}
         self.order_id = int(datetime.now().strftime("%f%S%M"))
         self.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
-        self.orders = {}  # {int(id): Order(), } of orders associated with strategy
+        self.orders = Orders()  # + Strategy grid orders pool
         self.tcm = None  # TradingCapabilityManager
-        self.last_state = None
+        self.last_state: bool = False
         self.rate_limiter = RATE_LIMITER
         self.start_time_ms = int(time.time() * 1000)
         self.send_request = None
@@ -123,7 +124,7 @@ class StrategyBase(metaclass=ABCMeta):
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
         self.account = None
         self.get_buffered_funds_last_time = self.get_time()
-        self.status_time = None  # + Last time sending status message
+        self.status_time: Optional[int] = None  # + Last time sending status message
         self.tlg_header = ''  # - Header for Telegram message
         self.tlg_client = None
         self.start_collect = None
@@ -140,8 +141,8 @@ class StrategyBase(metaclass=ABCMeta):
         if MODE in ('TC', 'S'):
             self.reset_backtest_vars()
         #
-        self.cycle_time = None  # + Cycle start time
-        self.command = None  # + External input command from Telegram
+        self.cycle_time: datetime = datetime.now(timezone.utc).replace(tzinfo=None)  # + Cycle start time
+        self.command: str = ""  # + External input command from Telegram
         self.connection_db = None  # - Connection to .db
 
     def __call__(self):
@@ -164,7 +165,7 @@ class StrategyBase(metaclass=ABCMeta):
         self.order_book = {}
         self.order_id = int(datetime.now().strftime("%f%S%M"))
         self.trades = []  # List of trades associated with strategy (limit = TRADES_LIST_LIMIT)
-        self.orders = {}  # Set of orders associated with strategy
+        self.orders.clear()  # Grid orders associated with strategy
         self.get_buffered_funds_last_time = self.get_time()
         self.rate_limiter = RATE_LIMITER
         self.start_time_ms = int(time.time() * 1000)
@@ -179,14 +180,6 @@ class StrategyBase(metaclass=ABCMeta):
         self.exchange = _session.client.exchange if _session.client else None
         self.send_request = _session.send_request
         self.for_request = _session.for_request
-
-    ###
-
-    def last_state_update(self, last_state):
-        last_state[MS_ORDER_ID] = ujson.dumps(self.order_id)
-        last_state['ms_start_time_ms'] = ujson.dumps(self.start_time_ms)
-        last_state[MS_ORDERS] = jsonpickle.encode(self.orders, keys=True)
-    ###
 
     def get_trading_capability_manager(self) -> TradingCapabilityManager:
         return self.tcm
@@ -212,12 +205,6 @@ class StrategyBase(metaclass=ABCMeta):
 
     def get_buffered_completed_trades(self) -> list[PrivateTrade]:
         return self.trades
-
-    def get_buffered_open_orders(self) -> list[Order]:
-        return list(self.orders.values())
-
-    def get_buffered_open_order(self, _id) -> Order:
-        return self.orders.get(_id)
 
     @staticmethod
     def get_buffered_recent_candles(
@@ -285,9 +272,6 @@ class StrategyBase(metaclass=ABCMeta):
         elif log_level >= logging.ERROR:
             logger.log(log_level, msg)
 
-    def order_exist(self, _id) -> bool:
-        return bool(self.orders.get(int(_id)))
-
     def trade_not_exist(self, _order_id: int, _trade_id: int) -> bool:
         return all(
             trade.order_id != _order_id or trade.id != _trade_id for trade in self.trades
@@ -299,9 +283,6 @@ class StrategyBase(metaclass=ABCMeta):
             if _trade.order_id == _order_id:
                 saved_filled_quantity += _trade.amount
         return saved_filled_quantity
-
-    def remove_from_orders_lists(self, _order_id_list: list) -> None:
-        [self.orders.pop(i, None) for i in _order_id_list]
 
     def remove_from_trades_lists(self, _order_id) -> None:
         self.trades[:] = [i for i in self.trades if i.order_id != _order_id]
@@ -404,7 +385,6 @@ class StrategyBase(metaclass=ABCMeta):
                     self.parquet_declare(Path(self.session_root, "raw"))
                     # Save current strategy state for backtesting
                     last_state = self.save_strategy_state()
-                    self.last_state_update(last_state)
                     with self.state_file.open(mode='w') as outfile:
                         ujson.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     #
@@ -456,19 +436,18 @@ class StrategyBase(metaclass=ABCMeta):
             self.candles[f"writer_{i.value}"].close()
 
         if SAVE_DS:
-            # Save session detail for analytics
-            session_data = Path(self.session_root, "snapshot")
+            session_data = self.session_root / "snapshot"
             session_data.mkdir(parents=True, exist_ok=True)
-            #
-            df_grid_sell = pd.DataFrame().from_dict(self.grid_sell, orient='index')
-            df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-            df_grid_sell.to_pickle(Path(session_data, "sell.pkl"))
-            #
-            df_grid_buy = pd.DataFrame().from_dict(self.grid_buy, orient='index')
-            df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
-            df_grid_buy.to_pickle(Path(session_data, "buy.pkl"))
+            if self.grid_sell:
+                df_grid_sell = pd.DataFrame.from_dict(self.grid_sell, orient='index')
+                df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+                df_grid_sell.to_pickle(session_data / "sell.pkl")
+            if self.grid_buy:
+                df_grid_buy = pd.DataFrame.from_dict(self.grid_buy, orient='index')
+                df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+                df_grid_buy.to_pickle(session_data / "buy.pkl")
 
-        make_archive(str(Path(self.session_root, "raw_bak")), 'zip', self.session_root, 'raw')
+        make_archive(str(self.session_root / "raw_bak"), 'zip', self.session_root, 'raw')
         self.message_log(f"Stream data for backtesting saved to {self.session_root}")
 
     def parquet_declare(self, raw_path):
@@ -501,29 +480,36 @@ class StrategyBase(metaclass=ABCMeta):
         asyncio.get_event_loop().stop()
 
     def _back_test_handler_ext(self):
-        # Save test data
-        session_path = Path(BACKTEST_PATH,
-                            f"{self.exchange}_{self.symbol}_{datetime.now().strftime('%m%d-%H-%M-%S')}")
-        session_path.mkdir(parents=True)
-        ds_ticker = pd.Series(self.account.ticker).astype(float)
-        ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
-        df_grid_sell = pd.DataFrame().from_dict(self.account.grid_sell, orient='index').astype(float)
-        df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
-        df_grid_buy = pd.DataFrame().from_dict(self.account.grid_buy, orient='index').astype(float)
-        df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
-        #
-        ds_ticker.to_pickle(Path(session_path, "ticker.pkl"))
-        df_grid_sell.to_pickle(Path(session_path, "sell.pkl"))
-        df_grid_buy.to_pickle(Path(session_path, "buy.pkl"))
-        copy(PARAMS, Path(session_path, Path(PARAMS).name))
+        timestamp_str = datetime.now().strftime('%m%d-%H-%M-%S')
+        session_path = Path(BACKTEST_PATH) / f"{self.exchange}_{self.symbol}_{timestamp_str}"
+        session_path.mkdir(parents=True, exist_ok=True)
+
+        if self.account.ticker:
+            ds_ticker = pd.Series(self.account.ticker, dtype=float)
+            ds_ticker.index = pd.to_datetime(ds_ticker.index, unit='ms')
+            ds_ticker.to_pickle(session_path / "ticker.pkl")
+
+        if self.account.grid_sell:
+            df_grid_sell = pd.DataFrame.from_dict(self.account.grid_sell, orient='index', dtype=float)
+            df_grid_sell.index = pd.to_datetime(df_grid_sell.index, unit='ms')
+            df_grid_sell.to_pickle(session_path / "sell.pkl")
+
+        if self.account.grid_buy:
+            df_grid_buy = pd.DataFrame.from_dict(self.account.grid_buy, orient='index', dtype=float)
+            df_grid_buy.index = pd.to_datetime(df_grid_buy.index, unit='ms')
+            df_grid_buy.to_pickle(session_path / "buy.pkl")
+
+        copy(PARAMS, session_path / Path(PARAMS).name)
+
         if LOGGING:
             print(f"Session data saved to: {session_path}")
 
     def restore_state_before_backtesting(self):
-        saved_state = load_file(self.state_file)
-        self.order_id = ujson.loads(saved_state.pop(MS_ORDER_ID, "0"))
-        self.orders = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
-        self.restore_state_before_backtesting_ex(saved_state)
+        pass
+        # saved_state = load_file(self.state_file)
+        # self.order_id = ujson.loads(saved_state.pop(MS_ORDER_ID, "0"))
+        # self.orders = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
+        # self.restore_state_before_backtesting_ex(saved_state)
 
     async def heartbeat(self, _session):
         try_count = 0
@@ -542,14 +528,6 @@ class StrategyBase(metaclass=ABCMeta):
         while True:
             try:
                 if MODE in ('T', 'TC'):
-                    last_state = self.save_strategy_state()
-                    self.last_state_update(last_state)
-                    # print(f"heartbeat.last_state: {last_state}")
-                    if LAST_STATE_FILE.exists():
-                        LAST_STATE_FILE.replace(LAST_STATE_FILE.with_suffix('.prev'))
-                    with LAST_STATE_FILE.open(mode='w') as outfile:
-                        ujson.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-                    #
                     if (
                         not self.wss_fire_up
                         and self.operational_status
@@ -750,8 +728,8 @@ class StrategyBase(metaclass=ABCMeta):
                 self.start_collect = False
                 self.session_data_handler()
 
-            if LAST_STATE_FILE.exists():
-                print(f"Current state saved into {LAST_STATE_FILE}")
+            self.save_strategy_state(LAST_STATE_FILE)
+            self.message_log(f"Last state saved to {LAST_STATE_FILE}", log_level=logging.INFO)
 
             if self.tlg_client:
                 await self.tlg_client.close()
@@ -864,13 +842,16 @@ class StrategyBase(metaclass=ABCMeta):
     def open_orders_snapshot(self, ts=None):
         orders_buy = {}
         orders_sell = {}
-        for k, order in self.orders.items():
+
+        for order in self.orders:
             if order.buy:
-                orders_buy[k] = order.price
+                orders_buy[order.id] = order.price
             else:
-                orders_sell[k] = order.price
-        self.grid_buy.update({ts or int(time.time() * 1000): pd.Series(orders_buy)})
-        self.grid_sell.update({ts or int(time.time() * 1000): pd.Series(orders_sell)})
+                orders_sell[order.id] = order.price
+
+        timestamp = ts or int(time.time() * 1000)
+        self.grid_buy[timestamp] = orders_buy
+        self.grid_sell[timestamp] = orders_sell
 
     async def cancel_order(self, order_id: int, cancel_all=False):
         _fetch_order = False
@@ -929,7 +910,6 @@ class StrategyBase(metaclass=ABCMeta):
 
     async def cancel_order_handler(self, _id, cancel_all):
         self.message_log(f"Cancel order {_id} success", color=Style.GREEN)
-        self.remove_from_orders_lists([_id])
         await self.on_cancel_order_success(_id, cancel_all=cancel_all)
         if MODE == 'TC' and SAVE_DS and self.start_collect:
             self.open_orders_snapshot()
@@ -1153,13 +1133,13 @@ class StrategyBase(metaclass=ABCMeta):
     async def create_order_handler(self, _id, result):
         if self.order_init_exist(_id):
             order = Order(result)
-            self.orders[order.id] = order
+            self.orders.update(order)
             self.message_log(
                 f"Order placed {order.id}({result.get('clientOrderId') or _id}) for {result.get('side')}"
                 f" {any2str(order.amount)} by {any2str(order.price)} = {any2str(order.amount * order.price)}",
                 color=Style.GREEN)
 
-            await self.on_place_order_success(_id, order)
+            await self.on_place_order_success(_id, order.id)
 
             if MODE == 'S':
                 await self.on_funds_update()
@@ -1209,7 +1189,7 @@ class StrategyBase(metaclass=ABCMeta):
     async def on_order_update_handler(self, ed):
         if self.symbol != ed['symbol']:
             return
-        if not self.order_exist(ed['order_id']) and ed["client_order_id"].isnumeric():
+        if not self.orders.exist(ed['order_id']) and ed["client_order_id"].isnumeric():
             _ed = {
                 "symbol": ed['symbol'],
                 "orderId": ed['order_id'],
@@ -1232,10 +1212,7 @@ class StrategyBase(metaclass=ABCMeta):
         if not Decimal(ed["cumulative_filled_quantity"]):
             return
 
-        if ed['order_status'] == 'FILLED':
-            # Remove from orders dict
-            self.remove_from_orders_lists([ed['order_id']])
-        elif ed['order_status'] == 'PARTIALLY_FILLED':
+        if ed['order_status'] == 'PARTIALLY_FILLED':
             # Update order in orders dict
             _order = {
                 "orderId": ed['order_id'],
@@ -1246,7 +1223,7 @@ class StrategyBase(metaclass=ABCMeta):
                 "side": ed['side'],
                 "transactTime": ed['transaction_time'],
             }
-            self.orders |= {ed['order_id']: Order(_order)}
+            self.orders.update(Order(_order))
 
         if self.trade_not_exist(ed["order_id"], ed["trade_id"]):
             self._on_order_update_handler_ext(ed)
@@ -1420,7 +1397,7 @@ class StrategyBase(metaclass=ABCMeta):
                         color=Style.GREEN,
                         tlg=not GRID_ONLY
                     )
-                    await self.restore_strategy_state(restore=True)
+                    await self.restore_strategy_state()
 
                 for order in orders:
                     _id = int(order['orderId'])
@@ -1428,8 +1405,8 @@ class StrategyBase(metaclass=ABCMeta):
                             self.order_trades_sum(_id) < Decimal(order['executedQty'])):
                         diff_id.add(_id)
 
-                # Missed fill event list
-                diff_id.update(set(self.orders).difference(set(exch_orders)))
+                # Missed fill events
+                diff_id.update(self.orders.keys(delay=1000).difference(exch_orders))
 
                 if diff_id:
                     self.message_log(f"Perhaps was missed event for order(s): {diff_id},"
@@ -1441,13 +1418,12 @@ class StrategyBase(metaclass=ABCMeta):
 
                 if self.last_state and MODE == 'TC':
                     last_state = self.save_strategy_state()
-                    self.last_state_update(last_state)
                     with self.state_file.open(mode='w') as outfile:
                         ujson.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
                     self.start_collect = True
                 exch_orders.clear()
                 diff_id.clear()
-                self.last_state = None
+                self.last_state = False
                 restore = False
 
             except (asyncio.CancelledError, KeyboardInterrupt):
@@ -1563,8 +1539,6 @@ class StrategyBase(metaclass=ABCMeta):
             await asyncio.sleep(TLG_DELAY)
 
     async def main(self, _symbol):  # NOSONAR
-        restore_state = None
-        last_state = {}
         active_orders = []
         exch_orders_ids = []
         try:
@@ -1607,16 +1581,14 @@ class StrategyBase(metaclass=ABCMeta):
                             print(f"Order: {order['orderId']}({order['clientOrderId']}), side: {order['side']},"
                                   f" amount: {order['origQty']}, price:{order['price']}, status: {order['status']}")
                     # Try load last strategy state from saved files
-                    last_state = load_last_state(LAST_STATE_FILE)
-                    restore_state = bool(last_state)
-                    print(f"main.restore_state: {restore_state}")
+                    self.last_state = self.load_strategy_state(LAST_STATE_FILE, probe=True)
                     if CANCEL_ALL_ORDERS and active_orders and not LOAD_LAST_STATE:
                         answer = await asyncio.to_thread(
                             input,
                             'Are you want cancel all active order for this pair? Y:\n'
                         )
                         if answer.lower() == 'y':
-                            restore_state = False
+                            self.last_state = False
                             try:
                                 res = await send_request(
                                     self.stub.cancel_all_orders,
@@ -1723,13 +1695,7 @@ class StrategyBase(metaclass=ABCMeta):
             await self.buffered_funds()
             answer = str()
 
-            if restore_state:
-                if last_state.get("command", None) == '"stopped"':
-                    await asyncio.to_thread(
-                        input,
-                        'Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n'
-                    )
-                    last_state["command"] = 'null'
+            if self.last_state:
                 if not LOAD_LAST_STATE:
                     answer = await asyncio.to_thread(
                         input,
@@ -1737,20 +1703,12 @@ class StrategyBase(metaclass=ABCMeta):
                     )
                 if LOAD_LAST_STATE or answer.lower() == 'y':
                     self.message_log("Load saved state after restart", color=Style.GREEN)
-                    self.last_state = last_state
-                    # Restore StrategyBase class var
-                    self.order_id = ujson.loads(
-                        last_state.pop(MS_ORDER_ID, str(int(datetime.now().strftime("%S%M")) * 1000))
-                    )
-                    self.start_time_ms = ujson.loads(
-                        last_state.pop('ms_start_time_ms', str(int(time.time() * 1000)))
-                    )
-
-                    self.orders = jsonpickle.decode(last_state.pop(MS_ORDERS, '{}'), keys=True)
+                    self.load_strategy_state(LAST_STATE_FILE)
+                    # TODO make handles for TP
                     for _id in exch_orders_ids:
-                        if _id not in self.orders.keys():
+                        if not self.orders.exist(_id):
                             _order = next((_o for _o in active_orders if int(_o["orderId"]) == _id))
-                            self.orders[_id] = Order(_order)
+                            self.orders.update(Order(_order))
                             self.message_log(
                                 f"Was restored order {_id}({_order.get('clientOrderId')}) from exchange data",
                                 log_level=logging.WARNING,
@@ -1758,13 +1716,20 @@ class StrategyBase(metaclass=ABCMeta):
                             )
                     [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                     #
-                    await self.restore_strategy_state(strategy_state=last_state, restore=False)
+
+                    if self.command == "stopped":
+                        await asyncio.to_thread(
+                            input,
+                            'Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n'
+                        )
+                        self.command = None
+
                     #
                     await self.init(check_funds=False)
                 else:
-                    restore_state = False
+                    self.last_state = False
 
-            if not restore_state:
+            if not self.last_state:
                 if MODE in ('T', 'TC'):
                     await self.init()
                     await asyncio.to_thread(
@@ -1802,7 +1767,7 @@ class StrategyBase(metaclass=ABCMeta):
                     tasks_manage(self.tasks, self.save_asset(), add_done_callback=False)
                 if MODE == 'TC':
                     tasks_manage(self.tasks, self.backtest_control(), add_done_callback=False)
-                if not restore_state:
+                if not self.last_state:
                     await self.start()
 
             tasks_manage(self.tasks, self.heartbeat(self.session), add_done_callback=False)
@@ -1813,7 +1778,7 @@ class StrategyBase(metaclass=ABCMeta):
 
     # region AbstractMethod
     @abstractmethod
-    def restore_state_before_backtesting_ex(self, *args):
+    def restore_state_before_backtesting_ex(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
@@ -1873,15 +1838,19 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    async def restore_strategy_state(self, **kwargs):
+    async def restore_strategy_state(self):
         raise NotImplementedError
 
     @abstractmethod
-    async def start(self, *args):
+    async def load_strategy_state(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
-    async def init(self, **kwargs):
+    async def start(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @abstractmethod
+    async def init(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
