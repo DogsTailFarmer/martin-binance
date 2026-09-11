@@ -70,6 +70,7 @@ def malloc_trim(trim_type: int = 0):
     ctypes.CDLL(ctypes.util.find_library('c')).malloc_trim(trim_type)
 
 
+# noinspection unresolved-references
 class Strategy(StrategyBase):
     def __init__(self, call_super=True):
         if call_super:
@@ -82,6 +83,7 @@ class Strategy(StrategyBase):
         self.orders_save = Orders()  # + Save for the time of cancellation
         # Take profit variables
         self.tp_wait_id: Optional[int] = None  # +
+        # TODO Use Orders member instead
         self.tp_order: Tuple[DecimalStr | float | int, ...] = ()  # - (id, buy, amount, price, local_time())
         self.tp_order_hold = {}  # - Save unreleased take profit order
         self.tp_hold = False  # - Flag for replace take profit order
@@ -122,7 +124,7 @@ class Strategy(StrategyBase):
         #
         self.cancel_grid_order_id = None  # - id individual canceled grid order
         self.cancel_order_id = None  # - Exist canceled not confirmed order
-        self.cycle_time_reverse: datetime = datetime.now(timezone.utc).replace(tzinfo=None)  # +
+        self.cycle_time_reverse: Optional[datetime] = datetime.now(timezone.utc).replace(tzinfo=None)  # +
         self.first_run = True  # -
         self.grid_only_restart = 0  # - Time to restart GRID_ONLY mode
         self.grid_remove: Optional[bool] = None  # + Flag when starting cancel grid orders
@@ -167,9 +169,20 @@ class Strategy(StrategyBase):
             scheduler.add_job(self.event_export_operational_status, 'cron', minute='*', jitter=25)
             scheduler.add_job(self.event_get_external_command, "interval", seconds=30)
             scheduler.add_job(self.event_report, "interval", seconds=6)
-            scheduler.add_job(self.save_strategy_state, "interval", seconds=60, kwargs={'file_path': LAST_STATE_FILE})
             if GRID_ONLY:
                 scheduler.add_job(self.event_grid_only_release, 'cron', minute='*', second='45')
+
+    @staticmethod
+    def auto_save_state(func):
+        """Decorator for automatic saving after method execution"""
+
+        async def wrapper(self, *args, **kwargs):
+            self._save_pending = False
+            result = await func(self, *args, **kwargs)
+            self._save_pending = True
+            return result
+
+        return wrapper
 
     async def init(self, check_funds=True) -> None:
         self.message_log('Start Init section')
@@ -256,17 +269,11 @@ class Strategy(StrategyBase):
         and atomic-writes them to the disk using custom formatting.
         """
         try:
-            # 1. Динамически собираем текущие значения по нашему реестру строк
             current_data = {attr: getattr(self, attr) for attr in BACKUP_REGISTRY}
-
-            # 2. Валидируем данные через сгенерированную при старте модель StateResponse
             model_instance = self.StateResponse.model_validate(current_data)
-
-            # 3. Запускаем наш красивый атомарный сериализатор (с поддержкой .bak копии)
             save2json(model_instance, file_path)
-
         except Exception as e:
-            self.message_log(f"Критическая ошибка при сохранении состояния: {e}", tlg=True)
+            self.message_log(f"Critical error while saving state: {e}", tlg=True)
 
     def scheduler_start(self):
         scheduler.start()
@@ -352,9 +359,6 @@ class Strategy(StrategyBase):
                 k_sum += k
                 diff_sum += k * (adx_data['+DI'] - adx_data['-DI'])
         if k_sum:
-            # TODO The values don't changed in times
-            print(f"event_di: diff_sum: {diff_sum}, k_sum: {k_sum}")
-
             self.adx_di_avg_delta.append(diff_sum / k_sum)
             self.adx_di_avg_delta = self.adx_di_avg_delta[-TC_ADX_DATA_LIMIT:]
 
@@ -1296,7 +1300,7 @@ class Strategy(StrategyBase):
                         self.shift_grid_threshold = base_price + 2 * PRICE_SHIFT * base_price / 100
                     else:
                         self.shift_grid_threshold = base_price - 2 * PRICE_SHIFT * base_price / 100
-                self.message_log(f"Shift grid threshold: {self.shift_grid_threshold:f}")
+                self.message_log(f"Shift grid threshold: {self.shift_grid_threshold or O_DEC:f}")
             #
             self.start_after_shift = 0
             if self.grid_update_started:
@@ -1679,7 +1683,7 @@ class Strategy(StrategyBase):
 
             over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
 
-            if over_price == 0:
+            if over_price == O_DEC:
                 self.message_log(f"{msg}, use previous or over_price_coarse * 2", log_level=logging.WARNING)
                 over_price = max(over_price_previous, 2 * over_price_coarse)
             else:
@@ -1695,7 +1699,6 @@ class Strategy(StrategyBase):
                        is_buy: bool,
                        order_type: str) -> tuple[Decimal, Decimal, str]:
         fee = FEE_TAKER if by_market else FEE_MAKER
-        log_msg = ""
 
         if FEE_FIRST:
             if is_buy:
@@ -1753,6 +1756,7 @@ class Strategy(StrategyBase):
             self.message_log(log_text, log_level=logging.INFO)
         return amount_first, amount_second
 
+    @auto_save_state
     async def after_filled_tp(self, one_else_grid: bool = False):
         """
         After filling take profit order calculate profit, deposit and restart or place additional TP
@@ -1847,6 +1851,7 @@ class Strategy(StrategyBase):
         self.debug_output()
         await self.start(profit_f, profit_s)
 
+    @auto_save_state
     async def reverse_after_grid_ending(self):
         self.message_log("Reverse after grid ending:", log_level=logging.DEBUG)
         self.debug_output()
@@ -1963,8 +1968,10 @@ class Strategy(StrategyBase):
                     else:
                         break
 
+                # noinspection none-function-assignment
                 [self.orders_hold.remove(_id) for _id in placed_ids]
 
+    @auto_save_state
     def grid_only_stop(self) -> None:
         tcm = self.get_trading_capability_manager()
         avg_rate = tcm.round_price(self.sum_amount_second / self.sum_amount_first, ROUND_FLOOR)
@@ -1990,6 +1997,7 @@ class Strategy(StrategyBase):
             return
         self.command = 'stop'
 
+    @auto_save_state
     async def grid_handler(
         self,
         _amount_first=None,
@@ -2078,6 +2086,7 @@ class Strategy(StrategyBase):
         else:
             self.grid_remove = None
 
+    @auto_save_state
     async def convert_tp(
             self,
             _amount_f: Decimal,
@@ -2159,6 +2168,7 @@ class Strategy(StrategyBase):
                          f" Sum_amount_second: {self.sum_amount_second}",
                          log_level=logging.DEBUG, color=Style.MAGENTA)
 
+    @auto_save_state
     async def cancel_grid(self, cancel_all=False):
         """
         Atomic cancel grid orders. Before start() all grid orders must be confirmed canceled
@@ -2198,6 +2208,7 @@ class Strategy(StrategyBase):
         else:
             self.grid_remove = None
 
+    @auto_save_state
     async def grid_update(self):
         _depo = self.depo_unused()
         self.message_log(f"Start update (place) grid orders, depo: {_depo}", color=Style.B_WHITE)
@@ -2315,6 +2326,7 @@ class Strategy(StrategyBase):
     # private update methods
     ##############################################################
 
+    @auto_save_state
     async def on_balance_update_ex(self, balance: Dict) -> None:
         asset = balance['asset']
         delta = Decimal(balance['balance_delta'])
@@ -2495,6 +2507,7 @@ class Strategy(StrategyBase):
                                       self.grid_hold['additional_grid'],
                                       self.grid_hold['grid_update'])
 
+    @auto_save_state
     async def on_order_update_ex(self, update: OrderUpdate) -> None:
         # self.message_log(f"Order {update.order_id}: {update.status}", log_level=logging.DEBUG)
         if update.status in ['ADAPTED',
@@ -2661,6 +2674,7 @@ class Strategy(StrategyBase):
     def order_init_exist(self, client_order_id: int):
         return bool(self.orders_init.exist(client_order_id) or client_order_id == self.tp_wait_id)
 
+    @auto_save_state
     async def on_place_order_success(self, client_order_id: int, order_id: int) -> None:
         # print(f"on_place_order_success.client_order_id: {client_order_id}")
         if self.orders_init.exist(client_order_id):
@@ -2695,6 +2709,7 @@ class Strategy(StrategyBase):
         else:
             self.message_log(f"Did not have waiting order {client_order_id}", logging.ERROR)
 
+    @auto_save_state
     async def on_place_order_error(self, client_order_id: int, error: str) -> None:
         self.message_log(f"On place order {client_order_id} error: {error}", logging.ERROR, tlg=True)
         if self.orders_init.exist(client_order_id):
@@ -2720,6 +2735,7 @@ class Strategy(StrategyBase):
         if 'FAILED_PRECONDITION' in error:
             self.command = 'stopped'
 
+    @auto_save_state
     async def on_cancel_order_success(self, order_id: int, cancel_all=False) -> None:
         if order_id == self.cancel_grid_order_id:
             self.ts_grid_update = self.get_time()

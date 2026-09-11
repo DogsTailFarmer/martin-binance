@@ -1,3 +1,17 @@
+## 3.2.1rc4 - 2026-09-11
+📦 deps(requirements, pyproject): add `pydantic==2.13.5`
+✨ feat(strategy_base.py): add deferred `_save_pending` flag and flush `save_strategy_state()` in main loop
+♻️ refactor(strategy_base.py): type `start_collect` and `command` as `Optional`; make `load_strategy_state()` sync
+✨ feat(strategy_base.py): add `**kwargs` to `on_new_funds()`, `on_new_ticker()`, `order_init_exist()`, `get_free_assets()`, `on_new_order_book()`, `on_cancel_order_error_string()`
+🐛 fix(strategy_base.py): remove stale order-restore block from `load_strategy_state()` path; drop `jsonpickle` import
+✨ feat(executor.py): introduce `auto_save_state()` decorator to flag `_save_pending` after each handler
+♻️ refactor(executor.py): apply `@auto_save_state` to `after_filled_tp()`, `grid_handler()`, `cancel_grid()`, `grid_update()`, `convert_tp()`, `grid_only_stop()`, `reverse_after_grid_ending()`, `on_balance_update_ex()`, `on_order_update_ex()`, `on_place_order_success()`, `on_place_order_error()`, `on_cancel_order_success()`
+🐛 fix(executor.py): guard `shift_grid_threshold` format and `over_price` comparison against `O_DEC` sentinel
+♻️ refactor(executor.py): remove periodic `save_strategy_state` scheduler job; drop unused `log_msg` and debug `print`
+📝 docs(executor.py): translate inline comments and log strings to English
+📝 docs(backup.py): translate all comments, docstrings, and user-facing messages to English
+♻️ refactor(backup.py): simplify `save2json()` by removing redundant list/tuple branch; clean `load_state()` fallback
+
 ## 3.2.1rc3 - 2026-09-09
 🏷 build(__init__.py): bump version to 3.2.1rc3
 ✨ feat(backup.py): add Pydantic state model, `save2json()`, `load_state()`, `init_dynamic_model()`

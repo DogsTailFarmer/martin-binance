@@ -27,3 +27,4 @@ tqdm==4.70.0
 ujson==5.13.0
 aiohttp==3.14.3
 aiosqlite==0.22.1
+pydantic==2.13.5

@@ -24,7 +24,6 @@ from pathlib import Path
 from shutil import rmtree, copy, make_archive
 from typing import Optional
 
-import jsonpickle
 import orjson
 import pandas as pd
 import pyarrow as pa
@@ -127,7 +126,7 @@ class StrategyBase(metaclass=ABCMeta):
         self.status_time: Optional[int] = None  # + Last time sending status message
         self.tlg_header = ''  # - Header for Telegram message
         self.tlg_client = None
-        self.start_collect = None
+        self.start_collect: Optional[bool | int] = None
         self.s_mode_break = None
         self.backtest_process = None
         # Init in reset_backtest_vars()
@@ -142,8 +141,9 @@ class StrategyBase(metaclass=ABCMeta):
             self.reset_backtest_vars()
         #
         self.cycle_time: datetime = datetime.now(timezone.utc).replace(tzinfo=None)  # + Cycle start time
-        self.command: str = ""  # + External input command from Telegram
+        self.command: Optional[str] = None  # + External input command from Telegram
         self.connection_db = None  # - Connection to .db
+        self._save_pending = False  # Deferred backup readiness flag
 
     def __call__(self):
         return self
@@ -528,6 +528,10 @@ class StrategyBase(metaclass=ABCMeta):
         while True:
             try:
                 if MODE in ('T', 'TC'):
+                    if self._save_pending:
+                        self.save_strategy_state(LAST_STATE_FILE)
+                        self._save_pending = False
+
                     if (
                         not self.wss_fire_up
                         and self.operational_status
@@ -1536,6 +1540,7 @@ class StrategyBase(metaclass=ABCMeta):
                 if command == 'exit':
                     raise SystemExit(1)
                 self.command = command
+                self._save_pending = True
             await asyncio.sleep(TLG_DELAY)
 
     async def main(self, _symbol):  # NOSONAR
@@ -1704,16 +1709,6 @@ class StrategyBase(metaclass=ABCMeta):
                 if LOAD_LAST_STATE or answer.lower() == 'y':
                     self.message_log("Load saved state after restart", color=Style.GREEN)
                     self.load_strategy_state(LAST_STATE_FILE)
-                    # TODO make handles for TP
-                    for _id in exch_orders_ids:
-                        if not self.orders.exist(_id):
-                            _order = next((_o for _o in active_orders if int(_o["orderId"]) == _id))
-                            self.orders.update(Order(_order))
-                            self.message_log(
-                                f"Was restored order {_id}({_order.get('clientOrderId')}) from exchange data",
-                                log_level=logging.WARNING,
-                                color=Style.YELLOW
-                            )
                     [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
                     #
 
@@ -1790,11 +1785,11 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    async def on_new_funds(self, *args):
+    async def on_new_funds(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
-    async def on_cancel_order_error_string(self, *args):
+    async def on_cancel_order_error_string(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
@@ -1806,7 +1801,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def order_init_exist(self, *args):
+    def order_init_exist(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
@@ -1822,7 +1817,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    async def on_new_ticker(self, *args):
+    async def on_new_ticker(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
@@ -1830,11 +1825,11 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def get_free_assets(self, **kwargs):
+    def get_free_assets(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
-    def on_new_order_book(self, *args):
+    def on_new_order_book(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod
@@ -1842,7 +1837,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    async def load_strategy_state(self, *args, **kwargs):
+    def load_strategy_state(self, *args, **kwargs):
         raise NotImplementedError
 
     @abstractmethod

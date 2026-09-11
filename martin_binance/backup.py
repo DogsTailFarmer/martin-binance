@@ -23,13 +23,11 @@ BACKUP_REGISTRY = [
     "tp_part_amount_second", "tp_part_free", "tp_target", "tp_wait_id"
 ]
 
-# 1. Глобальный сериализатор Decimal в строку для JSON
 DecimalStr = Annotated[
     Decimal,
     PlainSerializer(lambda v: str(v), return_type=str, when_used='json')
 ]
 
-# 2. Модель Pydantic, которая описывает, КАК ордер должен выглядеть в JSON-файле
 class PydanticOrderSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -44,34 +42,31 @@ class PydanticOrderSchema(BaseModel):
 
 def serialize_orders_to_json(orders_manager: Orders) -> Dict[str, Any]:
     """
-    Превращает живой объект Orders в JSON-совместимый словарь.
-    Сохраняет список ордеров И атрибут tp_order_id.
+    Converts the Orders object into a JSON-compatible dictionary.
+    Preserves the list of orders and the tp_order_id attribute.
     """
     return {
-        # Сериализуем список ордеров через схему PydanticOrderSchema
         "items": [PydanticOrderSchema.model_validate(o).model_dump(mode='json') for o in orders_manager],
-        # Напрямую сохраняем ID тейк-профита (инт или None)
         "tp_order_id": orders_manager.tp_order_id
     }
 
 
 def deserialize_json_to_orders(v: Any) -> Orders:
     """
-    Восстанавливает живой объект Orders из сохраненного состояния.
+    Restores a live Orders object from a saved state
     """
     manager = Orders()
 
-    # Если прилетел готовый объект (в памяти при валидации данных)
+    # If a ready-made object was received (in memory during data validation)
     if isinstance(v, Orders):
         return v
 
-    # Если мы читаем новые структурированные данные из JSON-файла
+    # If we are reading new structured data from a JSON file
     if isinstance(v, dict) and "items" in v:
-        manager.restore(v["items"])  # Восстанавливаем ордера
-        manager.tp_order_id = v.get("tp_order_id")  # Восстанавливаем tp_order_id
+        manager.restore(v["items"])
+        manager.tp_order_id = v.get("tp_order_id")
 
-    # Сценарий обратной совместимости: если файл был записан старой версией
-    # (где orders сохранялся просто как плоский список), бот не упадет, а мягко прочитает его
+    # Backward compatibility scenario: if the file was saved with an older version
     elif isinstance(v, list):
         manager.restore(v)
         manager.tp_order_id = None
@@ -79,7 +74,7 @@ def deserialize_json_to_orders(v: Any) -> Orders:
     return manager
 
 
-# Создаем Pydantic-тип для поля orders с кастомной логикой упаковки/распаковки
+# Create a Pydantic type for the 'orders' field with custom packing/unpacking logic
 PydanticOrdersField = Annotated[
     Orders,
     PlainSerializer(serialize_orders_to_json, when_used='json'),
@@ -89,11 +84,10 @@ PydanticOrdersField = Annotated[
 
 def save2json(model_instance, file_path: Path) -> None:
     """
-    Универсально форматирует модель Pydantic в JSON с алфавитной сортировкой ключей.
-    Использует сверхбыстрый orjson для упаковки вложенных структур.
-    Осуществляет АТОМАРНУЮ (безопасную) перезапись файла на диске.
+    Universally formats a Pydantic model into JSON with keys sorted alphabetically.
+    Uses ultra-fast orjson to serialize nested structures.
+    Performs an ATOMIC (safe) overwrite of the file on disk
     """
-    # 1. Выгружаем данные из Pydantic в виде плоского Python-словаря (Decimal -> str)
     data = model_instance.model_dump(mode='json')
 
     lines = ["{"]
@@ -104,19 +98,15 @@ def save2json(model_instance, file_path: Path) -> None:
         is_last = (idx == len(sorted_keys) - 1)
         comma = "" if is_last else ","
 
-        # Сценарий A: Динамическая обработка любых пулов ордеров (orders, orders_init, и т.д.)
         if key.startswith("orders") and isinstance(value, dict):
             lines.append(f'    "{key}": {{')
 
-            # 1. Записываем компактно tp_order_id
             tp_val = orjson.dumps(value.get("tp_order_id")).decode('utf-8')
             lines.append(f'        "tp_order_id": {tp_val},')
 
-            # 2. Упаковываем список ордеров в красивый компактный массив
             lines.append('        "items": [')
             orders_lines = []
             for order in value.get("items", []):
-                # Каждый ордер сжимается строго в одну строку
                 order_str = orjson.dumps(order).decode('utf-8')
                 orders_lines.append(f'            {order_str}')
 
@@ -124,59 +114,48 @@ def save2json(model_instance, file_path: Path) -> None:
             lines.append('        ]')
             lines.append(f'    }}{comma}')
 
-        # Сценарий B: Обработка компактных списков (например, "balance")
-        elif isinstance(value, (list, tuple)):
+        elif isinstance(value, str):
+            lines.append(f'    "{key}": "{value}"{comma}')
+
+        else:
             val_str = orjson.dumps(value).decode('utf-8')
             lines.append(f'    "{key}": {val_str}{comma}')
-
-        # Сценарий C: Обработка строк, чисел и всех остальных динамических финансовых полей
-        else:
-            if isinstance(value, str):
-                lines.append(f'    "{key}": "{value}"{comma}')
-            else:
-                val_str = orjson.dumps(value).decode('utf-8')
-                lines.append(f'    "{key}": {val_str}{comma}')
 
     lines.append("}")
     pretty_json_str = "\n".join(lines)
 
     # =====================================================================
-    # БЛОК АТОМАРНОЙ ПЕРЕЗАПИСИ С СОЗДАНИЕМ РЕЗЕРВНОЙ КОПИИ (.bak)
+    # Atomic overwrite block with backup creation (.bak)
     # =====================================================================
     file_path = file_path.resolve()
     temp_file_path = file_path.parent / f".{file_path.name}.tmp"
-    bak_file_path = file_path.with_suffix(file_path.suffix + ".bak")  # Превратит state.json в state.json.bak
+    bak_file_path = file_path.with_suffix(file_path.suffix + ".bak")
 
     try:
-        # Шаг 1: Записываем данные во временный файл
         temp_file_path.write_bytes(pretty_json_str.encode('utf-8'))
 
         with open(temp_file_path, "ab") as f:
             os.fsync(f.fileno())
 
-        # Шаг 2: Если старый рабочий файл существует, делаем из него .bak
-        # Используем replace для атомарного создания бэкапа в пределах одной папки
         if file_path.exists():
             file_path.replace(bak_file_path)
 
-        # Шаг 3: Подменяем основной файл свежими данными из temp
         temp_file_path.replace(file_path)
 
     except Exception as e:
         if temp_file_path.exists():
             temp_file_path.unlink()
-        raise OSError(f"Критическая ошибка атомарной записи файла {file_path}: {e}")
+        raise OSError(f"Critical error during atomic file write {file_path}: {e}")
 
 
 def load_state(file_path: Path, response:  type[ModelT], probe: bool = False) -> Optional[object]:
     """
-    Безопасно и сверхбыстро загружает состояние робота с диска.
-    В случае повреждения основного файла автоматически восстанавливает данные из .bak копии.
+    Safely and ultra-fast loads the strategy state from disk.
+    Automatically restores data from the .bak copy if the main file is corrupted.
     """
     file_path = file_path.resolve()
     bak_file_path = file_path.with_suffix(file_path.suffix + ".bak")
 
-    # Внутренняя функция для изоляции логики парсинга файла
     def _try_load(path: Path) -> Optional[object]:
         if not path.exists():
             return None
@@ -184,44 +163,36 @@ def load_state(file_path: Path, response:  type[ModelT], probe: bool = False) ->
         parsed_dict = orjson.loads(raw_bytes)
         return response.model_validate(parsed_dict)
 
-    # Попытка 1: Читаем основной файл состояния
     try:
         if file_path.exists():
             model_instance = _try_load(file_path)
             if model_instance:
-                # TODO Translate and change print to log message
                 if probe:
                     print("State backup is available")
                 else:
                     print(f"🎉 State successfully loaded from: {file_path.name}")
                 return model_instance
     except orjson.JSONDecodeError as e:
-        print(f"⚠️ Предупреждение: Основной файл {file_path.name} не прошел валидацию. Ошибка: {e}")
+        print(f"⚠️ Warning: The main file {file_path.name} failed validation. Error: {e}")
     except Exception as e:
-        print(f"⚠️ Предупреждение: Основной файл {file_path.name} поврежден. Ошибка: {e}")
+        print(f"⚠️ Warning: Main file {file_path.name} is corrupted. Error: {e}")
 
-
-    # Попытка 2: Fallback (Резервное восстановление из .bak файла)
     if bak_file_path.exists():
-        print(f"🔄 Запуск резервного восстановления! Попытка чтения копии: {bak_file_path.name}...")
+        print(f"🔄 Starting recovery from backup! Attempting to read copy: {bak_file_path.name}...")
         try:
             model_instance = _try_load(bak_file_path)
             if model_instance:
-                print(f"✅ Успешно! Состояние восстановлено из резервной копии (.bak).")
-
-                # Защитный шаг: восстанавливаем поврежденный основной файл из живого бэкапа,
-                # чтобы при следующем цикле записи/чтения система работала штатно.
+                print("✅ Success! The state has been restored from the backup (.bak)")
                 try:
                     file_path.write_bytes(bak_file_path.read_bytes())
-                except Exception:
-                    pass
+                except Exception as ex:
+                    print(ex)
 
                 return model_instance
         except Exception as bak_err:
-            print(f"❌ Критическая ошибка: Резервный файл {bak_file_path.name} тоже поврежден: {bak_err}")
+            print(f"❌ Critical error: The backup file {bak_file_path.name} is also corrupted: {bak_err}")
 
-    # Если файлов нет или оба уничтожены
-    print(f"❌ Не удалось восстановить состояние. Запуск чистой сессии (все пулы ордеров будут пустыми).")
+    print("❌ Failed to restore state. Starting a clean session (all order pools will be empty)")
     return None
 
 
@@ -267,7 +238,7 @@ def init_dynamic_model(strategy_instance, attributes_to_backup: List[str]):
             else:
                 base_fields[attr_name] = (Dict[Any, Any], lambda: {})
 
-        elif isinstance(default_value, (tuple, list)):  # FIXED: changed from current_value
+        elif isinstance(default_value, (tuple, list)):
             if default_value and any(isinstance(v, Decimal) for v in default_value):
                 base_fields[attr_name] = (Tuple[DecimalStr, ...], default_value)
             else:
