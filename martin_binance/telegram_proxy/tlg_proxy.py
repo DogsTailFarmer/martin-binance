@@ -22,7 +22,7 @@ import logging.handlers
 import requests
 import toml
 from requests.adapters import HTTPAdapter, Retry
-import ujson as json
+import orjson
 
 import martin_binance.tlg as tlg
 from martin_binance import LOG_FILE_TLG, CONFIG_FILE, CERT_DIR
@@ -73,7 +73,7 @@ def create_secure_context(server_cert: Path, server_key: Path, *, trusted: Path)
 
 
 def get_keyboard_markup():
-    return json.dumps({
+    return orjson.dumps({
         "inline_keyboard": [
             [
                 {'text': 'status', 'callback_data': 'status_callback'},
@@ -82,7 +82,7 @@ def get_keyboard_markup():
                 {'text': 'restart', 'callback_data': 'restart_callback'},
                 {'text': 'exit', 'callback_data': 'exit_callback'},
             ]
-        ]})
+        ]}).decode()
 
 
 def requests_post(_method, _data, inline_buttons=False):
@@ -198,7 +198,7 @@ def set_bot_commands(token):
     if _command and _command.status_code == 200 and (not _command.json().get('result') or
                                                      len(_command.json().get('result')) < COMMAND_COUNT):
         _commands = {
-            "commands": json.dumps([
+            "commands": orjson.dumps([
                 {"command": "status",
                  "description": "Get strategy status"},
                 {"command": "stop",
@@ -209,7 +209,7 @@ def set_bot_commands(token):
                  "description": "Restart current pair with recovery"},
                 {"command": "exit",
                  "description": "Exit from apps as Ctrl-C locally"}
-            ])
+            ]).decode()
         }
         res = requests_post(f'{TLG_URL}{token}/setMyCommands', _data=_commands)
         logger.info(f"Set or update command menu for Telegram bot: code: {res.status_code}, result: {res.json()},"
@@ -249,10 +249,12 @@ class TlgProxy(tlg.TlgProxyBase):
             _data={'chat_id': request.chat_id, 'text': request.data},
             inline_buttons=request.inline_buttons
         )
-        return tlg.Response(bot_id=request.bot_id, data=json.dumps(res.status_code if res else None))
+        return tlg.Response(bot_id=request.bot_id, data=orjson.dumps(res.status_code if res else None).decode())
 
     async def get_update(self, request: tlg.Request):
-        return tlg.Response(bot_id=request.bot_id, data=json.dumps(TlgProxy.command.pop(request.bot_id, None)))
+        return tlg.Response(
+            bot_id=request.bot_id, data=orjson.dumps(TlgProxy.command.pop(request.bot_id, None)).decode()
+        )
 
 
 def is_port_in_use(host: str, port: int) -> bool:

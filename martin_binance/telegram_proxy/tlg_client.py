@@ -19,7 +19,7 @@ openssl req -x509 -days 365 -newkey rsa:2048 -nodes -subj '/CN=localhost' -keyou
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.5"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -28,7 +28,7 @@ from pathlib import Path
 import asyncio
 from typing import Any
 
-import ujson as json
+import orjson
 import toml
 import random
 import logging.handlers
@@ -161,7 +161,7 @@ class TlgClient:
                     bot_id=self.bot_id,
                 )
             )
-            return json.loads(res.data) if res else None
+            return orjson.loads(res.data) if res else None
         except OSError as e:
             if e.errno == 101 or isinstance(e, (ConnectionError, TimeoutError)):
                 handle_connection_error(e, self.init_event, self.tasks, self.connect)

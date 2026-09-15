@@ -20,7 +20,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pymannkendall as mk
 from pathlib import Path
 
-import ujson
 import orjson
 from datetime import datetime, timezone
 import os
@@ -415,7 +414,6 @@ class Strategy(StrategyBase):
                                          f"Delay: {time_diff} sec", tlg=True)
             else:
                 order_buy, order_sell, order_hold = self.get_orders_status()
-
                 command = bool(self.command in ('end', 'stop'))
                 if GRID_ONLY:
                     header = (f"{'Buy' if self.cycle_buy else 'Sell'} assets Grid only mode\n"
@@ -456,7 +454,7 @@ class Strategy(StrategyBase):
                                  tlg=True)
 
     def get_orders_status(self) -> tuple[int, int, int]:
-        return self.orders.get_counts_by_side(), len(self.orders_hold)
+        return *self.orders.get_counts_by_side(), len(self.orders_hold)
 
     async def event_processing(self):
         if self.wait_wss_refresh and self.get_time() - self.wait_wss_refresh['timestamp'] > SHIFT_GRID_DELAY:
@@ -2315,8 +2313,7 @@ class Strategy(StrategyBase):
                         self.initial_first += part_amount_first
                     self.message_log(f"New first depo: {self.deposit_first}")
             self.grid_remove = None
-            tasks_manage(self.tasks, self.cancel_grid(cancel_all=True))
-            await asyncio.sleep(HEARTBEAT / 20)
+            await self.cancel_grid(cancel_all=True)
 
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")
@@ -2770,7 +2767,7 @@ class Strategy(StrategyBase):
                     self.restore_orders = False
                     self.orders_hold.sort(self.cycle_buy)
                     self.grid_remove = None
-                    if isinstance(self.start_after_shift, Decimal):
+                    if isinstance(self.start_after_shift, DecimalStr):
                         if GRID_ONLY or not self.check_min_amount():
                             self.shift_grid_threshold = self.start_after_shift
                         self.start_after_shift = 0
@@ -2816,33 +2813,7 @@ class Strategy(StrategyBase):
             await asyncio.sleep(np.random.default_rng().integers(HEARTBEAT, HEARTBEAT * 10))  # NOSONAR S6709
             await self.cancel_grid()
 
-    def restore_state_before_backtesting_ex(self, saved_state):
-        self.cycle_buy = ujson.loads(saved_state.get('cycle_buy'))
-        self.reverse = ujson.loads(saved_state.get('reverse'))
-        self.deposit_first = f2d(ujson.loads(saved_state.get('deposit_first')))
-        self.deposit_second = f2d(ujson.loads(saved_state.get('deposit_second')))
-        self.last_shift_time = self.get_time()
-        self.order_q = ujson.loads(saved_state.get('order_q'))
-        # self.orders_grid.restore(ujson.loads(saved_state.get('orders')))
-        self.orders_hold.restore(ujson.loads(saved_state.get('orders_hold')))
-        self.orders_save.restore(ujson.loads(saved_state.get('orders_save')))
-        self.over_price = ujson.loads(saved_state.get('over_price'))
-        self.reverse_hold = ujson.loads(saved_state.get('reverse_hold'))
-        self.reverse_init_amount = f2d(ujson.loads(saved_state.get('reverse_init_amount')))
-        self.reverse_price = ujson.loads(saved_state.get('reverse_price'))
-        if self.reverse_price:
-            self.reverse_price = f2d(self.reverse_price)
-        self.reverse_target_amount = f2d(ujson.loads(saved_state.get('reverse_target_amount')))
-        self.shift_grid_threshold = ujson.loads(saved_state.get('shift_grid_threshold'))
-        if self.shift_grid_threshold:
-            self.shift_grid_threshold = f2d(self.shift_grid_threshold)
-        self.sum_amount_first = f2d(ujson.loads(saved_state.get('sum_amount_first')))
-        self.sum_amount_second = f2d(ujson.loads(saved_state.get('sum_amount_second')))
-        self.tp_amount = f2d(ujson.loads(saved_state.get('tp_amount')))
-        self.tp_target = f2d(ujson.loads(saved_state.get('tp_target')))
-        self.tp_order = eval(ujson.loads(saved_state.get('tp_order')))
-        self.tp_wait_id = ujson.loads(saved_state.get('tp_wait_id'))
-
+    def restore_state_before_backtesting_ex(self):
         if self.reverse:
             if self.cycle_buy:
                 free_f = self.initial_reverse_first = Decimal()
@@ -2861,21 +2832,10 @@ class Strategy(StrategyBase):
         self.account.funds.base = {'asset': self.base_asset, 'free': free_f, 'locked': Decimal()}
         self.account.funds.quote = {'asset': self.quote_asset, 'free': free_s, 'locked': Decimal()}
 
-        # Restore orders
-        orders = ujson.loads(saved_state.get('orders'))
-        if self.orders.tp_order_id:
-            orders.append(
-                {
-                    "id": self.orders.tp_order_id,
-                    "buy": self.tp_order[0],
-                    "amount": self.tp_order[1],
-                    "price": self.tp_order[2]
-                }
-            )
         self.account.restore_state(
             self.symbol,
             self.start_time_ms,
-            orders,
+            self.orders,
             sum_amount=(self.cycle_buy, self.sum_amount_first, self.sum_amount_second)
         )
 

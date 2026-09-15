@@ -1,3 +1,14 @@
+## 3.2.1rc5 - 2026-09-15
+🔧 chore(version): bump all modules to 3.2.1rc5
+♻️ refactor(backup.py): replace `print()` with `msg2log()`, add AST type inference and `BeforeValidator` pipeline
+✨ feat(migrate_states.py): add `migrate_legacy_file()` and `migrate_all_directory_states()` for pre-3.2.1 conversion
+♻️ refactor(strategy_base.py): delegate state I/O to `save_strategy_state()`, guard WSS loops with `KeyboardInterrupt`
+♻️ refactor(executor.py): simplify `restore_state_before_backtesting_ex()`, await `cancel_grid()`, fix `get_orders_status()`
+♻️ refactor(exchange_simulator.py): integrate `Orders`, replace `pandas.Series` with `dict`, rename `Order` → `SimOrder`
+♻️ refactor(tlg, deps): replace `ujson` with `orjson` across Telegram proxy and dependency manifests
+📝 docs(templates/*): fix typo "analise" → "analyze" in ADX comment
+📝 docs(CHANGELOG.md): add 3.2.1rc5 release entry
+
 ## 3.2.1rc4 - 2026-09-11
 📦 deps(requirements, pyproject): add `pydantic==2.13.5`
 ✨ feat(strategy_base.py): add deferred `_save_pending` flag and flush `save_strategy_state()` in main loop

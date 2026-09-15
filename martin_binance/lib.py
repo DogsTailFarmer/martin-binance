@@ -2,7 +2,7 @@
 martin-binance classes and methods definitions
 """
 __author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
+__copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
 __version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"

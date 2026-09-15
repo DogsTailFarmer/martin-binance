@@ -1,14 +1,37 @@
+"""
+On-the-fly backup and restore operational strategy state
+"""
+__author__ = "Jerry Fedorenko"
+__copyright__ = "Copyright © 2026 Jerry Fedorenko aka VM"
+__license__ = "MIT"
+__version__ = "3.2.1"
+__maintainer__ = "Jerry Fedorenko"
+__contact__ = "https://github.com/DogsTailFarmer"
+
+import ast
 import inspect
-from decimal import Decimal
+from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Annotated, Dict, List, Tuple, Optional, Any, Union
 from pydantic import BaseModel, ConfigDict, PlainSerializer, BeforeValidator, create_model
 from pydantic.main import ModelT
-
+import logging
+import textwrap
 import orjson
 import os
 
 from martin_binance.lib import Orders
+from martin_binance.params import MODE
+
+if MODE == 'S':
+    logger = logging.getLogger('logger_S')
+else:
+    logger = logging.getLogger(f'logger.{__name__}')
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(logging.Formatter(fmt="[%(asctime)s: %(levelname)s] %(message)s"))
+    stream_handler.setLevel(logging.INFO)
+    logger.addHandler(stream_handler)
 
 BACKUP_REGISTRY = [
     "command", "cycle_buy", "cycle_buy_count", "cycle_sell_count", "cycle_time",
@@ -22,6 +45,10 @@ BACKUP_REGISTRY = [
     "sum_profit_first", "sum_profit_second", "tp_amount", "tp_order", "tp_part_amount_first",
     "tp_part_amount_second", "tp_part_free", "tp_target", "tp_wait_id"
 ]
+
+def msg2log(msg: str, log_level=logging.INFO) -> None:
+    if MODE in ('T', 'TC') or log_level >= logging.ERROR:
+        logger.log(log_level, msg)
 
 DecimalStr = Annotated[
     Decimal,
@@ -168,87 +195,205 @@ def load_state(file_path: Path, response:  type[ModelT], probe: bool = False) ->
             model_instance = _try_load(file_path)
             if model_instance:
                 if probe:
-                    print("State backup is available")
+                    msg2log("State backup is available", log_level=logging.INFO)
                 else:
-                    print(f"🎉 State successfully loaded from: {file_path.name}")
+                    msg2log(f"🎉 State successfully loaded from: {file_path.name}", log_level=logging.INFO)
                 return model_instance
     except orjson.JSONDecodeError as e:
-        print(f"⚠️ Warning: The main file {file_path.name} failed validation. Error: {e}")
+        msg2log(f"⚠️ The main file {file_path.name} failed validation. Error: {e}", log_level=logging.WARNING)
     except Exception as e:
-        print(f"⚠️ Warning: Main file {file_path.name} is corrupted. Error: {e}")
+        msg2log(f"⚠️ Main file {file_path.name} is corrupted. Error: {e}", log_level=logging.ERROR)
 
     if bak_file_path.exists():
-        print(f"🔄 Starting recovery from backup! Attempting to read copy: {bak_file_path.name}...")
+        msg2log(
+            f"🔄 Starting recovery from backup! Attempting to read copy: {bak_file_path.name}...",
+            log_level=logging.INFO
+        )
         try:
             model_instance = _try_load(bak_file_path)
             if model_instance:
-                print("✅ Success! The state has been restored from the backup (.bak)")
+                msg2log("✅ Success! The state has been restored from the backup (.bak)", log_level=logging.INFO)
                 try:
                     file_path.write_bytes(bak_file_path.read_bytes())
                 except Exception as ex:
-                    print(ex)
+                    msg2log(ex, log_level=logging.ERROR)
 
                 return model_instance
         except Exception as bak_err:
-            print(f"❌ Critical error: The backup file {bak_file_path.name} is also corrupted: {bak_err}")
+            msg2log(
+                f"❌ Critical error: The backup file {bak_file_path.name} is also corrupted: {bak_err}",
+                log_level = logging.CRITICAL
+            )
 
-    print("❌ Failed to restore state. Starting a clean session (all order pools will be empty)")
+    msg2log(
+        "❌ Failed to restore state. Starting a clean session (all order pools will be empty)",
+        log_level=logging.WARNING
+    )
     return None
 
+# =====================================================================
+# 1. Utility micro-validators for forced type casting
+# =====================================================================
+
+def force_decimal_validator(v: Any) -> Any:
+    """Forces string/number conversion to Decimal when reading state, respects None."""
+    if v is None or v == "None":
+        return None
+    try:
+        return Decimal(str(v))
+    except (ValueError, InvalidOperation):
+        return Decimal('0')
+
+
+def force_int_validator(v: Any) -> Any:
+    """Safely converts float/string timestamps to integer by dropping fractions."""
+    if v is None or v == "None":
+        return None
+    try:
+        return int(float(v))
+    except (ValueError, TypeError):
+        return 0
+
+
+def force_datetime_validator(v: Any) -> Any:
+    """Guarantees conversion of ISO strings from JSON back into datetime objects."""
+    if v is None or isinstance(v, datetime):
+        return v
+    try:
+        # Очищаем возможные лишние заэкранированные кавычки и парсим ISO-строку
+        return datetime.fromisoformat(str(v).replace('"', '').replace("'", ""))
+    except (ValueError, TypeError):
+        return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def force_dict_validator(v: Any) -> dict:
+    """Safely intercepts corrupted or legacy string '0' markers, forcing a clean dict."""
+    if v is None or v == "0" or v == 0:
+        return {}
+    if isinstance(v, dict):
+        return v
+    return {}
+
+
+def force_tuple_validator(v: Any) -> tuple:
+    """Safely intercepts corrupted or legacy string '0' markers, forcing a clean tuple."""
+    if v is None or v == "0" or v == 0:
+        return ()
+    if isinstance(v, (list, tuple)):
+        return tuple(v)
+    return ()
+
+# =====================================================================
+# 2. AUTOMATIC AST PARSER FOR STRATEGY SOURCE CODE
+# =====================================================================
+
+def get_init_self_annotations(strategy_instance) -> Dict[str, str]:
+    """
+    AST Parser with textwrap protection.
+    Traverses the class hierarchy and extracts all 'self.attr: Type' definitions
+    directly from the source code of __init__ methods.
+    """
+    annotations = {}
+
+    for cls in strategy_instance.__class__.__mro__:
+        if "__init__" in cls.__dict__:
+            try:
+                raw_source = inspect.getsource(cls.__init__)
+                source = textwrap.dedent(raw_source)
+                tree = ast.parse(source)
+
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Attribute):
+                        if isinstance(node.target.value, ast.Name) and node.target.value.id == "self":
+                            var_name = node.target.attr
+                            var_type_str = ast.unparse(node.annotation)
+                            if var_name not in annotations:
+                                annotations[var_name] = var_type_str
+            except (TypeError, OSError):
+                continue
+
+    return annotations
+
+
+# =====================================================================
+# 3. DYNAMIC PYDANTIC V2 MODEL GENERATOR
+# =====================================================================
 
 def init_dynamic_model(strategy_instance, attributes_to_backup: List[str]):
     """
     Builds the Pydantic model 'StateResponse' on-the-fly at startup.
-    Extracts types from __init__ annotations.
-    If a field is missing in an old JSON, Pydantic inserts its default value from __init__.
+    Uses an elegant unified pipeline combining AST-parsing and runtime inference.
     """
     base_fields = {}
-
-    # Extract annotations from the __init__ method
-    init_annotations = inspect.get_annotations(strategy_instance.__init__)
+    ast_annotations = get_init_self_annotations(strategy_instance)
 
     for attr_name in attributes_to_backup:
-        # Get the current default/live value from the strategy instance
         default_value = getattr(strategy_instance, attr_name, None)
+        hint_type = None
 
-        # Step 1: If the field has an explicit type annotation in __init__
-        if attr_name in init_annotations:
-            hint_type = init_annotations[attr_name]
+        # Step 3.1: If the type is found in the source code's AST annotations
+        if attr_name in ast_annotations:
+            type_str = ast_annotations[attr_name]
+            is_complex_collection = any(kw in type_str for kw in ("Dict", "List", "Tuple", "dict", "list", "tuple"))
 
-            # Use lambda factories for mutable structures to avoid shared references
+            if ("Decimal" in type_str or "DecimalStr" in type_str) and not is_complex_collection:
+                hint_type = Annotated[Optional[Decimal], BeforeValidator(force_decimal_validator)] if (
+                            "Optional" in type_str or "None" in type_str) else Annotated[
+                    Decimal, BeforeValidator(force_decimal_validator)]
+            elif "int" in type_str and not is_complex_collection:
+                hint_type = Annotated[Optional[int], BeforeValidator(force_int_validator)] if (
+                            "Optional" in type_str or "None" in type_str) else Annotated[
+                    int, BeforeValidator(force_int_validator)]
+            elif "datetime" in type_str and not is_complex_collection:
+                hint_type = Annotated[Optional[datetime], BeforeValidator(force_datetime_validator)] if (
+                            "Optional" in type_str or "None" in type_str) else Annotated[
+                    datetime, BeforeValidator(force_datetime_validator)]
+            elif is_complex_collection:
+                if "Dict" in type_str or "dict" in type_str:
+                    hint_type = Annotated[Dict[Any, Any], BeforeValidator(force_dict_validator)]
+                else:
+                    hint_type = Annotated[Tuple[Any, ...], BeforeValidator(force_tuple_validator)]
+            else:
+                # noinspection broad-exception
+                try:
+                    context = {
+                        'Optional': Optional, 'Dict': Dict, 'Tuple': Tuple, 'List': List, 'Any': Any, 'Union': Union,
+                        'datetime': datetime, 'DecimalStr': DecimalStr, 'Decimal': Decimal,
+                        'int': int, 'float': float, 'str': str, 'bool': bool
+                    }
+                    hint_type = eval(type_str, {}, context)
+                except Exception:
+                    hint_type = Any
+
+        # Step 3.2: Fall back to the dynamic type if the annotation is missing from the source code
+        if hint_type is None:
             if isinstance(default_value, Orders):
-                base_fields[attr_name] = (hint_type, lambda: Orders())
-            elif isinstance(default_value, dict) and not default_value:
-                base_fields[attr_name] = (hint_type, lambda: {})
+                hint_type = PydanticOrdersField
+            elif isinstance(default_value, Decimal):
+                hint_type = Annotated[Decimal, BeforeValidator(force_decimal_validator)]
+            elif isinstance(default_value, dict):
+                hint_type = Annotated[
+                    Dict[int, Tuple[DecimalStr, DecimalStr]], BeforeValidator(force_dict_validator)] if (
+                            default_value and any(
+                        isinstance(v, (Decimal, tuple, list)) for v in default_value.values())) else Annotated[
+                    Dict[Any, Any], BeforeValidator(force_dict_validator)]
+            elif isinstance(default_value, (tuple, list)):
+                hint_type = Annotated[Tuple[DecimalStr, ...], BeforeValidator(force_tuple_validator)] if (
+                            default_value and any(isinstance(v, Decimal) for v in default_value)) else Annotated[
+                    Tuple[Any, ...], BeforeValidator(force_tuple_validator)]
             else:
-                # For primitive types (int, float, str, bool, Decimal)
-                base_fields[attr_name] = (hint_type, default_value)
-            continue
+                hint_type = type(default_value) if default_value is not None else Any
 
-        # Step 2: Fallback logic based on the live default_value if no annotation is found
+        # Step 3.3: Assembling Pydantic fields (Safe factory capture)
         if isinstance(default_value, Orders):
-            base_fields[attr_name] = (PydanticOrdersField, lambda: Orders())
-
-        elif isinstance(default_value, Decimal):
-            base_fields[attr_name] = (DecimalStr, default_value)
-
-        elif isinstance(default_value, dict):
-            if default_value and any(isinstance(v, (Decimal, tuple, list)) for v in default_value.values()):
-                base_fields[attr_name] = (Dict[int, Tuple[DecimalStr, DecimalStr]], lambda: {})
-            else:
-                base_fields[attr_name] = (Dict[Any, Any], lambda: {})
-
-        elif isinstance(default_value, (tuple, list)):
-            if default_value and any(isinstance(v, Decimal) for v in default_value):
-                base_fields[attr_name] = (Tuple[DecimalStr, ...], default_value)
-            else:
-                base_fields[attr_name] = (List[Any], default_value)
-
+            base_fields[attr_name] = (hint_type, lambda factory=Orders: factory())
+        elif isinstance(default_value, dict) and not default_value:
+            base_fields[attr_name] = (hint_type, lambda factory=dict: factory())
+        elif isinstance(default_value, (list, tuple)) and not default_value:
+            base_fields[attr_name] = (hint_type, lambda factory=type(default_value): factory())
         else:
-            # Fallback for other types, default value acts as the field default
-            base_fields[attr_name] = (type(default_value) if default_value is not None else Any, default_value)
+            base_fields[attr_name] = (hint_type, default_value)
 
-    # Generate the finalized StateResponse class
     return create_model(
         "StateResponse",
         __config__=ConfigDict(arbitrary_types_allowed=True),

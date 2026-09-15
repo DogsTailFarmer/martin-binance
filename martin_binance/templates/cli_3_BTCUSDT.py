@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.4"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 """
@@ -90,7 +90,7 @@ ex.KBB = 2.0  # k for Bollinger Band
 # If -1 function is disabled, can take a value from 0 to infinity (in practice no more 1000)
 # When 0 - logarithmic scale, increase parameter the result is approaching linear
 ex.LINEAR_GRID_K = 0  # See 'Model of logarithmic grid.ods' for detail
-# Average Directional Index with +DI and -DI for Reverse conditions analise
+# Average Directional Index with +DI and -DI for Reverse conditions analyze
 ex.ADX_CANDLE_SIZE_IN_MINUTES = 1
 ex.ADX_NUMBER_OF_CANDLES = 60
 ex.ADX_PERIOD = 14

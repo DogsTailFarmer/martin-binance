@@ -28,7 +28,6 @@ import orjson
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import ujson
 from colorama import init as color_init
 from tqdm import tqdm
 
@@ -309,12 +308,12 @@ class StrategyBase(metaclass=ABCMeta):
                     self.reset_backtest_vars()
                     if SELF_OPTIMIZATION and self.command != 'stopped':
                         _ts = datetime.now(timezone.utc).replace(tzinfo=None)
-                        storage_name = Path(self.session_root, "_study.db")
+                        storage_name = self.session_root / "_study.db"
                         try:
                             self.backtest_process = await asyncio.create_subprocess_exec(
                                 OPTIMIZER,
                                 f"{self.exchange}_{self.symbol}",
-                                Path(self.session_root, Path(PARAMS).name),
+                                self.session_root / Path(PARAMS).name,
                                 str(N_TRIALS),
                                 f"sqlite:///{storage_name}",
                                 orjson.dumps(prm_best or _prm_best),
@@ -384,10 +383,7 @@ class StrategyBase(metaclass=ABCMeta):
 
                     self.parquet_declare(Path(self.session_root, "raw"))
                     # Save current strategy state for backtesting
-                    last_state = self.save_strategy_state()
-                    with self.state_file.open(mode='w') as outfile:
-                        ujson.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
-                    #
+                    self.save_strategy_state(self.state_file)                    #
                     self.start_collect = True
                     ts = time.time()
                     self.message_log("Start data collect", tlg=LOG_LEVEL == logging.DEBUG)
@@ -503,13 +499,6 @@ class StrategyBase(metaclass=ABCMeta):
 
         if LOGGING:
             print(f"Session data saved to: {session_path}")
-
-    def restore_state_before_backtesting(self):
-        pass
-        # saved_state = load_file(self.state_file)
-        # self.order_id = ujson.loads(saved_state.pop(MS_ORDER_ID, "0"))
-        # self.orders = jsonpickle.decode(saved_state.pop(MS_ORDERS, '{}'), keys=True)
-        # self.restore_state_before_backtesting_ex(saved_state)
 
     async def heartbeat(self, _session):
         try_count = 0
@@ -1305,6 +1294,8 @@ class StrategyBase(metaclass=ABCMeta):
                         self.s_ticker['pylist'].append({"key": ts, "row": orjson.dumps(self.ticker)})
                         if SAVE_DS:
                             self.open_orders_snapshot(ts=ts)
+            except KeyboardInterrupt:
+                pass  # user interrupt
             except Exception as ex:
                 self.message_log(f"Exception on WSS, on_ticker_update loop closed: {ex}", log_level=logging.WARNING)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
@@ -1357,6 +1348,8 @@ class StrategyBase(metaclass=ABCMeta):
                         self.s_order_book['pylist'].append(
                             {"key": int(time.time() * 1000), "row": orjson.dumps(self.order_book)}
                         )
+            except KeyboardInterrupt:
+                pass  # user interrupt
             except Exception as ex:
                 self.message_log(f"Exception on WSS, on_order_book_update loop closed: {ex}", log_level=logging.WARNING)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
@@ -1421,9 +1414,7 @@ class StrategyBase(metaclass=ABCMeta):
                             await self.cancel_order_handler(_id, cancel_all=False)
 
                 if self.last_state and MODE == 'TC':
-                    last_state = self.save_strategy_state()
-                    with self.state_file.open(mode='w') as outfile:
-                        ujson.dump(last_state, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+                    self.save_strategy_state(self.state_file)
                     self.start_collect = True
                 exch_orders.clear()
                 diff_id.clear()
@@ -1571,6 +1562,8 @@ class StrategyBase(metaclass=ABCMeta):
                     print(f"main.srv_version: {self.session.client.srv_version}")
                 #
                 if MODE in ('T', 'TC'):
+                    # Try load last strategy state from saved files
+                    self.last_state = self.load_strategy_state(LAST_STATE_FILE, probe=True)
                     # Check and Cancel ALL ACTIVE ORDER
                     try:
                         _active_orders = await send_request(
@@ -1585,8 +1578,6 @@ class StrategyBase(metaclass=ABCMeta):
                         for order in active_orders:
                             print(f"Order: {order['orderId']}({order['clientOrderId']}), side: {order['side']},"
                                   f" amount: {order['origQty']}, price:{order['price']}, status: {order['status']}")
-                    # Try load last strategy state from saved files
-                    self.last_state = self.load_strategy_state(LAST_STATE_FILE, probe=True)
                     if CANCEL_ALL_ORDERS and active_orders and not LOAD_LAST_STATE:
                         answer = await asyncio.to_thread(
                             input,
@@ -1651,8 +1642,8 @@ class StrategyBase(metaclass=ABCMeta):
                 #
                 if MODE in ('TC', 'S'):
                     self.session_root = Path(BACKTEST_PATH, f"{self.exchange}_{self.symbol}")
-                    self.state_file = Path(self.session_root, "saved_state.json")
-                    raw_path = Path(self.session_root, "raw")
+                    self.state_file = self.session_root / "saved_state.json"
+                    raw_path = self.session_root / "raw"
                     if MODE == 'TC':
                         BACKTEST_PATH.mkdir(parents=True, exist_ok=True)
                         rmtree(self.session_root, ignore_errors=True)
@@ -1664,7 +1655,7 @@ class StrategyBase(metaclass=ABCMeta):
             #
             else:
                 # Init class atr for reuse in next backtest cycle
-                raw_path = Path(self.session_root, "raw")
+                raw_path = self.session_root / "raw"
                 self.reset_vars()
                 self.reset_vars_ex()
             #
@@ -1739,8 +1730,9 @@ class StrategyBase(metaclass=ABCMeta):
                     self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
                     #
                     await self.wss_declare()
-                    if self.state_file.exists():
-                        self.restore_state_before_backtesting()
+
+                    if self.load_strategy_state(self.state_file):
+                        self.restore_state_before_backtesting_ex()
                         await self.init(check_funds=False)
                         self.start_collect = True
                     else:
