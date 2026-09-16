@@ -78,12 +78,6 @@ def migrate_legacy_file(input_path: Path, output_path: Path, strategy_instance=N
         "items": grid_items
     }
 
-    def convert_legacy_orders_list(legacy_str: str) -> list:
-        cleaned = json.loads(legacy_str) if legacy_str else []
-        if isinstance(cleaned, str):
-            cleaned = json.loads(cleaned)
-        return convert_legacy_orders(cleaned) if isinstance(cleaned, list) else []
-
     def convert_legacy_orders(raw_list: list) -> list:
         new_list = []
         for _o in raw_list:
@@ -96,6 +90,12 @@ def migrate_legacy_file(input_path: Path, output_path: Path, strategy_instance=N
                 "timestamp": int(_o.get("timestamp", get_time()))
             })
         return new_list
+
+    def convert_legacy_orders_list(legacy_str: str) -> list:
+        cleaned = json.loads(legacy_str) if legacy_str else []
+        if isinstance(cleaned, str):
+            cleaned = json.loads(cleaned)
+        return convert_legacy_orders(cleaned) if isinstance(cleaned, list) else []
 
     orders_hold = {
         "tp_order_id": None,

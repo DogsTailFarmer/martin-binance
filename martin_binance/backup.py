@@ -46,14 +46,17 @@ BACKUP_REGISTRY = [
     "tp_part_amount_second", "tp_part_free", "tp_target", "tp_wait_id"
 ]
 
+
+DecimalStr = Annotated[
+    Decimal,
+    PlainSerializer(lambda v: str(v), return_type=str, when_used='json')  # skipcq: FLK-E305
+]
+
+
 def msg2log(msg: str, log_level=logging.INFO) -> None:
     if MODE in ('T', 'TC') or log_level >= logging.ERROR:
         logger.log(log_level, msg)
 
-DecimalStr = Annotated[
-    Decimal,
-    PlainSerializer(lambda v: str(v), return_type=str, when_used='json')
-]
 
 class PydanticOrderSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -122,7 +125,7 @@ def save2json(model_instance, file_path: Path) -> None:
 
     for idx, key in enumerate(sorted_keys):
         value = data[key]
-        is_last = (idx == len(sorted_keys) - 1)
+        is_last = idx == len(sorted_keys) - 1
         comma = "" if is_last else ","
 
         if key.startswith("orders") and isinstance(value, dict):
@@ -222,7 +225,7 @@ def load_state(file_path: Path, response:  type[ModelT], probe: bool = False) ->
         except Exception as bak_err:
             msg2log(
                 f"❌ Critical error: The backup file {bak_file_path.name} is also corrupted: {bak_err}",
-                log_level = logging.CRITICAL
+                log_level=logging.CRITICAL
             )
 
     msg2log(
@@ -305,8 +308,8 @@ def get_init_self_annotations(strategy_instance) -> Dict[str, str]:
                 tree = ast.parse(source)
 
                 for node in ast.walk(tree):
-                    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Attribute):
-                        if isinstance(node.target.value, ast.Name) and node.target.value.id == "self":
+                    if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Attribute) \
+                        and isinstance(node.target.value, ast.Name) and node.target.value.id == "self":
                             var_name = node.target.attr
                             var_type_str = ast.unparse(node.annotation)
                             if var_name not in annotations:
@@ -375,15 +378,17 @@ def init_dynamic_model(strategy_instance, attributes_to_backup: List[str]):
             elif isinstance(default_value, Decimal):
                 hint_type = Annotated[Decimal, BeforeValidator(force_decimal_validator)]
             elif isinstance(default_value, dict):
-                hint_type = Annotated[
-                    Dict[int, Tuple[DecimalStr, DecimalStr]], BeforeValidator(force_dict_validator)] if (
-                            default_value and any(
-                        isinstance(v, (Decimal, tuple, list)) for v in default_value.values())) else Annotated[
-                    Dict[Any, Any], BeforeValidator(force_dict_validator)]
+                if default_value and any(isinstance(v, (Decimal, tuple, list)) for v in default_value.values()):
+                    hint_type = Annotated[
+                        Dict[int, Tuple[DecimalStr, DecimalStr]], BeforeValidator(force_dict_validator)
+                    ]
+                else:
+                    hint_type = Annotated[Dict[Any, Any], BeforeValidator(force_dict_validator)]
             elif isinstance(default_value, (tuple, list)):
-                hint_type = Annotated[Tuple[DecimalStr, ...], BeforeValidator(force_tuple_validator)] if (
-                            default_value and any(isinstance(v, Decimal) for v in default_value)) else Annotated[
-                    Tuple[Any, ...], BeforeValidator(force_tuple_validator)]
+                if default_value and any(isinstance(v, Decimal) for v in default_value):
+                    hint_type = Annotated[Tuple[DecimalStr, ...], BeforeValidator(force_tuple_validator)]
+                else:
+                    hint_type = Annotated[Tuple[Any, ...], BeforeValidator(force_tuple_validator)]
             else:
                 hint_type = type(default_value) if default_value is not None else Any
 

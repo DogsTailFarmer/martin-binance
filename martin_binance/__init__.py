@@ -6,7 +6,7 @@ Free trading system for SPOT exchanges
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc6"
+__version__ = "3.2.1rc7"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 

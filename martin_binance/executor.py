@@ -176,7 +176,7 @@ class Strategy(StrategyBase):
         """Decorator for automatic saving after method execution"""
 
         async def wrapper(self, *args, **kwargs):
-            self._save_pending = False
+            self._save_pending = False  # skipcq: PYL-W0212
             result = await func(self, *args, **kwargs)
             self._save_pending = True
             return result
@@ -291,7 +291,7 @@ class Strategy(StrategyBase):
         has_tp_order_hold_timeout = ts - self.tp_order_hold.get('timestamp', ts) > HOLD_TP_ORDER_TIMEOUT
 
         if self.stable_state(alarm_mode=True) or has_grid_hold_timeout or has_tp_order_hold_timeout:
-            order_buy, order_sell, order_hold  = self.get_orders_status()
+            order_buy, order_sell, order_hold = self.get_orders_status()
             await self.queue_to_db.put(
                 {
                     'ID_EXCHANGE': ID_EXCHANGE,
@@ -577,9 +577,9 @@ class Strategy(StrategyBase):
                     setattr(self, attr, getattr(saved_state, attr))
             self.message_log("All strategy parameters have been successfully loaded", tlg=True)
             return True
-        else:
-            self.message_log("The state file is missing or corrupt", tlg=True)
-            return False
+
+        self.message_log("The state file is missing or corrupt", tlg=True)
+        return False
 
     async def restore_strategy_state(self) -> None:
         self.first_run = False
@@ -831,7 +831,7 @@ class Strategy(StrategyBase):
                      WHERE id_exchange=:id_exchange\
                      AND f_currency=:f_currency\
                      AND s_currency=:s_currency",
-                     {'id_exchange': ID_EXCHANGE, 'f_currency': self.f_currency, 's_currency': self.s_currency}
+                    {'id_exchange': ID_EXCHANGE, 'f_currency': self.f_currency, 's_currency': self.s_currency}
                 )
                 await self.connection_db.commit()
             except aiosqlite.Error as err:
@@ -1967,7 +1967,7 @@ class Strategy(StrategyBase):
                         break
 
                 # noinspection none-function-assignment
-                [self.orders_hold.remove(_id) for _id in placed_ids]
+                [self.orders_hold.remove(_id) for _id in placed_ids]  # skipcq: PYL-W0106
 
     @auto_save_state
     def grid_only_stop(self) -> None:

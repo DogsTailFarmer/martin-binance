@@ -1,3 +1,12 @@
+## 3.2.1rc7 - 2026-09-16
+🏷️ chore(__init__.py): bump `__version__` to 3.2.1rc7
+🎨 style(executor.py): fix whitespace, add `skipcq` suppressions, and use early return in `load_strategy_state`
+♻️ refactor(backup.py): move `DecimalStr` alias above `msg2log` and flatten nested ternary type-hint expressions
+🎨 style(backup.py): remove redundant parentheses and fix `log_level` kwarg spacing
+♻️ refactor(migrate_states.py): reorder `convert_legacy_orders` before its caller `convert_legacy_orders_list`
+♻️ refactor(lib.py): simplify `task_active` with `any()` and add `skipcq` to `remove_ids`
+📝 docs(CHANGELOG.md): add 3.2.1rc7 release entry
+
 ## 3.2.1rc6 - 2026-09-16
 ✨ feat(lib.py): add `exist_grids()` method to check grid orders excluding TP order
 ♻️ refactor(executor.py): replace `len(self.orders)` with `exist_grids()` for accurate grid detection
