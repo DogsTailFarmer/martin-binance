@@ -40,6 +40,7 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
     if add_done_callback:
         _t.add_done_callback(tasks_set.discard)
 
+
 async def tasks_cancel(tasks_set: set, name=None, log_out=True):
     tasks = tasks_set.copy()
     for task in tasks:
@@ -293,6 +294,9 @@ class Orders:
 
     def exist_grid(self, _id: int | str) -> bool:
         return int(_id) != self.tp_order_id and int(_id) in self._orders
+
+    def exist_grids(self) -> bool:
+        return bool(len(self._orders) - bool(self.tp_order_id))
 
     def get_by_id(self, _id: int) -> Optional[Order]:
         """Returns a full-fledged Order object"""

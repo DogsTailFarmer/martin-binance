@@ -1,3 +1,11 @@
+## 3.2.1rc6 - 2026-09-16
+✨ feat(lib.py): add `exist_grids()` method to check grid orders excluding TP order
+♻️ refactor(executor.py): replace `len(self.orders)` with `exist_grids()` for accurate grid detection
+🎨 style(backup.py): add PEP8 blank lines and suppress `PYL-W0123` on `eval()` call
+🔧 chore(__init__.py): bump version to 3.2.1rc6
+🎨 style(migrate_states.py): add `skipcq` suppressions for `eval`, `jsonpickle`, and file read
+📝 docs(CHANGELOG.md): add 3.2.1rc6 release entry
+
 ## 3.2.1rc5 - 2026-09-15
 🔧 chore(version): bump all modules to 3.2.1rc5
 ♻️ refactor(backup.py): replace `print()` with `msg2log()`, add AST type inference and `BeforeValidator` pipeline

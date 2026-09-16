@@ -593,7 +593,7 @@ class Strategy(StrategyBase):
         if self.grid_remove:
             self.message_log("Restore, continue cancel grid orders", tlg=True)
             await self.cancel_grid()
-        elif not len(self.orders) and self.orders_hold:
+        elif not self.orders.exist_grids() and self.orders_hold:
             self.message_log("Restore, no grid orders, place from hold now", tlg=True)
             self.place_grid_part()
         elif self.grid_update_started and not self.orders and not self.orders_hold and not self.orders_save:
@@ -614,10 +614,10 @@ class Strategy(StrategyBase):
             for order_id in self.orders_init.keys():
                 self.message_log("Restore, wait grid orders", tlg=True)
                 await self.fetch_created_order(order_id, "Grid order event was missed into reload")
-        elif not len(self.orders) and not self.reverse_hold:
+        elif not self.orders.exist_grids() and not self.reverse_hold:
             self.message_log("Place grid orders", tlg=True)
             await self.grid_update()
-        elif GRID_ONLY and len(self.orders):
+        elif GRID_ONLY and self.orders.exist_grids():
             ff, fs, _, _ = self.get_free_assets(mode='available')
             if self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
                 self.grid_remove = True

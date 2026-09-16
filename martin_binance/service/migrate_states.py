@@ -38,7 +38,7 @@ def migrate_legacy_file(input_path: Path, output_path: Path, strategy_instance=N
     """
     print(f"📖 Reading state file: {input_path.name}")
 
-    with open(input_path, "r", encoding="utf-8") as f:
+    with open(input_path, "r", encoding="utf-8") as f:  # skipcq: PTC-W6004
         strategy_state = json.load(f)
 
     legacy_tp_order_id = json.loads(strategy_state.get('tp_order_id'))
@@ -48,7 +48,7 @@ def migrate_legacy_file(input_path: Path, output_path: Path, strategy_instance=N
     if ms_orders_raw.startswith('"') and ms_orders_raw.endswith('"'):
         ms_orders_raw = json.loads(ms_orders_raw)
 
-    decoded_ms_orders = jsonpickle.decode(ms_orders_raw, keys=True)
+    decoded_ms_orders = jsonpickle.decode(ms_orders_raw, keys=True)  # skipcq: BAN-B301
 
     grid_items = []
     for key, o in decoded_ms_orders.items():
@@ -126,7 +126,7 @@ def migrate_legacy_file(input_path: Path, output_path: Path, strategy_instance=N
     over_price = f2d(json.loads(strategy_state.get('over_price')))
 
     part_amount_raw = json.loads(strategy_state.get('part_amount', '"{}"'))
-    part_amount = eval(part_amount_raw) if part_amount_raw else {}
+    part_amount = eval(part_amount_raw) if part_amount_raw else {}  # skipcq: PYL-W0123
 
     initial_first = f2d(json.loads(strategy_state.get('initial_first')))
     initial_second = f2d(json.loads(strategy_state.get('initial_second')))
@@ -158,7 +158,7 @@ def migrate_legacy_file(input_path: Path, output_path: Path, strategy_instance=N
         start_after_shift = f2d(start_after_shift)
 
     started_balance_detail_raw = json.loads(strategy_state.get('started_balance_detail', "\"()\""))
-    started_balance_detail_tuple = eval(started_balance_detail_raw)
+    started_balance_detail_tuple = eval(started_balance_detail_raw)  # skipcq: PYL-W0123
     started_balance_detail = [str(x) for x in started_balance_detail_tuple] if started_balance_detail_tuple else []
 
     status_time_raw = json.loads(strategy_state.get('status_time'))
@@ -174,7 +174,7 @@ def migrate_legacy_file(input_path: Path, output_path: Path, strategy_instance=N
     tp_target = f2d(json.loads(strategy_state.get('tp_target')))
 
     tp_order_raw = json.loads(strategy_state.get('tp_order', '"()"'))
-    tp_order_tuple = eval(tp_order_raw) if tp_order_raw else ()
+    tp_order_tuple = eval(tp_order_raw) if tp_order_raw else ()  # skipcq: PYL-W0123
 
     tp_order = []
     if tp_order_tuple:
