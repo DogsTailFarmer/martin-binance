@@ -1,3 +1,6 @@
+## 3.2.1rc10 - 2026-09-17
+🔧 fix(deps): add missing closing quote for `pydantic` pin in `pyproject.toml`
+
 ## 3.2.1rc9 - 2026-09-17
 ♻️ refactor(executor.py): replace `self.tp_order` tuple with `Orders.get_by_id()` in `event_update_tp()`
 ♻️ refactor(backup.py): drop `tp_order` from backup fields list
