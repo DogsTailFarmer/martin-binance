@@ -1,3 +1,10 @@
+## 3.2.1rc9 - 2026-09-17
+♻️ refactor(executor.py): replace `self.tp_order` tuple with `Orders.get_by_id()` in `event_update_tp()`
+♻️ refactor(backup.py): drop `tp_order` from backup fields list
+🔖 version(__init__.py): bump to 3.2.1rc9, remove unused `EQUAL_STR` constant
+♻️ refactor(strategy_base.py): inline `EQUAL_STR`, use `ID_EXCHANGE` for backtest path
+🛡️ fix(lib.py): guard `get_by_id()` against `None` id argument
+
 ## 3.2.1rc8 - 2026-09-17
 🐛 fix(executor.py): lower APScheduler log level from CRITICAL to ERROR
 ✨ feat(executor.py): refine `tp_order` type to `Tuple[bool, DecimalStr, DecimalStr, float]`

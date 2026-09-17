@@ -33,7 +33,7 @@ from tqdm import tqdm
 
 from exchanges_wrapper import martin as mr, Status, GRPCError
 
-from martin_binance import LAST_STATE_PATH, BACKTEST_PATH, HEARTBEAT, KLINES_INIT, EQUAL_STR, ORDER_TIMEOUT
+from martin_binance import LAST_STATE_PATH, BACKTEST_PATH, HEARTBEAT, KLINES_INIT, ORDER_TIMEOUT
 from martin_binance.backtest.exchange_simulator import Account as backTestAccount
 from martin_binance.backtest.optimizer import OPTIMIZER, PARAMS_FLOAT
 from martin_binance.client import Trade
@@ -974,10 +974,10 @@ class StrategyBase(metaclass=ABCMeta):
                      self.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
             self.funds = funds
             if print_info and LOGGING:
-                print(EQUAL_STR)
+                print("=" * 64)
                 print(f"Base asset balance: {balance_f}")
                 print(f"Quote asset balance: {balance_s}")
-                print(EQUAL_STR)
+                print("=" * 64)
             else:
                 funds = {self.base_asset: FundsEntry(self.funds[self.base_asset]),
                          self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
@@ -1596,7 +1596,7 @@ class StrategyBase(metaclass=ABCMeta):
                                 for i in cancel_orders:
                                     print(f"Order: {i['orderId']}, side:{i['side']},"
                                           f" amount:{i['origQty']}, price:{i['price']}, status:{i['status']}")
-                                print(EQUAL_STR)
+                                print("=" * 64)
                             except GRPCError as ex:
                                 print(f"Exception on cancel All order: {ex.status.name}, {ex.message}")
                         else:
@@ -1641,7 +1641,7 @@ class StrategyBase(metaclass=ABCMeta):
                     self.ticker = _ticker.to_pydict()
                 #
                 if MODE in ('TC', 'S'):
-                    self.session_root = Path(BACKTEST_PATH, f"{self.exchange}_{self.symbol}")
+                    self.session_root = Path(BACKTEST_PATH, f"{ID_EXCHANGE}_{self.symbol}")
                     self.state_file = self.session_root / "saved_state.json"
                     raw_path = self.session_root / "raw"
                     if MODE == 'TC':

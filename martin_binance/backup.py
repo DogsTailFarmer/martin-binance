@@ -42,7 +42,7 @@ BACKUP_REGISTRY = [
     "restore_orders", "reverse", "reverse_hold", "reverse_init_amount", "reverse_price",
     "reverse_target_amount", "shift_grid_threshold", "start_after_shift", "start_time_ms",
     "started_balance_detail", "status_time", "sum_amount_first", "sum_amount_second",
-    "sum_profit_first", "sum_profit_second", "tp_amount", "tp_order", "tp_part_amount_first",
+    "sum_profit_first", "sum_profit_second", "tp_amount", "tp_part_amount_first",
     "tp_part_amount_second", "tp_part_free", "tp_target", "tp_wait_id"
 ]
 

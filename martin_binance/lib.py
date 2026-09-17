@@ -295,8 +295,10 @@ class Orders:
     def exist_grids(self) -> bool:
         return bool(len(self._orders) - bool(self.tp_order_id))
 
-    def get_by_id(self, _id: int) -> Optional[Order]:
+    def get_by_id(self, _id: int | None) -> Optional[Order]:
         """Returns a full-fledged Order object"""
+        if _id is None:
+            return None
         return self._orders.get(_id)
 
     def get_id_list(self) -> List[int]:

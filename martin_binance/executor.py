@@ -82,8 +82,6 @@ class Strategy(StrategyBase):
         self.orders_save = Orders()  # + Save for the time of cancellation
         # Take profit variables
         self.tp_wait_id: Optional[int] = None  # +
-        # TODO Use Orders member instead
-        self.tp_order: Tuple[bool, DecimalStr, DecimalStr, float] = ()  # - (buy, amount, price, local_time())
         self.tp_order_hold = {}  # - Save unreleased take profit order
         self.tp_hold = False  # - Flag for replace take profit order
         self.tp_cancel = False  # - Wanted cancel tp order after successes place and Start()
@@ -489,15 +487,15 @@ class Strategy(StrategyBase):
                 self.start_reverse_time = self.get_time()
 
     async def event_update_tp(self):
-        if (
-            ADAPTIVE_TRADE_CONDITION
-            and self.stable_state()
-            and self.orders.tp_order_id
-            and self.get_time() - self.tp_order[3] > TP_REFRESH
-            and not self.tp_part_amount_first
-        ):
-            self.message_log("Update TP order", color=Style.B_WHITE)
-            await self.place_profit_order()
+        if tp_order := self.orders.get_by_id(self.orders.tp_order_id):
+            if (
+                ADAPTIVE_TRADE_CONDITION
+                and self.stable_state()
+                and self.get_time() * 1000 - tp_order.timestamp > TP_REFRESH
+                and not self.tp_part_amount_first
+            ):
+                self.message_log("Update TP order", color=Style.B_WHITE)
+                await self.place_profit_order()
 
     async def event_grid_only_release(self):
         if self.grid_only_restart and self.get_time() > self.grid_only_restart:
@@ -1081,7 +1079,6 @@ class Strategy(StrategyBase):
                          f"! part_amount: {self.part_amount}\n"
                          f"! reverse_init_amount: {self.reverse_init_amount}\n"
                          f"! reverse_target_amount: {self.reverse_target_amount}\n"
-                         f"! tp_order: {self.tp_order}\n"
                          f"! tp_part_amount_first: {self.tp_part_amount_first},"
                          f" tp_part_amount_second: {self.tp_part_amount_second}\n"
                          f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
@@ -1490,7 +1487,6 @@ class Strategy(StrategyBase):
                     self.message_log(f"Create {'Buy' if buy_side else 'Sell'} take profit order,"
                                      f" vlm: {amount}, price: {price}, profit (incl.fee): {profit}%")
                     self.tp_target = target
-                    self.tp_order = (buy_side, amount, price, self.get_time())
                     self.tp_wait_id = self.place_limit_order_check(buy_side, amount, price, check=after_error)
         elif self.orders.tp_order_id and self.tp_cancel:
             self.cancel_order_id = self.orders.tp_order_id

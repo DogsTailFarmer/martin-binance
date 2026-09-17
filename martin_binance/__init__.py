@@ -6,11 +6,10 @@ Free trading system for SPOT exchanges
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc8"
+__version__ = "3.2.1rc9"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
-# TODO Dir name for backtest data might not be unique
 # TODO Export cycle time into t_orders -> grafana
 
 from pathlib import Path
@@ -32,7 +31,6 @@ BACKTEST_PATH = Path(WORK_PATH, "back_test")
 TRIAL_PARAMS = Path(WORK_PATH, "trial_params.json")
 CERT_DIR = Path(WORK_PATH, "keys")
 LOG_FILE_TLG = Path(LOG_PATH, "tlg_proxy.log")
-EQUAL_STR = "================================================================"
 
 
 def init():
