@@ -1,3 +1,9 @@
+## 3.2.1rc8 - 2026-09-17
+🐛 fix(executor.py): lower APScheduler log level from CRITICAL to ERROR
+✨ feat(executor.py): refine `tp_order` type to `Tuple[bool, DecimalStr, DecimalStr, float]`
+🔧 refactor(backup.py): resolve complex collection types via `eval()` with shared `eval_context`
+🐛 fix(backup.py): distinguish `List` vs `Tuple` in `init_dynamic_model` fallback inference
+
 ## 3.2.1rc7 - 2026-09-16
 🏷️ chore(__init__.py): bump `__version__` to 3.2.1rc7
 🎨 style(executor.py): fix whitespace, add `skipcq` suppressions, and use early return in `load_strategy_state`

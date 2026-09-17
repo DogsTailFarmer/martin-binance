@@ -264,7 +264,7 @@ def force_datetime_validator(v: Any) -> Any:
     if v is None or isinstance(v, datetime):
         return v
     try:
-        # Очищаем возможные лишние заэкранированные кавычки и парсим ISO-строку
+        # Clean up any extraneous escaped quotes and parse the ISO string.
         return datetime.fromisoformat(str(v).replace('"', '').replace("'", ""))
     except (ValueError, TypeError):
         return datetime.now(timezone.utc).replace(tzinfo=None)
@@ -329,23 +329,30 @@ def init_dynamic_model(strategy_instance, attributes_to_backup: List[str]):
     """
     Builds the Pydantic model 'StateResponse' on-the-fly at startup.
     Uses an elegant unified pipeline combining AST-parsing and runtime inference.
+    Successfully handles complex nested structures like Dict[...] and Tuple[...] without type drops.
     """
     base_fields = {}
     ast_annotations = get_init_self_annotations(strategy_instance)
+
+    eval_context = {
+        'Optional': Optional, 'Dict': Dict, 'Tuple': Tuple, 'List': List, 'Any': Any, 'Union': Union,
+        'datetime': datetime, 'DecimalStr': DecimalStr, 'Decimal': Decimal,
+        'int': int, 'float': float, 'str': str, 'bool': bool
+    }
 
     for attr_name in attributes_to_backup:
         default_value = getattr(strategy_instance, attr_name, None)
         hint_type = None
 
-        # Step 3.1: If the type is found in the source code's AST annotations
         if attr_name in ast_annotations:
             type_str = ast_annotations[attr_name]
             is_complex_collection = any(kw in type_str for kw in ("Dict", "List", "Tuple", "dict", "list", "tuple"))
 
             if ("Decimal" in type_str or "DecimalStr" in type_str) and not is_complex_collection:
-                hint_type = Annotated[Optional[Decimal], BeforeValidator(force_decimal_validator)] if (
-                            "Optional" in type_str or "None" in type_str) else Annotated[
-                    Decimal, BeforeValidator(force_decimal_validator)]
+                if "Optional" in type_str or "None" in type_str:
+                    hint_type = Annotated[Optional[Decimal], BeforeValidator(force_decimal_validator)]
+                else:
+                    hint_type = Annotated[Decimal, BeforeValidator(force_decimal_validator)]
             elif "int" in type_str and not is_complex_collection:
                 hint_type = Annotated[Optional[int], BeforeValidator(force_int_validator)] if (
                             "Optional" in type_str or "None" in type_str) else Annotated[
@@ -355,23 +362,22 @@ def init_dynamic_model(strategy_instance, attributes_to_backup: List[str]):
                             "Optional" in type_str or "None" in type_str) else Annotated[
                     datetime, BeforeValidator(force_datetime_validator)]
             elif is_complex_collection:
-                if "Dict" in type_str or "dict" in type_str:
-                    hint_type = Annotated[Dict[Any, Any], BeforeValidator(force_dict_validator)]
-                else:
-                    hint_type = Annotated[Tuple[Any, ...], BeforeValidator(force_tuple_validator)]
+                # noinspection broad-exception
+                try:
+                    parsed_type = eval(type_str, {}, eval_context)  # skipcq: PYL-W0123
+                    if "Dict" in type_str or "dict" in type_str:
+                        hint_type = Annotated[parsed_type, BeforeValidator(force_dict_validator)]
+                    else:
+                        hint_type = Annotated[parsed_type, BeforeValidator(force_tuple_validator)]
+                except Exception:
+                    hint_type = None
             else:
                 # noinspection broad-exception
                 try:
-                    context = {
-                        'Optional': Optional, 'Dict': Dict, 'Tuple': Tuple, 'List': List, 'Any': Any, 'Union': Union,
-                        'datetime': datetime, 'DecimalStr': DecimalStr, 'Decimal': Decimal,
-                        'int': int, 'float': float, 'str': str, 'bool': bool
-                    }
-                    hint_type = eval(type_str, {}, context)  # skipcq: PYL-W0123
+                    hint_type = eval(type_str, {}, eval_context)  # skipcq: PYL-W0123
                 except Exception:
                     hint_type = Any
 
-        # Step 3.2: Fall back to the dynamic type if the annotation is missing from the source code
         if hint_type is None:
             if isinstance(default_value, Orders):
                 hint_type = PydanticOrdersField
@@ -380,19 +386,18 @@ def init_dynamic_model(strategy_instance, attributes_to_backup: List[str]):
             elif isinstance(default_value, dict):
                 if default_value and any(isinstance(v, (Decimal, tuple, list)) for v in default_value.values()):
                     hint_type = Annotated[
-                        Dict[int, Tuple[DecimalStr, DecimalStr]], BeforeValidator(force_dict_validator)
-                    ]
+                        Dict[int, Tuple[DecimalStr, DecimalStr]], BeforeValidator(force_dict_validator)]
                 else:
                     hint_type = Annotated[Dict[Any, Any], BeforeValidator(force_dict_validator)]
             elif isinstance(default_value, (tuple, list)):
                 if default_value and any(isinstance(v, Decimal) for v in default_value):
                     hint_type = Annotated[Tuple[DecimalStr, ...], BeforeValidator(force_tuple_validator)]
                 else:
-                    hint_type = Annotated[Tuple[Any, ...], BeforeValidator(force_tuple_validator)]
+                    container_type = List[Any] if isinstance(default_value, list) else Tuple[Any, ...]
+                    hint_type = Annotated[container_type, BeforeValidator(force_tuple_validator)]
             else:
                 hint_type = type(default_value) if default_value is not None else Any
 
-        # Step 3.3: Assembling Pydantic fields (Safe factory capture)
         if isinstance(default_value, Orders):
             base_fields[attr_name] = (hint_type, lambda factory=Orders: factory())
         elif isinstance(default_value, dict) and not default_value:

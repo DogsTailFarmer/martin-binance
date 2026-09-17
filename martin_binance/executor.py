@@ -50,7 +50,7 @@ from martin_binance.params import *  # NOSONAR python:S2208
 from martin_binance.backup import BACKUP_REGISTRY, DecimalStr, init_dynamic_model, save2json, load_state
 
 scheduler = AsyncIOScheduler()
-logging.getLogger("apscheduler.executors.default").setLevel(logging.CRITICAL)
+logging.getLogger("apscheduler.executors.default").setLevel(logging.ERROR)
 
 O_DEC: DecimalStr = Decimal('0')
 TICKER_UPDATE_TIMEOUT = 600
@@ -83,7 +83,7 @@ class Strategy(StrategyBase):
         # Take profit variables
         self.tp_wait_id: Optional[int] = None  # +
         # TODO Use Orders member instead
-        self.tp_order: Tuple[DecimalStr | float | int, ...] = ()  # - (id, buy, amount, price, local_time())
+        self.tp_order: Tuple[bool, DecimalStr, DecimalStr, float] = ()  # - (buy, amount, price, local_time())
         self.tp_order_hold = {}  # - Save unreleased take profit order
         self.tp_hold = False  # - Flag for replace take profit order
         self.tp_cancel = False  # - Wanted cancel tp order after successes place and Start()
