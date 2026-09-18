@@ -1,3 +1,10 @@
+## 3.2.1rc11 - 2026-09-18
+🐛 fix(params): set `TP_REFRESH` to milliseconds instead of seconds
+📦 deps(wrapper): bump `exchanges-wrapper` from 2.2.2 to 2.2.3
+🐛 fix(executor): use `exist_grids()` and subtract `sum_amount_*` from cycle deposit
+📝 docs(migrate_states): add shebang and UTF-8 encoding header
+♻️ refactor(strategy_base): cache local refs in WSS handlers, replace `to_pydict()`
+
 ## 3.2.1rc10 - 2026-09-17
 🔧 fix(deps): add missing closing quote for `pydantic` pin in `pyproject.toml`
 

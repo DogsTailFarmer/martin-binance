@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Convertor for last state .json files to the new structure, applied for all saved state created before 3.2.1
 """

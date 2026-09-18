@@ -518,8 +518,8 @@ class StrategyBase(metaclass=ABCMeta):
             try:
                 if MODE in ('T', 'TC'):
                     if self._save_pending:
-                        self.save_strategy_state(LAST_STATE_FILE)
                         self._save_pending = False
+                        self.save_strategy_state(LAST_STATE_FILE)
 
                     if (
                         not self.wss_fire_up
@@ -765,15 +765,19 @@ class StrategyBase(metaclass=ABCMeta):
     async def on_funds_update(self):
         if MODE in ('T', 'TC'):
             try:
+                base_asset = self.base_asset
+                quote_asset = self.quote_asset
+                funds_update_handler = self.on_funds_update_handler
+
                 async for _funds in self.for_request(
                         self.stub.on_funds_update, mr.OnFundsUpdateRequest,
                         symbol=self.symbol,
-                        base_asset=self.base_asset,
-                        quote_asset=self.quote_asset
+                        base_asset=base_asset,
+                        quote_asset=quote_asset
                 ):
                     funds = orjson.loads(_funds.event)
-                    if self.base_asset in funds or self.quote_asset in funds:
-                        await self.on_funds_update_handler(funds)
+                    if base_asset in funds or quote_asset in funds:
+                        await funds_update_handler(funds)
             except Exception as ex:
                 self.message_log(f"Exception on WSS, on_funds_update loop closed: {ex}", log_level=logging.WARNING)
                 self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
@@ -1044,10 +1048,13 @@ class StrategyBase(metaclass=ABCMeta):
         _intervals = list(_klines.keys())
         if MODE in ('T', 'TC'):
             try:
+                get_kline = _klines.get
                 async for res in self.for_request(self.stub.on_klines_update, mr.FetchKlinesRequest,
                                                   symbol=self.symbol,
                                                   intervals=orjson.dumps(_intervals)):
-                    _klines.get(res.interval).refresh(orjson.loads(res.candle))
+
+                    get_kline(res.interval).refresh(orjson.loads(res.candle))
+
                     if MODE == 'TC' and (self.start_collect or self.start_collect is None):
                         if len(self.candles[f"pylist_{res.interval}"]) > PYARROW_BATCH_BUFFER_SIZE:
                             # noinspection PyArgumentList
@@ -1168,10 +1175,11 @@ class StrategyBase(metaclass=ABCMeta):
 
     async def on_order_update(self):
         try:
+            update_handler = self.on_order_update_handler
             async for event in self.for_request(self.stub.on_order_update, mr.MarketRequest, symbol=self.symbol):
                 # Only for registered orders on own pair
                 ed = orjson.loads(event.result)
-                await self.on_order_update_handler(ed)
+                await update_handler(ed)
         except Exception as ex:
             self.message_log(f"Exception on WSS, on_order_update loop closed: {ex}", log_level=logging.WARNING)
             self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
@@ -1274,13 +1282,20 @@ class StrategyBase(metaclass=ABCMeta):
         """
         if MODE in ('T', 'TC'):
             try:
+                on_new_ticker = self.on_new_ticker
+
                 async for _ticker in self.for_request(
                         self.stub.on_ticker_update,
                         mr.MarketRequest,
                         symbol=self.symbol
                 ):
-                    self.ticker = _ticker.to_pydict()
-                    await self.on_new_ticker(Ticker(self.ticker))
+                    self.ticker = {
+                        'openPrice': _ticker.open_price,
+                        'lastPrice': _ticker.last_price,
+                        'closeTime': _ticker.close_time
+                    }
+
+                    await on_new_ticker(Ticker(self.ticker))
                     #
                     if MODE == 'TC' and self.start_collect:
                         ts = int(time.time() * 1000)
@@ -1899,8 +1914,10 @@ def load_from_csv() -> list:
 
 
 def order_book_prepare(_order_book) -> dict:
+    raw_bids = _order_book.bids
+    raw_asks = _order_book.asks
     return {
         "lastUpdateId": _order_book.last_update_id,
-        "bids": [orjson.loads(v) for v in _order_book.bids],
-        "asks": [orjson.loads(v) for v in _order_book.asks]
+        "bids": [orjson.loads(v) for v in raw_bids],
+        "asks": [orjson.loads(v) for v in raw_asks]
     }

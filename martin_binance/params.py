@@ -68,7 +68,7 @@ COLLECT_ASSETS = bool()
 GRID_ONLY = bool()
 GRID_ONLY_DELAY = 25 * 60  # sec delay before try Restart GRID_ONLY cycle or Exit
 GRID_ONLY_EXIT = False  # Exit after sell asset (in continues cycle)
-TP_REFRESH = 10 * 60  # sec between TP refresh
+TP_REFRESH = 10 * 60 * 1000 # ms between TP refresh
 #
 ADAPTIVE_TRADE_CONDITION = bool()
 BB_CANDLE_SIZE_IN_MINUTES = int()

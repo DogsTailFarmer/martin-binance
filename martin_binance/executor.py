@@ -599,7 +599,7 @@ class Strategy(StrategyBase):
             self.message_log("Continue update grid", tlg=True)
             await self.cancel_grid()
         elif (
-                not self.orders
+                not self.orders.exist_grids()
                 and not self.orders_hold
                 and not self.orders_save
                 and not self.orders_init
@@ -797,13 +797,13 @@ class Strategy(StrategyBase):
         #
         start_cycle_output = not self.start_after_shift or self.first_run
         if self.cycle_buy:
-            amount = self.deposit_second
+            amount = self.deposit_second - self.sum_amount_second
             if start_cycle_output:
                 self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
                                  f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.s_currency} depo\n"
                                  f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
         else:
-            amount = self.deposit_first
+            amount = self.deposit_first - self.sum_amount_first
             if start_cycle_output:
                 self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                  f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
