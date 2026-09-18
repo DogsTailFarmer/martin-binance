@@ -351,6 +351,9 @@ class Strategy(StrategyBase):
             except (ZeroDivisionError, statistics.StatisticsError) as e:
                 self.message_log(f"No data for ADX analysis on {tf.name} timeframe, {e}", log_level=logging.DEBUG)
                 continue
+            except Exception as e:
+                self.message_log(f"ADX {tf.name}: {e}", log_level=logging.ERROR)
+                continue
             else:
                 k = TC_K.get(tf.value, 0.0)
                 k_sum += k

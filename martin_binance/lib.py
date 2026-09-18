@@ -508,7 +508,7 @@ class Klines:
     def __init__(self, _interval):
         self.interval = _interval
         self.kline = []
-        self.klines_series[_interval] = self.kline
+        Klines.klines_series[_interval] = self.kline
 
     def refresh(self, _candle):
         candle = Candle(_candle)
@@ -521,7 +521,7 @@ class Klines:
                 self.kline.append(candle)
                 if len(self.kline) > self.klines_lim:
                     del self.kline[0]
-            self.klines_series[self.interval] = self.kline
+            Klines.klines_series[self.interval] = self.kline
 
     @classmethod
     def get_kline(cls, _interval) -> list:

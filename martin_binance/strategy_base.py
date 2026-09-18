@@ -53,7 +53,7 @@ else:
 color_init()
 
 RATE_LIMITER = HEARTBEAT * (60 if GRID_ONLY else 10)
-KLINES_LIM = 50  # Number of candles must be <= 1000
+KLINES_LIM = 100  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and par.LOAD_LAST_STATE = 0
 TRADES_LIST_LIMIT = 50
 TRY_LIMIT = 10
@@ -215,11 +215,20 @@ class StrategyBase(metaclass=ABCMeta):
             size = convert_from_minute(candle_size_in_minutes)
         else:
             size = candle_size_in_minutes
+
         kline = Klines.get_kline(size)
-        if len(kline) > number_of_candles + 1:
-            return kline[-number_of_candles - (0 if include_current_building_candle else 1):
-                         None if include_current_building_candle else -1]
-        return kline[:None if include_current_building_candle else -1]
+
+        if not kline:
+            return []
+
+        if include_current_building_candle:
+            return kline[-number_of_candles:] if len(kline) > number_of_candles else kline
+        else:
+            available_closed_candles = kline[:-1]
+            if len(available_closed_candles) > number_of_candles:
+                return available_closed_candles[-number_of_candles:]
+            return available_closed_candles
+
 
     def get_time(self) -> float:
         current_time = time.time()

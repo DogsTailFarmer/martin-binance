@@ -1,4 +1,4 @@
-exchanges-wrapper==2.2.3
+exchanges-wrapper==2.2.4
 aiofiles==25.1.0
 aiocsv==1.4.1
 apscheduler==3.11.3

@@ -1,3 +1,9 @@
+## 3.2.1rc12 - 2026-09-18
+📦 deps(wrapper): bump `exchanges-wrapper` from 2.2.3 to 2.2.4
+🐛 fix(lib): use `Klines.klines_series` in `Kline.__init__` and `Kline.refresh`
+🐛 fix(executor): catch generic `Exception` in ADX analysis to prevent crashes
+✨ feat(strategy): raise `KLINES_LIM` to 100 and simplify kline slicing in `get_kline`
+
 ## 3.2.1rc11 - 2026-09-18
 🐛 fix(params): set `TP_REFRESH` to milliseconds instead of seconds
 📦 deps(wrapper): bump `exchanges-wrapper` from 2.2.2 to 2.2.3
