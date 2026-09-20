@@ -1,3 +1,7 @@
+## 3.2.1rc15 - 2026-09-20
+✨ feat(params): add `FR_SIZE` to trial search space
+🔧 fix(executor): rework middle-grid sizing with `depo_i` remaining-deposit tracking
+
 ## 3.2.1rc14 - 2026-09-20
 ✨ feat(params): add `FR_SIZE` param for min first-order volume in reverse cycle
 🔧 fix(executor): rework grid pricing and first-order sizing for reverse mode

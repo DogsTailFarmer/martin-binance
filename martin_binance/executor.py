@@ -1335,11 +1335,12 @@ class Strategy(StrategyBase):
         price_prev = base_price
         avg_amount = O_DEC
         total_grid_amount_f = total_grid_amount_s = O_DEC
-        depo_i = O_DEC
         rounding = ROUND_CEILING
         last_order_pass = False
         price_k = 1
         orders = []
+
+        depo_i = depo
 
         for i in range(self.order_q):
             if self.reverse:
@@ -1372,29 +1373,28 @@ class Strategy(StrategyBase):
                 price = min(price, tcm.get_max_price())
 
             price_prev = price
+            exchange_min_volume = amount_min * (price if buy_side else 1)
 
             if i == 0:
-                amount_0 = depo * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
-
+                amount_0 = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
                 if self.reverse:
-                    target_min_first_order = depo * FR_SIZE
-                    exchange_min_volume = amount_min * (price if buy_side else 1)
+                    target_min_first_order = depo_i * FR_SIZE
                     min_safe_remains = exchange_min_volume * (self.order_q - 1)
 
                     if target_min_first_order < exchange_min_volume:
                         amount = max(amount_0, exchange_min_volume)
-                    elif (depo - target_min_first_order) < min_safe_remains:
-                        max_possible_first_order = depo - min_safe_remains
+                    elif (depo_i - target_min_first_order) < min_safe_remains:
+                        max_possible_first_order = depo_i - min_safe_remains
                         amount = max(amount_0, max_possible_first_order)
                     else:
                         amount = max(amount_0, target_min_first_order)
                 else:
                     amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
 
-                depo_i = depo - amount
-
             elif i < self.order_q - 1:
-                amount = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
+                rem_orders = self.order_q - i
+                amount = depo_i * (self.martin - 1) / (self.martin ** rem_orders - 1)
+                amount = max(amount, exchange_min_volume)
             else:
                 amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
                 amount = max(O_DEC, amount_last_grid)
@@ -1405,13 +1405,16 @@ class Strategy(StrategyBase):
 
             amount = self.round_truncate(amount, base=True, _rounding=rounding)
 
+            if i < self.order_q - 1:
+                depo_i -= amount * price if buy_side else amount
+
             total_grid_amount_f += amount
             total_grid_amount_s += amount * price
 
             if i == self.order_q - 2:
                 amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
 
-                if amount_last_grid < amount_min * (price if buy_side else 1):
+                if amount_last_grid < exchange_min_volume:
                     total_grid_amount_f -= amount
                     total_grid_amount_s -= amount * price
 
