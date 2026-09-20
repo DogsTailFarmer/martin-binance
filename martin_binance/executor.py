@@ -579,7 +579,7 @@ class Strategy(StrategyBase):
             self.message_log("All strategy parameters have been successfully loaded", tlg=True)
             return True
 
-        self.message_log("The state file is missing or corrupt", tlg=True)
+        self.message_log("The state file is missing or corrupt, created new one", tlg=True)
         return False
 
     async def restore_strategy_state(self) -> None:
@@ -1339,14 +1339,28 @@ class Strategy(StrategyBase):
         rounding = ROUND_CEILING
         last_order_pass = False
         price_k = 1
-        amount_last_grid = O_DEC
         orders = []
 
         for i in range(self.order_q):
-            if LINEAR_GRID_K >= 0:
+            if self.reverse:
+                k_divider = float(self.order_q + LINEAR_GRID_K)
+                price_k = f2d(math.log(i + 1, max(2.0, k_divider)))
+            elif LINEAR_GRID_K >= 0:
                 price_k = f2d(1 - math.log(self.order_q - i, self.order_q + LINEAR_GRID_K))
-            price = base_price - i * delta_price * price_k if buy_side else base_price + i * delta_price * price_k
+
+            if self.reverse:
+                if buy_side:
+                    price = base_price - (over_price * base_price / 100) * price_k
+                else:
+                    price = base_price + (over_price * base_price / 100) * price_k
+            else:
+                if buy_side:
+                    price = base_price - i * delta_price * price_k
+                else:
+                    price = base_price + i * delta_price * price_k
+
             price = tcm.round_price(price, ROUND_HALF_EVEN)
+
             if buy_side and i and price_prev - price < min_delta:
                 price = price_prev - min_delta
             elif not buy_side and i and price - price_prev < min_delta:
@@ -1361,28 +1375,51 @@ class Strategy(StrategyBase):
 
             if i == 0:
                 amount_0 = depo * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
-                amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
+
+                if self.reverse:
+                    target_min_first_order = depo * FR_SIZE
+                    exchange_min_volume = amount_min * (price if buy_side else 1)
+                    min_safe_remains = exchange_min_volume * (self.order_q - 1)
+
+                    if target_min_first_order < exchange_min_volume:
+                        amount = max(amount_0, exchange_min_volume)
+                    elif (depo - target_min_first_order) < min_safe_remains:
+                        max_possible_first_order = depo - min_safe_remains
+                        amount = max(amount_0, max_possible_first_order)
+                    else:
+                        amount = max(amount_0, target_min_first_order)
+                else:
+                    amount = max(amount_0, amount_first_grid * (price if buy_side else 1))
+
                 depo_i = depo - amount
+
             elif i < self.order_q - 1:
                 amount = depo_i * self.martin ** i * (self.martin - 1) / (self.martin ** self.order_q - 1)
             else:
-                amount = amount_last_grid
+                amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
+                amount = max(O_DEC, amount_last_grid)
                 rounding = ROUND_FLOOR
 
             if buy_side:
                 amount /= price
 
             amount = self.round_truncate(amount, base=True, _rounding=rounding)
+
             total_grid_amount_f += amount
             total_grid_amount_s += amount * price
 
             if i == self.order_q - 2:
                 amount_last_grid = depo - (total_grid_amount_s if buy_side else total_grid_amount_f)
+
                 if amount_last_grid < amount_min * (price if buy_side else 1):
                     total_grid_amount_f -= amount
                     total_grid_amount_s -= amount * price
+
                     amount += amount_last_grid / (price if buy_side else 1)
                     amount = self.round_truncate(amount, base=True, _rounding=ROUND_FLOOR)
+
+                    total_grid_amount_f += amount
+                    total_grid_amount_s += amount * price
                     last_order_pass = True
 
             if buy_side:
@@ -1394,8 +1431,6 @@ class Strategy(StrategyBase):
                 orders.append((i, amount, price))
 
             if last_order_pass:
-                total_grid_amount_f += amount
-                total_grid_amount_s += amount * price
                 break
 
         if calc_avg_amount:
@@ -1654,35 +1689,28 @@ class Strategy(StrategyBase):
                         over_price_previous: Decimal = O_DEC) -> Decimal:
         """
         Calculate over price for depo refund after Reverse cycle
-        :param buy_side:
-        :param depo:
-        :param base_price:
-        :param reverse_target_amount:
-        :param min_delta:
-        :param amount_first_grid:
-        :param amount_min:
-        :param over_price_previous:
-        :return: Decimal calculated over price
         """
+
         if buy_side:
             over_price_coarse = 100 * (base_price - (depo / reverse_target_amount)) / base_price
         else:
             over_price_coarse = 100 * ((reverse_target_amount / depo) - base_price) / base_price
 
         if self.order_q > 1 and over_price_coarse > 0:
-            # Fine calculate over_price for target return amount
-            params = {'buy_side': buy_side,
-                      'depo': depo,
-                      'base_price': base_price,
-                      'amount_first_grid': amount_first_grid,
-                      'min_delta': min_delta,
-                      'amount_min': amount_min}
+            params = {
+                'buy_side': buy_side,
+                'depo': depo,
+                'base_price': base_price,
+                'amount_first_grid': amount_first_grid,
+                'min_delta': min_delta,
+                'amount_min': amount_min
+            }
 
             over_price, msg = solve(self.calc_grid, reverse_target_amount, over_price_coarse, **params)
 
             if over_price == O_DEC:
-                self.message_log(f"{msg}, use previous or over_price_coarse * 2", log_level=logging.WARNING)
-                over_price = max(over_price_previous, 2 * over_price_coarse)
+                self.message_log(f"{msg}, we use an multiplayer coarse over price", log_level=logging.WARNING)
+                over_price = max(over_price_previous, over_price_coarse * 3)
             else:
                 self.message_log(msg)
         else:

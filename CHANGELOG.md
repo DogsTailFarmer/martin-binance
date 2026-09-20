@@ -1,3 +1,10 @@
+## 3.2.1rc14 - 2026-09-20
+✨ feat(params): add `FR_SIZE` param for min first-order volume in reverse cycle
+🔧 fix(executor): rework grid pricing and first-order sizing for reverse mode
+🐛 fix(executor): raise `calc_over_price` fallback multiplier to 3× coarse value
+✨ feat(strategy_base): auto-save missing state file in `GRID_ONLY` mode
+🔧 fix(lib): rewrite `solve()` with asymmetric penalty and tighter Nelder-Mead bounds
+
 ## 3.2.1rc12 - 2026-09-18
 📦 deps(wrapper): bump `exchanges-wrapper` from 2.2.3 to 2.2.4
 🐛 fix(lib): use `Klines.klines_series` in `Kline.__init__` and `Kline.refresh`

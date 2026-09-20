@@ -1588,6 +1588,9 @@ class StrategyBase(metaclass=ABCMeta):
                 if MODE in ('T', 'TC'):
                     # Try load last strategy state from saved files
                     self.last_state = self.load_strategy_state(LAST_STATE_FILE, probe=True)
+                    if not self.last_state and GRID_ONLY and LOAD_LAST_STATE:
+                        self.save_strategy_state(LAST_STATE_FILE)
+                        self.last_state = True
                     # Check and Cancel ALL ACTIVE ORDER
                     try:
                         _active_orders = await send_request(

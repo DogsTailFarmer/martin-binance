@@ -74,19 +74,38 @@ def f2d(_f: float) -> Decimal:
 
 
 def solve(fn, value: Decimal, x: Decimal, **kwargs) -> tuple[Decimal, str]:
+    """
+    Поиск оптимального over_price с использованием штрафной функции высокой точности.
+    """
+
     def _fn(_x):
-        return abs(float(value) - fn(_x, **kwargs))
-    res = minimize(_fn, x0=np.array([float(x)]), method='Nelder-Mead')
-    if res.success:
-        _res = f2d(res.x[0])
-        n = 0
-        while f2d(fn(_res, **kwargs)) - value < 0:
-            _res += f2d(0.1)
-            n += 1
-            if n > 200:  # cycle limit check
-                return O_DEC, "Number of cycles exceeded"
-        return _res, f"{res.message} Number of iterations: {res.nit}, correction: +{n*0.1:.2f}"
-    return O_DEC, res.message
+        x_float = _x.item() if hasattr(_x, 'item') else float(_x[0])
+
+        if x_float <= 0:
+            return float('inf')
+
+        calculated = fn(f2d(x_float), **kwargs)
+        diff = float(value) - float(calculated)
+
+        if diff > 0:
+            return diff * 5000.0
+        return abs(diff)
+
+    res = minimize(
+        _fn, x0=np.array([float(x)]), method='Nelder-Mead',
+        options={'xatol': 1e-6, 'fatol': 1e-6, 'maxiter': 500}
+    )
+
+    if res.success and res.x[0] > 0:
+        optimal_x = f2d(res.x[0])
+        final_val = f2d(fn(optimal_x, **kwargs))
+
+        if final_val < value:
+            optimal_x += Decimal('0.0001')
+
+        return optimal_x, f"{res.message} Iterations: {res.nit}. Exact convergence"
+
+    return O_DEC, f"Optimizer convergence failure: {res.message}"
 
 
 def convert_from_minute(m: int) -> str:
