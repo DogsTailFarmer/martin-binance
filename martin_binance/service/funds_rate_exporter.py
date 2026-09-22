@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.9"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -75,6 +75,7 @@ SUM_PROFIT_USD = Gauge("margin_sum_profit_usd", "sum profit on last rate on USD"
 CYCLE_COUNT = Gauge("margin_cycle_count", "cycle count", ['exchange', 'pair', 'vps_name'])
 BUY_COUNT = Gauge("margin_buy_count", "cycle buy count", ['exchange', 'pair', 'vps_name'])
 SELL_COUNT = Gauge("margin_sell_count", "cycle sell count", ['exchange', 'pair', 'vps_name'])
+ACTIVE_CYCLE_TIME = Gauge("active_cycle_time", "active cycle time", ['exchange', 'pair', 'vps_name'])
 
 BUY_TIME = Gauge("margin_buy_time", "cycle buy time", ['exchange', 'pair', 'vps_name'])
 SELL_TIME = Gauge("margin_sell_time", "cycle sell time", ['exchange', 'pair', 'vps_name'])
@@ -95,18 +96,6 @@ S_DEPO = Gauge("margin_s_depo", "second depo", ['exchange', 'pair', 'vps_name'])
 # VPS control
 VPS_CPU = Gauge("margin_vps_cpu", "average cpu load", ['vps_name'])
 VPS_MEMORY = Gauge("margin_vps_memory", "average memory use in %", ['vps_name'])
-
-''' Cycle parameters for future use
-PRICE_SHIFT = Gauge("margin_price_shift", "price shift", ['exchange', 'pair'])
-PROFIT = Gauge("margin_profit", "profit", ['exchange', 'pair'])
-ORDER_Q = Gauge("margin_order_q", "order_q", ['exchange', 'pair'])
-MARTIN = Gauge("margin_martin", "martin", ['exchange', 'pair'])
-LINEAR_GRID_K = Gauge("margin_linear_grid_k", "linear_grid_k", ['exchange', 'pair'])
-ADAPTIVE_TRADE_CONDITION = Gauge("margin_adaptive_trade_condition", "adaptive_trade_condition", ['exchange', 'pair'])
-KB = Gauge("margin_kb", "bollinger band k bottom", ['exchange', 'pair'])
-KT = Gauge("margin_kt", "bollinger band k top", ['exchange', 'pair'])
-'''
-
 
 # endregion
 
@@ -204,6 +193,8 @@ async def db_handler(_currency_rate, currency_rate_last_time):
         BUY_INTEREST.clear()
         SELL_TIME.clear()
         SELL_INTEREST.clear()
+        ACTIVE_CYCLE_TIME.clear()
+        STATUS_ALARM.clear()
         #
         for row in records:
             # print(f"row: {row}")
@@ -220,6 +211,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
             SUM_S_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_s_profit)
             sum_profit = float(row[7])
             SUM_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_profit)
+
             # Alarm
             await cursor.execute(
                 'SELECT order_buy, order_sell\
@@ -229,13 +221,29 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                  AND s_currency=:s_currency',
                 {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
             )
-            status_alarm = await cursor.fetchone()
-            alarm = 0
-            if status_alarm:
+            if status_alarm := await cursor.fetchone():
                 order_buy = int(status_alarm[0])
                 order_sell = int(status_alarm[1])
                 alarm = 0 if order_buy and order_sell else 1
+            else:
+                alarm = 0
             STATUS_ALARM.labels(exchange, pair, VPS_NAME).set(alarm)
+
+            # Active cycle time
+            await cursor.execute(
+                'SELECT cycle_time\
+                 FROM t_orders\
+                 WHERE id_exchange=:id_exchange\
+                 AND f_currency=:f_currency\
+                 AND s_currency=:s_currency',
+                {'id_exchange': id_exchange, 'f_currency': f_currency, 's_currency': s_currency}
+            )
+            if cycle_time_row := await cursor.fetchone():
+                cycle_time = int(cycle_time_row[0])
+            else:
+                cycle_time = 0
+            ACTIVE_CYCLE_TIME.labels(exchange, pair, VPS_NAME).set(cycle_time)
+
             # Last rate
             await cursor.execute(
                 'SELECT rate\
@@ -251,6 +259,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                 LAST_RATE.labels(exchange, pair, VPS_NAME).set(last_rate)
             else:
                 last_rate = 0.0
+
             # Convert sum profit to USD by last rate
             sum_profit_usd = -1
             if _currency_rate.get(s_currency):

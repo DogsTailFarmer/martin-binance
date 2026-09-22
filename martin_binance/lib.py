@@ -61,10 +61,6 @@ async def tasks_cancel(tasks_set: set, name=None, log_out=True):
                 logger.info(f"The task {task_name} was cancelled {'by force' if flag else ''}")
 
 
-def task_active(tasks_set: set, name: str) -> bool:
-    return any(name in task.get_name() for task in tasks_set)
-
-
 def any2str(_x) -> str:
     return f"{_x:.10f}".rstrip('0').rstrip('.')
 

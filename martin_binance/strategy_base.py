@@ -229,16 +229,18 @@ class StrategyBase(metaclass=ABCMeta):
                 return available_closed_candles[-number_of_candles:]
             return available_closed_candles
 
-
     def get_time(self) -> float:
+        to = self.time_operational
         current_time = time.time()
-        if self.time_operational['new']:
-            diff = current_time - self.time_operational['diff'] if self.time_operational['diff'] else 0.0
-            last = max(self.time_operational['new'], self.time_operational['ts'] + diff)
-            self.time_operational['diff'] = current_time
-            self.time_operational['ts'] = last
-        else:
-            last = current_time
+
+        if not to['new']:
+            return current_time
+
+        t_diff = to['diff']
+        diff = current_time - t_diff if t_diff else 0.0
+        last = max(to['new'], to['ts'] + diff)
+        to['diff'] = current_time
+        to['ts'] = last
         return last
 
     async def transfer_to(self, symbol: str, amount: str, email=None):  # NOSONAR S7503

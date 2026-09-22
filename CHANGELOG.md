@@ -1,3 +1,12 @@
+## 3.2.1rc16 - 2026-09-22
+✨ feat(db_utils/executor): persist `cycle_time` to `t_orders` with schema migration
+📊 feat(funds_rate_exporter): add `ACTIVE_CYCLE_TIME` gauge, fix alarm logic, bump to 3.2.1
+🔧 fix(executor): rework GRID_ONLY restart, refresh, and grid-placement completion logic
+🐛 fix(executor): use `exist_grids()` for adaptive-trade and no-grid checks
+♻️ refactor(executor): make `grid_only_stop` async, apply `O_DEC` for GRID_ONLY amounts
+♻️ refactor(strategy_base): simplify `get_time()` with early-return pattern
+🗑️ chore(lib/executor): remove unused `task_active` helper and its import
+
 ## 3.2.1rc15 - 2026-09-20
 ✨ feat(params): add `FR_SIZE` to trial search space
 🔧 fix(executor): rework middle-grid sizing with `depo_i` remaining-deposit tracking

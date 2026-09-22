@@ -31,6 +31,23 @@ async def db_management(exchange) -> None:
             logger.error(f"DELETE from table t_orders failed: {ex}")
         else:
             await db_connect.commit()
+
+        try:
+            await db_connect.execute(
+                "SELECT cycle_time from t_orders"
+            )
+        except SqliteError as err:
+            logger.warning(f"SELECT t_orders: {err}")
+            try:
+                await db_connect.execute(
+                    "ALTER TABLE t_orders ADD COLUMN cycle_time INTEGER"
+                )
+            except SqliteError as err:
+                logger.error(f"ALTER t_orders: {err}")
+            else:
+                logger.info("t_orders altered: column cycle_time added")
+                await db_connect.commit()
+
         # Compliance check t_exchange and EXCHANGE() = exchange() from ms_cfg.toml
         try:
             cursor = await db_connect.execute("SELECT id_exchange, name FROM t_exchange")
@@ -106,22 +123,25 @@ async def save_to_db(queue_to_db) -> None:
                                                      :cycle_buy,\
                                                      :order_buy,\
                                                      :order_sell,\
-                                                     :order_hold)\
+                                                     :order_hold,\
+                                                     :cycle_time)\
                             ON CONFLICT(id_exchange, f_currency, s_currency)\
                          DO UPDATE SET cycle_buy=:cycle_buy,\
                                        order_buy=:order_buy,\
                                        order_sell=:order_sell,\
-                                       order_hold=:order_hold",
+                                       order_hold=:order_hold,\
+                                       cycle_time=:cycle_time",
                         {'id_exchange': data.get('ID_EXCHANGE'),
                          'f_currency': data.get('f_currency'),
                          's_currency': data.get('s_currency'),
                          'cycle_buy': data.get('cycle_buy'),
                          'order_buy': data.get('order_buy'),
                          'order_sell': data.get('order_sell'),
-                         'order_hold': data.get('order_hold')}
+                         'order_hold': data.get('order_hold'),
+                         'cycle_time': data.get('cycle_time')}
                     )
                 except SqliteError as err:
-                    logger.error(f"INSERT into t_orders: {err}")
+                        logger.exception(f"INSERT into t_orders: {err}")
                 else:
                     await db_connect.commit()
 
