@@ -1,3 +1,11 @@
+## 3.2.1rc17 - 2026-09-23
+✨ feat(params): add `K_ATR` and `TC_ADX_TREND_THRESHOLD` parameters
+🔧 fix(executor): zero out DI delta when ADX < `TC_ADX_TREND_THRESHOLD` in `event_di`
+✨ feat(executor): apply ATR-based adaptive shift threshold when BB unavailable
+✨ feat(executor): use ATR-adaptive BB trigger thresholds, early-return reverse in grid update
+✨ feat(executor): compute hybrid BB+ATR `over_price` and reverse `q_max` in `set_trade_conditions`
+✨ feat(executor): rewrite `set_profit` with ATR+BB adaptive take-profit calculation
+
 ## 3.2.1rc16 - 2026-09-22
 ✨ feat(db_utils/executor): persist `cycle_time` to `t_orders` with schema migration
 📊 feat(funds_rate_exporter): add `ACTIVE_CYCLE_TIME` gauge, fix alarm logic, bump to 3.2.1

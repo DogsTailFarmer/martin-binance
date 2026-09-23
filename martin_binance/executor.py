@@ -343,8 +343,10 @@ class Strategy(StrategyBase):
     def event_di(self):
         if self.command == 'stopped':
             return
+
         k_sum = 0.0
         diff_sum = 0.0
+
         for tf in KLINES_INIT:
             try:
                 adx_data = self.adx(tf.value, TC_ADX_DATA_LIMIT, TC_ADX_PERIOD)
@@ -357,7 +359,15 @@ class Strategy(StrategyBase):
             else:
                 k = TC_K.get(tf.value, 0.0)
                 k_sum += k
-                diff_sum += k * (adx_data['+DI'] - adx_data['-DI'])
+                adx_absolute = adx_data.get('adx', 0.0)
+
+                if adx_absolute < TC_ADX_TREND_THRESHOLD:
+                    diff = 0.0
+                else:
+                    diff = adx_data.get('+DI', 0.0) - adx_data.get('-DI', 0.0)
+
+                diff_sum += k * diff
+
         if k_sum:
             self.adx_di_avg_delta.append(diff_sum / k_sum)
             self.adx_di_avg_delta = self.adx_di_avg_delta[-TC_ADX_DATA_LIMIT:]
@@ -917,7 +927,7 @@ class Strategy(StrategyBase):
             await asyncio.sleep(60)
         #
         self.trade_control_is_waiting_state = False
-        self.message_log('The conditions are favorable, continue trading', color=Style.GREEN)
+        self.message_log('The conditions are favorable, continue trading', tlg=True, color=Style.GREEN)
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -1282,24 +1292,30 @@ class Strategy(StrategyBase):
                 else:
                     self.orders_hold.append_order(i, buy_side, amount, price)
             #
+
             if allow_grid_shift:
                 bb = None
+
                 if GRID_ONLY:
                     try:
                         bb = self.bollinger_band(15, BB_NUMBER_OF_CANDLES)
                     except Exception as ex:
                         self.message_log(f"Can't get BollingerBand: {ex}", log_level=logging.ERROR)
                     else:
-                        if buy_side:
-                            self.shift_grid_threshold = bb.get('tbb')
-                        else:
-                            self.shift_grid_threshold = bb.get('bbb')
-                if not GRID_ONLY or (GRID_ONLY and bb is None):
+                        self.shift_grid_threshold = bb.get('tbb') if buy_side else bb.get('bbb')
+
+                if bb is None:
+                    atr_absolute = self.atr(interval=14)
+                    atr_pct = (atr_absolute / base_price) * Decimal('100') if base_price else O_DEC
+                    adaptive_shift_pct = max(PRICE_SHIFT, atr_pct * Decimal('0.25'))
+                    shift_amount = adaptive_shift_pct * base_price / Decimal('100')
+
                     if buy_side:
-                        self.shift_grid_threshold = base_price + 2 * PRICE_SHIFT * base_price / 100
+                        self.shift_grid_threshold = base_price + shift_amount
                     else:
-                        self.shift_grid_threshold = base_price - 2 * PRICE_SHIFT * base_price / 100
-                self.message_log(f"Shift grid threshold: {self.shift_grid_threshold or O_DEC:f}")
+                        self.shift_grid_threshold = base_price - shift_amount
+
+                self.message_log(f"Shift grid threshold: {any2str(self.shift_grid_threshold)}")
             #
             self.start_after_shift = 0
             if self.grid_update_started:
@@ -1450,16 +1466,21 @@ class Strategy(StrategyBase):
         if not self.orders:
             self.place_grid_part()
             return
-        #
-        do_it = False
-        if ADAPTIVE_TRADE_CONDITION and self.stable_state() and not self.part_amount \
-                and (self.orders.exist_grids() or self.orders_hold):
-            depo_remaining = self.depo_unused() / (self.deposit_second if self.cycle_buy else self.deposit_first)
 
-            if self.reverse and depo_remaining >= f2d(0.65):
-                if self.get_time() - self.ts_grid_update > GRID_UPDATE_INTERVAL:
-                    do_it = True
-            elif not self.reverse and depo_remaining >= f2d(0.35):
+        if self.reverse:
+            return
+        # ======================================================================
+
+        do_it = False
+        delta = O_DEC
+        has_active_orders = bool(self.orders.exist_grids() or self.orders_hold)
+
+        if ADAPTIVE_TRADE_CONDITION and self.stable_state() and not self.part_amount and has_active_orders:
+            current_deposit = self.deposit_second if self.cycle_buy else self.deposit_first
+            depo_remaining = self.depo_unused() / current_deposit
+
+            # Адаптивный ATR-фильтр Боллинджера (выполняется строго для ПРЯМОГО цикла)
+            if depo_remaining >= f2d(0.35):
                 try:
                     bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
                 except Exception as ex:
@@ -1467,19 +1488,23 @@ class Strategy(StrategyBase):
                 else:
                     last_price = self.orders_hold.get_last().price if self.orders_hold else self.orders.get_last().price
                     predicted_price = bb.get('bbb') if self.cycle_buy else bb.get('tbb')
+
                     if self.cycle_buy:
-                        delta = 100 * (last_price - predicted_price) / last_price
+                        delta = Decimal('100') * (last_price - predicted_price) / last_price
                     else:
-                        delta = 100 * (predicted_price - last_price) / last_price
-                    #
-                    do_it = (delta > f2d(1.5)) if delta > 0 else (delta < f2d(-3))
+                        delta = Decimal('100') * (predicted_price - last_price) / last_price
+
+                    atr_pct = (self.atr(interval=14) / last_price) * Decimal('100') if last_price else O_DEC
+                    min_trigger_threshold = max(f2d(1.0), atr_pct * Decimal('0.5'))
+                    max_trigger_threshold = f2d(-2.0) * min_trigger_threshold
+
+                    if delta > O_DEC:
+                        do_it = (delta > min_trigger_threshold)
+                    else:
+                        do_it = (delta < max_trigger_threshold)
 
         if do_it:
-            if self.reverse:
-                self.message_log("Update grid in Reverse cycle", color=Style.B_WHITE)
-            else:
-                # noinspection PyUnboundLocalVariable
-                self.message_log(f"Update grid orders, BB limit difference: {float(delta):.2f}%", color=Style.B_WHITE)
+            self.message_log(f"Update grid orders, BB limit difference: {float(delta):.2f}%", color=Style.B_WHITE)
             self.grid_update_started = True
             await self.cancel_grid()
 
@@ -1547,6 +1572,7 @@ class Strategy(StrategyBase):
         tcm = self.get_trading_capability_manager()
         step_size = tcm.get_minimal_amount_change()
         depo_c = (depo / base_price) if buy_side else depo
+
         if not additional_grid and not grid_update and not GRID_ONLY and 0 < PROFIT_MAX < 100:
             try:
                 profit_max = min(PROFIT_MAX, max(PROFIT, 100 * self.atr() / self.get_buffered_ticker().last_price))
@@ -1562,6 +1588,7 @@ class Strategy(StrategyBase):
                                   f" {float(depo_c):f}. Increase depo amount or PROFIT parameter.")
         else:
             amount_first_grid = amount_min
+
         if self.reverse:
             over_price = self.calc_over_price(buy_side,
                                               depo,
@@ -1571,36 +1598,80 @@ class Strategy(StrategyBase):
                                               amount_first_grid,
                                               amount_min)
         else:
-            bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
-            if buy_side:
-                bbb = bb.get('bbb')
-                over_price = 100 * (base_price - bbb) / base_price
-            else:
-                tbb = bb.get('tbb')
-                over_price = 100 * (tbb - base_price) / base_price
+            try:
+                bb = self.bollinger_band(BB_CANDLE_SIZE_IN_MINUTES, BB_NUMBER_OF_CANDLES)
+                if buy_side:
+                    over_price_bb = 100 * (base_price - bb.get('bbb')) / base_price
+                else:
+                    over_price_bb = 100 * (bb.get('tbb') - base_price) / base_price
+            except Exception as ex:
+                self.message_log(f"Can't get BB values: {ex}", logging.WARNING)
+                over_price_bb = O_DEC
+
+            try:
+                atr_absolute = self.atr(interval=14)
+                over_price_atr = (atr_absolute * K_ATR / base_price) * Decimal('100')
+            except Exception as ex:
+                self.message_log(f"Can't get ATR value: {ex}", logging.WARNING)
+                over_price_atr = O_DEC
+
+            over_price = max(over_price_bb, over_price_atr)
+
+            if over_price:
+                indicator_winner = "BOLLINGER" if over_price_bb > over_price_atr else "ATR"
+                self.message_log(
+                    f"Dynamic hybrid over_price set by {indicator_winner}: {float(over_price):.4f}% "
+                    f"(BB: {float(over_price_bb):.2f}%, ATR: {float(over_price_atr):.2f}%)",
+                    logging.DEBUG
+                )
+
         self.over_price = max(over_price, OVER_PRICE)
-        # Adapt grid orders quantity for new over price
+
         order_q = int(self.over_price * ORDER_Q / OVER_PRICE)
         amnt_2 = amount_min * self.martin
-        q_max = int(math.log(1 + (depo_c - amount_first_grid) * self.martin * (self.martin - 1) / amnt_2, self.martin))
+
+        if self.reverse:
+            rem_depo = depo_c * (Decimal('1.0') - FR_SIZE)
+
+            if rem_depo > O_DEC and amount_min > O_DEC:
+                q_max = int(math.log(1 + rem_depo * (self.martin - 1) / amount_min, self.martin)) + 1
+                q_max = max(q_max, 2)
+            else:
+                q_max = 2
+        else:
+            q_max = int(
+                math.log(1 + (depo_c - amount_first_grid) * self.martin * (self.martin - 1) / amnt_2, self.martin)
+            )
+
         self.message_log(f"set_trade_conditions: buy_side: {buy_side}, depo: {float(depo):f},"
                          f" base_price: {base_price}, reverse_target_amount: {reverse_target_amount},"
                          f" amount_min: {amount_min}, step_size: {step_size}, delta_min: {delta_min},"
                          f" amount_first_grid: {amount_first_grid:f}, coarse overprice: {float(self.over_price):f}",
                          logging.DEBUG)
+
         while q_max > ORDER_Q or (GRID_ONLY and q_max > 1):
             delta_price = self.over_price * base_price / (100 * (q_max - 1))
-            if LINEAR_GRID_K >= 0:
-                price_k = f2d(1 - math.log(q_max - 1, q_max + LINEAR_GRID_K))
+
+            if self.reverse:
+                k_divider = float(q_max + LINEAR_GRID_K)
+                price_k_prev = f2d(math.log(q_max - 1, max(2.0, k_divider)))
+                price_k_last = f2d(math.log(q_max, max(2.0, k_divider)))
+
+                total_range = self.over_price * base_price / 100
+                delta = total_range * (price_k_last - price_k_prev)
             else:
-                price_k = 1
-            delta = delta_price * price_k
+                if LINEAR_GRID_K >= 0:
+                    price_k = f2d(1 - math.log(q_max - 1, q_max + LINEAR_GRID_K))
+                else:
+                    price_k = 1
+                delta = delta_price * price_k
+
             if delta > delta_min:
                 break
             q_max -= 1
-        #
+
         self.order_q = max(q_max if order_q > q_max else order_q, 1)
-        # Correction over_price after change orders count
+
         if self.reverse and self.order_q > 1:
             over_price = self.calc_over_price(buy_side,
                                               depo,
@@ -1611,31 +1682,40 @@ class Strategy(StrategyBase):
                                               amount_min,
                                               over_price)
             self.over_price = max(over_price, OVER_PRICE)
+
         return amount_first_grid
 
     def set_profit(self, tp_amount: Decimal, amount: Decimal, by_market: bool) -> Decimal:
+        """
+        Calculation of the adaptive Take-Profit percentage based on ATR and Bollinger Bands
+        """
         fee = FEE_TAKER if by_market else FEE_MAKER
-        tbb = None
-        bbb = None
-        n = len(self.orders) + len(self.orders_init) + len(self.orders_hold) + len(self.orders_save)
-        if PROFIT_MAX and (n > 1 or self.reverse):
-            try:
-                bb = self.bollinger_band(15, 20)
-            except statistics.StatisticsError:
-                self.message_log("Set profit Exception, can't calculate BollingerBand, set profit by default",
-                                 log_level=logging.WARNING)
-            else:
-                tbb = bb.get('tbb', O_DEC)
-                bbb = bb.get('bbb', O_DEC)
-        if tbb and bbb:
+        avg_price_fee = self.sum_amount_second / self.sum_amount_first
+
+        try:
+            atr_absolute = self.atr(interval=14)
+            atr_rel = atr_absolute * Decimal('0.30')
+            bb = self.bollinger_band(15, 20)
+
             if self.cycle_buy:
-                profit = 100 * (tbb * amount - tp_amount) / tp_amount
+                predicted_atr = avg_price_fee + atr_rel
+                tbb = bb.get('tbb', O_DEC)
+                predicted_price = min(predicted_atr, tbb)
+                profit = 100 * (predicted_price * amount - tp_amount) / tp_amount
             else:
-                profit = 100 * (amount / bbb - tp_amount) / tp_amount
-            profit = min(max(profit, PROFIT + fee), PROFIT_MAX)
-        else:
-            profit = PROFIT + fee
-        return profit.quantize(Decimal("1.0123"), rounding=ROUND_CEILING)
+                predicted_atr = avg_price_fee - atr_rel
+                bbb = bb.get('bbb', O_DEC)
+                predicted_price = max(predicted_atr, bbb)
+                profit = 100 * (amount / predicted_price - tp_amount) / tp_amount
+        except Exception as ex:
+            self.message_log(
+                f"Set profit indicator exception: {ex}, use default profit rate",
+                log_level=logging.WARNING
+            )
+            return PROFIT + fee
+
+        profit = min(max(profit, PROFIT + fee), PROFIT_MAX)
+        return profit.quantize(Decimal("0.0001"), rounding=ROUND_CEILING)
 
     def calc_profit_order(self, buy_side: bool, by_market=False, log_output=True) -> Dict[str, Decimal]:
         """
