@@ -1,3 +1,11 @@
+## 3.2.1rc18 - 2026-09-24
+✨ feat(executor/cycle): add `export_cycle_result` method and call it on cycle & reverse completion
+♻️ refactor(executor/start): replace inline db-export block with `export_cycle_result` call
+🐛 fix(executor/trade-control): move `first_iteration` log after ADX analysis loop
+🐛 fix(executor/adx): return zeroed dict in `calculate_adx` when candles < `adx_period * 2`
+🐛 fix(executor/grid): drop redundant `float()` cast in BB-limit-difference log
+🐛 fix(executor/reverse): compute `profit_second` before branch and export both cycle types
+
 ## 3.2.1rc17 - 2026-09-23
 ✨ feat(params): add `K_ATR` and `TC_ADX_TREND_THRESHOLD` parameters
 🔧 fix(executor): zero out DI delta when ADX < `TC_ADX_TREND_THRESHOLD` in `event_di`

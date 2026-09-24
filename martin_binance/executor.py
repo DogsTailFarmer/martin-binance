@@ -644,6 +644,37 @@ class Strategy(StrategyBase):
             self.message_log("Restore, no TP order, create", tlg=True)
             await self.place_profit_order()
 
+    async def export_cycle_result(self):
+        if MODE not in ('T', 'TC'):
+            return
+        ct = datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time
+        ct = ct.total_seconds()
+        data_to_db = {
+            'ID_EXCHANGE': ID_EXCHANGE,
+            'f_currency': self.f_currency,
+            's_currency': self.s_currency,
+            'f_funds': self.initial_reverse_first if self.reverse else self.initial_first,
+            's_funds': self.initial_reverse_second if self.reverse else self.initial_second,
+            'avg_rate': self.avg_rate,
+            'cycle_buy': self.cycle_buy,
+            'f_depo': O_DEC if self.cycle_buy else self.deposit_first,
+            's_depo': self.deposit_second if self.cycle_buy else O_DEC,
+            'f_profit': self.profit_first,
+            's_profit': self.profit_second,
+            'PRICE_SHIFT': PRICE_SHIFT,
+            'PROFIT': PROFIT,
+            'order_q': self.order_q,
+            'MARTIN': MARTIN,
+            'LINEAR_GRID_K': LINEAR_GRID_K,
+            'ADAPTIVE_TRADE_CONDITION': ADAPTIVE_TRADE_CONDITION,
+            'KBB': KBB,
+            'over_price': self.over_price,
+            'cycle_time': ct,
+            'destination': 't_funds'
+        }
+        self.message_log('Send data to .db t_funds')
+        await self.queue_to_db.put(data_to_db)
+
     async def start(self, profit_f: Decimal = O_DEC, profit_s: Decimal = O_DEC) -> None:
         self.message_log('Start')
         if self.command == 'stopped':
@@ -689,53 +720,15 @@ class Strategy(StrategyBase):
                     _fs = fs
             if go_trade:
                 self.save_init_assets(ff, fs)
-                if MODE in ('T', 'TC') and not GRID_ONLY:
-                    if COLLECT_ASSETS:
-                        _fw, _sw = await self.collect_assets()
-                        ff -= _fw
-                        fs -= _sw
-                        if self.exchange in ('binance', 'huobi'):
-                            _fw -= self.sum_fee_f
-                            _sw -= self.sum_fee_s
-                        self.sum_profit_first += _fw
-                        self.sum_profit_second += _sw
-                    else:
-                        _fw = _sw = O_DEC
-                    #
-                    if self.cycle_buy:
-                        df = O_DEC
-                        ds = self.deposit_second - self.profit_second
-                    else:
-                        df = self.deposit_first - self.profit_first
-                        ds = O_DEC
-                    ct = datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time
-                    ct = ct.total_seconds()
-                    # noinspection PyUnboundLocalVariable
-                    data_to_db = {
-                        'ID_EXCHANGE': ID_EXCHANGE,
-                        'f_currency': self.f_currency,
-                        's_currency': self.s_currency,
-                        'f_funds': _ff,
-                        's_funds': _fs,
-                        'avg_rate': self.avg_rate,
-                        'cycle_buy': self.cycle_buy,
-                        'f_depo': df,
-                        's_depo': ds,
-                        'f_profit': self.profit_first + _fw,
-                        's_profit': self.profit_second + _sw,
-                        'PRICE_SHIFT': PRICE_SHIFT,
-                        'PROFIT': PROFIT,
-                        'order_q': self.order_q,
-                        'MARTIN': MARTIN,
-                        'LINEAR_GRID_K': LINEAR_GRID_K,
-                        'ADAPTIVE_TRADE_CONDITION': ADAPTIVE_TRADE_CONDITION,
-                        'KBB': KBB,
-                        'over_price': self.over_price,
-                        'cycle_time': ct,
-                        'destination': 't_funds'
-                    }
-                    self.message_log('Send data to .db t_funds')
-                    await self.queue_to_db.put(data_to_db)
+                if not GRID_ONLY and MODE in ('T', 'TC') and COLLECT_ASSETS:
+                    _fw, _sw = await self.collect_assets()
+                    ff -= _fw
+                    fs -= _sw
+                    if self.exchange in ('binance', 'huobi'):
+                        _fw -= self.sum_fee_f
+                        _sw -= self.sum_fee_s
+                    self.profit_first += _fw
+                    self.profit_second += _sw
             else:
                 self.first_run = False
                 self.wait_refunding_for_start = True
@@ -909,11 +902,6 @@ class Strategy(StrategyBase):
             if last_diff > 0:
                 break
 
-            if first_iteration:
-                self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
-                self.trade_control_is_waiting_state = True
-                first_iteration = False
-
             if len(self.adx_di_avg_delta) >= 5:
                 result = mk.original_test(self.adx_di_avg_delta)
                 self.message_log(
@@ -923,6 +911,11 @@ class Strategy(StrategyBase):
                     break
             else:
                 self.message_log("Not enough data for analysis, collecting it")
+
+            if first_iteration:
+                self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
+                self.trade_control_is_waiting_state = True
+                first_iteration = False
 
             await asyncio.sleep(60)
         #
@@ -990,6 +983,10 @@ class Strategy(StrategyBase):
             number_of_candles=adx_number_of_candles,
             include_current_building_candle=True
         )
+
+        if len(candles) < (adx_period * 2):
+            return {'adx': 0.0, '+DI': 0.0, '-DI': 0.0}
+
         for i in candles:
             high.append(i.high)
             low.append(i.low)
@@ -1504,7 +1501,7 @@ class Strategy(StrategyBase):
                         do_it = (delta < max_trigger_threshold)
 
         if do_it:
-            self.message_log(f"Update grid orders, BB limit difference: {float(delta):.2f}%", color=Style.B_WHITE)
+            self.message_log(f"Update grid orders, BB limit difference: {delta}%", color=Style.B_WHITE)
             self.grid_update_started = True
             await self.cancel_grid()
 
@@ -1896,6 +1893,7 @@ class Strategy(StrategyBase):
             self.profit_first += profit_first
             self.part_profit_first = O_DEC
             self.message_log(f"Cycle profit first {self.profit_first} + {profit_reverse}")
+        await self.export_cycle_result()
         transfer_sum_amount_first = transfer_sum_amount_second = O_DEC
         if one_else_grid:
             self.message_log("Some grid orders was execute after TP was filled")
@@ -1971,9 +1969,17 @@ class Strategy(StrategyBase):
             self.restart = True
             # Calculate profit and time for Reverse cycle
             self.cycle_time = self.cycle_time_reverse or datetime.now(timezone.utc).replace(tzinfo=None)
+
             if self.cycle_buy:
                 self.profit_first += self.round_truncate(self.sum_amount_first - self.reverse_init_amount +
                                                          self.tp_part_amount_first, base=True)
+            else:
+                self.profit_second += self.round_truncate(self.sum_amount_second - self.reverse_init_amount +
+                                                          self.tp_part_amount_second, base=False)
+
+            await self.export_cycle_result()
+
+            if self.cycle_buy:
                 profit_f = self.round_truncate(self.profit_first - self.tp_part_amount_first, base=True)
                 self.deposit_first += profit_f
                 self.initial_first += profit_f
@@ -1981,8 +1987,6 @@ class Strategy(StrategyBase):
                 self.sum_profit_first += self.profit_first
                 self.cycle_sell_count += 1
             else:
-                self.profit_second += self.round_truncate(self.sum_amount_second - self.reverse_init_amount +
-                                                          self.tp_part_amount_second, base=False)
                 profit_s = self.round_truncate(self.profit_second - self.tp_part_amount_second, base=False)
                 self.deposit_second += profit_s
                 self.initial_second += profit_s
