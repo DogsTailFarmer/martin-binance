@@ -36,14 +36,14 @@ async def db_management(exchange) -> None:
             await db_connect.execute(
                 "SELECT cycle_time from t_orders"
             )
-        except SqliteError as err:
-            logger.warning(f"SELECT t_orders: {err}")
+        except SqliteError as ex:
+            logger.warning(f"SELECT t_orders: {ex}")
             try:
                 await db_connect.execute(
                     "ALTER TABLE t_orders ADD COLUMN cycle_time INTEGER"
                 )
-            except SqliteError as err:
-                logger.error(f"ALTER t_orders: {err}")
+            except SqliteError as ex:
+                logger.error(f"ALTER t_orders: {ex}")
             else:
                 logger.info("t_orders altered: column cycle_time added")
                 await db_connect.commit()
@@ -62,7 +62,7 @@ async def db_management(exchange) -> None:
                     try:
                         await db_connect.execute("INSERT into t_exchange values(?,?)", (i, exch))
                     except SqliteError as ex:
-                        logger.error(f"INSERT into t_exchange: {ex}")
+                        logger.exception(f"INSERT into t_exchange: {ex}")
                     else:
                         await db_connect.commit()
 
@@ -108,9 +108,9 @@ async def save_to_db(queue_to_db) -> None:
                          data.get('cycle_time'),
                          0)
                     )
-                except SqliteError as err:
+                except SqliteError as ex:
                     result = False
-                    logger.error(f"For save data into t_funds: {err}, retry")
+                    logger.exception(f"For save data into t_funds: {ex}, retry")
                 else:
                     await db_connect.commit()
                     result = True
@@ -140,8 +140,8 @@ async def save_to_db(queue_to_db) -> None:
                          'order_hold': data.get('order_hold'),
                          'cycle_time': data.get('cycle_time')}
                     )
-                except SqliteError as err:
-                        logger.exception(f"INSERT into t_orders: {err}")
+                except SqliteError as ex:
+                    logger.exception(f"INSERT into t_orders: {ex}")
                 else:
                     await db_connect.commit()
 

@@ -1,3 +1,10 @@
+## 3.2.1rc20 - 2026-09-25
+🎨 style(params): add missing space before inline comment on `TP_REFRESH`
+🎨 style(executor): suppress `PYL-W0212` and drop redundant comparison parentheses
+🐛 fix(db_utils): use `logger.exception` and rename `err` → `ex` for clarity
+♻️ refactor(strategy_base): remove unnecessary `else` after `return` in `get_candles`
+🎨 style(funds_rate_exporter): add blank line before `init()` for PEP 8
+
 ## 3.2.1rc19 - 2026-09-25
 🐛 fix(executor/deposit): initialize `deposit_first`/`deposit_second` to zero, round-truncate on init
 ✨ feat(executor/init): validate `AMOUNT_FIRST`/`AMOUNT_SECOND` when `USE_ALL_FUND` is off

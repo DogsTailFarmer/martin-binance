@@ -99,6 +99,7 @@ VPS_MEMORY = Gauge("margin_vps_memory", "average memory use in %", ['vps_name'])
 
 # endregion
 
+
 async def init():
     global session, sql_conn
     session = aiohttp.ClientSession()

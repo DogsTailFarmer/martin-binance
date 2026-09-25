@@ -175,7 +175,7 @@ class Strategy(StrategyBase):
         async def wrapper(self, *args, **kwargs):
             self._save_pending = False  # skipcq: PYL-W0212
             result = await func(self, *args, **kwargs)
-            self._save_pending = True
+            self._save_pending = True  # skipcq: PYL-W0212
             return result
 
         return wrapper
@@ -1518,9 +1518,9 @@ class Strategy(StrategyBase):
                     max_trigger_threshold = f2d(-2.0) * min_trigger_threshold
 
                     if delta > O_DEC:
-                        do_it = (delta > min_trigger_threshold)
+                        do_it = delta > min_trigger_threshold
                     else:
-                        do_it = (delta < max_trigger_threshold)
+                        do_it = delta < max_trigger_threshold
 
         if do_it:
             self.message_log(f"Update grid orders, BB limit difference: {delta}%", color=Style.B_WHITE)

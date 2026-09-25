@@ -223,11 +223,11 @@ class StrategyBase(metaclass=ABCMeta):
 
         if include_current_building_candle:
             return kline[-number_of_candles:] if len(kline) > number_of_candles else kline
-        else:
-            available_closed_candles = kline[:-1]
-            if len(available_closed_candles) > number_of_candles:
-                return available_closed_candles[-number_of_candles:]
-            return available_closed_candles
+
+        available_closed_candles = kline[:-1]
+        if len(available_closed_candles) > number_of_candles:
+            return available_closed_candles[-number_of_candles:]
+        return available_closed_candles
 
     def get_time(self) -> float:
         to = self.time_operational
