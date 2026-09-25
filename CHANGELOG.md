@@ -1,3 +1,11 @@
+## 3.2.1rc19 - 2026-09-25
+🐛 fix(executor/deposit): initialize `deposit_first`/`deposit_second` to zero, round-truncate on init
+✨ feat(executor/init): validate `AMOUNT_FIRST`/`AMOUNT_SECOND` when `USE_ALL_FUND` is off
+♻️ refactor(executor/grid_only): restructure start/restart flow, add `for_tp` and `call_start` guards
+♻️ refactor(executor/start): drop `profit_f`/`profit_s` args, inline `after_filled_tp` accumulation
+🐛 fix(executor/trade_control): run Mann-Kendall in thread with 2 s timeout, guard empty buffer
+✨ feat(executor/grid_only): add `GRID_ONLY_EXIT` to abort sell cycle after time limit
+
 ## 3.2.1rc18 - 2026-09-24
 ✨ feat(executor/cycle): add `export_cycle_result` method and call it on cycle & reverse completion
 ♻️ refactor(executor/start): replace inline db-export block with `export_cycle_result` call

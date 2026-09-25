@@ -98,8 +98,8 @@ class Strategy(StrategyBase):
         self.sum_amount_second = O_DEC  # Sum buy/sell in second currency for current cycle
         self.part_amount: Dict[int, Tuple[DecimalStr, DecimalStr]] = {}  # +
         #
-        self.deposit_first = AMOUNT_FIRST  # + Calculated operational deposit
-        self.deposit_second = AMOUNT_SECOND  # + Calculated operational deposit
+        self.deposit_first = O_DEC  # + Calculated operational deposit
+        self.deposit_second = O_DEC  # + Calculated operational deposit
         self.sum_profit_first = O_DEC  # + Sum profit from start
         self.sum_profit_second = O_DEC  # + Sum profit from start
         self.cycle_buy_count = 0  # + Count for buy cycle
@@ -188,6 +188,10 @@ class Strategy(StrategyBase):
             init_params_error = 'PROFIT_MAX'
         elif USE_ALL_FUND and START_ON_BUY and AMOUNT_FIRST:
             init_params_error = 'USE_ALL_FUND and (AMOUNT_FIRST and START_ON_BUY): one only allowed'
+        elif not USE_ALL_FUND and START_ON_BUY and not AMOUNT_SECOND:
+            init_params_error = 'Set the value AMOUNT_SECOND or set USE_ALL_FUND'
+        elif not USE_ALL_FUND and not START_ON_BUY and not AMOUNT_FIRST:
+            init_params_error = 'Set the value AMOUNT_FIRST or set USE_ALL_FUND'
         else:
             init_params_error = None
         if init_params_error:
@@ -227,6 +231,8 @@ class Strategy(StrategyBase):
         self.round_quote = ROUND_QUOTE or str(Decimal(self.round_base) *
                                               Decimal(str(tcm.round_price(f2d(1.123456789), ROUND_FLOOR))))
         self.message_log(f"Round pattern, for base: {self.round_base}, quote: {self.round_quote}")
+        self.deposit_first = self.round_truncate(AMOUNT_FIRST, base=True)
+        self.deposit_second = self.round_truncate(AMOUNT_SECOND, base=False)
         if last_price := self.get_buffered_ticker().last_price:
             self.message_log(f"Last ticker price: {last_price}")
             self.avg_rate = last_price
@@ -514,7 +520,10 @@ class Strategy(StrategyBase):
         if self.grid_only_restart and self.get_time() > self.grid_only_restart:
             ff, fs, _, _ = self.get_free_assets(mode='available')
             if USE_ALL_FUND:
-                if self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
+                if self.check_min_amount(
+                        amount=(fs / self.avg_rate) if self.cycle_buy else ff,
+                        for_tp=False
+                ):
                     self.message_log("Grid Only mode Refresh", color=Style.B_WHITE)
                     self.grid_remove = True
                     await self.cancel_grid(cancel_all=True)
@@ -630,17 +639,12 @@ class Strategy(StrategyBase):
             self.message_log("Place grid orders", tlg=True)
             await self.grid_update()
         elif GRID_ONLY and self.orders.exist_grids():
-            ff, fs, _, _ = self.get_free_assets(mode='available')
-            if self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
-                self.grid_remove = True
-                await self.cancel_grid(cancel_all=True)
-            elif USE_ALL_FUND:
-                self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
+            self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
 
         if self.tp_wait_id:
             self.message_log("Restore, wait TP order", tlg=True)
             await self.fetch_created_order(self.tp_wait_id, "TP order event was missed into reload")
-        elif not self.orders.tp_order_id and self.stable_state():
+        elif not self.orders.tp_order_id and self.stable_state() and not GRID_ONLY:
             self.message_log("Restore, no TP order, create", tlg=True)
             await self.place_profit_order()
 
@@ -675,7 +679,7 @@ class Strategy(StrategyBase):
         self.message_log('Send data to .db t_funds')
         await self.queue_to_db.put(data_to_db)
 
-    async def start(self, profit_f: Decimal = O_DEC, profit_s: Decimal = O_DEC) -> None:
+    async def start(self) -> None:
         self.message_log('Start')
         if self.command == 'stopped':
             self.message_log('Strategy stopped, waiting manual action')
@@ -705,19 +709,9 @@ class Strategy(StrategyBase):
         if self.restart or (GRID_ONLY and not self.first_run):
             # Check refunding before restart
             if self.cycle_buy:
-                init_s = self.initial_reverse_second if self.reverse else self.initial_second
-                go_trade = fs >= init_s
-                if go_trade:
-                    fs = init_s
-                    _ff = ff
-                    _fs = fs - profit_s
+                go_trade = fs >= (self.initial_reverse_second if self.reverse else self.initial_second)
             else:
-                init_f = self.initial_reverse_first if self.reverse else self.initial_first
-                go_trade = ff >= init_f
-                if go_trade:
-                    ff = init_f
-                    _ff = ff - profit_f
-                    _fs = fs
+                go_trade = ff >= (self.initial_reverse_first if self.reverse else self.initial_first)
             if go_trade:
                 self.save_init_assets(ff, fs)
                 if not GRID_ONLY and MODE in ('T', 'TC') and COLLECT_ASSETS:
@@ -744,7 +738,18 @@ class Strategy(StrategyBase):
             self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if GRID_ONLY:
-            if USE_ALL_FUND and not self.start_after_shift and not self.grid_only_restart:
+            ff, fs, _, _ = self.get_free_assets()
+            c1 = (self.cycle_buy and self.deposit_second < fs) or (not self.cycle_buy and self.deposit_first < ff)
+            c2 = self.check_min_amount(
+                amount=(fs / self.avg_rate) if self.cycle_buy else ff,
+                for_tp=False
+            )
+
+            if c1 and self.orders.exist_grids() and c2:
+                self.grid_remove = True
+                await self.cancel_grid(cancel_all=True, call_start=False)
+
+            if USE_ALL_FUND and (not self.start_after_shift or c1):
                 if self.cycle_buy:
                     self.deposit_second = fs
                 else:
@@ -752,8 +757,9 @@ class Strategy(StrategyBase):
                 self.save_init_assets(ff, fs)
                 self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
 
-            if (START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)) \
-                    or not self.check_min_amount(amount=(fs / self.avg_rate) if self.cycle_buy else ff):
+            c3 = START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)
+
+            if c3 or not c2:
                 if self.first_run:
                     self.message_log("Grid only mode started", tlg=True)
                     self.first_run = False
@@ -896,21 +902,37 @@ class Strategy(StrategyBase):
 
         first_iteration = True
         while True:
+            if not self.adx_di_avg_delta:
+                self.message_log("Candle buffer is empty, waiting", log_level=logging.WARNING)
+                await asyncio.sleep(60)
+                continue
+
             last_diff = self.adx_di_avg_delta[-1]
             if first_iteration:
                 self.message_log(f"Weighted average multi-frame directional index: {last_diff}")
             if last_diff > 0:
                 break
 
-            if len(self.adx_di_avg_delta) >= 5:
-                result = mk.original_test(self.adx_di_avg_delta)
-                self.message_log(
-                    f"Last DI diff: {last_diff}, Trend: {result.trend} {'significant' if result.h else ''}"
-                )
-                if result.h and result.z > 0 and last_diff > -TC_DI_DIFF:
-                    break
-            else:
-                self.message_log("Not enough data for analysis, collecting it")
+            try:
+                if len(self.adx_di_avg_delta) >= 5:
+                    data_snapshot = self.adx_di_avg_delta.copy()
+
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(mk.original_test, data_snapshot),
+                        timeout=2.0
+                    )
+
+                    self.message_log(
+                        f"Last DI diff: {last_diff}, Trend: {result.trend} {'significant' if result.h else ''}"
+                    )
+                    if result.h and result.z > 0 and last_diff > -TC_DI_DIFF:
+                        break
+                else:
+                    self.message_log("Not enough data for analysis, collecting it")
+            except asyncio.TimeoutError:
+                self.message_log("Trade Control: Mann-Kendall test timed out!", log_level=logging.WARNING)
+            except Exception as ex:
+                self.message_log(f"Trade Control: {ex}, continue", log_level=logging.WARNING)
 
             if first_iteration:
                 self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
@@ -920,7 +942,7 @@ class Strategy(StrategyBase):
             await asyncio.sleep(60)
         #
         self.trade_control_is_waiting_state = False
-        self.message_log('The conditions are favorable, continue trading', tlg=True, color=Style.GREEN)
+        self.message_log('The conditions are favorable, continue trading', color=Style.GREEN)
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -1907,17 +1929,13 @@ class Strategy(StrategyBase):
             self.deposit_second += self.profit_second - transfer_sum_amount_second
             if self.reverse:
                 self.sum_profit_second += profit_reverse
-                profit_f = transfer_sum_amount_first
-                profit_s = self.profit_second + profit_reverse - transfer_sum_amount_second
-                self.initial_reverse_first += profit_f
-                self.initial_reverse_second += profit_s
+                self.initial_reverse_first += transfer_sum_amount_first
+                self.initial_reverse_second += (self.profit_second + profit_reverse - transfer_sum_amount_second)
             else:
                 # Take full profit only for non-reverse cycle
                 self.sum_profit_second += self.profit_second
-                profit_f = transfer_sum_amount_first
-                profit_s = self.profit_second - transfer_sum_amount_second
-                self.initial_first += profit_f
-                self.initial_second += profit_s
+                self.initial_first += transfer_sum_amount_first
+                self.initial_second += (self.profit_second - transfer_sum_amount_second)
             self.message_log(f"after_filled_tp: new initial_funding:"
                              f" {self.initial_reverse_second if self.reverse else self.initial_second}",
                              log_level=logging.INFO)
@@ -1926,17 +1944,13 @@ class Strategy(StrategyBase):
             self.deposit_first += self.profit_first - transfer_sum_amount_first
             if self.reverse:
                 self.sum_profit_first += profit_reverse
-                profit_f = self.profit_first + profit_reverse - transfer_sum_amount_first
-                profit_s = transfer_sum_amount_second
-                self.initial_reverse_first += profit_f
-                self.initial_reverse_second += profit_s
+                self.initial_reverse_first += (self.profit_first + profit_reverse - transfer_sum_amount_first)
+                self.initial_reverse_second += transfer_sum_amount_second
             else:
                 # Take full account profit only for non-reverse cycle
                 self.sum_profit_first += self.profit_first
-                profit_f = self.profit_first - transfer_sum_amount_first
-                profit_s = transfer_sum_amount_second
-                self.initial_first += profit_f
-                self.initial_second += profit_s
+                self.initial_first += (self.profit_first - transfer_sum_amount_first)
+                self.initial_second += transfer_sum_amount_second
             self.message_log(f"after_filled_tp: new initial_funding:"
                              f" {self.initial_reverse_first if self.reverse else self.initial_first}",
                              log_level=logging.INFO)
@@ -1956,13 +1970,12 @@ class Strategy(StrategyBase):
         self.part_amount.clear()
         self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
         self.debug_output()
-        await self.start(profit_f, profit_s)
+        await self.start()
 
     @auto_save_state
     async def reverse_after_grid_ending(self):
         self.message_log("Reverse after grid ending:", log_level=logging.DEBUG)
         self.debug_output()
-        profit_f = profit_s = O_DEC
         if self.reverse:
             self.message_log('End reverse cycle', tlg=True)
             self.reverse = False
@@ -2055,7 +2068,7 @@ class Strategy(StrategyBase):
             self.sum_amount_second = self.tp_part_amount_second
             self.tp_part_amount_first = self.tp_part_amount_second = O_DEC
             self.debug_output()
-            await self.start(profit_f, profit_s)
+            await self.start()
 
     def place_grid_part(self) -> None:
         if self.orders_hold and not self.orders_init and not self.grid_remove:
@@ -2100,6 +2113,10 @@ class Strategy(StrategyBase):
                              f"Average rate is {avg_rate}", tlg=True)
         self.sum_amount_first = self.sum_amount_second = O_DEC
         if USE_ALL_FUND:
+            if GRID_ONLY_EXIT:
+                self.message_log("Exit from sell asset cycle after time limit", color=Style.B_WHITE)
+                tasks_manage(self.tasks, self.raise_keyboard_interrupt(), add_done_callback=False)
+                return
             self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
             self.message_log("Waiting funding for convert", color=Style.B_WHITE)
             return
@@ -2283,7 +2300,7 @@ class Strategy(StrategyBase):
                          log_level=logging.DEBUG, color=Style.MAGENTA)
 
     @auto_save_state
-    async def cancel_grid(self, cancel_all=False):
+    async def cancel_grid(self, cancel_all=False, call_start=True):
         """
         Atomic cancel grid orders. Before start() all grid orders must be confirmed canceled
         """
@@ -2316,7 +2333,8 @@ class Strategy(StrategyBase):
                     await self.grid_update()
                 else:
                     self.grid_update_started = None
-                    await self.start()
+                    if call_start:
+                        await self.start()
         else:
             self.grid_remove = None
 
