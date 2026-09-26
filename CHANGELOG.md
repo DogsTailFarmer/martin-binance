@@ -1,3 +1,10 @@
+## 3.2.1rc21 - 2026-09-26
+♻️ refactor(executor/scheduler): move `event_grid_update` job inside `GRID_ONLY` guard
+🐛 fix(executor/trading): suppress redundant Telegram log on wait-loop exit via `tlg` flag
+✨ feat(executor/grid): add `allow_grid_shift` parameter to `grid_update`
+✨ feat(executor/grid): re-place grid with shift on deposit change in `GRID_ONLY` mode
+🐛 fix(executor/orders): include `orders_init` state in grid completion check
+
 ## 3.2.1rc20 - 2026-09-25
 🎨 style(params): add missing space before inline comment on `TP_REFRESH`
 🎨 style(executor): suppress `PYL-W0212` and drop redundant comparison parentheses

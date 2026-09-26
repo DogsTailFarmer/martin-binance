@@ -155,11 +155,11 @@ class Strategy(StrategyBase):
         self.sum_fee_f = self.sum_fee_s = O_DEC  # -
         self.StateResponse = init_dynamic_model(self, BACKUP_REGISTRY)
         #
-        scheduler.add_job(self.event_grid_update, "interval",  minutes=5)
         scheduler.add_job(self.event_processing, "interval",  seconds=5)
         scheduler.add_job(self.event_update_tp, 'cron', minute='*', second='15')
         scheduler.add_job(self.event_exec_command, "interval",  seconds=2)
         if not GRID_ONLY:
+            scheduler.add_job(self.event_grid_update, "interval", minutes=5)
             scheduler.add_job(self.event_di, 'cron', minute='*', second='25')
         if MODE in ('T', 'TC'):
             scheduler.add_job(self.event_export_operational_status, 'cron', minute='*', jitter=25)
@@ -901,6 +901,7 @@ class Strategy(StrategyBase):
             return
 
         first_iteration = True
+        tlg = False
         while True:
             if not self.adx_di_avg_delta:
                 self.message_log("Candle buffer is empty, waiting", log_level=logging.WARNING)
@@ -938,11 +939,12 @@ class Strategy(StrategyBase):
                 self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
                 self.trade_control_is_waiting_state = True
                 first_iteration = False
+                tlg = True
 
             await asyncio.sleep(60)
         #
         self.trade_control_is_waiting_state = False
-        self.message_log('The conditions are favorable, continue trading', color=Style.GREEN)
+        self.message_log('The conditions are favorable, continue trading', tlg=tlg, color=Style.GREEN)
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -2339,7 +2341,7 @@ class Strategy(StrategyBase):
             self.grid_remove = None
 
     @auto_save_state
-    async def grid_update(self):
+    async def grid_update(self, allow_grid_shift=False):
         _depo = self.depo_unused()
         self.message_log(f"Start update (place) grid orders, depo: {_depo}", color=Style.B_WHITE)
         if self.reverse:
@@ -2357,7 +2359,7 @@ class Strategy(StrategyBase):
         await self.place_grid(self.cycle_buy,
                               _depo,
                               _reverse_target_amount,
-                              allow_grid_shift=False,
+                              allow_grid_shift=allow_grid_shift,
                               grid_update=True)
 
     def check_min_amount(self, amount=O_DEC, price=O_DEC, for_tp=True, by_market=False) -> bool:
@@ -2442,7 +2444,11 @@ class Strategy(StrategyBase):
                         self.initial_first += part_amount_first
                     self.message_log(f"New first depo: {self.deposit_first}")
             self.grid_remove = None
-            await self.cancel_grid(cancel_all=True)
+            if GRID_ONLY:
+                await self.cancel_grid(cancel_all=True, call_start=False)
+                await self.grig_update(allow_grid_shift=True)
+            else:
+                await self.cancel_grid(cancel_all=True)
 
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")
@@ -2820,7 +2826,7 @@ class Strategy(StrategyBase):
 
                 if GRID_ONLY and USE_ALL_FUND:
                     self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
-                if not self.orders_hold:
+                if not self.orders_init and not self.orders_hold:
                     if GRID_ONLY and AMOUNT_FIRST:
                         self.grid_only_restart = 0
                     self.message_log('All grid orders have been successfully placed', color=Style.B_WHITE)
