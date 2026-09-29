@@ -1,3 +1,19 @@
+## 3.2.1rc23 - 2026-09-29
+✨ feat(executor/version): introduce `VERSION` constant and reference it in all log outputs
+✨ feat(executor/volatility): add `calc_dynamic_volatility_pct` for hybrid BB+ATR selection
+✨ feat(params/volatility): add `BB_CANDLE_SIZE_COVERAGE`, `BB_CANDLE_SIZE_SHIFT`, `K_ATR_SHIFT`
+♻️ refactor(executor/grid): unify `start_after_shift` as bool and extract `not_grid` guard
+♻️ refactor(executor/grid_handler): flatten branching and unify `calc` flag for partial fills
+♻️ refactor(executor/cancel_grid): remove `call_start` param, let caller invoke `start()`
+🛡️ feat(executor/trade-control): wrap Mann-Kendall loop in `asyncio.shield` with `CancelledError` recovery
+🛡️ fix(lib/tasks_cancel): add `asyncio.timeout`, `asyncio.shield`, and safe `CancelledError` re-raise
+♻️ refactor(strategy_base/csv): rewrite `save_to_csv` with in-memory `deque` and periodic `disk_flusher`
+♻️ refactor(strategy_base/startup): decouple state-restore check from `init` and backtest flow
+✨ feat(executor/debug): extend `debug_output` with `sum_profit_*` and `started_balance_detail`
+✨ feat(backtest/VCoSEL): rewrite analyser with strict timeline sync, trade markers, `create_fast_trace`
+🐛 fix(strategy_base/orders): format `origQty`/`price` via `any2str` in active-order display
+🐛 fix(executor/balance): clamp `started_balance_detail` components with `max(val, O_DEC)`
+
 ## 3.2.1rc21 - 2026-09-26
 ♻️ refactor(executor/scheduler): move `event_grid_update` job inside `GRID_ONLY` guard
 🐛 fix(executor/trading): suppress redundant Telegram log on wait-loop exit via `tlg` flag

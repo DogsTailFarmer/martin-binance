@@ -41,27 +41,48 @@ def tasks_manage(tasks_set: set, coro, name=None, add_done_callback=True):
         _t.add_done_callback(tasks_set.discard)
 
 
-async def tasks_cancel(tasks_set: set, name=None, log_out=True):
-    tasks = tasks_set.copy()
-    for task in tasks:
-        task_name = task.get_name()
+async def tasks_cancel(
+        tasks_set: set[asyncio.Task],
+        name: str = None,
+        log_out: bool = True,
+        timeout_seconds: float = 5.0
+):
+    targets = [
+        task for task in tasks_set
+        if not (name and f"{name}" not in task.get_name())
+    ]
+
+    if not targets:
+        return
+
+    for task in targets:
         if log_out:
-            logger.debug(f"Active background task: {task_name}")
-        if name and f"{name}" not in task_name:
-            continue
+            logger.debug(f"Active background task: {task.get_name()}")
         task.cancel()
-        flag = None
-        try:
-            await task
-        except asyncio.CancelledError:  # NOSONAR
-            flag = True
-        finally:
-            tasks_set.discard(task)
-            if log_out:
-                logger.info(f"The task {task_name} was cancelled {'by force' if flag else ''}")
+        tasks_set.discard(task)
+
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            await asyncio.shield(asyncio.gather(*targets, return_exceptions=True))
+
+    except TimeoutError:
+        if log_out:
+            logger.warning(
+                f"Shutdown timeout reached ({timeout_seconds}s). "
+                f"Some tasks failed to close in time and were abandoned."
+            )
+    except asyncio.CancelledError:
+        await asyncio.gather(*targets, return_exceptions=True)
+        raise
+
+    if log_out:
+        for task in targets:
+            logger.info(f"The task {task.get_name()} was processed during shutdown")
 
 
 def any2str(_x) -> str:
+    if isinstance(_x, str):
+        _x = Decimal(_x)
     return f"{_x:.10f}".rstrip('0').rstrip('.')
 
 

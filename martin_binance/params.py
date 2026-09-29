@@ -2,9 +2,9 @@
 martin-binance strategy parameters
 """
 __author__ = "Jerry Fedorenko"
-__copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
+__copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.9"
+__version__ = "3.2.1r"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -16,10 +16,12 @@ __all__ = [
     'SYMBOL', 'EXCHANGE', 'ID_EXCHANGE', 'FEE_MAKER', 'FEE_TAKER', 'FEE_FIRST', 'FEE_SECOND', 'FEE_BNB',
     'SAVE_ASSET', 'GRID_MAX_COUNT', 'START_ON_BUY', 'AMOUNT_FIRST', 'USE_ALL_FUND', 'AMOUNT_SECOND',
     'PRICE_SHIFT', 'ROUND_BASE', 'ROUND_QUOTE', 'PROFIT', 'PROFIT_MAX', 'OVER_PRICE', 'ORDER_Q',
-    'MARTIN', 'SHIFT_GRID_DELAY', 'GRID_UPDATE_INTERVAL', 'FR_SIZE', 'STATUS_DELAY', 'GRID_ONLY', 'LOG_LEVEL',
+    'MARTIN', 'SHIFT_GRID_DELAY', 'FR_SIZE', 'STATUS_DELAY', 'GRID_ONLY', 'LOG_LEVEL',
     'HOLD_TP_ORDER_TIMEOUT', 'COLLECT_ASSETS', 'GRID_ONLY_DELAY', 'TP_REFRESH', 'ADAPTIVE_TRADE_CONDITION',
-    'BB_CANDLE_SIZE_IN_MINUTES', 'BB_NUMBER_OF_CANDLES', 'KBB', 'K_ATR', 'LINEAR_GRID_K', 'ADX_CANDLE_SIZE_IN_MINUTES',
-    'ADX_NUMBER_OF_CANDLES', 'ADX_PERIOD', 'ADX_THRESHOLD', 'ADX_PRICE_THRESHOLD', 'REVERSE', 'REVERSE_TARGET_AMOUNT',
+    'BB_CANDLE_SIZE_IN_MINUTES', 'BB_NUMBER_OF_CANDLES', 'KBB', 'K_ATR', 'BB_CANDLE_SIZE_COVERAGE',
+    'BB_NUMBER_OF_CANDLES_COVERAGE', 'BB_CANDLE_SIZE_SHIFT', 'BB_NUMBER_OF_CANDLES_SHIFT',
+    'K_ATR_SHIFT', 'LINEAR_GRID_K', 'ADX_CANDLE_SIZE_IN_MINUTES', 'ADX_NUMBER_OF_CANDLES',
+    'ADX_PERIOD', 'ADX_THRESHOLD', 'ADX_PRICE_THRESHOLD', 'REVERSE', 'REVERSE_TARGET_AMOUNT',
     'REVERSE_INIT_AMOUNT', 'REVERSE_STOP', 'HEAD_VERSION', 'LOAD_LAST_STATE', 'LAST_STATE_FILE', 'VPS_NAME', 'PARAMS',
     'TLG_SERVICE', 'TELEGRAM_CONFIG', 'TLG_INLINE', 'MODE', 'XTIME', 'SAVE_DS', 'SAVE_PERIOD', 'LOGGING',
     'SELF_OPTIMIZATION', 'N_TRIALS', 'SESSION_RESULT', 'TRADE_CONTROL', 'TC_ADX_DATA_LIMIT', 'TC_ADX_PERIOD',
@@ -59,7 +61,6 @@ OVER_PRICE = Decimal()
 ORDER_Q = int()
 MARTIN = Decimal()
 SHIFT_GRID_DELAY = int()
-GRID_UPDATE_INTERVAL = 60 * 60  # sec between grid update in Reverse cycle
 FR_SIZE = Decimal('0.20')  # Minimum volume of the first order in the reverse (20% of the deposit)
 # Other
 STATUS_DELAY = int()
@@ -76,6 +77,13 @@ BB_CANDLE_SIZE_IN_MINUTES = int()
 BB_NUMBER_OF_CANDLES = int()
 KBB = float()
 K_ATR = Decimal('3.5')
+# --- Settings for grid coverage (Coverage) ---
+BB_CANDLE_SIZE_COVERAGE = 60  # BB timeframe for coverage calculation
+BB_NUMBER_OF_CANDLES_COVERAGE = 20  # Number of candles for BB coverage
+# --- Settings for grid shift (Shift) ---
+BB_CANDLE_SIZE_SHIFT = 15  # BB timeframe for shift
+BB_NUMBER_OF_CANDLES_SHIFT = 20  # Number of candles for BB shift
+K_ATR_SHIFT = Decimal('0.25')  # ATR coefficient for grid shift threshold
 #
 LINEAR_GRID_K = int()
 #

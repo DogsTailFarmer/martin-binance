@@ -11,7 +11,6 @@ __contact__ = "https://github.com/DogsTailFarmer"
 import asyncio
 import aiofiles
 import aiosqlite
-from aiocsv import AsyncWriter
 import logging
 import os
 import random
@@ -23,6 +22,7 @@ from decimal import Decimal
 from pathlib import Path
 from shutil import rmtree, copy, make_archive
 from typing import Optional
+from collections import deque
 
 import orjson
 import pandas as pd
@@ -55,7 +55,8 @@ color_init()
 RATE_LIMITER = HEARTBEAT * (60 if GRID_ONLY else 10)
 KLINES_LIM = 100  # Number of candles must be <= 1000
 CANCEL_ALL_ORDERS = True  # Ask about cancel all active orders before start strategy and par.LOAD_LAST_STATE = 0
-TRADES_LIST_LIMIT = 50
+TRADES_LIST_LIMIT = 500
+WRITE_INTERVAL = 60  # Disk write interval in seconds
 TRY_LIMIT = 10
 PYARROW_BATCH_BUFFER_SIZE = 20480  # Rows
 ORDER_BOOK_PRKT = "order_book.parquet"
@@ -116,7 +117,7 @@ class StrategyBase(metaclass=ABCMeta):
         self.bulk_orders_cancel = {}
         self.session_root = None
         self.state_file = None
-        self.operational_status = None
+        self.operational_status = False
         self.tasks = set()
         #
         self.time_operational = {'ts': 0.0, 'diff': 0.0, 'new': 0.0}  # - See get_time()
@@ -734,6 +735,9 @@ class StrategyBase(metaclass=ABCMeta):
 
             self.save_strategy_state(LAST_STATE_FILE)
             self.message_log(f"Last state saved to {LAST_STATE_FILE}", log_level=logging.INFO)
+
+            await SAVE_TRADE_QUEUE.put(None)
+            await SAVE_TRADE_QUEUE.join()
 
             if self.tlg_client:
                 await self.tlg_client.close()
@@ -1606,7 +1610,9 @@ class StrategyBase(metaclass=ABCMeta):
                         active_orders = list(map(orjson.loads, _active_orders.orders))
                         for order in active_orders:
                             print(f"Order: {order['orderId']}({order['clientOrderId']}), side: {order['side']},"
-                                  f" amount: {order['origQty']}, price:{order['price']}, status: {order['status']}")
+                                  f" amount: {any2str(order['origQty'])},"
+                                  f" price:{any2str(order['price'])},"
+                                  f" status: {order['status']}")
                     if CANCEL_ALL_ORDERS and active_orders and not LOAD_LAST_STATE:
                         answer = await asyncio.to_thread(
                             input,
@@ -1624,7 +1630,9 @@ class StrategyBase(metaclass=ABCMeta):
                                 print('Before start was canceled orders:')
                                 for i in cancel_orders:
                                     print(f"Order: {i['orderId']}, side:{i['side']},"
-                                          f" amount:{i['origQty']}, price:{i['price']}, status:{i['status']}")
+                                          f" amount:{any2str(i['origQty'])},"
+                                          f" price:{any2str(i['price'])},"
+                                          f" status:{i['status']}")
                                 print("=" * 64)
                             except GRPCError as ex:
                                 print(f"Exception on cancel All order: {ex.status.name}, {ex.message}")
@@ -1718,35 +1726,44 @@ class StrategyBase(metaclass=ABCMeta):
                     self.backtest[f"candles_{i.value}"] = pq.ParquetFile(Path(raw_path, f"candles_{i.value}.parquet"))
 
             await self.buffered_funds()
-            answer = str()
 
+            restore_state = False
             if self.last_state:
                 if not LOAD_LAST_STATE:
                     answer = await asyncio.to_thread(
                         input,
                         'Restore saved state after restart? Y:\n'
                     )
-                if LOAD_LAST_STATE or answer.lower() == 'y':
-                    self.message_log("Load saved state after restart", color=Style.GREEN)
-                    self.load_strategy_state(LAST_STATE_FILE)
-                    [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
-                    #
-
-                    if self.command == "stopped":
-                        await asyncio.to_thread(
-                            input,
-                            'Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n'
-                        )
-                        self.command = None
-
-                    #
-                    await self.init(check_funds=False)
+                    if answer.lower() == 'y':
+                        restore_state = True
                 else:
+                    restore_state = True
+
+                if not restore_state:
                     self.last_state = False
 
-            if not self.last_state:
+            is_backtest_with_state = (
+                    not self.last_state
+                    and MODE not in ('T', 'TC')
+                    and self.load_strategy_state(self.state_file)
+            )
+
+            check_funds = not (restore_state or is_backtest_with_state)
+            await self.init(check_funds=check_funds)
+
+            if self.last_state:
+                self.message_log("Load saved state after restart", color=Style.GREEN)
+                self.load_strategy_state(LAST_STATE_FILE)
+                [self.trades.append(PrivateTrade(trade)) for trade in load_from_csv()]
+
+                if self.command == "stopped":
+                    await asyncio.to_thread(
+                        input,
+                        'Saved state was "stopped". Press Enter for continue or Ctrl-Z for Cancel\n'
+                    )
+                    self.command = None
+            else:
                 if MODE in ('T', 'TC'):
-                    await self.init()
                     await asyncio.to_thread(
                         input,
                         'Press Enter for Start or Ctrl-Z for Cancel\n'
@@ -1757,15 +1774,13 @@ class StrategyBase(metaclass=ABCMeta):
                     self.get_buffered_funds_last_time = self.get_time()
                     self.start_time_ms = int(self.get_time() * 1000)
                     self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
-                    #
+
                     await self.wss_declare()
 
-                    if self.load_strategy_state(self.state_file):
+                    if is_backtest_with_state:
                         self.restore_state_before_backtesting_ex()
-                        await self.init(check_funds=False)
                         self.start_collect = True
                     else:
-                        await self.init()
                         await self.start()
 
             if MODE in ('T', 'TC'):
@@ -1891,38 +1906,69 @@ class StrategyBase(metaclass=ABCMeta):
 async def save_to_csv() -> None:
     file_name = Path(LAST_STATE_PATH, f"{ID_EXCHANGE}_{SYMBOL}.csv")
 
-    async with aiofiles.open(file_name, mode="a", newline='') as afp:
-        writer = AsyncWriter(afp)
+    existing_lines = deque(maxlen=TRADES_LIST_LIMIT)
+    if file_name.exists() and file_name.stat().st_size > 0:
+        async with aiofiles.open(file_name, mode="r", encoding="utf-8") as fr:
+            lines = [line.strip() for line in await fr.readlines() if line.strip()]
+            existing_lines.extend(lines)
+
+    has_unsaved_changes = False
+
+    async def disk_flusher():
+        nonlocal has_unsaved_changes
+        while True:
+            await asyncio.sleep(WRITE_INTERVAL)
+            if has_unsaved_changes:
+                async with aiofiles.open(file_name, mode="w", newline='', encoding="utf-8") as _fw:
+                    await _fw.write("\n".join(existing_lines) + "\n")
+                has_unsaved_changes = False
+
+    flusher_task = asyncio.create_task(disk_flusher())
+
+    try:
         while True:
             row_data = await SAVE_TRADE_QUEUE.get()
-            await writer.writerow(row_data)
+
+            if row_data is None:  # Graceful Shutdown
+                SAVE_TRADE_QUEUE.task_done()
+                break
+
+            existing_lines.append(",".join(str(x) for x in row_data))
+            has_unsaved_changes = True
             SAVE_TRADE_QUEUE.task_done()
+
+    finally:
+        flusher_task.cancel()
+        if has_unsaved_changes:
+            try:
+                async with aiofiles.open(file_name, mode="w", newline='', encoding="utf-8") as fw:
+                    await fw.write("\n".join(existing_lines) + "\n")
+                print("The trade logger successfully flushed remaining data to disk.")
+            except Exception as e:
+                print(f"Error during final flush: {e}")
+
+    print("The trade logger successfully saved all data and shut down")
 
 
 def load_from_csv() -> list:
     file_name = Path(LAST_STATE_PATH, f"{ID_EXCHANGE}_{SYMBOL}.csv")
     trades = []
-    if file_name.exists() and file_name.stat().st_size:
-        data = []
-        with open(file_name, 'r') as f:
+
+    if file_name.exists() and file_name.stat().st_size > 0:
+        with open(file_name, 'r', encoding='utf-8') as f:
             for line in f:
                 values = line.strip().split(',')
                 if len(values) == 12:
-                    data.append(values)
-
-        df = pd.DataFrame(data).tail(TRADES_LIST_LIMIT)
-
-        for _, row in df.iterrows():
-            trade = {
-                "time": row.iloc[1],
-                "isBuyer": row.iloc[2] == 'BUY',
-                "isMaker": row.iloc[0] == 'TRADE',
-                "orderId": row.iloc[3],
-                "id": row.iloc[5],
-                "qty": row.iloc[10],
-                "price": row.iloc[11],
-            }
-            trades.append(trade)
+                    trade = {
+                        "time": values[1],
+                        "isBuyer": values[2] == 'BUY',
+                        "isMaker": values[0] == 'TRADE',
+                        "orderId": values[3],
+                        "id": values[5],
+                        "qty": values[10],
+                        "price": values[11],
+                    }
+                    trades.append(trade)
 
     return trades
 
