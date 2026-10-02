@@ -144,6 +144,7 @@ class StrategyBase(metaclass=ABCMeta):
         self.command: Optional[str] = None  # + External input command from Telegram
         self.connection_db = None  # - Connection to .db
         self._save_pending = False  # Deferred backup readiness flag
+        # self.tp_convert2grid = False
 
     def __call__(self):
         return self
@@ -1197,7 +1198,7 @@ class StrategyBase(metaclass=ABCMeta):
                 await update_handler(ed)
         except Exception as ex:
             self.message_log(f"Exception on WSS, on_order_update loop closed: {ex}", log_level=logging.WARNING)
-            self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
+            # self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
             self.wss_fire_up = True
         else:
             self.message_log("WSS: on_order_update loop closed", log_level=logging.DEBUG)
@@ -1436,9 +1437,15 @@ class StrategyBase(metaclass=ABCMeta):
                 diff_id.update(self.orders.keys(delay=1000).difference(exch_orders))
 
                 if diff_id:
-                    self.message_log(f"Perhaps was missed event for order(s): {diff_id},"
+                    diff_id_list = list(diff_id)
+                    tp_id = self.orders.tp_order_id
+                    if tp_id in diff_id_list:
+                        diff_id_list.remove(tp_id)
+                        diff_id_list.insert(0, tp_id)
+
+                    self.message_log(f"Perhaps was missed event for order(s): {diff_id_list},"
                                      f" checking it", log_level=logging.WARNING, tlg=False)
-                    for _id in diff_id:
+                    for _id in diff_id_list:
                         res = await self.fetch_order(_id, _filled_update_call=True)
                         if res.get('status') in ('CANCELED', 'EXPIRED_IN_MATCH'):
                             await self.cancel_order_handler(_id, cancel_all=False)
@@ -1594,9 +1601,6 @@ class StrategyBase(metaclass=ABCMeta):
                 if MODE in ('T', 'TC'):
                     # Try load last strategy state from saved files
                     self.last_state = self.load_strategy_state(LAST_STATE_FILE, probe=True)
-                    if not self.last_state and GRID_ONLY and LOAD_LAST_STATE:
-                        self.save_strategy_state(LAST_STATE_FILE)
-                        self.last_state = True
                     # Check and Cancel ALL ACTIVE ORDER
                     try:
                         _active_orders = await send_request(
@@ -1764,10 +1768,13 @@ class StrategyBase(metaclass=ABCMeta):
                     self.command = None
             else:
                 if MODE in ('T', 'TC'):
-                    await asyncio.to_thread(
-                        input,
-                        'Press Enter for Start or Ctrl-Z for Cancel\n'
-                    )
+                    if GRID_ONLY and LOAD_LAST_STATE:
+                        pass  # Auto start
+                    else:
+                        await asyncio.to_thread(
+                            input,
+                            'Press Enter for Start or Ctrl-Z for Cancel\n'
+                        )
                 else:
                     # Set initial local time from backtest data
                     self.time_operational['new'] = self.backtest['ticker_index_first'] / 1000

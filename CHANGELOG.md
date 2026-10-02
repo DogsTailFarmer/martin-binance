@@ -1,3 +1,14 @@
+## 3.2.1rc26 - 2026-10-02
+✂️ refactor(executor/grid): remove `grid_update_started` flag, simplify `cancel_grid` and `grid_update` lifecycle
+🔄 refactor(executor/trade_control): inline `_protected_logic`, poll `trade_control_is_waiting_state` from caller
+➕ feat(executor/sum): add `mode` param to `update_sum_amount` for update vs correct
+🐛 fix(executor/tp): guard `tp_was_filled` unpack with try/except ValueError
+✂️ refactor(lib/tasks_cancel): simplify to per-task await, drop timeout/shield
+🔧 fix(strategy_base/orders): prioritize TP order in missed-event diff list
+⚡ perf(strategy_base/startup): auto-start when GRID_ONLY and LOAD_LAST_STATE
+✏️ fix(OoTSP): correct typo "analise" → "analyse", bump version to 3.2.1
+📦 chore(init/backup): bump to 3.2.1rc26, drop `grid_update_started` from registry, add credits
+
 ## 3.2.1rc23 - 2026-09-29
 ✨ feat(executor/version): introduce `VERSION` constant and reference it in all log outputs
 ✨ feat(executor/volatility): add `calc_dynamic_volatility_pct` for hybrid BB+ATR selection

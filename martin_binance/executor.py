@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1"
+__version__ = "3.2.1rc26"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -19,6 +19,7 @@ import aiosqlite
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pymannkendall as mk
 from pathlib import Path
+import traceback
 
 import orjson
 from datetime import datetime, timezone
@@ -124,7 +125,6 @@ class Strategy(StrategyBase):
         self.first_run = True  # -
         self.grid_only_restart = 0  # - Time to restart GRID_ONLY mode
         self.grid_remove: Optional[bool] = None  # + Flag when starting cancel grid orders
-        self.grid_update_started: Optional[bool] = None  # + Flag when grid update process started
         self.last_ticker_update = 0  # -
         self.martin = O_DEC  # + Operational increment volume of orders in the grid
         self.order_q: Optional[int] = None  # + Adaptive order quantity for grid
@@ -518,7 +518,7 @@ class Strategy(StrategyBase):
 
     async def event_grid_only_release(self):
         if self.grid_only_restart and self.get_time() > self.grid_only_restart:
-            ff, fs, _, _ = self.get_free_assets(mode='available')
+            ff, fs, _, _ = self.get_free_assets()
             if USE_ALL_FUND:
                 if self.check_min_amount(
                         amount=(fs / self.avg_rate) if self.cycle_buy else ff,
@@ -527,6 +527,7 @@ class Strategy(StrategyBase):
                     self.message_log("Grid Only mode Refresh", color=Style.B_WHITE)
                     self.grid_remove = True
                     await self.cancel_grid(cancel_all=True)
+                    await self.start()
                 elif GRID_ONLY_EXIT:
                     self.message_log("Exit from sell asset cycle after time limit", color=Style.B_WHITE)
                     tasks_manage(self.tasks, self.raise_keyboard_interrupt(), add_done_callback=False)
@@ -542,7 +543,6 @@ class Strategy(StrategyBase):
         return (
             self.grid_remove is None
             and not GRID_ONLY
-            and not self.grid_update_started
             and not self.tp_hold
             and not self.tp_order_hold
             and not self.tp_wait_id
@@ -627,20 +627,16 @@ class Strategy(StrategyBase):
         elif not self.orders.exist_grids() and self.orders_hold:
             self.message_log("Restore, no grid orders, place from hold now", tlg=True)
             self.place_grid_part()
-        elif self.grid_update_started and not_grid:
-            self.grid_remove = True
-            self.message_log("Continue update grid", tlg=True)
-            await self.cancel_grid()
-        elif not_grid and not self.orders.tp_order_id and not self.tp_wait_id:
+        elif not self.orders.tp_order_id and not self.tp_wait_id and self.check_min_amount():
+            self.message_log("Place TP", tlg=not GRID_ONLY)
+            await self.place_profit_order()
+        elif not_grid:
             self.message_log("Restore, Restart", tlg=not GRID_ONLY)
             await self.start()
         elif self.orders_init:
             for order_id in self.orders_init.keys():
                 self.message_log("Restore, wait grid orders", tlg=True)
                 await self.fetch_created_order(order_id, "Grid order event was missed into reload")
-        elif not self.orders.exist_grids() and not self.reverse_hold:
-            self.message_log("Place grid orders", tlg=True)
-            await self.grid_update()
         elif GRID_ONLY and self.orders.exist_grids():
             self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
 
@@ -709,7 +705,7 @@ class Strategy(StrategyBase):
         ff, fs, _, _ = self.get_free_assets(mode='available')
         if self.first_run:
             self.save_init_assets(ff, fs)
-        if self.restart or (GRID_ONLY and not self.first_run):
+        if self.restart:
             # Check refunding before restart
             if self.cycle_buy:
                 go_trade = fs >= (self.initial_reverse_second if self.reverse else self.initial_second)
@@ -734,7 +730,10 @@ class Strategy(StrategyBase):
         self.wait_refunding_for_start = False
         # Checking for optimal trading conditions
         if not self.first_run:
-            await self.trade_control()
+            self.trade_control_is_waiting_state = True
+            tasks_manage(self.tasks, self.trade_control())
+            while self.trade_control_is_waiting_state:
+                await asyncio.sleep(HEARTBEAT)
         #
         self.avg_rate = self.get_buffered_ticker().last_price
         if self.first_run or MODE in ('T', 'TC'):
@@ -755,10 +754,13 @@ class Strategy(StrategyBase):
                     self.deposit_first = ff
                 self.save_init_assets(ff, fs)
                 self.grid_only_restart = self.get_time() + GRID_ONLY_DELAY
+            elif START_ON_BUY and AMOUNT_FIRST:
+                if not self.check_min_amount(amount=self.deposit_second / self.avg_rate, for_tp=False):
+                    self.deposit_first = self.round_truncate(AMOUNT_FIRST, base=True)
+                    self.deposit_second = self.round_truncate(AMOUNT_SECOND, base=False)
 
             if c1 and self.orders.exist_grids() and c2:
                 self.grid_remove = True
-                self.grid_update_started = True
                 await self.cancel_grid(cancel_all=True)
 
             c3 = START_ON_BUY and AMOUNT_FIRST and (ff >= AMOUNT_FIRST or fs < AMOUNT_SECOND)
@@ -808,7 +810,6 @@ class Strategy(StrategyBase):
         self.profit_first = self.profit_second = O_DEC
         self.over_price = OVER_PRICE
         self.order_q = self.order_q_limit = ORDER_Q
-        self.grid_update_started = None
         self.place_grid_part_after_tp = True
         self.sum_fee_f = self.sum_fee_s = O_DEC
         #
@@ -902,55 +903,44 @@ class Strategy(StrategyBase):
 
     async def trade_control(self):
         if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy or not self.adx_di_avg_delta:
+            self.trade_control_is_waiting_state = False
             return
 
-        async def _protected_logic():
-            first_iteration = True
-            tlg = False
-            while True:
-                last_diff = self.adx_di_avg_delta[-1]
-                if first_iteration:
-                    self.message_log(f"Weighted average multi-frame directional index: {last_diff}")
-                if last_diff > 0:
-                    break
+        first_iteration = True
+        tlg = False
+        while True:
+            last_diff = self.adx_di_avg_delta[-1]
+            if first_iteration:
+                self.message_log(f"Weighted average multi-frame directional index: {last_diff}")
+            if last_diff > 0:
+                break
 
-                try:
-                    if len(self.adx_di_avg_delta) >= 5:
-                        data_snapshot = self.adx_di_avg_delta.copy()
-                        result = await asyncio.wait_for(
-                            asyncio.to_thread(mk.original_test, data_snapshot),
-                            timeout=2.0
-                        )
-                        self.message_log(f"Last DI diff: {last_diff}, Trend: {result.trend}")
-                        if result.h and result.z > 0 and last_diff > -TC_DI_DIFF:
-                            break
-                    else:
-                        self.message_log("Not enough data for analysis, collecting it")
-                except asyncio.TimeoutError:
-                    self.message_log("Trade Control: Mann-Kendall test timed out!", log_level=logging.WARNING)
-                except Exception as ex:
-                    self.message_log(f"Trade Control Error: {ex}, continue", log_level=logging.WARNING)
+            try:
+                if len(self.adx_di_avg_delta) >= 5:
+                    data_snapshot = self.adx_di_avg_delta.copy()
+                    result = await asyncio.wait_for(
+                        asyncio.to_thread(mk.original_test, data_snapshot),
+                        timeout=2.0
+                    )
+                    self.message_log(f"Last DI diff: {last_diff}, Trend: {result.trend}")
+                    if result.h and result.z > 0 and last_diff > -TC_DI_DIFF:
+                        break
+                else:
+                    self.message_log("Not enough data for analysis, collecting it")
+            except asyncio.TimeoutError:
+                self.message_log("Trade Control: Mann-Kendall test timed out!", log_level=logging.WARNING)
+            except Exception as ex:
+                self.message_log(f"Trade Control Error: {ex}, continue", log_level=logging.WARNING)
 
-                if first_iteration:
-                    self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
-                    self.trade_control_is_waiting_state = True
-                    first_iteration = False
-                    tlg = True
+            if first_iteration:
+                self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
+                first_iteration = False
+                tlg = True
 
-                await asyncio.sleep(60)
+            await asyncio.sleep(60)
 
-            self.trade_control_is_waiting_state = False
-            self.message_log('The conditions are favorable, continue trading', tlg=tlg, color=Style.GREEN)
-
-        try:
-            await asyncio.shield(_protected_logic())
-        except asyncio.CancelledError:
-            self.message_log(
-                "Trade Control: External cancellation intercepted by Shield. State preserved, closing iteration safely.",
-                log_level=logging.WARNING
-            )
-            self.trade_control_is_waiting_state = False
-            raise
+        self.trade_control_is_waiting_state = False
+        self.message_log('The conditions are favorable, trading are continue', tlg=tlg, color=Style.GREEN)
 
     def save_init_assets(self, ff, fs):
         if self.reverse:
@@ -1126,7 +1116,6 @@ class Strategy(StrategyBase):
                          f" part_profit_second: {self.part_profit_second}\n"
                          f"! profit_first: {self.profit_first}, profit_second: {self.profit_second}\n"
                          f"! sum_profit_first: {self.sum_profit_first}, sum_profit_second: {self.sum_profit_second}\n"
-                         f"! started_balance_detail: {self.started_balance_detail}\n"
                          f"! command: {self.command}\n"
                          f"! Profit: {self.get_sum_profit()}\n"
                          f"! ======================================",
@@ -1257,8 +1246,10 @@ class Strategy(StrategyBase):
                                                                   additional_grid=additional_grid,
                                                                   grid_update=grid_update)
                 except statistics.StatisticsError as ex:
-                    self.message_log(f"Can't set trade conditions: {ex}, waiting for WSS data update",
-                                     log_level=logging.WARNING)
+                    self.message_log(
+                        f"Can't set trade conditions: {ex}, waiting for WSS data update",
+                        log_level=logging.WARNING
+                    )
                     self.wait_wss_refresh = {
                               'buy_side': buy_side,
                               'depo': depo,
@@ -1269,9 +1260,8 @@ class Strategy(StrategyBase):
                     }
                     return
                 except Exception as ex:
-                    self.message_log(
-                        f"Can't set trade conditions: {ex}", log_level=logging.ERROR
-                    )
+                    self.message_log(f"Can't set trade conditions: {ex}", log_level=logging.ERROR)
+                    self.message_log(f"Exception traceback: {traceback.format_exc()}", log_level=logging.DEBUG)
                     return
             else:
                 self.over_price = OVER_PRICE
@@ -1334,8 +1324,6 @@ class Strategy(StrategyBase):
                 self.message_log(f"Shift grid threshold: {any2str(self.shift_grid_threshold)}")
             #
             self.start_after_shift = False
-            if self.grid_update_started:
-                self.grid_update_started = None
         else:
             self.grid_hold = {'buy_side': buy_side,
                               'depo': depo,
@@ -1580,8 +1568,7 @@ class Strategy(StrategyBase):
 
         if do_it:
             self.message_log(f"Update grid orders, BB limit difference: {float(delta):.4f}%", color=Style.B_WHITE)
-            self.grid_update_started = True
-            await self.cancel_grid()
+            await self.grid_update()
 
     async def place_profit_order(self, by_market=False, after_error=False) -> None:
         if not GRID_ONLY and self.check_min_amount():
@@ -1921,7 +1908,11 @@ class Strategy(StrategyBase):
         After filling take profit order calculate profit, deposit and restart or place additional TP
         """
         # noinspection PyTupleAssignmentBalance
-        amount_first, amount_second, by_market = self.tp_was_filled  # skipcq: PYL-W0632
+        try:
+            amount_first, amount_second, by_market = self.tp_was_filled  # skipcq: PYL-W0632
+        except ValueError:
+            self.message_log("Not data for TP handling", log_level=logging.WARNING)
+            return
         self.message_log(f"after_filled_tp: amount_first: {float(amount_first):f},"
                          f" amount_second: {float(amount_second):f},"
                          f" by_market: {by_market}, tp_amount: {self.tp_amount}, tp_target: {self.tp_target}"
@@ -2176,12 +2167,7 @@ class Strategy(StrategyBase):
             # Calculate cycle sum trading for both currency
             delta_f = amount_first_fee + part_amount[0]
             delta_s = amount_second_fee + part_amount[1]
-            self.sum_amount_first += delta_f
-            self.sum_amount_second += delta_s
-            self.message_log(
-                f"Sum_amount_first: {self.sum_amount_first}, Sum_amount_second: {self.sum_amount_second}",
-                color=Style.MAGENTA
-            )
+            self.update_sum_amount(delta_f, delta_s, mode='update')
             if GRID_ONLY:
                 # Correct depo and init amount
                 if self.cycle_buy:
@@ -2314,15 +2300,20 @@ class Strategy(StrategyBase):
         self.message_log("Too small for trade and not grid for update", tlg=True)
         return False
 
-    def update_sum_amount(self, _amount_f, _amount_s):
-        self.message_log(f"Before Correction: Sum_amount_first: {self.sum_amount_first},"
-                         f" Sum_amount_second: {self.sum_amount_second}",
-                         log_level=logging.DEBUG, color=Style.MAGENTA)
-        self.sum_amount_first -= _amount_f
-        self.sum_amount_second -= _amount_s
+    def update_sum_amount(self, _amount_f, _amount_s, mode='correct'):
+        if mode == 'correct':
+            self.message_log(f"Before Correction: Sum_amount_first: {self.sum_amount_first},"
+                             f" Sum_amount_second: {self.sum_amount_second}",
+                             color=Style.MAGENTA)
+            self.sum_amount_first -= _amount_f
+            self.sum_amount_second -= _amount_s
+        else:
+            self.sum_amount_first += _amount_f
+            self.sum_amount_second += _amount_s
+
         self.message_log(f"Sum_amount_first: {self.sum_amount_first},"
                          f" Sum_amount_second: {self.sum_amount_second}",
-                         log_level=logging.DEBUG, color=Style.MAGENTA)
+                         color=Style.MAGENTA)
 
     @auto_save_state
     async def cancel_grid(self, cancel_all=False):
@@ -2351,29 +2342,15 @@ class Strategy(StrategyBase):
                 self.orders_save.clear()
                 self.orders_hold.clear()
                 self.message_log("cancel_grid: Ended", log_level=logging.DEBUG)
-                if self.tp_was_filled:
-                    self.grid_update_started = None
-                    await self.after_filled_tp(one_else_grid=False)
-                elif self.grid_update_started:
-                    if GRID_ONLY and self.start_after_shift:
-                        self.start_after_shift = False
-                        allow_grid_shift = True
-                    else:
-                        allow_grid_shift = False
-                    await self.grid_update(allow_grid_shift=allow_grid_shift)
-                else:
-                    self.grid_update_started = None
-                    await self.start()
         else:
             self.grid_remove = None
 
     @auto_save_state
-    async def grid_update(self, allow_grid_shift=False):
-        if GRID_ONLY:
-            _depo = self.deposit_second if self.cycle_buy else self.deposit_first
-        else:
-            _depo = self.depo_unused()
+    async def grid_update(self):
+        _depo = self.depo_unused()
         self.message_log(f"Start update (place) grid orders, depo: {_depo}", color=Style.B_WHITE)
+        await self.cancel_grid(cancel_all=False)
+
         if self.reverse:
             if self.cycle_buy:
                 _reverse_target_amount = self.reverse_target_amount - self.sum_amount_first
@@ -2389,7 +2366,7 @@ class Strategy(StrategyBase):
         await self.place_grid(self.cycle_buy,
                               _depo,
                               _reverse_target_amount,
-                              allow_grid_shift=allow_grid_shift,
+                              allow_grid_shift=False,
                               grid_update=True)
 
     def check_min_amount(self, amount=O_DEC, price=O_DEC, for_tp=True, by_market=False) -> bool:
@@ -2474,13 +2451,8 @@ class Strategy(StrategyBase):
                         self.initial_first += part_amount_first
                     self.message_log(f"New first depo: {self.deposit_first}")
 
-            if GRID_ONLY:
-                self.grid_remove = True
-                self.grid_update_started = True
-            else:
-                self.grid_remove = None
-
             await self.cancel_grid(cancel_all=True)
+            await self.start()
 
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")
@@ -2627,12 +2599,11 @@ class Strategy(StrategyBase):
         self.debug_output()
 
         if update_grid and not GRID_ONLY:
-            self.grid_update_started = True
-            await self.cancel_grid()
+            await self.update_grid()
         elif restart and GRID_ONLY and USE_ALL_FUND:
-            self.grid_remove = True
-            self.grid_update_started = True
-            await self.cancel_grid()
+            if self.orders.exist_grids():
+                await self.cancel_grid()
+            await self.start()
 
     async def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
         ff = funds.get(self.f_currency, O_DEC)
@@ -2746,6 +2717,7 @@ class Strategy(StrategyBase):
                     self.restore_orders = False
                     self.grid_remove = None
                     await self.cancel_grid(cancel_all=True)
+                    await self.after_filled_tp(one_else_grid=False)
             else:
                 self.message_log(f"Wild order, do not know it: {update.order_id}", tlg=True)
         elif update.status == 'PARTIALLY_FILLED':
@@ -2758,17 +2730,16 @@ class Strategy(StrategyBase):
                 # Adjusting amount for saved order, if exists
                 if _order := self.orders_save.get_by_id(update.order_id):
                     self.orders_save.remove(update.order_id)
-                    #TODO Ajust received_amount and remaining_amount
+                    #TODO Adjust received_amount and remaining_amount
                     _order.amount -= self.round_truncate(amount_first, base=True, _rounding=ROUND_CEILING)
                     self.orders_save.update(_order)
 
-                if not GRID_ONLY:
-                    part_amount_first, part_amount_second = self.part_amount.pop(update.order_id, (O_DEC, O_DEC))
-                    part_amount_first -= amount_first_fee
-                    part_amount_second -= amount_second_fee
-                    self.part_amount[update.order_id] = (part_amount_first, part_amount_second)
-                    self.message_log(f"Part_amount_first: {part_amount_first},"
-                                     f" Part_amount_second: {part_amount_second}", log_level=logging.DEBUG)
+                part_amount_first, part_amount_second = self.part_amount.pop(update.order_id, (O_DEC, O_DEC))
+                part_amount_first -= amount_first_fee
+                part_amount_second -= amount_second_fee
+                self.part_amount[update.order_id] = (part_amount_first, part_amount_second)
+                self.message_log(f"Part_amount_first: {part_amount_first},"
+                                 f" Part_amount_second: {part_amount_second}", log_level=logging.DEBUG)
                 # Get min trade amount
                 if self.check_min_amount(amount=self.sum_amount_first + amount_first_fee, by_market=by_market):
                     self.shift_grid_threshold = None
@@ -2778,8 +2749,12 @@ class Strategy(StrategyBase):
                         by_market=by_market
                     )
                 else:
+                    self.update_sum_amount(amount_first_fee, amount_second_fee, mode='update')
                     self.last_shift_time = self.get_time() + 2 * SHIFT_GRID_DELAY
-                    self.message_log("Partially trade too small, ignore", color=Style.B_WHITE)
+                    self.message_log(
+                        "Partially trade too small, It will be taken into account later",
+                        color=Style.B_WHITE
+                    )
             elif self.orders.tp_order_id == update.order_id:
                 self.message_log("Take profit partially filled", color=Style.B_WHITE)
                 amount_first_fee, amount_second_fee = self.fee_for_tp(amount_first, amount_second, by_market=by_market)

@@ -36,7 +36,7 @@ else:
 BACKUP_REGISTRY = [
     "command", "cycle_buy", "cycle_buy_count", "cycle_sell_count", "cycle_time",
     "cycle_time_reverse", "deposit_first", "deposit_second", "grid_remove",
-    "grid_update_started", "initial_first", "initial_reverse_first", "initial_reverse_second",
+    "initial_first", "initial_reverse_first", "initial_reverse_second",
     "initial_second", "martin", "order_id", "order_q", "orders", "orders_hold",
     "orders_save", "over_price", "part_amount", "profit_first", "profit_second",
     "restore_orders", "reverse", "reverse_hold", "reverse_init_amount", "reverse_price",

@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.1.0"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -33,7 +33,7 @@ def main():
                 ),
                 inquirer.List(
                     "mode",
-                    message="New study session or analise from saved one",
+                    message="New study session or analyse from saved one",
                     choices=["New", "Analise saved study session", "Exit"],
                 ),
                 inquirer.Text(
@@ -67,7 +67,7 @@ def main():
             )
             print_study_result(study)
             print(f"Study instance saved to {storage_name} for later use")
-        elif answers.get('mode') == 'Analise saved study session':
+        elif answers.get('mode') == 'Analyse saved study session':
             # noinspection PyArgumentList
             study = optuna.load_study(study_name=study_name, storage=storage_name)
 
