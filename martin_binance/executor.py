@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc26"
+__version__ = "3.2.1rc27"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -527,6 +527,8 @@ class Strategy(StrategyBase):
                     self.message_log("Grid Only mode Refresh", color=Style.B_WHITE)
                     self.grid_remove = True
                     await self.cancel_grid(cancel_all=True)
+                    while self.grid_remove or self.cancel_grid_hold:
+                        await asyncio.sleep(HEARTBEAT)
                     await self.start()
                 elif GRID_ONLY_EXIT:
                     self.message_log("Exit from sell asset cycle after time limit", color=Style.B_WHITE)
@@ -2338,9 +2340,9 @@ class Strategy(StrategyBase):
                 self.message_log(f"cancel_grid order: {first_order.id}", log_level=logging.DEBUG)
                 await self.cancel_order(first_order.id, cancel_all=cancel_all)
             else:
-                self.grid_remove = None
                 self.orders_save.clear()
                 self.orders_hold.clear()
+                self.grid_remove = None
                 self.message_log("cancel_grid: Ended", log_level=logging.DEBUG)
         else:
             self.grid_remove = None
@@ -2350,6 +2352,8 @@ class Strategy(StrategyBase):
         _depo = self.depo_unused()
         self.message_log(f"Start update (place) grid orders, depo: {_depo}", color=Style.B_WHITE)
         await self.cancel_grid(cancel_all=False)
+        while self.grid_remove or self.cancel_grid_hold:
+            await asyncio.sleep(HEARTBEAT)
 
         if self.reverse:
             if self.cycle_buy:
@@ -2452,6 +2456,9 @@ class Strategy(StrategyBase):
                     self.message_log(f"New first depo: {self.deposit_first}")
 
             await self.cancel_grid(cancel_all=True)
+            while self.grid_remove or self.cancel_grid_hold:
+                await asyncio.sleep(HEARTBEAT)
+
             await self.start()
 
     def on_new_order_book(self, order_book: OrderBook) -> None:
@@ -2603,6 +2610,9 @@ class Strategy(StrategyBase):
         elif restart and GRID_ONLY and USE_ALL_FUND:
             if self.orders.exist_grids():
                 await self.cancel_grid()
+                while self.grid_remove or self.cancel_grid_hold:
+                    await asyncio.sleep(HEARTBEAT)
+
             await self.start()
 
     async def on_new_funds(self, funds: Dict[str, FundsEntry]) -> None:
@@ -2717,6 +2727,8 @@ class Strategy(StrategyBase):
                     self.restore_orders = False
                     self.grid_remove = None
                     await self.cancel_grid(cancel_all=True)
+                    while self.grid_remove or self.cancel_grid_hold:
+                        await asyncio.sleep(HEARTBEAT)
                     await self.after_filled_tp(one_else_grid=False)
             else:
                 self.message_log(f"Wild order, do not know it: {update.order_id}", tlg=True)

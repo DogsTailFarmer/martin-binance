@@ -1,3 +1,9 @@
+## 3.2.1rc27 - 2026-10-03
+🐛 fix(executor/grid): poll **grid_remove** and **cancel_grid_hold** after **cancel_grid** in all callers
+🐛 fix(executor/grid): reset **grid_remove** after clearing order pools in **cancel_grid**
+✏️ docs(backup): shorten restore-failure warning message
+🧹 chore(strategy_base): remove dead **tp_convert2grid** comment line
+
 ## 3.2.1rc26 - 2026-10-02
 ✂️ refactor(executor/grid): remove `grid_update_started` flag, simplify `cancel_grid` and `grid_update` lifecycle
 🔄 refactor(executor/trade_control): inline `_protected_logic`, poll `trade_control_is_waiting_state` from caller

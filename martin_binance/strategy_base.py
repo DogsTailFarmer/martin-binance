@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1"
+__version__ = "3.2.1rc27"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -144,7 +144,6 @@ class StrategyBase(metaclass=ABCMeta):
         self.command: Optional[str] = None  # + External input command from Telegram
         self.connection_db = None  # - Connection to .db
         self._save_pending = False  # Deferred backup readiness flag
-        # self.tp_convert2grid = False
 
     def __call__(self):
         return self

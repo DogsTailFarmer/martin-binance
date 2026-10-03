@@ -229,7 +229,7 @@ def load_state(file_path: Path, response:  type[ModelT], probe: bool = False) ->
             )
 
     msg2log(
-        "❌ Failed to restore state. Starting a clean session (all order pools will be empty)",
+        "❌ Failed to restore state. Starting a clean session.",
         log_level=logging.WARNING
     )
     return None
