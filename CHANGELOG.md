@@ -1,3 +1,17 @@
+## 3.2.1rc28 - 2026-10-07
+🐛 fix(executor/scheduler): make **scheduler_stop** async via **asyncio.to_thread**
+✨ refactor(executor/cycle): extract **export_cycle_result** conditionals into local vars
+🐛 fix(executor/backtest): reset **sum_profit_first/second** in **restore_state_before_backtesting_ex**
+🔧 refactor(executor/backtest): pass **orders.get_list()** to **account.restore_state**
+♻️ refactor(simulator/order): rename **SimOrder** → **Order** with native Binance field names
+♻️ refactor(simulator/account): replace **Orders** class with plain dict and **pd.Series** grids
+♻️ refactor(simulator/restore): simplify **restore_state** by delegating to **create_order**
+🐛 fix(strategy_base/scheduler): **await** **scheduler_stop** in shutdown and abstract signature
+⚡ perf(strategy_base/ticker): accumulate and batch **asyncio.sleep** calls in **loop_ds**
+🐛 fix(strategy_base/optimizer): use **ID_EXCHANGE** constant in subprocess arguments
+✨ feat(strategy_base/state): probe **load_strategy_state** before committing full restore
+🔖 fix(OoTSP/cli): correct "Analise" → "Analyse" typo in interactive choices
+
 ## 3.2.1rc27 - 2026-10-03
 🐛 fix(executor/grid): poll **grid_remove** and **cancel_grid_hold** after **cancel_grid** in all callers
 🐛 fix(executor/grid): reset **grid_remove** after clearing order pools in **cancel_grid**

@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc27"
+__version__ = "3.2.1rc28"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -280,9 +280,9 @@ class Strategy(StrategyBase):
     def scheduler_start(self):
         scheduler.start()
 
-    def scheduler_stop(self):
+    async def scheduler_stop(self):
         if scheduler.running:
-            scheduler.shutdown()
+            await asyncio.to_thread(scheduler.shutdown, wait=True)
 
     async def event_export_operational_status(self):
         ts = self.get_time()
@@ -652,18 +652,31 @@ class Strategy(StrategyBase):
     async def export_cycle_result(self):
         if MODE not in ('T', 'TC'):
             return
+
+        if self.cycle_buy:
+            df, ds = O_DEC, self.deposit_second
+        else:
+            df, ds = self.deposit_first, O_DEC
+
+        if self.reverse:
+            ff = self.initial_reverse_first
+            fs = self.initial_reverse_second
+        else:
+            ff = self.initial_first
+            fs = self.initial_second
+
         ct = datetime.now(timezone.utc).replace(tzinfo=None) - self.cycle_time
         ct = ct.total_seconds()
         data_to_db = {
             'ID_EXCHANGE': ID_EXCHANGE,
             'f_currency': self.f_currency,
             's_currency': self.s_currency,
-            'f_funds': self.initial_reverse_first if self.reverse else self.initial_first,
-            's_funds': self.initial_reverse_second if self.reverse else self.initial_second,
+            'f_funds': ff,
+            's_funds': fs,
             'avg_rate': self.avg_rate,
             'cycle_buy': self.cycle_buy,
-            'f_depo': O_DEC if self.cycle_buy else self.deposit_first,
-            's_depo': self.deposit_second if self.cycle_buy else O_DEC,
+            'f_depo': df,
+            's_depo': ds,
             'f_profit': self.profit_first,
             's_profit': self.profit_second,
             'PRICE_SHIFT': PRICE_SHIFT,
@@ -2954,6 +2967,8 @@ class Strategy(StrategyBase):
             await self.cancel_grid()
 
     def restore_state_before_backtesting_ex(self):
+        self.sum_profit_first = self.sum_profit_second = Decimal()
+
         if self.reverse:
             if self.cycle_buy:
                 free_f = self.initial_reverse_first = Decimal()
@@ -2975,7 +2990,7 @@ class Strategy(StrategyBase):
         self.account.restore_state(
             self.symbol,
             self.start_time_ms,
-            self.orders,
+            self.orders.get_list(),
             sum_amount=(self.cycle_buy, self.sum_amount_first, self.sum_amount_second)
         )
 

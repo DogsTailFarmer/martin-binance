@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc27"
+__version__ = "3.2.1rc28"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -324,7 +324,7 @@ class StrategyBase(metaclass=ABCMeta):
                         try:
                             self.backtest_process = await asyncio.create_subprocess_exec(
                                 OPTIMIZER,
-                                f"{self.exchange}_{self.symbol}",
+                                f"{ID_EXCHANGE}_{self.symbol}",
                                 self.session_root / Path(PARAMS).name,
                                 str(N_TRIALS),
                                 f"sqlite:///{storage_name}",
@@ -742,7 +742,7 @@ class StrategyBase(metaclass=ABCMeta):
             if self.tlg_client:
                 await self.tlg_client.close()
 
-            self.scheduler_stop()
+            await self.scheduler_stop()
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
             try:
@@ -818,6 +818,8 @@ class StrategyBase(metaclass=ABCMeta):
 
         batches = ds.iter_batches(PYARROW_BATCH_BUFFER_SIZE)
         index_prev = 0
+        accumulated_delay = 0.0
+
         for batch in batches:
             for row in batch.to_pylist():
                 index = row.pop('key') / 1000
@@ -829,8 +831,12 @@ class StrategyBase(metaclass=ABCMeta):
                     delay = index - self.get_time()
 
                 if delay > 0:
-                    delay /= XTIME
-                    await asyncio.sleep(delay)
+                    accumulated_delay += (delay / XTIME)
+
+                if accumulated_delay >= 0.001:
+                    await asyncio.sleep(accumulated_delay)
+                    accumulated_delay = 0.0
+
                 yield orjson.loads(row['row'])
 
                 if self.s_mode_break:
@@ -839,8 +845,12 @@ class StrategyBase(metaclass=ABCMeta):
                 continue
             break
 
+        if accumulated_delay > 0:
+            await asyncio.sleep(accumulated_delay)
+
         if ticker:
             self.backtest['ticker_index_last'] = index_prev * 1000
+
 
     async def aiter_candles(self, _klines: dict[str, Klines], _i: str):
         self.s_mode_break = None
@@ -1748,7 +1758,7 @@ class StrategyBase(metaclass=ABCMeta):
             is_backtest_with_state = (
                     not self.last_state
                     and MODE not in ('T', 'TC')
-                    and self.load_strategy_state(self.state_file)
+                    and self.load_strategy_state(self.state_file, probe=True)
             )
 
             check_funds = not (restore_state or is_backtest_with_state)
@@ -1784,6 +1794,8 @@ class StrategyBase(metaclass=ABCMeta):
                     await self.wss_declare()
 
                     if is_backtest_with_state:
+                        self.load_strategy_state(self.state_file)
+                        self.cycle_time = datetime.now(timezone.utc).replace(tzinfo=None)
                         self.restore_state_before_backtesting_ex()
                         self.start_collect = True
                     else:
@@ -1899,7 +1911,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def scheduler_stop(self):
+    async def scheduler_stop(self):
         raise NotImplementedError
 
     @abstractmethod

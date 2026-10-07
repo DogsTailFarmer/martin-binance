@@ -6,7 +6,7 @@ Optimization of Trading Strategy Parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1"
+__version__ = "3.2.1rc28"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -34,12 +34,12 @@ def main():
                 inquirer.List(
                     "mode",
                     message="New study session or analyse from saved one",
-                    choices=["New", "Analise saved study session", "Exit"],
+                    choices=["New", "Analyse saved study session", "Exit"],
                 ),
                 inquirer.Text(
                     "n_trials",
                     message="Enter number of cycles, from 15 to 1000",
-                    ignore=lambda x: x["mode"] in ("Analise saved study session", "Exit"),
+                    ignore=lambda x: x["mode"] in ("Analyse saved study session", "Exit"),
                     default='150',
                     validate=lambda _, c: 15 <= int(c) <= 1000,
                 ),
