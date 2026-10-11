@@ -1,3 +1,9 @@
+## 3.2.1rc29 - 2026-10-11
+✨ feat(executor/cancellation): wrap **async** ops in **asyncio.shield** + **CancelledError** guards
+🐛 fix(executor/scheduler): make **scheduler_stop** sync, drop **asyncio.to_thread** offload
+♻️ refactor(simulator/orders): replace **pandas.Series** with plain **dict** for buy/sell tracking
+♻️ refactor(simulator/ticker): simplify **on_ticker_update** with early-return + dict iteration
+
 ## 3.2.1rc28 - 2026-10-07
 🐛 fix(executor/scheduler): make **scheduler_stop** async via **asyncio.to_thread**
 ✨ refactor(executor/cycle): extract **export_cycle_result** conditionals into local vars

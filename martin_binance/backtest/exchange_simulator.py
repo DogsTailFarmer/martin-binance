@@ -6,14 +6,11 @@ Simple exchange simulator for backtest purpose
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.0.34"
+__version__ = "3.2.1rc29"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
 from decimal import Decimal
-from typing import Dict
-
-import pandas as pd
 
 
 def any2str(_x) -> str:
@@ -140,8 +137,8 @@ class Account:
         self.fee_maker = Decimal('0')
         self.fee_taker = Decimal('0')
         self.orders = {}
-        self.orders_buy = pd.Series()
-        self.orders_sell = pd.Series()
+        self.orders_buy = {}
+        self.orders_sell = {}
         self.trade_id = 0
         self.ticker = {}
         self.grid_buy = {}
@@ -157,7 +154,7 @@ class Account:
             amount: str,
             price: str,
             lt: int,
-            order_id=None) -> {}:
+            order_id=None) -> dict:
 
         order_id = order_id or ((max(self.orders.keys()) + 1) if self.orders else 1)
         order = Order(
@@ -171,13 +168,14 @@ class Account:
         )
 
         if buy:
-            self.orders_buy.at[order_id] = Decimal(price)
+            self.orders_buy[order_id] = Decimal(price)
             if self.save_ds:
-                self.grid_buy[lt] = self.orders_buy
+                self.grid_buy[lt] = self.orders_buy.copy()
         else:
-            self.orders_sell.at[order_id] = Decimal(price)
+            self.orders_sell[order_id] = Decimal(price)
             if self.save_ds:
-                self.grid_sell[lt] = self.orders_sell
+                self.grid_sell[lt] = self.orders_sell.copy()
+
             #
         self.funds.on_order_created(buy=buy, amount=Decimal(amount), price=Decimal(price))
         self.orders[order_id] = order
@@ -209,17 +207,14 @@ class Account:
             raise UserWarning(f"Error on Cancel order, can't find {order_id} anymore")
 
         order.status = 'CANCELED'
-        try:
-            if order.side == 'BUY':
-                self.orders_buy = self.orders_buy.drop(order_id)
-                if self.save_ds and self.orders_buy.values.size:
-                    self.grid_buy[ts] = self.orders_buy
-            else:
-                self.orders_sell = self.orders_sell.drop(order_id)
-                if self.save_ds and self.orders_sell.values.size:
-                    self.grid_sell[ts] = self.orders_sell
-        except Exception as ex:
-            raise UserWarning(f"Order {order_id} not active: {ex}") from ex
+        if order.side == 'BUY':
+            self.orders_buy.pop(order_id, None)
+            if self.save_ds and self.orders_buy:
+                self.grid_buy[ts] = self.orders_buy.copy()
+        else:
+            self.orders_sell.pop(order_id, None)
+            if self.save_ds and self.orders_sell:
+                self.grid_sell[ts] = self.orders_sell.copy()
 
         self.orders[order_id] = order
         self.funds.on_order_canceled(order.side, order.orig_qty - order.executed_qty, order.price)
@@ -238,46 +233,54 @@ class Account:
                 'side': order.side,
                 'selfTradePreventionMode': order.self_trade_prevention_mode}
 
-    def on_ticker_update(self, ticker: {}, ts: int) -> list[Dict]:
+    def on_ticker_update(self, ticker: dict, ts: int) -> list[dict]:
+        orders_filled = []
         filled_buy_id = []
         filled_sell_id = []
-        orders_id = []
-        orders_filled = []
+        orders_id = list(self.market_ids) if self.market_ids else []
 
         self.ticker_last = Decimal(ticker['lastPrice'])
         qty = Decimal(ticker['Qty'])
         part = bool(qty)
+        close_time = int(ticker['closeTime'])
 
-        if self.market_ids:
-            orders_id.extend(self.market_ids)
+        if self.orders_buy:
+            orders_id.extend([oid for oid, price in self.orders_buy.items() if price >= self.ticker_last])
 
-        orders_id.extend(self.orders_buy[self.orders_buy >= self.ticker_last].index.values)
-        orders_id.extend(self.orders_sell[self.orders_sell <= self.ticker_last].index.values)
+        if self.orders_sell:
+            orders_id.extend([oid for oid, price in self.orders_sell.items() if price <= self.ticker_last])
 
         if self.save_ds:
-            # Save data for analytics
             self.ticker[ts] = ticker['lastPrice']
-            if self.orders_sell.values.size:
-                self.grid_sell[ts] = self.orders_sell
-            if self.orders_buy.values.size:
-                self.grid_buy[ts] = self.orders_buy
-        #
+            if self.orders_sell:
+                self.grid_sell[ts] = self.orders_sell.copy()
+            if self.orders_buy:
+                self.grid_buy[ts] = self.orders_buy.copy()
+
+        if not orders_id:
+            return orders_filled
+
         for order_id in orders_id:
             if part and not qty:
                 break
 
             order = self.orders.get(order_id)
+            if order is None:
+                continue
 
-            order.transact_time = int(ticker['closeTime'])
-            order.event_time = order.transact_time
-            order.trade_id = self.trade_id = self.trade_id + 1
+            order.transact_time = close_time
+            order.event_time = close_time
 
+            self.trade_id += 1
+            order.trade_id = self.trade_id
             order.last_executed_price = self.ticker_last
 
             delta = order.orig_qty - order.executed_qty
-            order.last_executed_quantity = last_executed_qty = min(delta, qty) if part else delta
+            last_executed_qty = min(delta, qty) if part else delta
+            order.last_executed_quantity = last_executed_qty
             order.executed_qty += last_executed_qty
-            order.last_quote_asset_transacted = order.last_executed_price * last_executed_qty
+
+            order.last_quote_asset_transacted = self.ticker_last * last_executed_qty
             order.quote_asset_transacted += order.last_quote_asset_transacted
 
             if part:
@@ -292,20 +295,20 @@ class Account:
                     filled_buy_id.append(order_id)
                 else:
                     filled_sell_id.append(order_id)
-            elif 0 < order.executed_qty < order.orig_qty:
+            elif order.executed_qty > 0:
                 order.status = 'PARTIALLY_FILLED'
-            #
+
             self.orders[order_id] = order
-            #
-            res = {
+
+            orders_filled.append({
                 'event_time': order.event_time,
                 'symbol': order.symbol,
                 'client_order_id': order.client_order_id,
                 'side': order.side,
                 'order_type': order.type,
                 'time_in_force': order.time_in_force,
-                'order_quantity': str(order.orig_qty),
-                'order_price': str(order.price),
+                'order_quantity': f"{order.orig_qty}",
+                'order_price': f"{order.price}",
                 'stop_price': '0',
                 'iceberg_quantity': '0',
                 'order_list_id': -1,
@@ -314,9 +317,9 @@ class Account:
                 'order_status': order.status,
                 'order_reject_reason': 'NONE',
                 'order_id': order_id,
-                'last_executed_quantity': str(order.last_executed_quantity),
-                'cumulative_filled_quantity': str(order.cumulative_filled_quantity),
-                'last_executed_price': str(order.last_executed_price),
+                'last_executed_quantity': f"{order.last_executed_quantity}",
+                'cumulative_filled_quantity': f"{order.cumulative_filled_quantity}",
+                'last_executed_price': f"{order.last_executed_price}",
                 'commission_amount': '0',
                 'commission_asset': '',
                 'transaction_time': order.transact_time,
@@ -326,12 +329,10 @@ class Account:
                 'is_maker_side': bool(order_id not in self.market_ids),
                 'ignore_b': True,
                 'order_creation_time': order.order_creation_time,
-                'quote_asset_transacted': str(order.quote_asset_transacted),
-                'last_quote_asset_transacted': str(order.last_quote_asset_transacted),
-                'quote_order_quantity': str(order.quote_order_quantity)
-            }
-            #
-            orders_filled.append(res)
+                'quote_asset_transacted': f"{order.quote_asset_transacted}",
+                'last_quote_asset_transacted': f"{order.last_quote_asset_transacted}",
+                'quote_order_quantity': f"{order.quote_order_quantity}"
+            })
 
             self.funds.on_order_filled(
                 order.side,
@@ -340,14 +341,18 @@ class Account:
                 order.last_executed_price,
                 self.fee_taker if order_id in self.market_ids else self.fee_maker
             )
-            #
-        self.orders_buy = self.orders_buy.drop(filled_buy_id, errors="ignore")
-        self.orders_sell = self.orders_sell.drop(filled_sell_id, errors="ignore")
-        self.market_ids.clear()
 
+        if filled_buy_id:
+            for oid in filled_buy_id:
+                self.orders_buy.pop(oid, None)
+        if filled_sell_id:
+            for oid in filled_sell_id:
+                self.orders_sell.pop(oid, None)
+
+        self.market_ids.clear()
         return orders_filled
 
-    def restore_state(self, symbol: str, lt: int, orders: list, sum_amount: ()):
+    def restore_state(self, symbol: str, lt: int, orders: list, sum_amount: tuple):
         if sum_amount[0]:
             self.funds.base['free'] += sum_amount[1]
             self.funds.quote['free'] -= sum_amount[2]

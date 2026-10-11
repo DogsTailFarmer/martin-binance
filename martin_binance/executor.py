@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc28"
+__version__ = "3.2.1rc29"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -280,9 +280,9 @@ class Strategy(StrategyBase):
     def scheduler_start(self):
         scheduler.start()
 
-    async def scheduler_stop(self):
+    def scheduler_stop(self):
         if scheduler.running:
-            await asyncio.to_thread(scheduler.shutdown, wait=True)
+            scheduler.shutdown(wait=True)
 
     async def event_export_operational_status(self):
         ts = self.get_time()
@@ -295,56 +295,67 @@ class Strategy(StrategyBase):
 
         if self.stable_state(alarm_mode=True) or has_grid_hold_timeout or has_tp_order_hold_timeout:
             order_buy, order_sell, order_hold = self.get_orders_status()
-            await self.queue_to_db.put(
-                {
-                    'ID_EXCHANGE': ID_EXCHANGE,
-                    'f_currency': self.f_currency,
-                    's_currency': self.s_currency,
-                    'cycle_buy': self.cycle_buy,
-                    'order_buy': order_buy,
-                    'order_sell': order_sell,
-                    'order_hold': order_hold,
-                    'cycle_time': int(self.get_time() - self.cycle_time.timestamp()),
-                    'destination': 't_orders'
-                }
-            )
+            try:
+                await self.queue_to_db.put(
+                    {
+                        'ID_EXCHANGE': ID_EXCHANGE,
+                        'f_currency': self.f_currency,
+                        's_currency': self.s_currency,
+                        'cycle_buy': self.cycle_buy,
+                        'order_buy': order_buy,
+                        'order_sell': order_sell,
+                        'order_hold': order_hold,
+                        'cycle_time': int(self.get_time() - self.cycle_time.timestamp()),
+                        'destination': 't_orders'
+                    }
+                )
+            except asyncio.CancelledError:  # NOSONAR S7497
+                self.message_log("Event export_operational_status was cancelled")
+
 
     async def event_get_external_command(self):
         try:
-            cursor_analytic = await self.connection_db.execute(
-                'SELECT max(message_id), text_in, bot_id \
-                 FROM t_control \
-                 WHERE bot_id=:bot_id',
-                {'bot_id': self.tlg_header}
-            )
-            row = await cursor_analytic.fetchone()
-            await cursor_analytic.close()
-        except aiosqlite.Error as err:
-            row = None
-            self.message_log(f"SELECT from t_control: {err}")
-        if row and row[0] and 'BNB_request' in row[1]:
-            params = orjson.loads(row[1])[1]
-            await self.transfer_to(
-                'BNB',
-                any2str(
+            try:
+                cursor_analytic = await self.connection_db.execute(
+                    'SELECT max(message_id), text_in, bot_id \
+                     FROM t_control \
+                     WHERE bot_id=:bot_id',
+                    {'bot_id': self.tlg_header}
+                )
+                row = await cursor_analytic.fetchone()
+                await cursor_analytic.close()
+            except aiosqlite.Error as err:
+                row = None
+                self.message_log(f"SELECT from t_control: {err}")
+
+            if row and row[0] and 'BNB_request' in row[1]:
+                params = orjson.loads(row[1])[1]
+
+                volume = any2str(
                     max(
                         Decimal(params['tranche_volume']),
                         self.get_trading_capability_manager().min_notional
                     ) / self.get_buffered_ticker().last_price
-                ),
-                params['email']
-            )
-            # Remove applied command from .db
-            try:
-                await self.connection_db.execute(
-                    'UPDATE t_control \
-                     SET apply = 1 \
-                     WHERE message_id=:message_id',
-                    {'message_id': row[0]}
                 )
-                await self.connection_db.commit()
-            except aiosqlite.Error as err:
-                self.message_log(f"UPDATE t_control: {err}")
+
+                async def critical_transaction():
+                    await self.transfer_to('BNB', volume, params['email'])
+                    try:
+                        await self.connection_db.execute(
+                            'UPDATE t_control \
+                             SET apply = 1 \
+                             WHERE message_id=:message_id',
+                            {'message_id': row[0]}
+                        )
+                        await self.connection_db.commit()
+                    except aiosqlite.Error as err:
+                        self.message_log(f"UPDATE t_control: {err}")
+
+                await asyncio.shield(critical_transaction())
+
+        except asyncio.CancelledError:  # NOSONAR S7497
+            self.message_log("Event get_external_command was cancelled")
+
 
     def event_di(self):
         if self.command == 'stopped':
@@ -386,9 +397,15 @@ class Strategy(StrategyBase):
                 self.start_collect = False
         if self.command == 'restart':
             self.command = None
-            await asyncio.sleep(HEARTBEAT)
-            await self.stop()
-            os.execv(sys.executable, [sys.executable] + [sys.argv[0]] + ['1'])
+            try:
+                await asyncio.sleep(HEARTBEAT)
+                await asyncio.shield(self.stop())
+            except asyncio.CancelledError:  # NOSONAR S7497
+                self.message_log("Event exec_command was cancelled, but stop() finished. Restarting...")
+            finally:
+                self.save_strategy_state(LAST_STATE_FILE)
+                self.message_log(f"Last state saved to {LAST_STATE_FILE}", log_level=logging.INFO)
+                os.execv(sys.executable, [sys.executable] + sys.argv + ['1'])
 
     async def event_report(self):  # NOSONAR S7503
         is_time_for_report_update = STATUS_DELAY and (self.get_time() - self.status_time) / 60 > STATUS_DELAY
@@ -514,7 +531,10 @@ class Strategy(StrategyBase):
                 and not self.tp_part_amount_first
             ):
                 self.message_log("Update TP order", color=Style.B_WHITE)
-                await self.place_profit_order()
+                try:
+                    await asyncio.shield(self.place_profit_order())
+                except asyncio.CancelledError:  # NOSONAR S7497
+                    self.message_log("Event update_tp was cancelled, but finished")
 
     async def event_grid_only_release(self):
         if self.grid_only_restart and self.get_time() > self.grid_only_restart:
@@ -1548,7 +1568,6 @@ class Strategy(StrategyBase):
 
         if self.reverse or self.shift_grid_threshold or self.start_after_shift:
             return
-        # ======================================================================
 
         do_it = False
         delta = O_DEC
@@ -1583,7 +1602,10 @@ class Strategy(StrategyBase):
 
         if do_it:
             self.message_log(f"Update grid orders, BB limit difference: {float(delta):.4f}%", color=Style.B_WHITE)
-            await self.grid_update()
+            try:
+                await asyncio.shield(self.grid_update())
+            except asyncio.CancelledError:  # NOSONAR S7497
+                self.message_log("Event grid_update was cancelled, but finished")
 
     async def place_profit_order(self, by_market=False, after_error=False) -> None:
         if not GRID_ONLY and self.check_min_amount():

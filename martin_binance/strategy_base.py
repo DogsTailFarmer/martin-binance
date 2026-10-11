@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc28"
+__version__ = "3.2.1rc29"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -742,7 +742,7 @@ class StrategyBase(metaclass=ABCMeta):
             if self.tlg_client:
                 await self.tlg_client.close()
 
-            await self.scheduler_stop()
+            self.scheduler_stop()
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             [task.cancel() for task in tasks]
             try:
@@ -1911,7 +1911,7 @@ class StrategyBase(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    async def scheduler_stop(self):
+    def scheduler_stop(self):
         raise NotImplementedError
 
     @abstractmethod
