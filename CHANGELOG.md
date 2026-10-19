@@ -1,3 +1,9 @@
+## 3.2.1rc30 - 2026-10-19
+✨ feat(executor/orders): include **reverse** flag in order payload dict
+✨ feat(db_utils/migration): add **reverse** column to **t_orders** via **ALTER TABLE**
+♻️ refactor(db_utils/orders): extract **db_payload** builder for **t_orders** upsert
+✨ feat(funds_rate_exporter/metrics): expose **ACTIVE_CYCLE_BUY** and **ACTIVE_CYCLE_REVERSE** gauges
+
 ## 3.2.1rc29 - 2026-10-11
 ✨ feat(executor/cancellation): wrap **async** ops in **asyncio.shield** + **CancelledError** guards
 🐛 fix(executor/scheduler): make **scheduler_stop** sync, drop **asyncio.to_thread** offload

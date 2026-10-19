@@ -4,7 +4,7 @@ Functions for managing and saving data to a SQLite database from martin-binance 
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1"
+__version__ = "3.2.1rc30"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -43,9 +43,25 @@ async def db_management(exchange) -> None:
                     "ALTER TABLE t_orders ADD COLUMN cycle_time INTEGER"
                 )
             except SqliteError as ex:
-                logger.error(f"ALTER t_orders: {ex}")
+                logger.exception(f"ALTER t_orders: {ex}")
             else:
                 logger.info("t_orders altered: column cycle_time added")
+                await db_connect.commit()
+
+        try:
+            await db_connect.execute(
+                "SELECT reverse from t_orders"
+            )
+        except SqliteError as ex:
+            logger.warning(f"SELECT t_orders: {ex}")
+            try:
+                await db_connect.execute(
+                    "ALTER TABLE t_orders ADD COLUMN reverse INTEGER"
+                )
+            except SqliteError as ex:
+                logger.exception(f"ALTER t_orders: {ex}")
+            else:
+                logger.info("t_orders altered: column reverse added")
                 await db_connect.commit()
 
         # Compliance check t_exchange and EXCHANGE() = exchange() from ms_cfg.toml
@@ -115,30 +131,34 @@ async def save_to_db(queue_to_db) -> None:
                     await db_connect.commit()
                     result = True
             elif data.get('destination') == 't_orders':
+                fields = [
+                    'id_exchange', 'f_currency', 's_currency', 'cycle_buy',
+                    'reverse', 'order_buy', 'order_sell', 'order_hold', 'cycle_time'
+                ]
+
+                db_payload = {f: data.get(f, data.get(f.upper())) for f in fields}
+
                 try:
                     await db_connect.execute(
-                        "INSERT INTO t_orders VALUES(:id_exchange,\
-                                                     :f_currency,\
-                                                     :s_currency,\
-                                                     :cycle_buy,\
-                                                     :order_buy,\
-                                                     :order_sell,\
-                                                     :order_hold,\
-                                                     :cycle_time)\
-                            ON CONFLICT(id_exchange, f_currency, s_currency)\
-                         DO UPDATE SET cycle_buy=:cycle_buy,\
-                                       order_buy=:order_buy,\
-                                       order_sell=:order_sell,\
-                                       order_hold=:order_hold,\
-                                       cycle_time=:cycle_time",
-                        {'id_exchange': data.get('ID_EXCHANGE'),
-                         'f_currency': data.get('f_currency'),
-                         's_currency': data.get('s_currency'),
-                         'cycle_buy': data.get('cycle_buy'),
-                         'order_buy': data.get('order_buy'),
-                         'order_sell': data.get('order_sell'),
-                         'order_hold': data.get('order_hold'),
-                         'cycle_time': data.get('cycle_time')}
+                        """
+                        INSERT INTO t_orders (
+                            id_exchange, f_currency, s_currency, cycle_buy, 
+                            reverse, order_buy, order_sell, order_hold, cycle_time
+                        ) 
+                        VALUES (
+                            :id_exchange, :f_currency, :s_currency, :cycle_buy, 
+                            :reverse, :order_buy, :order_sell, :order_hold, :cycle_time
+                        )
+                        ON CONFLICT(id_exchange, f_currency, s_currency)
+                        DO UPDATE SET 
+                            cycle_buy = :cycle_buy,
+                            reverse = :reverse,
+                            order_buy = :order_buy,
+                            order_sell = :order_sell,
+                            order_hold = :order_hold,
+                            cycle_time = :cycle_time
+                        """,
+                        db_payload
                     )
                 except SqliteError as ex:
                     logger.exception(f"INSERT into t_orders: {ex}")

@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1"
+__version__ = "3.2.1rc30"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -64,6 +64,8 @@ sql_conn = None
 
 # region Metric declare
 STATUS_ALARM = Gauge("margin_alarm", "1 when not order", ['exchange', 'pair', 'vps_name'])
+ACTIVE_CYCLE_BUY = Gauge("margin_active_cycle_buy", "1 when cycle buy", ['exchange', 'pair', 'vps_name'])
+ACTIVE_CYCLE_REVERSE = Gauge("margin_active_cycle_reverse", "1 when cycle reverse", ['exchange', 'pair', 'vps_name'])
 
 SUM_F_PROFIT = Gauge("margin_f_profit", "first profit", ['exchange', 'pair', 'vps_name'])
 SUM_S_PROFIT = Gauge("margin_s_profit", "second profit", ['exchange', 'pair', 'vps_name'])
@@ -196,6 +198,8 @@ async def db_handler(_currency_rate, currency_rate_last_time):
         SELL_INTEREST.clear()
         ACTIVE_CYCLE_TIME.clear()
         STATUS_ALARM.clear()
+        ACTIVE_CYCLE_BUY.clear()
+        ACTIVE_CYCLE_REVERSE.clear()
         #
         for row in records:
             # print(f"row: {row}")
@@ -230,9 +234,9 @@ async def db_handler(_currency_rate, currency_rate_last_time):
                 alarm = 0
             STATUS_ALARM.labels(exchange, pair, VPS_NAME).set(alarm)
 
-            # Active cycle time
+            # Active cycle status
             await cursor.execute(
-                'SELECT cycle_time\
+                'SELECT cycle_time, cycle_buy, reverse\
                  FROM t_orders\
                  WHERE id_exchange=:id_exchange\
                  AND f_currency=:f_currency\
@@ -241,9 +245,15 @@ async def db_handler(_currency_rate, currency_rate_last_time):
             )
             if cycle_time_row := await cursor.fetchone():
                 cycle_time = int(cycle_time_row[0])
+                cycle_buy = int(cycle_time_row[1])
+                cycle_reverse = int(cycle_time_row[2])
             else:
                 cycle_time = 0
+                cycle_buy = 0
+                cycle_reverse = 0
             ACTIVE_CYCLE_TIME.labels(exchange, pair, VPS_NAME).set(cycle_time)
+            ACTIVE_CYCLE_BUY.labels(exchange, pair, VPS_NAME).set(cycle_buy)
+            ACTIVE_CYCLE_REVERSE.labels(exchange, pair, VPS_NAME).set(cycle_reverse)
 
             # Last rate
             await cursor.execute(

@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc29"
+__version__ = "3.2.1rc30"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -302,6 +302,7 @@ class Strategy(StrategyBase):
                         'f_currency': self.f_currency,
                         's_currency': self.s_currency,
                         'cycle_buy': self.cycle_buy,
+                        'reverse': self.reverse,
                         'order_buy': order_buy,
                         'order_sell': order_sell,
                         'order_hold': order_hold,
