@@ -7,7 +7,7 @@
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc30"
+__version__ = "3.2.1rc31"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 
@@ -63,6 +63,7 @@ session = None
 sql_conn = None
 
 # region Metric declare
+ID_EXCHANGE = Gauge("margin_id_exchange", "id_exchange", ['exchange', 'pair', 'vps_name'])
 STATUS_ALARM = Gauge("margin_alarm", "1 when not order", ['exchange', 'pair', 'vps_name'])
 ACTIVE_CYCLE_BUY = Gauge("margin_active_cycle_buy", "1 when cycle buy", ['exchange', 'pair', 'vps_name'])
 ACTIVE_CYCLE_REVERSE = Gauge("margin_active_cycle_reverse", "1 when cycle reverse", ['exchange', 'pair', 'vps_name'])
@@ -197,6 +198,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
         SELL_TIME.clear()
         SELL_INTEREST.clear()
         ACTIVE_CYCLE_TIME.clear()
+        ID_EXCHANGE.clear()
         STATUS_ALARM.clear()
         ACTIVE_CYCLE_BUY.clear()
         ACTIVE_CYCLE_REVERSE.clear()
@@ -216,7 +218,7 @@ async def db_handler(_currency_rate, currency_rate_last_time):
             SUM_S_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_s_profit)
             sum_profit = float(row[7])
             SUM_PROFIT.labels(exchange, pair, VPS_NAME).set(sum_profit)
-
+            ID_EXCHANGE.labels(exchange, pair, VPS_NAME).set(id_exchange)
             # Alarm
             await cursor.execute(
                 'SELECT order_buy, order_sell\

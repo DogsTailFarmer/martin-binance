@@ -1,3 +1,8 @@
+## 3.2.1rc31 - 2026-10-20
+✨ feat(funds_rate_exporter): add **ID_EXCHANGE** gauge metric and set it via **ID_EXCHANGE.labels()** in export loop
+🧹 refactor(funds_rate_exporter): include **ID_EXCHANGE.clear()** in metric reset sequence
+🧹 refactor(grafana): update model template
+
 ## 3.2.1rc30 - 2026-10-19
 ✨ feat(executor/orders): include **reverse** flag in order payload dict
 ✨ feat(db_utils/migration): add **reverse** column to **t_orders** via **ALTER TABLE**
