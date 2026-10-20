@@ -1,3 +1,8 @@
+## 3.2.1 - 2026-10-20
+🏷️ chore(release): bump **__version__** to 3.2.1 across all module files
+📝 docs(changelog): add 3.2.1 stable release entry dated 2026-10-20
+📝 docs(readme): document save-state format break and **migrate_states** converter step
+
 ## 3.2.1rc31 - 2026-10-20
 ✨ feat(funds_rate_exporter): add **ID_EXCHANGE** gauge metric and set it via **ID_EXCHANGE.labels()** in export loop
 🧹 refactor(funds_rate_exporter): include **ID_EXCHANGE.clear()** in metric reset sequence

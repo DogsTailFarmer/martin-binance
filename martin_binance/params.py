@@ -4,7 +4,7 @@ martin-binance strategy parameters
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1r"
+__version__ = "3.2.1"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 

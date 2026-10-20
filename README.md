@@ -25,7 +25,8 @@ All risks and possible losses associated with use of this strategy lie with you.
 Strongly recommended that you test the strategy in the demo mode before using real bidding.
 
 ## Important notices
-* After update to `3.0.25`, the configuration file `exch_srv_cfg.toml` for [exchanges-wrapper](https://github.com/DogsTailFarmer/exchanges-wrapper) must be updated. [Use templates for reference.](https://github.com/DogsTailFarmer/exchanges-wrapper/blob/master/exchanges_wrapper/exch_srv_cfg.toml.template)
+### **_The save-state file format has been changed and is incompatible with previous versions_**
+* After update to `3.2.1`, stop all pair, execute [convertor](https://github.com/DogsTailFarmer/martin-binance/blob/da894a842c180ab15b62e2d336b643a6c5572548/martin_binance/service/migrate_states.py) once per VPS
 
 ## Notices
 * You cannot run multiple pairs with overlapping currencies on the same account!
