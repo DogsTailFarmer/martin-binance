@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1"
+__version__ = "3.2.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -20,6 +20,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pymannkendall as mk
 from pathlib import Path
 import traceback
+import shlex
 
 import orjson
 from datetime import datetime, timezone
@@ -55,6 +56,7 @@ logging.getLogger("apscheduler.executors.default").setLevel(logging.ERROR)
 O_DEC: DecimalStr = Decimal('0')
 TICKER_UPDATE_TIMEOUT = 600
 VERSION = f"{release_ver} + {HEAD_VERSION} + {__version__} + {msb_ver}"
+
 
 def get_mode_details(mode):
     mode_mapping = {
@@ -313,7 +315,6 @@ class Strategy(StrategyBase):
             except asyncio.CancelledError:  # NOSONAR S7497
                 self.message_log("Event export_operational_status was cancelled")
 
-
     async def event_get_external_command(self):
         try:
             try:
@@ -356,7 +357,6 @@ class Strategy(StrategyBase):
 
         except asyncio.CancelledError:  # NOSONAR S7497
             self.message_log("Event get_external_command was cancelled")
-
 
     def event_di(self):
         if self.command == 'stopped':
@@ -406,7 +406,9 @@ class Strategy(StrategyBase):
             finally:
                 self.save_strategy_state(LAST_STATE_FILE)
                 self.message_log(f"Last state saved to {LAST_STATE_FILE}", log_level=logging.INFO)
-                os.execv(sys.executable, [sys.executable] + sys.argv + ['1'])
+                safe_args = [shlex.quote(arg) for arg in sys.argv]
+                cmd_args = [sys.executable] + safe_args + ["1"]
+                os.execv(sys.executable, cmd_args)
 
     async def event_report(self):  # NOSONAR S7503
         is_time_for_report_update = STATUS_DELAY and (self.get_time() - self.status_time) / 60 > STATUS_DELAY
@@ -2778,7 +2780,7 @@ class Strategy(StrategyBase):
                 # Adjusting amount for saved order, if exists
                 if _order := self.orders_save.get_by_id(update.order_id):
                     self.orders_save.remove(update.order_id)
-                    #TODO Adjust received_amount and remaining_amount
+                    # TODO Adjust received_amount and remaining_amount
                     _order.amount -= self.round_truncate(amount_first, base=True, _rounding=ROUND_CEILING)
                     self.orders_save.update(_order)
 

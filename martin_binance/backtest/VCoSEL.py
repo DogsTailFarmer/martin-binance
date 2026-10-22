@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Perfectly Synchronized Visual Comparison of Session Log (Strict Timeline Alignment)
+Synchronized Visual Comparison of Session Log (Strict Timeline Alignment)
 """
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "4.0.0"
+__version__ = "4.0.1"
 
 from dash import Dash, html, dcc
 import plotly.graph_objects as go
@@ -16,6 +16,8 @@ from tkinter.filedialog import askdirectory
 from martin_binance import BACKTEST_PATH, WORK_PATH, LAST_STATE_PATH
 
 clrs = {'background': '#696969', 'text': '#7FDBFF'}
+SELL_PKL = "sell.pkl"
+BUY_PKL = "buy.pkl"
 
 # ==========================================
 # 1. DATA LOADING & AUTOMATIC PATH ROUTING
@@ -26,15 +28,15 @@ source_root = Path(askdirectory(title='Pick ROOT folder for BASE strategy', init
 s_snapshot = source_root / "snapshot"
 
 # Safe loading for base strategy grids
-s_sell_df = pd.read_pickle(s_snapshot / "sell.pkl") if (s_snapshot / "sell.pkl").exists() else pd.DataFrame()
-s_buy_df = pd.read_pickle(s_snapshot / "buy.pkl") if (s_snapshot / "buy.pkl").exists() else pd.DataFrame()
+s_sell_df = pd.read_pickle(s_snapshot / SELL_PKL) if (s_snapshot / SELL_PKL).exists() else pd.DataFrame()
+s_buy_df = pd.read_pickle(s_snapshot / BUY_PKL) if (s_snapshot / BUY_PKL).exists() else pd.DataFrame()
 
 # Select TEST strategy directory (files are stored flat in root folder)
 test_folder = Path(askdirectory(title='Pick ROOT folder for TEST strategy', initialdir=str(BACKTEST_PATH)))
 
 # Safe loading for test strategy grids
-df_grid_sell = pd.read_pickle(test_folder / "sell.pkl") if (test_folder / "sell.pkl").exists() else pd.DataFrame()
-df_grid_buy = pd.read_pickle(test_folder / "buy.pkl") if (test_folder / "buy.pkl").exists() else pd.DataFrame()
+df_grid_sell = pd.read_pickle(test_folder / SELL_PKL) if (test_folder / SELL_PKL).exists() else pd.DataFrame()
+df_grid_buy = pd.read_pickle(test_folder / BUY_PKL) if (test_folder / BUY_PKL).exists() else pd.DataFrame()
 
 # Ticker is mandatory for timeline reference
 ticker_path = test_folder / "ticker.pkl"
@@ -55,7 +57,7 @@ if trades_file.exists() and trades_file.stat().st_size > 0:
     with open(trades_file, 'r', encoding='utf-8') as f:
         for line in f:
             values = line.strip().split(',')
-            if len(values) == 12 and values in ('TRADE', 'TRADE_BY_MARKET'):
+            if values and values[0] in ('TRADE', 'TRADE_BY_MARKET'):
                 raw_csv_data.append(values)
 
     if raw_csv_data:
@@ -95,13 +97,14 @@ def create_fast_trace(df, color, name, dash=None, width=1):
 
     x_data, y_data = [], []
     for col in df_filtered.columns:
-        x_data.extend(df_filtered.index.tolist());
+        x_data.extend(df_filtered.index.tolist())
         x_data.append(None)
-        y_data.extend(df_filtered[col].tolist());
+        y_data.extend(df_filtered[col].tolist())
         y_data.append(None)
 
     line_layout = {'color': color, 'width': width}
-    if dash: line_layout['dash'] = dash
+    if dash:
+        line_layout['dash'] = dash
     return go.Scatter(x=x_data, y=y_data, mode='lines', name=name, line=line_layout, showlegend=True)
 
 
@@ -127,7 +130,8 @@ grid_traces = [
     create_fast_trace(s_buy_df, 'forestgreen', 'Source Buy Grid', dash='dot', width=2)
 ]
 for trace in grid_traces:
-    if trace is not None: fig.add_trace(trace)
+    if trace is not None:
+        fig.add_trace(trace)
 
 # --- INJECT REAL TRADE MARKERS (BUY / SELL) ---
 if not df_trades.empty:
@@ -137,7 +141,12 @@ if not df_trades.empty:
     if not buys.empty:
         fig.add_trace(go.Scatter(
             x=buys.index, y=buys['price'], mode='markers', name='Actual BUY',
-            marker=dict(symbol='triangle-up', size=11, color='lime', line=dict(color='black', width=1)),
+            marker={
+                'symbol': 'triangle-up',
+                'size': 11,
+                'color': 'lime',
+                'line': {'color': 'black', 'width': 1}
+            },
             customdata=buys['qty'],
             hovertemplate='<b>BUY Execution</b><br>Price: %{y}<br>Amount: %{customdata}<br>Time: %{x}<extra></extra>'
         ))
@@ -145,7 +154,12 @@ if not df_trades.empty:
     if not sells.empty:
         fig.add_trace(go.Scatter(
             x=sells.index, y=sells['price'], mode='markers', name='Actual SELL',
-            marker=dict(symbol='triangle-down', size=11, color='crimson', line=dict(color='black', width=1)),
+            marker={
+                'symbol': 'triangle-down',
+                'size': 11,
+                'color': 'crimson',
+                'line': {'color': 'black', 'width': 1}
+            },
             customdata=sells['qty'],
             hovertemplate='<b>SELL Execution</b><br>Price: %{y}<br>Amount: %{customdata}<br>Time: %{x}<extra></extra>'
         ))

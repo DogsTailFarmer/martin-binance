@@ -4,7 +4,7 @@ On-the-fly backup and restore operational strategy state
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1"
+__version__ = "3.2.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -140,9 +140,11 @@ def save2json(model_instance, file_path: Path) -> None:
                 order_str = orjson.dumps(order).decode('utf-8')
                 orders_lines.append(f'            {order_str}')
 
-            lines.append(",\n".join(orders_lines))
-            lines.append('        ]')
-            lines.append(f'    }}{comma}')
+            lines.extend([
+                ",\n".join(orders_lines),
+                '        ]',
+                f'    }}{comma}'
+            ])
 
         elif isinstance(value, str):
             lines.append(f'    "{key}": "{value}"{comma}')

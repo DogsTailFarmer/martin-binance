@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1"
+__version__ = "3.2.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -298,7 +298,6 @@ class StrategyBase(metaclass=ABCMeta):
     def remove_from_trades_lists(self, _order_id) -> None:
         self.trades[:] = [i for i in self.trades if i.order_id != _order_id]
 
-    #
     async def backtest_control(self):
         """
         Managing backtest and optimization cycles
@@ -489,7 +488,7 @@ class StrategyBase(metaclass=ABCMeta):
 
     def _back_test_handler_ext(self):
         timestamp_str = datetime.now().strftime('%m%d-%H-%M-%S')
-        session_path = Path(BACKTEST_PATH) / f"{self.exchange}_{self.symbol}_{timestamp_str}"
+        session_path = Path(BACKTEST_PATH) / f"{ID_EXCHANGE}_{self.symbol}_{timestamp_str}"
         session_path.mkdir(parents=True, exist_ok=True)
 
         if self.account.ticker:
@@ -850,7 +849,6 @@ class StrategyBase(metaclass=ABCMeta):
 
         if ticker:
             self.backtest['ticker_index_last'] = index_prev * 1000
-
 
     async def aiter_candles(self, _klines: dict[str, Klines], _i: str):
         self.s_mode_break = None

@@ -1,3 +1,16 @@
+## 3.2.2 - 2026-10-22
+📦 requirements.txt: bump exchanges-wrapper to 2.2.5 and aiohttp to 3.14.5
+🐛 executor.py: fix **os.execv** args via **shlex.quote** to prevent shell-injection on restart
+✏️ executor.py: remove redundant blank lines and fix **TODO** comment spacing
+✏️ db_utils.py: strip trailing whitespace in SQL **INSERT** statement
+🔧 python-publish.yml: add **--only-binary :all:** flag to **pip install** build
+📦 pyproject.toml: bump exchanges-wrapper to 2.2.5 and aiohttp to 3.14.5
+♻️ backup.py: replace sequential **lines.append** calls with **lines.extend**
+🐛 VCoSEL.py: fix CSV trade-row filter and extract **SELL_PKL** / **BUY_PKL** constants
+✏️ VCoSEL.py: normalize style — brace-notation dicts, drop semicolons, split one-liners
+🐛 strategy_base.py: fix **_back_test_handler_ext** to reference **ID_EXCHANGE** constant
+✏️ strategy_base.py: remove stray comment and extra blank line
+
 ## 3.2.1 - 2026-10-20
 🏷️ chore(release): bump **__version__** to 3.2.1 across all module files
 📝 docs(changelog): add 3.2.1 stable release entry dated 2026-10-20

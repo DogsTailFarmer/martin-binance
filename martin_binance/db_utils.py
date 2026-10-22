@@ -4,7 +4,7 @@ Functions for managing and saving data to a SQLite database from martin-binance 
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2026 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.1rc30"
+__version__ = "3.2.2"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -144,13 +144,13 @@ async def save_to_db(queue_to_db) -> None:
                         INSERT INTO t_orders (
                             id_exchange, f_currency, s_currency, cycle_buy, 
                             reverse, order_buy, order_sell, order_hold, cycle_time
-                        ) 
+                        )
                         VALUES (
                             :id_exchange, :f_currency, :s_currency, :cycle_buy, 
                             :reverse, :order_buy, :order_sell, :order_hold, :cycle_time
                         )
                         ON CONFLICT(id_exchange, f_currency, s_currency)
-                        DO UPDATE SET 
+                        DO UPDATE SET
                             cycle_buy = :cycle_buy,
                             reverse = :reverse,
                             order_buy = :order_buy,
