@@ -1,3 +1,9 @@
+## 3.2.3 - 2026-11-03
+📦 deps(requirements.txt, pyproject.toml): bump `exchanges-wrapper` to 2.2.6
+✨ executor(executor.py): deduct fees from deposit via `fee_for_grid` before grid creation
+🔇 logging(executor.py): raise apscheduler log threshold to `CRITICAL`
+🛡️ guard(executor.py): skip `start()` when active grids or TP orders exist
+
 ## 3.2.2 - 2026-10-22
 📦 requirements.txt: bump exchanges-wrapper to 2.2.5 and aiohttp to 3.14.5
 🐛 executor.py: fix **os.execv** args via **shlex.quote** to prevent shell-injection on restart

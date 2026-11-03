@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.2"
+__version__ = "3.2.3"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -51,7 +51,7 @@ from martin_binance.params import *  # NOSONAR python:S2208
 from martin_binance.backup import BACKUP_REGISTRY, DecimalStr, init_dynamic_model, save2json, load_state
 
 scheduler = AsyncIOScheduler()
-logging.getLogger("apscheduler.executors.default").setLevel(logging.ERROR)
+logging.getLogger("apscheduler.executors.default").setLevel(logging.CRITICAL)
 
 O_DEC: DecimalStr = Decimal('0')
 TICKER_UPDATE_TIMEOUT = 600
@@ -1459,6 +1459,15 @@ class Strategy(StrategyBase):
         price_k = 1
         orders = []
 
+        if FEE_FIRST and not buy_side:
+            fee = self.fee_for_grid(depo, O_DEC, print_info=False)[0] - depo
+            depo -= fee
+            self.message_log(f"The deposit has been adjusted: -{fee} = {depo}")
+        elif FEE_SECOND and buy_side:
+            fee = self.fee_for_grid(O_DEC, depo, print_info=False)[1] - depo
+            depo -= fee
+            self.message_log(f"The deposit has been adjusted: -{fee} = {depo}")
+
         depo_i = depo
 
         for i in range(self.order_q):
@@ -2497,7 +2506,8 @@ class Strategy(StrategyBase):
             while self.grid_remove or self.cancel_grid_hold:
                 await asyncio.sleep(HEARTBEAT)
 
-            await self.start()
+            if not self.orders.exist_grids() and not self.orders.tp_order_id and not self.tp_wait_id:
+                await self.start()
 
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")
