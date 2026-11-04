@@ -1,3 +1,9 @@
+## 3.2.4 - 2026-11-04
+📦 deps(requirements.txt, pyproject.toml): bump `exchanges-wrapper` to 2.2.7
+✨ executor(executor.py): add `log_out` flag to `calc_grid` for conditional fee-adjustment logging
+♻️ executor(executor.py): drop `ff`, `fs` args from `get_free_assets` calls
+♻️ strategy_base(strategy_base.py): replace `print` with `message_log` for unified logging
+
 ## 3.2.3 - 2026-11-03
 📦 deps(requirements.txt, pyproject.toml): bump `exchanges-wrapper` to 2.2.6
 ✨ executor(executor.py): deduct fees from deposit via `fee_for_grid` before grid creation

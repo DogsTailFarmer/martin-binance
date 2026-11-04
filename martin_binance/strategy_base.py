@@ -1001,10 +1001,10 @@ class StrategyBase(metaclass=ABCMeta):
                      self.quote_asset: {'free': balance_s['free'], 'locked': balance_s['locked']}}
             self.funds = funds
             if print_info and LOGGING:
-                print("=" * 64)
-                print(f"Base asset balance: {balance_f}")
-                print(f"Quote asset balance: {balance_s}")
-                print("=" * 64)
+                self.message_log("=" * 64)
+                self.message_log(f"Base asset balance: {balance_f}")
+                self.message_log(f"Quote asset balance: {balance_s}")
+                self.message_log("=" * 64)
             else:
                 funds = {self.base_asset: FundsEntry(self.funds[self.base_asset]),
                          self.quote_asset: FundsEntry(self.funds[self.quote_asset])}
@@ -1616,14 +1616,15 @@ class StrategyBase(metaclass=ABCMeta):
                             symbol=_symbol
                         )
                     except Exception as ex:
-                        print(f"Can't get active orders: {ex}")
+                        self.message_log(f"Can't get active orders: {ex}")
                     else:
                         active_orders = list(map(orjson.loads, _active_orders.orders))
                         for order in active_orders:
-                            print(f"Order: {order['orderId']}({order['clientOrderId']}), side: {order['side']},"
-                                  f" amount: {any2str(order['origQty'])},"
-                                  f" price:{any2str(order['price'])},"
-                                  f" status: {order['status']}")
+                            self.message_log(f"Order: {order['orderId']}({order['clientOrderId']}),"
+                                             f" side: {order['side']},"
+                                             f" amount: {any2str(order['origQty'])},"
+                                             f" price:{any2str(order['price'])},"
+                                             f" status: {order['status']}")
                     if CANCEL_ALL_ORDERS and active_orders and not LOAD_LAST_STATE:
                         answer = await asyncio.to_thread(
                             input,
@@ -1638,15 +1639,15 @@ class StrategyBase(metaclass=ABCMeta):
                                     symbol=_symbol
                                 )
                                 cancel_orders = orjson.loads(res.result)
-                                print('Before start was canceled orders:')
+                                self.message_log('Before start was canceled orders:')
                                 for i in cancel_orders:
-                                    print(f"Order: {i['orderId']}, side:{i['side']},"
-                                          f" amount:{any2str(i['origQty'])},"
-                                          f" price:{any2str(i['price'])},"
-                                          f" status:{i['status']}")
-                                print("=" * 64)
+                                    self.message_log(f"Order: {i['orderId']}, side:{i['side']},"
+                                                     f" amount:{any2str(i['origQty'])},"
+                                                     f" price:{any2str(i['price'])},"
+                                                     f" status:{i['status']}")
+                                self.message_log("=" * 64)
                             except GRPCError as ex:
-                                print(f"Exception on cancel All order: {ex.status.name}, {ex.message}")
+                                self.message_log(f"Exception on cancel All order: {ex.status.name}, {ex.message}")
                         else:
                             [exch_orders_ids.append(int(_o['orderId'])) for _o in active_orders]
                 # Init section
@@ -1656,7 +1657,7 @@ class StrategyBase(metaclass=ABCMeta):
                 if LOGGING:
                     filters = self.info_symbol.get('filters')
                     for _filter in filters:
-                        print(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
+                        self.message_log(f"{filters.get(_filter).pop('filterType')}: {filters.get(_filter)}")
                 # init Strategy class var
                 self.base_asset = self.info_symbol.get('baseAsset')
                 self.quote_asset = self.info_symbol.get('quoteAsset')
@@ -1675,8 +1676,8 @@ class StrategyBase(metaclass=ABCMeta):
                             symbol=_symbol
                         )
                         price = _price.to_pydict()
-                        print(f"Not bids or asks for pair {price.get('symbol')},"
-                              f" last known price is {price.get('price')}")
+                        self.message_log(f"Not bids or asks for pair {price.get('symbol')},"
+                                         f" last known price is {price.get('price')}")
                         amount = self.info_symbol['filters']['lotSize']['minQty']
                         self.order_book['bids'] = self.order_book['bids'] or [[price['price'], amount]]
                         self.order_book['asks'] = self.order_book['asks'] or [[price['price'], amount]]

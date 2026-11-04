@@ -857,13 +857,13 @@ class Strategy(StrategyBase):
             if start_cycle_output:
                 self.message_log(f"Start Buy{' Reverse' if self.reverse else ''}"
                                  f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.s_currency} depo\n"
-                                 f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
+                                 f"{'' if GRID_ONLY else self.get_free_assets(mode='free')[3]}", tlg=True)
         else:
             amount = self.deposit_first - (O_DEC if GRID_ONLY else self.sum_amount_first)
             if start_cycle_output:
                 self.message_log(f"Start Sell{' Reverse' if self.reverse else ''}"
                                  f" {'asset' if GRID_ONLY else 'cycle'} with {amount} {self.f_currency} depo\n"
-                                 f"{'' if GRID_ONLY else self.get_free_assets(ff, fs, mode='free')[3]}", tlg=True)
+                                 f"{'' if GRID_ONLY else self.get_free_assets(mode='free')[3]}", tlg=True)
         #
         if self.reverse:
             self.message_log(f"For Reverse cycle target return amount: {self.reverse_target_amount}",
@@ -1332,7 +1332,7 @@ class Strategy(StrategyBase):
                           'amount_first_grid': amount_first_grid,
                           'min_delta': min_delta,
                           'amount_min': amount_min}
-                grid_calc = self.calc_grid(self.over_price, calc_avg_amount=False, **params)
+                grid_calc = self.calc_grid(self.over_price, calc_avg_amount=False, log_out=True, **params)
                 orders = grid_calc['orders']
                 total_grid_amount_f = grid_calc['total_grid_amount_f']
                 total_grid_amount_s = grid_calc['total_grid_amount_s']
@@ -1438,7 +1438,7 @@ class Strategy(StrategyBase):
 
         return volatility_pct
 
-    def calc_grid(self, over_price: Decimal, calc_avg_amount=True, **kwargs):
+    def calc_grid(self, over_price: Decimal, calc_avg_amount=True, log_out=False, **kwargs):
         if isinstance(over_price, np.ndarray):
             over_price = Decimal(str(over_price[0]))
 
@@ -1462,11 +1462,13 @@ class Strategy(StrategyBase):
         if FEE_FIRST and not buy_side:
             fee = self.fee_for_grid(depo, O_DEC, print_info=False)[0] - depo
             depo -= fee
-            self.message_log(f"The deposit has been adjusted: -{fee} = {depo}")
+            if log_out:
+                self.message_log(f"The deposit has been adjusted: -{fee} = {depo}")
         elif FEE_SECOND and buy_side:
             fee = self.fee_for_grid(O_DEC, depo, print_info=False)[1] - depo
             depo -= fee
-            self.message_log(f"The deposit has been adjusted: -{fee} = {depo}")
+            if log_out:
+                self.message_log(f"The deposit has been adjusted: -{fee} = {depo}")
 
         depo_i = depo
 
