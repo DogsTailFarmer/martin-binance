@@ -1,3 +1,9 @@
+## 3.2.5 - 2026-11-06
+📦 deps(requirements.txt, pyproject.toml): bump numpy, optuna, pandas, pyarrow, scikit-learn, scipy, pydantic
+🔧 refactor(executor.py): simplify `trade_control` ADX/DI loop, drop `asyncio.wait_for` and `first_run` guard
+🐛 fix(executor.py): dispatch `start()` through `tasks_manage` instead of bare `await`
+🏷️ version(executor.py, __init__.py, strategy_base.py): bump to 3.2.5
+
 ## 3.2.4 - 2026-11-04
 📦 deps(requirements.txt, pyproject.toml): bump `exchanges-wrapper` to 2.2.7
 ✨ executor(executor.py): add `log_out` flag to `calc_grid` for conditional fee-adjustment logging

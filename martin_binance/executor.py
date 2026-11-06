@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.3"
+__version__ = "3.2.5"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -767,11 +767,10 @@ class Strategy(StrategyBase):
                 return
         self.wait_refunding_for_start = False
         # Checking for optimal trading conditions
-        if not self.first_run:
-            self.trade_control_is_waiting_state = True
-            tasks_manage(self.tasks, self.trade_control())
-            while self.trade_control_is_waiting_state:
-                await asyncio.sleep(HEARTBEAT)
+        self.trade_control_is_waiting_state = True
+        tasks_manage(self.tasks, self.trade_control())
+        while self.trade_control_is_waiting_state:
+            await asyncio.sleep(HEARTBEAT)
         #
         self.avg_rate = self.get_buffered_ticker().last_price
         if self.first_run or MODE in ('T', 'TC'):
@@ -940,40 +939,36 @@ class Strategy(StrategyBase):
         return msg
 
     async def trade_control(self):
-        if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy or not self.adx_di_avg_delta:
+        if not TRADE_CONTROL or GRID_ONLY or not self.cycle_buy:
             self.trade_control_is_waiting_state = False
             return
 
         first_iteration = True
         tlg = False
+        last_diff = 0
         while True:
-            last_diff = self.adx_di_avg_delta[-1]
-            if first_iteration:
-                self.message_log(f"Weighted average multi-frame directional index: {last_diff}")
-            if last_diff > 0:
-                break
-
-            try:
-                if len(self.adx_di_avg_delta) >= 5:
-                    data_snapshot = self.adx_di_avg_delta.copy()
-                    result = await asyncio.wait_for(
-                        asyncio.to_thread(mk.original_test, data_snapshot),
-                        timeout=2.0
-                    )
-                    self.message_log(f"Last DI diff: {last_diff}, Trend: {result.trend}")
-                    if result.h and result.z > 0 and last_diff > -TC_DI_DIFF:
-                        break
-                else:
-                    self.message_log("Not enough data for analysis, collecting it")
-            except asyncio.TimeoutError:
-                self.message_log("Trade Control: Mann-Kendall test timed out!", log_level=logging.WARNING)
-            except Exception as ex:
-                self.message_log(f"Trade Control Error: {ex}, continue", log_level=logging.WARNING)
+            if self.adx_di_avg_delta:
+                last_diff = self.adx_di_avg_delta[-1]
+                if first_iteration:
+                    self.message_log(f"Weighted average multi-frame directional index: {last_diff}")
+                if last_diff > 0:
+                    break
 
             if first_iteration:
                 self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
                 first_iteration = False
                 tlg = True
+
+            adx_len = len(self.adx_di_avg_delta)
+
+            if adx_len >= 5:
+                data_snapshot = self.adx_di_avg_delta.copy()
+                result = mk.original_test(data_snapshot)
+                self.message_log(f"Last DI diff: {last_diff}, Trend: {result.trend}")
+                if result.h and result.z > 0 and last_diff > -TC_DI_DIFF:
+                    break
+            else:
+                self.message_log(f"Not enough data for analysis: {adx_len} < 5, collecting it")
 
             await asyncio.sleep(60)
 
@@ -2509,7 +2504,7 @@ class Strategy(StrategyBase):
                 await asyncio.sleep(HEARTBEAT)
 
             if not self.orders.exist_grids() and not self.orders.tp_order_id and not self.tp_wait_id:
-                await self.start()
+                tasks_manage(self.tasks, self.start())
 
     def on_new_order_book(self, order_book: OrderBook) -> None:
         # print(f"on_new_order_book: max_bids: {order_book.bids[0].price}, min_asks: {order_book.asks[0].price}")
