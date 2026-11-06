@@ -1,3 +1,14 @@
+## 3.2.6 - 2026-11-06
+✨ feat(version): bump to 3.2.6 in `__init__`, `executor`, `strategy_base`, CHANGELOG
+🔧 refactor(executor.py): rename exception variable `err` to `ex` in `critical_transaction`
+🐛 fix(executor.py): conditionally suppress Telegram log on first iteration via `start_after_shift`
+🐛 fix(executor.py): use `remaining_amount` in `place_grid_part` and drop `orders_init` guard
+🐛 fix(executor.py): increment `remaining_amount` alongside `amount` when merging small deltas
+🐛 fix(executor.py): update `received_amount`/`remaining_amount` in saved-order adjustment (drop TODO)
+🐛 fix(executor.py): use `remaining_amount` for min-amount check and merge in `restore_orders`
+🧹 chore(strategy_base.py): add `noinspection unresolved-references` suppressions
+🐛 fix(strategy_base.py): schedule `start()` via `tasks_manage` instead of direct `await`
+
 ## 3.2.5 - 2026-11-06
 📦 deps(requirements.txt, pyproject.toml): bump numpy, optuna, pandas, pyarrow, scikit-learn, scipy, pydantic
 🔧 refactor(executor.py): simplify `trade_control` ADX/DI loop, drop `asyncio.wait_for` and `first_run` guard

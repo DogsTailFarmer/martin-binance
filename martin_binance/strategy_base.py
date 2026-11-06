@@ -4,7 +4,7 @@ martin-binance base class and methods definitions
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.5"
+__version__ = "3.2.6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = "https://github.com/DogsTailFarmer"
 
@@ -668,6 +668,7 @@ class StrategyBase(metaclass=ABCMeta):
 
             await asyncio.sleep(delay)
 
+    # noinspection unresolved-references
     async def fee_generate_bnb_request(self, balances, connection_db, default_balance):
         bnb = next((item for item in balances if item["asset"] == 'BNB'), default_balance)['free']
         _price = await self.send_request(
@@ -853,6 +854,7 @@ class StrategyBase(metaclass=ABCMeta):
     async def aiter_candles(self, _klines: dict[str, Klines], _i: str):
         self.s_mode_break = None
         async for row in self.loop_ds(self.backtest[f"candles_{_i}"]):
+            # noinspection unresolved-references
             _klines.get(_i).refresh(row)
             # noinspection PyUnreachableCode
             if self.s_mode_break:
@@ -1076,6 +1078,7 @@ class StrategyBase(metaclass=ABCMeta):
                                                   symbol=self.symbol,
                                                   intervals=orjson.dumps(_intervals)):
 
+                    # noinspection unresolved-references
                     get_kline(res.interval).refresh(orjson.loads(res.candle))
 
                     if MODE == 'TC' and (self.start_collect or self.start_collect is None):
@@ -1798,7 +1801,7 @@ class StrategyBase(metaclass=ABCMeta):
                         self.restore_state_before_backtesting_ex()
                         self.start_collect = True
                     else:
-                        await self.start()
+                        tasks_manage(self.tasks, self.start())
 
             if MODE in ('T', 'TC'):
                 if TLG_SERVICE:
@@ -1816,7 +1819,7 @@ class StrategyBase(metaclass=ABCMeta):
                 if MODE == 'TC':
                     tasks_manage(self.tasks, self.backtest_control(), add_done_callback=False)
                 if not self.last_state:
-                    await self.start()
+                    tasks_manage(self.tasks, self.start())
 
             tasks_manage(self.tasks, self.heartbeat(self.session), add_done_callback=False)
 

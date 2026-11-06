@@ -4,7 +4,7 @@ Cyclic grid strategy based on martingale
 __author__ = "Jerry Fedorenko"
 __copyright__ = "Copyright © 2021-2025 Jerry Fedorenko aka VM"
 __license__ = "MIT"
-__version__ = "3.2.5"
+__version__ = "3.2.6"
 __maintainer__ = "Jerry Fedorenko"
 __contact__ = 'https://github.com/DogsTailFarmer'
 ##################################################################
@@ -350,8 +350,8 @@ class Strategy(StrategyBase):
                             {'message_id': row[0]}
                         )
                         await self.connection_db.commit()
-                    except aiosqlite.Error as err:
-                        self.message_log(f"UPDATE t_control: {err}")
+                    except aiosqlite.Error as ex:
+                        self.message_log(f"UPDATE t_control: {ex}")
 
                 await asyncio.shield(critical_transaction())
 
@@ -955,9 +955,14 @@ class Strategy(StrategyBase):
                     break
 
             if first_iteration:
-                self.message_log('Waiting for optimal trading conditions', tlg=True, color=Style.YELLOW)
+                tlg = not self.start_after_shift
+                self.message_log(
+                    'Waiting for optimal trading conditions',
+                    tlg=tlg,
+                    color=Style.YELLOW
+                )
                 first_iteration = False
-                tlg = True
+
 
             adx_len = len(self.adx_di_avg_delta)
 
@@ -2139,7 +2144,7 @@ class Strategy(StrategyBase):
             await self.start()
 
     def place_grid_part(self) -> None:
-        if self.orders_hold and not self.orders_init and not self.grid_remove:
+        if self.orders_hold and not self.grid_remove:
             n = len(self.orders) + len(self.orders_init)
 
             if n < self.order_q_limit:
@@ -2151,7 +2156,7 @@ class Strategy(StrategyBase):
 
                     waiting_order_id = self.place_limit_order_check(
                         i.buy,
-                        i.amount,
+                        i.remaining_amount,
                         i.price,
                         check=True
                     )
@@ -2324,7 +2329,9 @@ class Strategy(StrategyBase):
         if _order := self.orders_hold.get_last():
             self.message_log("Small amount was added to last held grid order")
             self.restore_orders_fire()
-            _order.amount += (amount / _order.price) if self.cycle_buy else amount
+            delta = (amount / _order.price) if self.cycle_buy else amount
+            _order.amount += delta
+            _order.remaining_amount += delta
             self.orders_hold.update(_order)
             self.orders_hold.sort(cycle_buy=self.cycle_buy)
             return True
@@ -2332,11 +2339,11 @@ class Strategy(StrategyBase):
         if _order := self.orders.get_last():
             self.message_log("Small amount was added to last grid order")
             self.restore_orders_fire()
-            added_qty = ((amount / _order.price) if self.cycle_buy else amount)
+            delta = ((amount / _order.price) if self.cycle_buy else amount)
             self.cancel_grid_order_id = _order.id
             await self.cancel_order(_order.id)
-            _order.remaining_amount += added_qty
-            _order.amount = _order.remaining_amount
+            _order.amount += delta
+            _order.remaining_amount += delta
             self.order_id += 1
             _order.id = self.order_id
             self.orders_hold.update(_order)
@@ -2787,8 +2794,9 @@ class Strategy(StrategyBase):
                 # Adjusting amount for saved order, if exists
                 if _order := self.orders_save.get_by_id(update.order_id):
                     self.orders_save.remove(update.order_id)
-                    # TODO Adjust received_amount and remaining_amount
-                    _order.amount -= self.round_truncate(amount_first, base=True, _rounding=ROUND_CEILING)
+                    delta = self.round_truncate(amount_first, base=True, _rounding=ROUND_CEILING)
+                    _order.received_amount += delta
+                    _order.remaining_amount -= delta
                     self.orders_save.update(_order)
 
                 part_amount_first, part_amount_second = self.part_amount.pop(update.order_id, (O_DEC, O_DEC))
@@ -2936,19 +2944,19 @@ class Strategy(StrategyBase):
             if self.restore_orders:
                 if _order := self.orders_save.get_by_id(order_id):
                     self.orders_save.remove(order_id)
-                    if self.check_min_amount(amount=_order.amount, price=_order.price):
+                    if self.check_min_amount(amount=_order.remaining_amount, price=_order.price):
                         self.orders_hold.update(_order)
                     elif _order_saved := self.orders_save.get_last():
-                        _order_saved.amount += _order.amount
-                        _order_saved.remaining_amount += _order.amount
+                        _order_saved.amount += _order.remaining_amount
+                        _order_saved.remaining_amount += _order.remaining_amount
                         self.orders_save.update(_order_saved.id)
-                        self.message_log(f"Small restored amount {_order.amount} was added"
+                        self.message_log(f"Small restored amount {_order.remaining_amount} was added"
                                          f" to last saved order {_order_saved.id}", tlg=True)
                     elif _order_hold := self.orders_hold.get_last():
-                        _order_hold.amount += _order.amount
-                        _order_hold.remaining_amount += _order.amount
+                        _order_hold.amount += _order.remaining_amount
+                        _order_hold.remaining_amount += _order.remaining_amount
                         self.orders_hold.update(_order_hold)
-                        self.message_log(f"Small restored amount {_order.amount} was added"
+                        self.message_log(f"Small restored amount {_order.remaining_amount} was added"
                                          f" to last held order {_order_hold.id}", tlg=True)
                     else:
                         self.message_log("Too small restore for trade and not saved or held grid for update", tlg=True)
